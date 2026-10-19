@@ -103,20 +103,88 @@ TEST_CASE("ITM: staff has damage, spell and charge blocks") {
     CHECK(item->damage[0] == 10);
 }
 
-TEST_CASE("ITM: book and scroll carry spell blocks") {
-    for (std::uint32_t type : {21u, 22u}) {
+TEST_CASE("ITM: book (type 21) carries a spell block and no effects block") {
+    Bytes b = base(21, 0);
+    put_requirements(b);
+    put_u32(b, 421); // spell id
+    put_u32(b, 0);   // reserved
+    auto item = parse_item(b);
+    REQUIRE(item.has_value());
+    CHECK(item->type == ItemType::book);
+    CHECK(item->has_spell);
+    CHECK_FALSE(item->has_damage);
+    CHECK_FALSE(item->has_charge);
+    CHECK(item->spell_id == 421);
+    CHECK(item->effects.empty());
+}
+
+TEST_CASE("ITM: scroll (type 22) carries a spell block and an effects block") {
+    Bytes b = base(22, 0);
+    put_requirements(b);
+    put_u32(b, 422); // spell id
+    put_u32(b, 0);   // reserved
+    put_u32(b, 0);   // effects count
+    auto item = parse_item(b);
+    REQUIRE(item.has_value());
+    CHECK(item->type == ItemType::scroll);
+    CHECK(item->has_spell);
+    CHECK_FALSE(item->has_damage);
+    CHECK(item->spell_id == 422);
+    CHECK(item->effects.empty());
+}
+
+TEST_CASE("ITM: damage block covers armor types 11..14 but not bracers 15") {
+    for (std::uint32_t type : {11u, 12u, 13u, 14u}) {
         Bytes b = base(type, 0);
         put_requirements(b);
-        put_u32(b, 400 + type);
-        put_u32(b, 0);
+        for (int i = 0; i < 6; ++i) put_u32(b, static_cast<std::uint32_t>(i + 1));
         put_u32(b, 0);
         auto item = parse_item(b);
         REQUIRE(item.has_value());
-        CHECK(item->type == static_cast<ItemType>(type));
-        CHECK(item->has_spell);
-        CHECK_FALSE(item->has_damage);
-        CHECK_FALSE(item->has_charge);
-        CHECK(item->spell_id == 400 + type);
+        CHECK(item->has_damage);
+        CHECK(item->damage[0] == 1);
+        CHECK(item->damage[5] == 6);
+    }
+
+    Bytes bracers = base(15, 0);
+    put_requirements(bracers);
+    put_u32(bracers, 0); // effects count only
+    auto item = parse_item(bracers);
+    REQUIRE(item.has_value());
+    CHECK_FALSE(item->has_damage);
+    CHECK(item->effects.empty());
+}
+
+TEST_CASE("ITM: stone (type 28) carries damage and an effects block") {
+    SUBCASE("zero effects") {
+        Bytes b = base(28, 0);
+        put_requirements(b);
+        for (int i = 0; i < 6; ++i) put_u32(b, static_cast<std::uint32_t>(i + 1));
+        put_u32(b, 0);
+        auto item = parse_item(b);
+        REQUIRE(item.has_value());
+        CHECK(item->type == ItemType::stone);
+        CHECK(item->has_damage);
+        CHECK(item->damage[0] == 1);
+        CHECK(item->damage[5] == 6);
+        CHECK(item->effects.empty());
+    }
+    SUBCASE("two effects") {
+        Bytes b = base(28, 0);
+        put_requirements(b);
+        for (int i = 0; i < 6; ++i) put_u32(b, static_cast<std::uint32_t>(10 + i));
+        put_u32(b, 2);
+        put_u32(b, 1); put_u32(b, 2); put_u32(b, 3);
+        b.push_back(2); b.push_back(5); b.push_back(1); b.push_back(7);
+        put_u32(b, 4); put_u32(b, 5); put_u32(b, 6);
+        b.push_back(0); b.push_back(9); b.push_back(0); b.push_back(3);
+        auto item = parse_item(b);
+        REQUIRE(item.has_value());
+        CHECK(item->has_damage);
+        CHECK(item->damage[0] == 10);
+        REQUIRE(item->effects.size() == 2);
+        CHECK(item->effects[0].type == 1);
+        CHECK(item->effects[1].type == 4);
     }
 }
 

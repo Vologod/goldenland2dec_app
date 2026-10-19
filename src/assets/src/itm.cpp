@@ -45,7 +45,7 @@ Result<Item> parse_item(std::span<const std::uint8_t> data) {
         !r.read_u32le(item.perception) || !r.read_u32le(item.agility))
         return Error{ErrorCode::format, "truncated ITM requirements"};
     const std::uint32_t t = type;
-    item.has_damage = (t <= 7) || (t >= 11 && t <= 14);
+    item.has_damage = (t <= 7) || (t >= 11 && t <= 14) || (t == 28);
     if (item.has_damage) {
         for (auto& v : item.damage) {
             if (!r.read_u32le(v)) return Error{ErrorCode::format, "truncated ITM damage"};
@@ -71,15 +71,18 @@ Result<Item> parse_item(std::span<const std::uint8_t> data) {
     item.has_damage_type = (t == 8 || t == 9 || t == 10);
     if (item.has_damage_type && !r.read_u32le(item.damage_type))
         return Error{ErrorCode::format, "truncated ITM damage type"};
-    std::uint32_t count = 0;
-    if (!r.read_u32le(count)) return Error{ErrorCode::format, "truncated ITM effects count"};
-    if (count > 1000) return Error{ErrorCode::format, "unreasonable ITM effects count"};
-    item.effects.resize(count);
-    for (auto& e : item.effects) {
-        if (!r.read_u32le(e.type) || !r.read_u32le(e.amount) || !r.read_u32le(e.flags) ||
-            !r.read_u8(e.duration.hi) || !r.read_u8(e.duration.lo) ||
-            !r.read_u8(e.delay.hi) || !r.read_u8(e.delay.lo))
-            return Error{ErrorCode::format, "truncated ITM effect"};
+    // Books (type 21) end after the spell block and carry no effects block.
+    if (t != 21) {
+        std::uint32_t count = 0;
+        if (!r.read_u32le(count)) return Error{ErrorCode::format, "truncated ITM effects count"};
+        if (count > 1000) return Error{ErrorCode::format, "unreasonable ITM effects count"};
+        item.effects.resize(count);
+        for (auto& e : item.effects) {
+            if (!r.read_u32le(e.type) || !r.read_u32le(e.amount) || !r.read_u32le(e.flags) ||
+                !r.read_u8(e.duration.hi) || !r.read_u8(e.duration.lo) ||
+                !r.read_u8(e.delay.hi) || !r.read_u8(e.delay.lo))
+                return Error{ErrorCode::format, "truncated ITM effect"};
+        }
     }
     if (!r.at_end()) return Error{ErrorCode::format, "trailing ITM data"};
     return item;

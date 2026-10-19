@@ -145,6 +145,21 @@ TEST_CASE("PAK: opens from a file") {
     std::filesystem::remove(path);
 }
 
+TEST_CASE("PAK: reads raw entries from a file") {
+    const Bytes raw = {'r','a','w',0x00,0xFF,0x10,0x20};
+    Bytes pak = make_pak_from_payloads(
+        {{"raw/file.dat", static_cast<std::uint32_t>(raw.size()), raw_payload(raw)}});
+    auto path = unique_temp_path();
+    { std::ofstream out(path, std::ios::binary); out.write(reinterpret_cast<const char*>(pak.data()), pak.size()); }
+    auto archive = PakArchive::open_from_file(path);
+    REQUIRE(archive.has_value());
+    REQUIRE(archive->entries().size() == 1);
+    auto data = archive->read(archive->entries()[0]);
+    REQUIRE(data.has_value());
+    CHECK(Bytes(data->begin(), data->end()) == raw);
+    std::filesystem::remove(path);
+}
+
 TEST_CASE("PAK: lookup is case-insensitive and slash-normalized") {
     Bytes pak = make_pak({{"Scripts\\A.SCR", {'x'}}});
     auto archive = PakArchive::open_from_memory(std::move(pak));
