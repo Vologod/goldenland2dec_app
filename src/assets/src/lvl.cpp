@@ -36,24 +36,28 @@ Result<std::span<const std::uint8_t>> read_block(ByteReader& reader, std::string
         return format_error("truncated LVL block size at offset " + std::to_string(offset));
     std::span<const std::uint8_t> payload;
     if (!reader.read_bytes(size, payload))
-        return format_error("LVL block " + std::string(expected) + " payload exceeds file");
+        return format_error("LVL block " + std::string(expected) + " payload exceeds file at offset " +
+                            std::to_string(offset));
     return payload;
 }
 
 Result<std::vector<LvlMask>> parse_masks(std::span<const std::uint8_t> payload) {
     ByteReader reader(payload);
     std::uint32_t count = 0;
-    if (!reader.read_u32le(count)) return format_error("truncated BLK_MDSC count");
-    if (static_cast<std::uint64_t>(count) * 16 + 4 != payload.size())
+    if (!reader.read_u32le(count))
+        return format_error("truncated BLK_MDSC count at offset 0");
+    if (payload.size() < 4 || (payload.size() - 4) % 16 != 0 ||
+        count != (payload.size() - 4) / 16)
         return format_error("BLK_MDSC count does not match payload size");
     std::vector<LvlMask> masks;
     masks.reserve(count);
     for (std::uint32_t i = 0; i < count; ++i) {
         LvlMask mask;
         std::uint32_t padding = 0;
+        const std::size_t offset = reader.position();
         if (!reader.read_u32le(padding) || !reader.read_u32le(mask.number) ||
             !reader.read_u32le(mask.x) || !reader.read_u32le(mask.y))
-            return format_error("truncated BLK_MDSC entry");
+            return format_error("truncated BLK_MDSC entry at offset " + std::to_string(offset));
         (void)padding;
         masks.push_back(mask);
     }
@@ -65,7 +69,7 @@ Result<std::vector<LvlDescription>> parse_descriptions(std::span<const std::uint
     ByteReader reader(payload);
     std::uint32_t count = 0;
     if (!reader.read_u32le(count))
-        return format_error("truncated " + std::string(block_name) + " count");
+        return format_error("truncated " + std::string(block_name) + " count at offset 0");
     if (payload.size() < 4 || count > (payload.size() - 4) / 20)
         return format_error(std::string(block_name) + " count exceeds payload");
     std::vector<LvlDescription> descriptions;
@@ -73,71 +77,119 @@ Result<std::vector<LvlDescription>> parse_descriptions(std::span<const std::uint
     for (std::uint32_t i = 0; i < count; ++i) {
         LvlDescription description;
         std::uint32_t raw_x = 0, raw_y = 0;
+        const std::size_t entry_offset = reader.position();
         if (!reader.read_u16le(description.param1) || !reader.read_u16le(description.param2) ||
             !reader.read_u32le(description.number) || !reader.read_u32le(raw_x) ||
             !reader.read_u32le(raw_y))
-            return format_error("truncated " + std::string(block_name) + " entry");
+            return format_error("truncated " + std::string(block_name) + " entry at offset " +
+                                std::to_string(entry_offset));
         description.x = static_cast<std::int32_t>(raw_x);
         description.y = static_cast<std::int32_t>(raw_y);
+        const std::size_t string_offset = reader.position();
         if (!read_lvl_string(reader, description.name))
-            return format_error("truncated " + std::string(block_name) + " string");
+            return format_error("truncated " + std::string(block_name) + " string at offset " +
+                                std::to_string(string_offset));
         descriptions.push_back(std::move(description));
     }
     if (!reader.at_end())
-        return format_error(std::string(block_name) + " has trailing bytes");
+        return format_error(std::string(block_name) + " has trailing bytes at offset " +
+                            std::to_string(reader.position()));
     return descriptions;
 }
 
 Result<std::vector<LvlCellGroup>> parse_cell_groups(std::span<const std::uint8_t> payload) {
     ByteReader reader(payload);
     std::uint32_t count = 0;
-    if (!reader.read_u32le(count)) return format_error("truncated BLK_CGRP count");
+    if (!reader.read_u32le(count))
+        return format_error("truncated BLK_CGRP count at offset 0");
     if (payload.size() < 4 || count > (payload.size() - 4) / 8)
         return format_error("BLK_CGRP count exceeds payload");
     std::vector<LvlCellGroup> groups;
     groups.reserve(count);
     for (std::uint32_t i = 0; i < count; ++i) {
         LvlCellGroup group;
+        const std::size_t name_offset = reader.position();
         if (!read_lvl_string(reader, group.name))
-            return format_error("truncated BLK_CGRP name");
+            return format_error("truncated BLK_CGRP name at offset " +
+                                std::to_string(name_offset));
         std::uint32_t cells = 0;
         if (!reader.read_u32le(cells))
-            return format_error("truncated BLK_CGRP cell count");
+            return format_error("truncated BLK_CGRP cell count at offset " +
+                                std::to_string(reader.position()));
         if (cells > reader.remaining().size() / 4)
-            return format_error("BLK_CGRP cell count exceeds payload");
+            return format_error("BLK_CGRP cell count exceeds payload at offset " +
+                                std::to_string(reader.position()));
         group.cells.reserve(cells);
         for (std::uint32_t j = 0; j < cells; ++j) {
             std::uint16_t x = 0, y = 0;
+            const std::size_t cell_offset = reader.position();
             if (!reader.read_u16le(x) || !reader.read_u16le(y))
-                return format_error("truncated BLK_CGRP cell");
+                return format_error("truncated BLK_CGRP cell at offset " +
+                                    std::to_string(cell_offset));
             group.cells.emplace_back(x, y);
         }
         groups.push_back(std::move(group));
     }
-    if (!reader.at_end()) return format_error("BLK_CGRP has trailing bytes");
+    if (!reader.at_end())
+        return format_error("BLK_CGRP has trailing bytes at offset " +
+                            std::to_string(reader.position()));
     return groups;
 }
 
-bool validate_environment(std::span<const std::uint8_t> payload) {
-    if (payload.size() < 32) return false;
+VoidResult validate_environment(std::span<const std::uint8_t> payload) {
     ByteReader reader(payload);
-    if (!reader.skip(20)) return false;
+    if (!reader.skip(16))
+        return format_error("truncated BLK_SENV header at offset 0");
+    std::uint32_t sound_count = 0;
+    if (!reader.read_u32le(sound_count))
+        return format_error("truncated BLK_SENV sound count at offset " +
+                            std::to_string(reader.position()));
     std::string ignored;
-    for (int i = 0; i < 3; ++i)
-        if (!read_lvl_string(reader, ignored)) return false;
-    return true;
+    for (int i = 0; i < 3; ++i) {
+        const std::size_t offset = reader.position();
+        if (!read_lvl_string(reader, ignored))
+            return format_error("truncated BLK_SENV string at offset " +
+                                std::to_string(offset));
+    }
+    if (sound_count > reader.remaining().size() / 52)
+        return format_error("BLK_SENV sound count exceeds payload at offset " +
+                            std::to_string(reader.position()));
+    for (std::uint32_t i = 0; i < sound_count; ++i) {
+        const std::size_t path_offset = reader.position();
+        if (!read_lvl_string(reader, ignored))
+            return format_error("truncated BLK_SENV sound path at offset " +
+                                std::to_string(path_offset));
+        const std::size_t record_offset = reader.position();
+        if (!reader.skip(48))
+            return format_error("truncated BLK_SENV sound record at offset " +
+                                std::to_string(record_offset));
+    }
+    if (!reader.at_end())
+        return format_error("BLK_SENV has trailing bytes at offset " +
+                            std::to_string(reader.position()));
+    return std::monostate{};
 }
 
-bool validate_doors(std::span<const std::uint8_t> payload) {
+VoidResult validate_doors(std::span<const std::uint8_t> payload) {
     ByteReader reader(payload);
     std::uint32_t count = 0;
-    if (!reader.read_u32le(count)) return false;
-    if (count > (payload.size() - 4) / 24) return false;
+    if (!reader.read_u32le(count))
+        return format_error("truncated BLK_DOOR count at offset 0");
+    if (count > (payload.size() - 4) / 24)
+        return format_error("BLK_DOOR count exceeds payload");
     std::string ignored;
-    for (std::uint32_t i = 0; i < count; ++i)
-        for (int j = 0; j < 6; ++j)
-            if (!read_lvl_string(reader, ignored)) return false;
-    return reader.at_end();
+    for (std::uint32_t i = 0; i < count; ++i) {
+        for (int j = 0; j < 6; ++j) {
+            const std::size_t offset = reader.position();
+            if (!read_lvl_string(reader, ignored))
+                return format_error("truncated BLK_DOOR string at offset " +
+                                    std::to_string(offset));
+        }
+    }
+    if (!reader.at_end())
+        return format_error("BLK_DOOR has trailing bytes at offset " +
+                            std::to_string(reader.position()));
+    return std::monostate{};
 }
 } // namespace
 
@@ -156,32 +208,40 @@ Result<LvlData> parse_lvl(std::span<const std::uint8_t> data) {
                     if (payload.size() != 4) return format_error("bad BLK_LVER size");
                     if (!block_reader.read_u16le(lvl.version.major) ||
                         !block_reader.read_u16le(lvl.version.minor))
-                        return format_error("truncated BLK_LVER");
+                        return format_error("truncated BLK_LVER at offset " +
+                                            std::to_string(block_reader.position()));
                     break;
                 }
                 case 1: {
                     if (payload.size() != 8) return format_error("bad BLK_MPSZ size");
                     if (!block_reader.read_u32le(lvl.map_size.pixel_width) ||
                         !block_reader.read_u32le(lvl.map_size.pixel_height))
-                        return format_error("truncated BLK_MPSZ");
+                        return format_error("truncated BLK_MPSZ at offset " +
+                                            std::to_string(block_reader.position()));
                     break;
                 }
                 case 2: {
-                    if (payload.size() < 8) return format_error("bad BLK_MHDR size");
+                    if (payload.size() < 8) return format_error("BLK_MHDR too short");
                     if (!block_reader.read_u32le(lvl.chunk_width) ||
                         !block_reader.read_u32le(lvl.chunk_height))
-                        return format_error("truncated BLK_MHDR header");
+                        return format_error("truncated BLK_MHDR header at offset " +
+                                            std::to_string(block_reader.position()));
                     const std::uint64_t chunk_count =
                         static_cast<std::uint64_t>(lvl.chunk_width) * lvl.chunk_height;
-                    if (chunk_count * 24 + 8 != payload.size())
-                        return format_error("BLK_MHDR size does not match chunk dimensions");
+                    const std::size_t chunk_bytes = payload.size() - 8;
+                    if (chunk_bytes % 24 != 0 || chunk_count != chunk_bytes / 24)
+                        return format_error("BLK_MHDR size does not match chunk dimensions at "
+                                            "offset " +
+                                            std::to_string(block_reader.position()));
                     lvl.chunks.resize(static_cast<std::size_t>(chunk_count));
                     for (auto& chunk : lvl.chunks) {
                         for (auto& tile : chunk) {
+                            const std::size_t offset = block_reader.position();
                             if (!block_reader.read_u16le(tile.relief) ||
                                 !block_reader.read_u16le(tile.sound) ||
                                 !block_reader.read_u16le(tile.mask))
-                                return format_error("truncated BLK_MHDR tile");
+                                return format_error("truncated BLK_MHDR tile at offset " +
+                                                    std::to_string(offset));
                         }
                     }
                     break;
@@ -217,8 +277,8 @@ Result<LvlData> parse_lvl(std::span<const std::uint8_t> data) {
                     break;
                 }
                 case 8: {
-                    if (!validate_environment(payload))
-                        return format_error("bad BLK_SENV payload");
+                    auto environment = validate_environment(payload);
+                    if (!environment.has_value()) return environment.error();
                     break;
                 }
                 case 9: {
@@ -226,13 +286,15 @@ Result<LvlData> parse_lvl(std::span<const std::uint8_t> data) {
                     break;
                 }
                 case 10: {
-                    if (!validate_doors(payload)) return format_error("bad BLK_DOOR payload");
+                    auto doors = validate_doors(payload);
+                    if (!doors.has_value()) return doors.error();
                     break;
                 }
                 case 11: {
                     if (payload.size() != 4) return format_error("bad BLK_LFLS size");
                     if (!block_reader.read_u32le(lvl.level_floors))
-                        return format_error("truncated BLK_LFLS");
+                        return format_error("truncated BLK_LFLS at offset " +
+                                            std::to_string(block_reader.position()));
                     break;
                 }
                 default:
@@ -240,7 +302,7 @@ Result<LvlData> parse_lvl(std::span<const std::uint8_t> data) {
             }
         }
         if (!reader.at_end()) return format_error("trailing data after BLK_LFLS");
-        return lvl;
+        return std::move(lvl);
     } catch (const std::bad_alloc&) {
         return format_error("LVL allocation failed");
     }

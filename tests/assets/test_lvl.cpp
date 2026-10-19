@@ -142,18 +142,20 @@ Block make_cgrp() {
     return {"BLK_CGRP", p};
 }
 
-Block make_senv() {
+Bytes senv_payload(std::uint32_t sound_count) {
     Bytes p;
     put_i32(p, 5);
     put_u32(p, 0);
     put_u32(p, 0);
     put_u32(p, 0);
-    put_u32(p, 0);
+    put_u32(p, sound_count);
     put_string(p, "");
     put_string(p, "");
     put_string(p, "");
-    return {"BLK_SENV", p};
+    return p;
 }
+
+Block make_senv() { return {"BLK_SENV", senv_payload(0)}; }
 
 Block make_wthr() {
     Bytes p;
@@ -257,6 +259,16 @@ TEST_CASE("LVL: parses all 12 blocks") {
     CHECK(lvl.level_floors == 5);
 }
 
+TEST_CASE("LVL: validates SENV sound records") {
+    auto blocks = valid_blocks();
+    Bytes payload = senv_payload(1);
+    put_string(payload, "sound.wav");
+    payload.insert(payload.end(), 48, 0);
+    blocks[8].payload = std::move(payload);
+    auto result = parse_lvl(assemble(blocks));
+    CHECK(result.has_value());
+}
+
 TEST_CASE("LVL: rejects a wrong block name") {
     auto blocks = valid_blocks();
     blocks[0].name = "BLK_BAD!";
@@ -330,11 +342,29 @@ TEST_CASE("LVL: rejects counts beyond the payload") {
 }
 
 TEST_CASE("LVL: rejects a malformed tile header") {
-    Bytes data = make_valid();
-    set_u32(data, find_block_payload(data, "BLK_MHDR"), 3);
-    auto result = parse_lvl(data);
-    REQUIRE_FALSE(result.has_value());
-    CHECK(result.error().code == gl::ErrorCode::format);
+    SUBCASE("truncated header") {
+        auto blocks = valid_blocks();
+        blocks[2].payload = {1, 0, 0, 0};
+        auto result = parse_lvl(assemble(blocks));
+        REQUIRE_FALSE(result.has_value());
+        CHECK(result.error().code == gl::ErrorCode::format);
+    }
+    SUBCASE("overflowing dimensions") {
+        auto blocks = valid_blocks();
+        blocks[2].payload.clear();
+        put_u32(blocks[2].payload, 0x80000000u);
+        put_u32(blocks[2].payload, 0x40000000u);
+        auto result = parse_lvl(assemble(blocks));
+        REQUIRE_FALSE(result.has_value());
+        CHECK(result.error().code == gl::ErrorCode::format);
+    }
+    SUBCASE("dimensions do not match payload") {
+        Bytes data = make_valid();
+        set_u32(data, find_block_payload(data, "BLK_MHDR"), 3);
+        auto result = parse_lvl(data);
+        REQUIRE_FALSE(result.has_value());
+        CHECK(result.error().code == gl::ErrorCode::format);
+    }
 }
 
 TEST_CASE("LVL: rejects a string longer than its payload") {
@@ -350,6 +380,38 @@ TEST_CASE("LVL: rejects invalid environment, weather and door payloads") {
     SUBCASE("SENV too short") {
         auto blocks = valid_blocks();
         blocks[8].payload.resize(31);
+        auto result = parse_lvl(assemble(blocks));
+        REQUIRE_FALSE(result.has_value());
+        CHECK(result.error().code == gl::ErrorCode::format);
+    }
+    SUBCASE("SENV sound path truncated") {
+        auto blocks = valid_blocks();
+        blocks[8].payload = senv_payload(1);
+        auto result = parse_lvl(assemble(blocks));
+        REQUIRE_FALSE(result.has_value());
+        CHECK(result.error().code == gl::ErrorCode::format);
+    }
+    SUBCASE("SENV sound record truncated") {
+        auto blocks = valid_blocks();
+        Bytes payload = senv_payload(1);
+        put_string(payload, "sound.wav");
+        payload.insert(payload.end(), 47, 0);
+        blocks[8].payload = std::move(payload);
+        auto result = parse_lvl(assemble(blocks));
+        REQUIRE_FALSE(result.has_value());
+        CHECK(result.error().code == gl::ErrorCode::format);
+    }
+    SUBCASE("SENV sound count exceeds payload") {
+        auto blocks = valid_blocks();
+        blocks[8].payload = senv_payload(1000);
+        auto result = parse_lvl(assemble(blocks));
+        REQUIRE_FALSE(result.has_value());
+        CHECK(result.error().code == gl::ErrorCode::format);
+    }
+    SUBCASE("SENV trailing bytes") {
+        auto blocks = valid_blocks();
+        blocks[8].payload = senv_payload(0);
+        blocks[8].payload.push_back(0);
         auto result = parse_lvl(assemble(blocks));
         REQUIRE_FALSE(result.has_value());
         CHECK(result.error().code == gl::ErrorCode::format);
