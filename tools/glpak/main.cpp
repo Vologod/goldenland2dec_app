@@ -134,6 +134,35 @@ struct ExtractOptions {
     std::optional<std::string> out;
 };
 
+struct ExtractStats {
+    std::size_t written = 0;
+    bool format_error = false;
+    bool io_error = false;
+};
+
+bool extract_batch_entry(const fs::path& out_dir, std::string_view virtual_path,
+                         gl::Result<Bytes> data, ExtractStats& stats) {
+    if (!data) {
+        std::cerr << "glpak: " << virtual_path << ": " << data.error().message << '\n';
+        if (data.error().code == gl::ErrorCode::format ||
+            data.error().code == gl::ErrorCode::unsupported)
+            stats.format_error = true;
+        else
+            stats.io_error = true;
+        return true;
+    }
+    const auto target = extraction_target(out_dir, virtual_path);
+    if (!target) {
+        std::cerr << "glpak: " << virtual_path << ": unsafe virtual path\n";
+        stats.format_error = true;
+        return true;
+    }
+    const int code = write_bytes(*target, data.value());
+    if (code != kOk) return false;
+    ++stats.written;
+    return true;
+}
+
 bool parse_extract_options(const std::vector<std::string>& args, ExtractOptions& options,
                            std::string& error) {
     for (std::size_t i = 3; i < args.size(); ++i) {
@@ -272,28 +301,18 @@ int cmd_extract(const std::vector<std::string>& args) {
                     kIo);
     }
 
-    std::size_t written = 0;
+    ExtractStats stats;
     if (options.all) {
         for (const auto& entry : vfs.list()) {
-            const auto target = extraction_target(out_dir, entry.path);
-            if (!target) return fail("unsafe virtual path: " + entry.path, kFormat);
-            auto data = vfs.read(entry.path);
-            if (!data) return fail(data.error());
-            const int code = write_bytes(*target, data.value());
-            if (code != kOk) return code;
-            ++written;
+            if (!extract_batch_entry(out_dir, entry.path, vfs.read(entry.path), stats))
+                return kIo;
         }
     } else if (options.archive) {
         const PakArchive* archive = vfs.archive(*options.archive);
         if (!archive) return fail("unknown archive: " + *options.archive, kArgument);
         for (const auto& entry : archive->entries()) {
-            const auto target = extraction_target(out_dir, entry.name);
-            if (!target) return fail("unsafe archive entry: " + entry.name, kFormat);
-            auto data = archive->read(entry);
-            if (!data) return fail(data.error());
-            const int code = write_bytes(*target, data.value());
-            if (code != kOk) return code;
-            ++written;
+            if (!extract_batch_entry(out_dir, entry.name, archive->read(entry), stats))
+                return kIo;
         }
     } else if (options.file) {
         if (!gl::assets::is_safe_relative_path(*options.file)) {
@@ -305,7 +324,7 @@ int cmd_extract(const std::vector<std::string>& args) {
         if (!data) return fail(data.error());
         const int code = write_bytes(*target, data.value());
         if (code != kOk) return code;
-        ++written;
+        ++stats.written;
     } else if (options.prefix) {
         if (!gl::assets::is_safe_relative_path(*options.prefix)) {
             return fail("unsafe prefix: " + *options.prefix, kArgument);
@@ -314,16 +333,13 @@ int cmd_extract(const std::vector<std::string>& args) {
         if (prefix.empty()) return fail("empty prefix", kArgument);
         for (const auto& entry : vfs.list()) {
             if (!entry.path.starts_with(prefix)) continue;
-            const auto target = extraction_target(out_dir, entry.path);
-            if (!target) return fail("unsafe virtual path: " + entry.path, kFormat);
-            auto data = vfs.read(entry.path);
-            if (!data) return fail(data.error());
-            const int code = write_bytes(*target, data.value());
-            if (code != kOk) return code;
-            ++written;
+            if (!extract_batch_entry(out_dir, entry.path, vfs.read(entry.path), stats))
+                return kIo;
         }
     }
-    std::cout << "extracted " << written << " file(s)\n";
+    std::cout << "extracted " << stats.written << " file(s)\n";
+    if (stats.format_error) return kFormat;
+    if (stats.io_error) return kIo;
     return kOk;
 }
 
