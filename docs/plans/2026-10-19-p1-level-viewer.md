@@ -103,10 +103,10 @@ Parse the 12 blocks in order (8-byte name, u32 size, payload); decode MPSZ, MHDR
 ADSC, TDSC, CGRP, LFLS; validate the rest (SENV/WTHR/DOOR) and skip their contents. Strings are
 `u32 len + cp1251`. Reject bad block names/sizes and out-of-range counts.
 
-- [ ] **Step 1:** Synthetic test with a minimal valid 12-block LVL + bad magic/size cases.
-- [ ] **Step 2:** Implement `parse_lvl`.
-- [ ] **Step 3:** Integration: iterate `levels/lvl/*.lvl` in `levels.pak`, parse all 175, assert 0 failures.
-- [ ] **Step 4:** Commit.
+- [x] **Step 1:** Synthetic test with a minimal valid 12-block LVL + bad magic/size cases.
+- [x] **Step 2:** Implement `parse_lvl`.
+- [x] **Step 3:** Integration: iterate `levels/lvl/*.lvl` in `levels.pak`, parse all 175, assert 0 failures.
+- [x] **Step 4:** Commit.
 
 ---
 

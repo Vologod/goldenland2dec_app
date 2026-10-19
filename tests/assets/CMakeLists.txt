@@ -10,6 +10,7 @@ add_executable(gl_assets_tests
     test_sdb.cpp
     test_itm.cpp
     test_image.cpp
+    test_lvl.cpp
 )
 target_include_directories(gl_assets_tests PRIVATE ${CMAKE_SOURCE_DIR}/third_party)
 target_link_libraries(gl_assets_tests PRIVATE gl_assets)
@@ -17,7 +18,7 @@ gl_enable_warnings(gl_assets_tests)
 
 add_test(NAME gl_assets_tests COMMAND gl_assets_tests)
 
-add_executable(gl_assets_real_tests test_real_main.cpp test_real_data.cpp)
+add_executable(gl_assets_real_tests test_real_main.cpp test_real_data.cpp test_real_levels.cpp)
 target_include_directories(gl_assets_real_tests PRIVATE ${CMAKE_SOURCE_DIR}/third_party)
 target_link_libraries(gl_assets_real_tests PRIVATE gl_assets)
 gl_enable_warnings(gl_assets_real_tests)

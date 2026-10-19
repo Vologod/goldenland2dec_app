@@ -20,6 +20,7 @@ add_library(gl_assets STATIC
     src/assets/src/csx.cpp
     src/assets/src/sdb.cpp
     src/assets/src/itm.cpp
+    src/assets/src/lvl.cpp
     src/assets/src/image.cpp
     src/assets/src/stb_impl.cpp
 )

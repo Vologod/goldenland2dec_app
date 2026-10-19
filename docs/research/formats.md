@@ -88,6 +88,27 @@ weight_x10   : uint32
 Полный список полей и условных блоков — `fersatgit/Goldenland-2-Cold-Heaven` README
 (раздел ITM). Парсер должен корректно пропускать отсутствующие опциональные блоки.
 
+## LVL (уровень)
+
+Подтверждено на всех 175 `levels/lvl/*.lvl` из `levels.pak` (`I:\Games\Златогорье-2`):
+12 блоков строго в порядке `BLK_LVER`, `BLK_MPSZ`, `BLK_MHDR`, `BLK_MDSC`, `BLK_SDSC`,
+`BLK_ADSC`, `BLK_TDSC`, `BLK_CGRP`, `BLK_SENV`, `BLK_WTHR`, `BLK_DOOR`, `BLK_LFLS`.
+Заголовок блока: 8 байт ASCII-имени + `u32 size` (LE), затем payload ровно `size` байт;
+лишних байт после `BLK_LFLS` нет. `BLK_LVER` = `u16 major=3`, `u16 minor=1` во всех файлах.
+
+- `BLK_MHDR`: `u32 chunkW`, `u32 chunkH`; `size == 8 + chunkW*chunkH*24` (чанк = 4 тайла
+  по 6 байт: `u16 relief`, `u16 sound`, `u16 mask`, маска `0xFFFF` — пусто).
+- `BLK_MDSC`: `size == 4 + count*16`; запись `(u32 pad, u32 number, u32 x, u32 y)`.
+- `BLK_SDSC`/`BLK_ADSC`/`BLK_TDSC`: запись `(u16 p1, u16 p2, u32 number, i32 x, i32 y,
+  string)`; string = `u32 len` + cp1251. Payload расходуется ровно.
+- `BLK_CGRP`: payload начинается с `u32 count`; далее на группу `string name`,
+  `u32 cellsCount`, `cellsCount*(u16 x,u16 y)`. Payload расходуется ровно.
+- `BLK_SENV`: минимум 32 байта; заголовок `i32`, `float×3`, `u32 soundCount`, затем
+  3 строки; далее звуки (в P1 не моделируются).
+- `BLK_WTHR`: ровно 4 байта (`u16 type`, `u16 intensity`).
+- `BLK_DOOR`: `u32 count`, затем `count*6` строк; payload расходуется ровно.
+- `BLK_LFLS`: ровно 4 байта (`u32 levelFloors`).
+
 ## Прочие форматы (следующие подпроекты)
 
 - `LVL`, `PAD`, `MDF`, `SEF`, `LAO` — уровни/маски/метаданные (`DarkContact/GoldenLandEditor`).
