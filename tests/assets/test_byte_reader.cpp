@@ -1,4 +1,5 @@
 #include <doctest/doctest.h>
+#include <limits>
 #include "gl/assets/byte_reader.hpp"
 
 using gl::assets::ByteReader;
@@ -34,4 +35,17 @@ TEST_CASE("ByteReader reads byte spans") {
     CHECK(out.size() == 2);
     CHECK(out[0] == 'a');
     CHECK(r.remaining().size() == 1);
+}
+
+TEST_CASE("ByteReader rejects huge lengths without wrapping") {
+    const std::uint8_t data[] = {1,2,3,4,5,6,7,8};
+    ByteReader r(data);
+    std::uint32_t v = 0;
+    REQUIRE(r.read_u32le(v));
+    const std::size_t huge = std::numeric_limits<std::size_t>::max();
+    std::span<const std::uint8_t> out;
+    REQUIRE_FALSE(r.read_bytes(huge, out));
+    REQUIRE(r.position() == 4);
+    REQUIRE_FALSE(r.skip(huge));
+    REQUIRE(r.position() == 4);
 }

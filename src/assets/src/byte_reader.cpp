@@ -29,13 +29,13 @@ bool ByteReader::read_u64le(std::uint64_t& out) {
     return true;
 }
 bool ByteReader::read_bytes(std::size_t n, std::span<const std::uint8_t>& out) {
-    if (pos_ + n > data_.size()) return false;
+    if (n > data_.size() - pos_) return false;
     out = data_.subspan(pos_, n);
     pos_ += n;
     return true;
 }
 bool ByteReader::skip(std::size_t n) {
-    if (pos_ + n > data_.size()) return false;
+    if (n > data_.size() - pos_) return false;
     pos_ += n;
     return true;
 }
