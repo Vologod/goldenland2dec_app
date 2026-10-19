@@ -12,6 +12,7 @@ option(GL_BUILD_TOOLS "Build CLI tools" ON)
 add_subdirectory(third_party/miniz)
 
 add_library(gl_assets STATIC
+    src/assets/src/log.cpp
     src/assets/src/byte_reader.cpp
     src/assets/src/cp1251.cpp
     src/assets/src/pak.cpp
