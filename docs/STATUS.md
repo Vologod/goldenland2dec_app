@@ -9,10 +9,11 @@
 
 ## Текущая задача
 
-**P0 — Ассеты и форматы.** Спецификация:
-`docs/specs/2026-10-19-goldenland2-android-port-design.md` (раздел 6).
+**P0 — Ассеты и форматы.** Спецификация и план готовы:
+- `docs/specs/2026-10-19-goldenland2-android-port-design.md` (раздел 6).
+- `docs/plans/2026-10-19-p0-assets-formats.md` (10 задач, TDD, приёмка).
 
-Следующий шаг: ревью спецификации пользователем → `writing-plans` → план реализации P0.
+Следующий шаг: исполнение плана (subagent-driven или inline).
 
 ## Критерии приёмки P0 (кратко)
 
@@ -31,6 +32,7 @@
 - 2026-10-19: создан git-репозиторий, коммит `cd8009e` опубликован в
   `https://github.com/Vologod/goldenland2dec_app` (ветка `main`).
   SSH: ключ `~/.ssh/id_ed25519_gl2`, repo-local `core.sshCommand`.
+- 2026-10-19: написан план реализации P0 (`docs/plans/2026-10-19-p0-assets-formats.md`).
 
 ## Следующие задачи
 
