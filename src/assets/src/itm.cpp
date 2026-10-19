@@ -45,7 +45,7 @@ Result<Item> parse_item(std::span<const std::uint8_t> data) {
         !r.read_u32le(item.perception) || !r.read_u32le(item.agility))
         return Error{ErrorCode::format, "truncated ITM requirements"};
     const std::uint32_t t = type;
-    item.has_damage = (t <= 7) || (t >= 11 && t <= 15);
+    item.has_damage = (t <= 7) || (t >= 11 && t <= 14);
     if (item.has_damage) {
         for (auto& v : item.damage) {
             if (!r.read_u32le(v)) return Error{ErrorCode::format, "truncated ITM damage"};

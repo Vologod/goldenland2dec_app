@@ -27,35 +27,40 @@ Bytes zlib_compress(const Bytes& in) {
 Bytes zlib_payload(const Bytes& content) {
     Bytes compressed = zlib_compress(content);
     Bytes payload;
-    put_u32(payload, 0);
-    put_u32(payload, static_cast<std::uint32_t>(content.size()));
+    put_u32(payload, 1);
+    put_u32(payload, static_cast<std::uint32_t>(compressed.size()));
     payload.insert(payload.end(), compressed.begin(), compressed.end());
     return payload;
 }
 Bytes raw_payload(const Bytes& content) {
     Bytes payload;
-    put_u32(payload, 1);
+    put_u32(payload, 0);
     payload.insert(payload.end(), content.begin(), content.end());
     return payload;
 }
-Bytes make_pak_from_payloads(const std::vector<std::pair<std::string, Bytes>>& files) {
+struct PayloadFile {
+    std::string name;
+    std::uint32_t unpacked_size = 0;
+    Bytes payload;
+};
+Bytes make_pak_from_payloads(const std::vector<PayloadFile>& files) {
     Bytes header = {'P','A','K',' ',0,0,0,0};
     put_u32(header, static_cast<std::uint32_t>(files.size()));
     std::uint32_t fat_size = 0;
     for (const auto& file : files)
-        fat_size += 4 + static_cast<std::uint32_t>(file.first.size()) + 4 + 4;
+        fat_size += 4 + static_cast<std::uint32_t>(file.name.size()) + 4 + 4;
     std::uint32_t running = static_cast<std::uint32_t>(header.size()) + fat_size;
     Bytes fat;
-    for (const auto& [name, payload] : files) {
-        put_u32(fat, static_cast<std::uint32_t>(name.size()));
-        fat.insert(fat.end(), name.begin(), name.end());
-        put_u32(fat, static_cast<std::uint32_t>(payload.size()));
+    for (const auto& file : files) {
+        put_u32(fat, static_cast<std::uint32_t>(file.name.size()));
+        fat.insert(fat.end(), file.name.begin(), file.name.end());
+        put_u32(fat, file.unpacked_size);
         put_u32(fat, running);
-        running += static_cast<std::uint32_t>(payload.size());
+        running += static_cast<std::uint32_t>(file.payload.size());
     }
     Bytes pak = header;
     pak.insert(pak.end(), fat.begin(), fat.end());
-    for (const auto& file : files) pak.insert(pak.end(), file.second.begin(), file.second.end());
+    for (const auto& file : files) pak.insert(pak.end(), file.payload.begin(), file.payload.end());
     return pak;
 }
 std::filesystem::path unique_temp_path() {
@@ -75,10 +80,10 @@ Bytes make_pak(const std::vector<std::pair<std::string, Bytes>>& files) {
         fat.insert(fat.end(), name.begin(), name.end());
         Bytes compressed = zlib_compress(content);
         Bytes payload;
-        put_u32(payload, 0);
-        put_u32(payload, static_cast<std::uint32_t>(content.size()));
+        put_u32(payload, 1);
+        put_u32(payload, static_cast<std::uint32_t>(compressed.size()));
         payload.insert(payload.end(), compressed.begin(), compressed.end());
-        put_u32(fat, static_cast<std::uint32_t>(payload.size()));
+        put_u32(fat, static_cast<std::uint32_t>(content.size()));
         put_u32(fat, 0); // offset patched below
         payloads.push_back(std::move(payload));
     }
@@ -149,7 +154,8 @@ TEST_CASE("PAK: lookup is case-insensitive and slash-normalized") {
 
 TEST_CASE("PAK: reads raw (uncompressed) entries") {
     const Bytes raw = {'r','a','w',0x00,0xFF};
-    Bytes pak = make_pak_from_payloads({{"raw/bin.dat", raw_payload(raw)}});
+    Bytes pak = make_pak_from_payloads(
+        {{"raw/bin.dat", static_cast<std::uint32_t>(raw.size()), raw_payload(raw)}});
     auto archive = PakArchive::open_from_memory(std::move(pak));
     REQUIRE(archive.has_value());
     const PakEntry* entry = archive->find("raw/bin.dat");
@@ -160,7 +166,7 @@ TEST_CASE("PAK: reads raw (uncompressed) entries") {
 }
 
 TEST_CASE("PAK: reads zero-length uncompressed entries") {
-    Bytes pak = make_pak_from_payloads({{"empty", zlib_payload({})}});
+    Bytes pak = make_pak_from_payloads({{"empty", 0, zlib_payload({})}});
     auto archive = PakArchive::open_from_memory(std::move(pak));
     REQUIRE(archive.has_value());
     auto data = archive->read(archive->entries()[0]);
@@ -170,11 +176,11 @@ TEST_CASE("PAK: reads zero-length uncompressed entries") {
 
 TEST_CASE("PAK: rejects corrupt zlib") {
     Bytes payload;
-    put_u32(payload, 0);
+    put_u32(payload, 1);
     put_u32(payload, 8);
     const Bytes garbage = {0xDE,0xAD,0xBE,0xEF,0xDE,0xAD,0xBE,0xEF};
     payload.insert(payload.end(), garbage.begin(), garbage.end());
-    Bytes pak = make_pak_from_payloads({{"bad.bin", payload}});
+    Bytes pak = make_pak_from_payloads({{"bad.bin", 8, payload}});
     auto archive = PakArchive::open_from_memory(std::move(pak));
     REQUIRE(archive.has_value());
     auto data = archive->read(archive->entries()[0]);

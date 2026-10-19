@@ -22,8 +22,8 @@ struct ArchiveInfo {
 
 struct VfsEntry {
     std::string path;
-    // On-disk archive payload size, not the decompressed content size.
-    std::uint64_t compressed_size = 0;
+    // Uncompressed (FAT) size reported by the source archive.
+    std::uint64_t uncompressed_size = 0;
     std::string source;
 };
 

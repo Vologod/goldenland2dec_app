@@ -13,6 +13,7 @@ constexpr std::uint64_t kMaxEntrySize = 512ull * 1024 * 1024;
 
 struct PakEntry {
     std::string name;
+    // Uncompressed (FAT) size, not the on-disk payload size.
     std::uint32_t size = 0;
     std::uint32_t offset = 0;
 };

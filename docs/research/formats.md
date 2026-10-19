@@ -17,7 +17,7 @@ count      : uint32  (little-endian)
 FAT[count] : {
   name_len : uint32
   name     : name_len байт, cp1251, путь с обратными слэшами
-  size     : uint32  (размер данных в архиве)
+  size     : uint32  (распакованный размер данных)
   offset   : uint32  (абсолютное смещение от начала файла)
 }
 ```
@@ -25,16 +25,18 @@ FAT[count] : {
 Данные по `offset`:
 
 ```
-compressed   : uint32
-if compressed == 0:
-    unpacked_size : uint32
-    data          : zlib-поток
+mode         : uint32  (0 — raw, иначе — zlib)
+if mode == 0:
+    data     : raw, ровно `size` байт
 else:
-    data          : raw (проверить в P0)
+    stored   : uint32  (длина zlib-потока в архиве)
+    data     : zlib-поток, разворачивается в `size` байт
 ```
 
-Подтверждение на реальных заголовках: `engineres.pak` = `PAK \0\0\0\0`, count `0x3CE` (974),
-первый `name_len` = `0x18` (24).
+Проверено 2026-10-19 на всех `.pak` в `I:\Games\Златогорье-2\Data` (mode 0 / 1,
+`offset + заголовок + data` не выходит за файл): `scripts.pak` count `0x1185` (4485),
+`sdb.pak` 45, `items.pak` 3786, `engineres.pak` `0x411` (1041). Сумма `size` по `items.pak`
+совпадает с распакованным итогом 28 847 595.
 
 ## CSX (спрайт с палитрой)
 

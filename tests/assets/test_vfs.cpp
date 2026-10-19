@@ -29,10 +29,10 @@ Bytes make_pak(const std::vector<std::pair<std::string, Bytes>>& files) {
         mz_compress(compressed.data(), &bound, content.data(), content.size());
         compressed.resize(bound);
         Bytes payload;
-        put_u32(payload, 0);
-        put_u32(payload, static_cast<std::uint32_t>(content.size()));
+        put_u32(payload, 1);
+        put_u32(payload, static_cast<std::uint32_t>(compressed.size()));
         payload.insert(payload.end(), compressed.begin(), compressed.end());
-        put_u32(fat, static_cast<std::uint32_t>(payload.size()));
+        put_u32(fat, static_cast<std::uint32_t>(content.size()));
         put_u32(fat, 0);
         payloads.push_back(std::move(payload));
     }
@@ -139,7 +139,7 @@ TEST_CASE("VFS: exists and list cover merged archive view only") {
     const auto entries = vfs->list();
     REQUIRE(entries.size() == 1);
     CHECK(entries[0].path == "a/b.txt");
-    CHECK(entries[0].compressed_size > 0);
+    CHECK(entries[0].uncompressed_size > 0);
     CHECK(entries[0].source == "world.pak");
 
     std::filesystem::remove_all(dir);

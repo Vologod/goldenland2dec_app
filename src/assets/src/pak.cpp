@@ -18,24 +18,16 @@ bool read_stream_u32(std::istream& in, std::uint32_t& out) {
           (std::uint32_t(b[2]) << 16) | (std::uint32_t(b[3]) << 24);
     return true;
 }
-Result<Bytes> read_payload(std::span<const std::uint8_t> payload, std::uint64_t entry_size) {
-    if (entry_size < 4) return Error{ErrorCode::format, "entry too small"};
-    ByteReader r(payload);
-    std::uint32_t compressed = 0;
-    if (!r.read_u32le(compressed)) return Error{ErrorCode::format, "missing compression flag"};
-    if (compressed == 0) {
-        std::uint32_t unpacked = 0;
-        if (!r.read_u32le(unpacked)) return Error{ErrorCode::format, "missing unpacked size"};
-        if (unpacked > kMaxEntrySize) return Error{ErrorCode::format, "entry too large"};
-        Bytes out(unpacked);
-        mz_ulong out_len = unpacked;
-        int status = mz_uncompress(out.data(), &out_len, r.remaining().data(), r.remaining().size());
-        if (status != MZ_OK || out_len != unpacked)
-            return Error{ErrorCode::format, "zlib decompression failed"};
-        return out;
-    }
-    Bytes out(r.remaining().begin(), r.remaining().end());
-    if (out.size() > kMaxEntrySize) return Error{ErrorCode::format, "entry too large"};
+
+Result<Bytes> inflate_zlib(std::span<const std::uint8_t> data, std::uint32_t unpacked_size) {
+    if (unpacked_size > kMaxEntrySize) return Error{ErrorCode::format, "entry too large"};
+    if (data.empty()) return Error{ErrorCode::format, "empty zlib stream"};
+    Bytes out(unpacked_size > 0 ? unpacked_size : 1);
+    mz_ulong out_len = unpacked_size;
+    const int status = mz_uncompress(out.data(), &out_len, data.data(), data.size());
+    if (status != MZ_OK || out_len != unpacked_size)
+        return Error{ErrorCode::format, "zlib decompression failed"};
+    out.resize(unpacked_size);
     return out;
 }
 }
@@ -69,7 +61,7 @@ Result<PakArchive> PakArchive::parse_memory(ByteReader& reader, std::uint64_t fi
         std::uint32_t size = 0, offset = 0;
         if (!reader.read_u32le(size) || !reader.read_u32le(offset))
             return Error{ErrorCode::format, "truncated entry header"};
-        if (size < 4 || std::uint64_t(offset) + size > file_size)
+        if (offset >= file_size || size > kMaxEntrySize)
             return Error{ErrorCode::format, "entry outside archive"};
         archive.entries_.push_back({std::string(reinterpret_cast<const char*>(name.data()), name.size()),
                                     size, offset});
@@ -112,7 +104,7 @@ Result<PakArchive> PakArchive::open_from_file(const std::filesystem::path& path)
         std::uint32_t size = 0, offset = 0;
         if (!read_stream_u32(in, size) || !read_stream_u32(in, offset))
             return Error{ErrorCode::format, "truncated entry header"};
-        if (size < 4 || std::uint64_t(offset) + size > file_size)
+        if (offset >= file_size || size > kMaxEntrySize)
             return Error{ErrorCode::format, "entry outside archive"};
         archive.entries_.push_back({std::move(name), size, offset});
     }
@@ -120,23 +112,48 @@ Result<PakArchive> PakArchive::open_from_file(const std::filesystem::path& path)
 }
 
 Result<Bytes> PakArchive::read(const PakEntry& entry) const {
-    if (entry.size < 4 || entry.size > kMaxEntrySize) return Error{ErrorCode::format, "bad entry size"};
-    const std::uint64_t end = std::uint64_t(entry.offset) + entry.size;
+    if (entry.size > kMaxEntrySize) return Error{ErrorCode::format, "entry too large"};
     if (in_memory_) {
-        if (end > memory_.size()) return Error{ErrorCode::format, "entry outside archive"};
-    } else if (end > file_size_) {
-        return Error{ErrorCode::format, "entry outside archive"};
-    }
-    Bytes payload(entry.size);
-    if (in_memory_) {
-        std::memcpy(payload.data(), memory_.data() + entry.offset, entry.size);
-    } else {
-        std::ifstream in(path_, std::ios::binary);
-        if (!in) return Error{ErrorCode::io, "cannot open PAK: " + path_.string()};
-        in.seekg(static_cast<std::streamoff>(entry.offset));
-        if (!in.read(reinterpret_cast<char*>(payload.data()), entry.size))
+        const std::size_t offset = entry.offset;
+        if (offset > memory_.size() || memory_.size() - offset < 4)
             return Error{ErrorCode::format, "truncated entry payload"};
+        ByteReader r(std::span<const std::uint8_t>(memory_).subspan(offset));
+        std::uint32_t compressed = 0;
+        if (!r.read_u32le(compressed)) return Error{ErrorCode::format, "missing compression flag"};
+        if (compressed == 0) {
+            if (r.remaining().size() < entry.size)
+                return Error{ErrorCode::format, "truncated raw entry"};
+            return Bytes(r.remaining().begin(), r.remaining().begin() + entry.size);
+        }
+        std::uint32_t stored = 0;
+        if (!r.read_u32le(stored)) return Error{ErrorCode::format, "missing stored size"};
+        if (stored > kMaxEntrySize) return Error{ErrorCode::format, "entry too large"};
+        if (r.remaining().size() < stored)
+            return Error{ErrorCode::format, "truncated compressed entry"};
+        return inflate_zlib(r.remaining().first(stored), entry.size);
     }
-    return read_payload(payload, entry.size);
+
+    std::ifstream in(path_, std::ios::binary);
+    if (!in) return Error{ErrorCode::io, "cannot open PAK: " + path_.string()};
+    in.seekg(static_cast<std::streamoff>(entry.offset));
+    if (!in) return Error{ErrorCode::io, "cannot seek PAK: " + path_.string()};
+    std::uint32_t compressed = 0;
+    if (!read_stream_u32(in, compressed))
+        return Error{ErrorCode::format, "truncated entry payload"};
+    if (compressed == 0) {
+        Bytes out(entry.size);
+        if (!out.empty() &&
+            !in.read(reinterpret_cast<char*>(out.data()), static_cast<std::streamsize>(out.size())))
+            return Error{ErrorCode::format, "truncated entry payload"};
+        return out;
+    }
+    std::uint32_t stored = 0;
+    if (!read_stream_u32(in, stored)) return Error{ErrorCode::format, "truncated entry payload"};
+    if (stored > kMaxEntrySize) return Error{ErrorCode::format, "entry too large"};
+    Bytes payload(stored);
+    if (!payload.empty() &&
+        !in.read(reinterpret_cast<char*>(payload.data()), static_cast<std::streamsize>(payload.size())))
+        return Error{ErrorCode::format, "truncated entry payload"};
+    return inflate_zlib(std::span<const std::uint8_t>(payload), entry.size);
 }
 }
