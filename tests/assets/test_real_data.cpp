@@ -1,20 +1,21 @@
-#include "gl/assets/csx.hpp"
 #include "gl/assets/itm.hpp"
 #include "gl/assets/pak.hpp"
 #include "gl/assets/sdb.hpp"
 #include "gl/assets/vfs.hpp"
+#include <cstddef>
 #include <cstdlib>
 #include <doctest/doctest.h>
-#include <filesystem>
+#include <string_view>
 
 using namespace gl::assets;
 
-TEST_CASE("real data: archive counts and samples") {
+namespace {
+bool game_dir_available() { return std::getenv("GL_GAME_DIR") != nullptr; }
+} // namespace
+
+TEST_CASE("real data: archive counts and samples" * doctest::skip(!game_dir_available())) {
     const char *dir = std::getenv("GL_GAME_DIR");
-    if (!dir) {
-        MESSAGE("GL_GAME_DIR not set; skipping");
-        return;
-    }
+    REQUIRE(dir != nullptr);
     auto vfs = GameVfs::mount(dir);
     REQUIRE(vfs.has_value());
 
