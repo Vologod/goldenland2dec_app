@@ -8,6 +8,13 @@ P0 завершена и принята. Текущая фаза — P1: заг�
 
 ## Текущая задача
 
+**P1 — Level viewer.** Task 1 завершён: SDL2 (`release-2.32.10`, FetchContent),
+`gl_platform` (`SdlContext`, `Window`), placeholder-таргеты `gl_render`/`gl_game`,
+`glview` с `--help` и окном 1280×720 (закрытие по Esc/quit).
+Проверено: сборка без предупреждений в first-party коде; `ctest` без `GL_GAME_DIR` —
+2 passed + 1 skipped; `gl_assets_real_tests` с `GL_GAME_DIR` — 2/2 (32 assertions);
+окно открыто и закрыто с exit 0.
+
 **P0 — Ассеты и форматы.** Реализация и приёмка завершены (Tasks 0–10).
 
 Перед запуском `glpak` и тестов LLVM-MinGW `bin` должен быть в `PATH`
@@ -58,6 +65,8 @@ P0 завершена и принята. Текущая фаза — P1: заг�
   факты зафиксированы в `docs/research/formats.md`.
 - 2026-10-19: Task 10 — `gl_assets_real_tests` (`GL_GAME_DIR`), приёмка распаковки
   и CSX-декодирования; P0 закрыт.
+- 2026-10-19: P1 Task 1 — `cmake/SDL2.cmake` (FetchContent, SDL2 `release-2.32.10`),
+  `gl_platform` (`SdlContext`/`Window`), `gl_render`/`gl_game` placeholders, `glview`.
 - 2026-10-19: финальная волна правок P0 — продолжение batch-extract после битых
   записей (exit 3), CLI-тест, полное real-data декодирование `.csx/.sdb/.itm`,
   проверка размеров изображений до аллокации, валидация дубликатов/перекрытий PAK,

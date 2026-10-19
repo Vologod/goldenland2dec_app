@@ -29,8 +29,15 @@ target_include_directories(gl_assets PRIVATE third_party/stb)
 include(cmake/CompilerWarnings.cmake)
 gl_enable_warnings(gl_assets)
 
+include(cmake/SDL2.cmake)
+
+add_subdirectory(src/platform)
+add_subdirectory(src/render)
+add_subdirectory(src/game)
+
 if (GL_BUILD_TOOLS)
     add_subdirectory(tools/glpak)
+    add_subdirectory(tools/glview)
 endif()
 
 if (GL_BUILD_TESTS)
