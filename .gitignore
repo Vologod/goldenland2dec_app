@@ -1,0 +1,24 @@
+# Build output
+/build/
+/out/
+/.local/
+/.vs/
+*.user
+*.suo
+
+# Editors / OS
+.DS_Store
+Thumbs.db
+*.swp
+
+# Game data must never be committed
+/Data/
+GameData/
+*.pak
+*.sav
+*.hero
+*.dll
+*.exe
+!third_party/**/*.dll
+!third_party/**/*.exe
+!tools/**/*.exe
