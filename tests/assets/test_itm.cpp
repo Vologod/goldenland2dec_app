@@ -30,6 +30,11 @@ Bytes base(std::uint32_t type, std::uint32_t flags) {
     put_u32(b, 0xFFFFFFFF); // material
     return b;
 }
+void check_format_error(const Bytes& b) {
+    auto item = parse_item(b);
+    REQUIRE_FALSE(item.has_value());
+    CHECK(item.error().code == gl::ErrorCode::format);
+}
 }
 
 TEST_CASE("ITM: parses a sword with damage") {
@@ -169,40 +174,88 @@ TEST_CASE("ITM: parses non-empty effects with timings") {
 TEST_CASE("ITM: rejects truncation in major blocks") {
     SUBCASE("shell") {
         Bytes b = base(0, 1u << 4);
-        auto item = parse_item(b);
-        REQUIRE_FALSE(item.has_value());
-        CHECK(item.error().code == gl::ErrorCode::format);
+        const auto shell_start = b.size();
+        put_str(b, "shell.bmp");
+        put_requirements(b);
+        for (int i = 0; i < 6; ++i) put_u32(b, 0);
+        put_u32(b, 0);
+        b.resize(shell_start + 4 + 3);
+        check_format_error(b);
     }
     SUBCASE("requirements") {
         Bytes b = base(0, 0);
-        auto item = parse_item(b);
-        REQUIRE_FALSE(item.has_value());
-        CHECK(item.error().code == gl::ErrorCode::format);
+        check_format_error(b);
     }
     SUBCASE("damage") {
         Bytes b = base(0, 0);
         put_requirements(b);
-        for (int i = 0; i < 5; ++i) put_u32(b, 0);
-        auto item = parse_item(b);
-        REQUIRE_FALSE(item.has_value());
-        CHECK(item.error().code == gl::ErrorCode::format);
+        const auto damage_start = b.size();
+        for (int i = 0; i < 6; ++i) put_u32(b, 0x11111111u);
+        put_u32(b, 0);
+        b.resize(damage_start + 4 * 4 + 2);
+        check_format_error(b);
     }
     SUBCASE("spell") {
         Bytes b = base(21, 0);
         put_requirements(b);
+        const auto spell_start = b.size();
         put_u32(b, 123);
-        auto item = parse_item(b);
-        REQUIRE_FALSE(item.has_value());
-        CHECK(item.error().code == gl::ErrorCode::format);
+        put_u32(b, 0);
+        put_u32(b, 0);
+        b.resize(spell_start + 4 + 2);
+        check_format_error(b);
     }
-    SUBCASE("effects") {
-        Bytes b = base(21, 0);
+    SUBCASE("charge") {
+        Bytes b = base(6, 0);
         put_requirements(b);
-        put_u32(b, 123); put_u32(b, 0);
-        put_u32(b, 1);
-        auto item = parse_item(b);
-        REQUIRE_FALSE(item.has_value());
-        CHECK(item.error().code == gl::ErrorCode::format);
+        for (int i = 0; i < 6; ++i) put_u32(b, 0);
+        put_u32(b, 321); put_u32(b, 0);
+        const auto charge_start = b.size();
+        put_u32(b, 7);
+        put_u32(b, 0);
+        b.resize(charge_start + 2);
+        check_format_error(b);
+    }
+    SUBCASE("healing") {
+        Bytes b = base(19, 0);
+        put_requirements(b);
+        const auto healing_start = b.size();
+        put_u32(b, 50); put_u32(b, 25);
+        put_u32(b, 0);
+        b.resize(healing_start + 4 + 2);
+        check_format_error(b);
+    }
+    SUBCASE("recipe") {
+        Bytes b = base(26, 0);
+        put_requirements(b);
+        const auto recipe_start = b.size();
+        put_u32(b, 11); put_u32(b, 22); put_u32(b, 33);
+        put_u32(b, 0);
+        b.resize(recipe_start + 4 + 2);
+        check_format_error(b);
+    }
+    SUBCASE("damage_type") {
+        Bytes b = base(8, 0);
+        put_requirements(b);
+        const auto damage_type_start = b.size();
+        put_u32(b, 5);
+        put_u32(b, 0);
+        b.resize(damage_type_start + 2);
+        check_format_error(b);
+    }
+    SUBCASE("missing effects count") {
+        Bytes b = base(0, 0);
+        put_requirements(b);
+        for (int i = 0; i < 6; ++i) put_u32(b, 0);
+        check_format_error(b);
+    }
+    SUBCASE("mid-effect") {
+        Bytes b = base(0, 0);
+        put_requirements(b);
+        for (int i = 0; i < 6; ++i) put_u32(b, 0);
+        put_u32(b, 1); put_u32(b, 2); put_u32(b, 3); put_u32(b, 4);
+        b.push_back(5);
+        check_format_error(b);
     }
 }
 
