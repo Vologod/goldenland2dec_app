@@ -303,13 +303,16 @@ using gl::assets::ByteReader;
 TEST_CASE("ByteReader reads little-endian integers") {
     const std::uint8_t data[] = {1,2,3,4,5,6,7,8};
     ByteReader r(data);
-    std::uint32_t v = 0;
-    REQUIRE(r.read_u32le(v));
-    CHECK(v == 0x04030201u);
     std::uint64_t q = 0;
     REQUIRE(r.read_u64le(q));
     CHECK(q == 0x0807060504030201ull);
     CHECK(r.at_end());
+
+    ByteReader r2(data);
+    std::uint32_t v = 0;
+    REQUIRE(r2.read_u32le(v));
+    CHECK(v == 0x04030201u);
+    CHECK(r2.position() == 4);
 }
 
 TEST_CASE("ByteReader fails without advancing on short input") {
