@@ -2,6 +2,7 @@
 #include "gl/assets/bytes.hpp"
 #include "gl/assets/pak.hpp"
 #include "gl/assets/result.hpp"
+#include <cstddef>
 #include <cstdint>
 #include <filesystem>
 #include <map>
@@ -21,7 +22,8 @@ struct ArchiveInfo {
 
 struct VfsEntry {
     std::string path;
-    std::uint64_t size = 0;
+    // On-disk archive payload size, not the decompressed content size.
+    std::uint64_t compressed_size = 0;
     std::string source;
 };
 
@@ -46,5 +48,6 @@ private:
     std::vector<std::unique_ptr<PakArchive>> paks_;
     std::vector<ArchiveInfo> archives_;
     std::map<std::string, Location, std::less<>> index_;
+    std::map<std::string, std::filesystem::path, std::less<>> loose_index_;
 };
 }
