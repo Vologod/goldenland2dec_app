@@ -305,14 +305,14 @@ int cmd_extract(const std::vector<std::string>& args) {
     if (options.all) {
         for (const auto& entry : vfs.list()) {
             if (!extract_batch_entry(out_dir, entry.path, vfs.read(entry.path), stats))
-                return kIo;
+                return stats.format_error ? kFormat : kIo;
         }
     } else if (options.archive) {
         const PakArchive* archive = vfs.archive(*options.archive);
         if (!archive) return fail("unknown archive: " + *options.archive, kArgument);
         for (const auto& entry : archive->entries()) {
             if (!extract_batch_entry(out_dir, entry.name, archive->read(entry), stats))
-                return kIo;
+                return stats.format_error ? kFormat : kIo;
         }
     } else if (options.file) {
         if (!gl::assets::is_safe_relative_path(*options.file)) {
@@ -334,7 +334,7 @@ int cmd_extract(const std::vector<std::string>& args) {
         for (const auto& entry : vfs.list()) {
             if (!entry.path.starts_with(prefix)) continue;
             if (!extract_batch_entry(out_dir, entry.path, vfs.read(entry.path), stats))
-                return kIo;
+                return stats.format_error ? kFormat : kIo;
         }
     }
     std::cout << "extracted " << stats.written << " file(s)\n";
