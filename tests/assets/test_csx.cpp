@@ -173,7 +173,7 @@ TEST_CASE("CSX: rejects truncated run operands") {
 
 TEST_CASE("CSX: rejects images above the total pixel limit") {
     std::vector<std::uint32_t> palette = {0x000000, 0x00FF00};
-    Bytes data = make_csx({}, {}, 2048, 8193, palette);
+    Bytes data = make_csx({}, {}, 4096, 16385, palette);
     auto img = decode_csx(data);
     REQUIRE_FALSE(img.has_value());
     CHECK(img.error().code == gl::ErrorCode::format);

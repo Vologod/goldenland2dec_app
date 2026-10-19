@@ -4,7 +4,8 @@
 
 namespace gl::assets {
 namespace {
-constexpr std::uint64_t kMaxPixels = 16ull * 1024 * 1024;
+constexpr std::uint64_t kMaxPixels = 64ull * 1024 * 1024;
+constexpr std::uint32_t kMaxDimension = 1'000'000;
 }
 
 Result<CsxImage> decode_csx(std::span<const std::uint8_t> data) {
@@ -21,7 +22,8 @@ Result<CsxImage> decode_csx(std::span<const std::uint8_t> data) {
             if (!r.read_u32le(c)) return Error{ErrorCode::format, "truncated CSX palette"};
         if (!r.read_u32le(image.width) || !r.read_u32le(image.height))
             return Error{ErrorCode::format, "truncated CSX dimensions"};
-        if (image.width == 0 || image.height == 0 || image.width > 16384 || image.height > 16384)
+        if (image.width == 0 || image.height == 0 || image.width > kMaxDimension ||
+            image.height > kMaxDimension)
             return Error{ErrorCode::format, "bad CSX dimensions"};
         if (static_cast<std::uint64_t>(image.width) * image.height > kMaxPixels)
             return Error{ErrorCode::format, "CSX pixel limit exceeded"};

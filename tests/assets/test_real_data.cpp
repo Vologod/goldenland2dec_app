@@ -1,16 +1,32 @@
+#include "gl/assets/csx.hpp"
 #include "gl/assets/itm.hpp"
 #include "gl/assets/pak.hpp"
 #include "gl/assets/sdb.hpp"
 #include "gl/assets/vfs.hpp"
+#include <array>
+#include <cctype>
 #include <cstddef>
 #include <cstdlib>
 #include <doctest/doctest.h>
+#include <iostream>
+#include <string>
 #include <string_view>
 
 using namespace gl::assets;
 
 namespace {
 bool game_dir_available() { return std::getenv("GL_GAME_DIR") != nullptr; }
+
+std::string lower_extension(std::string_view name) {
+    const std::size_t slash = name.find_last_of("/\\");
+    const std::size_t dot = name.find_last_of('.');
+    if (dot == std::string_view::npos || (slash != std::string_view::npos && dot < slash))
+        return {};
+    std::string ext(name.substr(dot));
+    for (char& c : ext)
+        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    return ext;
+}
 } // namespace
 
 TEST_CASE("real data: archive counts and samples" * doctest::skip(!game_dir_available())) {
@@ -39,4 +55,73 @@ TEST_CASE("real data: archive counts and samples" * doctest::skip(!game_dir_avai
     REQUIRE(item.has_value());
     auto parsed = parse_item(item.value());
     CHECK(parsed.has_value());
+}
+
+TEST_CASE("real data: every non-empty CSX, SDB and ITM entry decodes" *
+          doctest::skip(!game_dir_available())) {
+    const char *dir = std::getenv("GL_GAME_DIR");
+    REQUIRE(dir != nullptr);
+    auto vfs = GameVfs::mount(dir);
+    REQUIRE(vfs.has_value());
+
+    enum Kind { kCsx, kSdb, kItm, kKindCount };
+    std::array<std::size_t, kKindCount> decoded{};
+    std::array<std::size_t, kKindCount> empty{};
+    std::size_t failures = 0;
+
+    for (const auto& info : vfs->archives()) {
+        const PakArchive* archive = vfs->archive(info.name);
+        REQUIRE(archive != nullptr);
+        for (const auto& entry : archive->entries()) {
+            const std::string ext = lower_extension(entry.name);
+            Kind kind = kKindCount;
+            if (ext == ".csx") kind = kCsx;
+            else if (ext == ".sdb") kind = kSdb;
+            else if (ext == ".itm") kind = kItm;
+            if (kind == kKindCount) continue;
+
+            auto data = archive->read(entry);
+            if (!data) {
+                ++failures;
+                std::cout << "read failure: " << info.name << ':' << entry.name << ": "
+                          << data.error().message << '\n';
+                continue;
+            }
+            if (data.value().empty()) {
+                ++empty[static_cast<std::size_t>(kind)];
+                continue;
+            }
+            bool ok = false;
+            std::string reason;
+            if (kind == kCsx) {
+                auto result = decode_csx(data.value());
+                ok = result.has_value();
+                if (!ok) reason = result.error().message;
+            } else if (kind == kSdb) {
+                auto result = Sdb::parse(data.value());
+                ok = result.has_value();
+                if (!ok) reason = result.error().message;
+            } else {
+                auto result = parse_item(data.value());
+                ok = result.has_value();
+                if (!ok) reason = result.error().message;
+            }
+            if (ok) {
+                ++decoded[static_cast<std::size_t>(kind)];
+            } else {
+                ++failures;
+                std::cout << "decode failure: " << info.name << ':' << entry.name << ": " << reason
+                          << '\n';
+            }
+        }
+    }
+
+    std::cout << "real data decoded: .csx=" << decoded[kCsx] << " .sdb=" << decoded[kSdb]
+              << " .itm=" << decoded[kItm] << '\n';
+    std::cout << "real data empty: .csx=" << empty[kCsx] << " .sdb=" << empty[kSdb]
+              << " .itm=" << empty[kItm] << '\n';
+    CHECK(failures == 0);
+    CHECK(decoded[kCsx] > 0);
+    CHECK(decoded[kSdb] > 0);
+    CHECK(decoded[kItm] > 0);
 }
