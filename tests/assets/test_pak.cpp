@@ -1,0 +1,101 @@
+#include <doctest/doctest.h>
+#include "gl/assets/pak.hpp"
+#include <miniz.h>
+#include <filesystem>
+#include <fstream>
+
+using namespace gl::assets;
+
+namespace {
+void put_u32(Bytes& b, std::uint32_t v) {
+    b.push_back(v & 0xFF); b.push_back((v >> 8) & 0xFF);
+    b.push_back((v >> 16) & 0xFF); b.push_back((v >> 24) & 0xFF);
+}
+Bytes zlib_compress(const Bytes& in) {
+    mz_ulong out_len = mz_compressBound(in.size());
+    Bytes out(out_len);
+    REQUIRE(mz_compress(out.data(), &out_len, in.data(), in.size()) == MZ_OK);
+    out.resize(out_len);
+    return out;
+}
+Bytes make_pak(const std::vector<std::pair<std::string, Bytes>>& files) {
+    Bytes header = {'P','A','K',' ',0,0,0,0};
+    put_u32(header, static_cast<std::uint32_t>(files.size()));
+    Bytes fat;
+    std::vector<Bytes> payloads;
+    for (const auto& [name, content] : files) {
+        put_u32(fat, static_cast<std::uint32_t>(name.size()));
+        fat.insert(fat.end(), name.begin(), name.end());
+        Bytes compressed = zlib_compress(content);
+        Bytes payload;
+        put_u32(payload, 0);
+        put_u32(payload, static_cast<std::uint32_t>(content.size()));
+        payload.insert(payload.end(), compressed.begin(), compressed.end());
+        put_u32(fat, static_cast<std::uint32_t>(payload.size()));
+        put_u32(fat, 0); // offset patched below
+        payloads.push_back(std::move(payload));
+    }
+    std::uint32_t running = static_cast<std::uint32_t>(header.size() + fat.size());
+    std::size_t pos = 0;
+    for (std::size_t i = 0; i < files.size(); ++i) {
+        pos += 4 + files[i].first.size() + 4;
+        fat[pos + 0] = running & 0xFF;
+        fat[pos + 1] = (running >> 8) & 0xFF;
+        fat[pos + 2] = (running >> 16) & 0xFF;
+        fat[pos + 3] = (running >> 24) & 0xFF;
+        pos += 4;
+        running += static_cast<std::uint32_t>(payloads[i].size());
+    }
+    Bytes pak = header;
+    pak.insert(pak.end(), fat.begin(), fat.end());
+    for (const auto& p : payloads) pak.insert(pak.end(), p.begin(), p.end());
+    return pak;
+}
+}
+
+TEST_CASE("PAK: reads zlib entries from memory") {
+    Bytes pak = make_pak({{"scripts/a.scr", {'h','e','l','l','o'}}});
+    auto archive = PakArchive::open_from_memory(std::move(pak));
+    REQUIRE(archive.has_value());
+    REQUIRE(archive->entries().size() == 1);
+    CHECK(archive->entries()[0].name == "scripts/a.scr");
+    auto data = archive->read(archive->entries()[0]);
+    REQUIRE(data.has_value());
+    CHECK(Bytes(data->begin(), data->end()) == Bytes{'h','e','l','l','o'});
+}
+
+TEST_CASE("PAK: rejects bad magic and truncated data") {
+    Bytes bad = {'N','O','P','E',0,0,0,0};
+    auto r = PakArchive::open_from_memory(std::move(bad));
+    REQUIRE_FALSE(r.has_value());
+    CHECK(r.error().code == gl::ErrorCode::format);
+
+    Bytes pak = make_pak({{"a", {'x'}}});
+    pak.resize(pak.size() - 1);
+    auto t = PakArchive::open_from_memory(std::move(pak));
+    // Truncation may be detected at read time, not open time.
+    if (t.has_value()) {
+        auto data = t->read(t->entries()[0]);
+        CHECK_FALSE(data.has_value());
+    }
+}
+
+TEST_CASE("PAK: opens from a file") {
+    Bytes pak = make_pak({{"a", {'x','y'}}, {"b", {'z'}}});
+    auto path = std::filesystem::temp_directory_path() / "gl_pak_test.pak";
+    { std::ofstream out(path, std::ios::binary); out.write(reinterpret_cast<const char*>(pak.data()), pak.size()); }
+    auto archive = PakArchive::open_from_file(path);
+    REQUIRE(archive.has_value());
+    CHECK(archive->entries().size() == 2);
+    auto data = archive->read(archive->entries()[1]);
+    REQUIRE(data.has_value());
+    CHECK(Bytes(data->begin(), data->end()) == Bytes{'z'});
+    std::filesystem::remove(path);
+}
+
+TEST_CASE("PAK: lookup is case-insensitive and slash-normalized") {
+    Bytes pak = make_pak({{"Scripts\\A.SCR", {'x'}}});
+    auto archive = PakArchive::open_from_memory(std::move(pak));
+    REQUIRE(archive.has_value());
+    CHECK(archive->find("scripts/a.scr") != nullptr);
+}
