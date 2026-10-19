@@ -13,8 +13,8 @@
 - `docs/specs/2026-10-19-goldenland2-android-port-design.md` (раздел 6).
 - `docs/plans/2026-10-19-p0-assets-formats.md` (10 задач, TDD, приёмка).
 
-Следующий шаг: исполнение плана (subagent-driven). Tasks 0–7 завершены, review пройден;
-далее Task 8 (image).
+Следующий шаг: исполнение плана (subagent-driven). Tasks 0–8 завершены, review пройден;
+далее Task 9 (CLI glpak).
 
 ## Критерии приёмки P0 (кратко)
 
