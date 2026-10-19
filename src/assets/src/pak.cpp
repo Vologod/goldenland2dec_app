@@ -1,7 +1,11 @@
 #include "gl/assets/pak.hpp"
 #include "gl/assets/cp1251.hpp"
+#include <cstdint>
 #include <cstring>
 #include <fstream>
+#include <istream>
+#include <span>
+#include <string_view>
 #include <utility>
 #include <miniz.h>
 
@@ -117,10 +121,14 @@ Result<PakArchive> PakArchive::open_from_file(const std::filesystem::path& path)
 
 Result<Bytes> PakArchive::read(const PakEntry& entry) const {
     if (entry.size < 4 || entry.size > kMaxEntrySize) return Error{ErrorCode::format, "bad entry size"};
+    const std::uint64_t end = std::uint64_t(entry.offset) + entry.size;
+    if (in_memory_) {
+        if (end > memory_.size()) return Error{ErrorCode::format, "entry outside archive"};
+    } else if (end > file_size_) {
+        return Error{ErrorCode::format, "entry outside archive"};
+    }
     Bytes payload(entry.size);
     if (in_memory_) {
-        if (std::uint64_t(entry.offset) + entry.size > memory_.size())
-            return Error{ErrorCode::format, "entry outside archive"};
         std::memcpy(payload.data(), memory_.data() + entry.offset, entry.size);
     } else {
         std::ifstream in(path_, std::ios::binary);

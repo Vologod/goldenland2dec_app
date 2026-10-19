@@ -2,8 +2,10 @@
 #include "gl/assets/byte_reader.hpp"
 #include "gl/assets/bytes.hpp"
 #include "gl/assets/result.hpp"
+#include <cstdint>
 #include <filesystem>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace gl::assets {

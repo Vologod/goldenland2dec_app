@@ -1,8 +1,14 @@
 #include <doctest/doctest.h>
 #include "gl/assets/pak.hpp"
 #include <miniz.h>
+#include <atomic>
+#include <chrono>
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
+#include <string>
+#include <utility>
+#include <vector>
 
 using namespace gl::assets;
 
@@ -17,6 +23,47 @@ Bytes zlib_compress(const Bytes& in) {
     REQUIRE(mz_compress(out.data(), &out_len, in.data(), in.size()) == MZ_OK);
     out.resize(out_len);
     return out;
+}
+Bytes zlib_payload(const Bytes& content) {
+    Bytes compressed = zlib_compress(content);
+    Bytes payload;
+    put_u32(payload, 0);
+    put_u32(payload, static_cast<std::uint32_t>(content.size()));
+    payload.insert(payload.end(), compressed.begin(), compressed.end());
+    return payload;
+}
+Bytes raw_payload(const Bytes& content) {
+    Bytes payload;
+    put_u32(payload, 1);
+    payload.insert(payload.end(), content.begin(), content.end());
+    return payload;
+}
+Bytes make_pak_from_payloads(const std::vector<std::pair<std::string, Bytes>>& files) {
+    Bytes header = {'P','A','K',' ',0,0,0,0};
+    put_u32(header, static_cast<std::uint32_t>(files.size()));
+    std::uint32_t fat_size = 0;
+    for (const auto& file : files)
+        fat_size += 4 + static_cast<std::uint32_t>(file.first.size()) + 4 + 4;
+    std::uint32_t running = static_cast<std::uint32_t>(header.size()) + fat_size;
+    Bytes fat;
+    for (const auto& [name, payload] : files) {
+        put_u32(fat, static_cast<std::uint32_t>(name.size()));
+        fat.insert(fat.end(), name.begin(), name.end());
+        put_u32(fat, static_cast<std::uint32_t>(payload.size()));
+        put_u32(fat, running);
+        running += static_cast<std::uint32_t>(payload.size());
+    }
+    Bytes pak = header;
+    pak.insert(pak.end(), fat.begin(), fat.end());
+    for (const auto& file : files) pak.insert(pak.end(), file.second.begin(), file.second.end());
+    return pak;
+}
+std::filesystem::path unique_temp_path() {
+    static std::atomic<unsigned> counter{0};
+    const auto stamp = std::chrono::steady_clock::now().time_since_epoch().count();
+    return std::filesystem::temp_directory_path() /
+           ("gl_pak_test_" + std::to_string(stamp) + "_" +
+            std::to_string(counter.fetch_add(1)) + ".pak");
 }
 Bytes make_pak(const std::vector<std::pair<std::string, Bytes>>& files) {
     Bytes header = {'P','A','K',' ',0,0,0,0};
@@ -82,7 +129,7 @@ TEST_CASE("PAK: rejects bad magic and truncated data") {
 
 TEST_CASE("PAK: opens from a file") {
     Bytes pak = make_pak({{"a", {'x','y'}}, {"b", {'z'}}});
-    auto path = std::filesystem::temp_directory_path() / "gl_pak_test.pak";
+    auto path = unique_temp_path();
     { std::ofstream out(path, std::ios::binary); out.write(reinterpret_cast<const char*>(pak.data()), pak.size()); }
     auto archive = PakArchive::open_from_file(path);
     REQUIRE(archive.has_value());
@@ -98,4 +145,39 @@ TEST_CASE("PAK: lookup is case-insensitive and slash-normalized") {
     auto archive = PakArchive::open_from_memory(std::move(pak));
     REQUIRE(archive.has_value());
     CHECK(archive->find("scripts/a.scr") != nullptr);
+}
+
+TEST_CASE("PAK: reads raw (uncompressed) entries") {
+    const Bytes raw = {'r','a','w',0x00,0xFF};
+    Bytes pak = make_pak_from_payloads({{"raw/bin.dat", raw_payload(raw)}});
+    auto archive = PakArchive::open_from_memory(std::move(pak));
+    REQUIRE(archive.has_value());
+    const PakEntry* entry = archive->find("raw/bin.dat");
+    REQUIRE(entry != nullptr);
+    auto data = archive->read(*entry);
+    REQUIRE(data.has_value());
+    CHECK(Bytes(data->begin(), data->end()) == raw);
+}
+
+TEST_CASE("PAK: reads zero-length uncompressed entries") {
+    Bytes pak = make_pak_from_payloads({{"empty", zlib_payload({})}});
+    auto archive = PakArchive::open_from_memory(std::move(pak));
+    REQUIRE(archive.has_value());
+    auto data = archive->read(archive->entries()[0]);
+    REQUIRE(data.has_value());
+    CHECK(data->empty());
+}
+
+TEST_CASE("PAK: rejects corrupt zlib") {
+    Bytes payload;
+    put_u32(payload, 0);
+    put_u32(payload, 8);
+    const Bytes garbage = {0xDE,0xAD,0xBE,0xEF,0xDE,0xAD,0xBE,0xEF};
+    payload.insert(payload.end(), garbage.begin(), garbage.end());
+    Bytes pak = make_pak_from_payloads({{"bad.bin", payload}});
+    auto archive = PakArchive::open_from_memory(std::move(pak));
+    REQUIRE(archive.has_value());
+    auto data = archive->read(archive->entries()[0]);
+    REQUIRE_FALSE(data.has_value());
+    CHECK(data.error().code == gl::ErrorCode::format);
 }
