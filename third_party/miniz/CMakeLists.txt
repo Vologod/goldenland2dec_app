@@ -1,0 +1,6 @@
+add_library(miniz STATIC miniz.c miniz_tdef.c miniz_tinfl.c miniz_zip.c)
+target_include_directories(miniz PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+include(GenerateExportHeader)
+generate_export_header(miniz)
+target_include_directories(miniz PUBLIC ${CMAKE_CURRENT_BINARY_DIR})
+target_compile_definitions(miniz PUBLIC MINIZ_STATIC_DEFINE)
