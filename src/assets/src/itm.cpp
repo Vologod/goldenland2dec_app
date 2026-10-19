@@ -23,6 +23,7 @@ Result<Item> parse_item(std::span<const std::uint8_t> data) {
     if (!r.read_u32le(item.description_id) || !r.read_u32le(type) ||
         !r.read_u32le(item.flags) || !r.read_u32le(item.max_stack))
         return Error{ErrorCode::format, "truncated ITM header"};
+    // Item types outside 0..28 pass through; conditional blocks key off the raw value.
     item.type = static_cast<ItemType>(type);
     auto puppet = read_string(r); if (!puppet) return puppet.error();
     auto icon = read_string(r); if (!icon) return icon.error();
@@ -31,7 +32,9 @@ Result<Item> parse_item(std::span<const std::uint8_t> data) {
     if (!r.read_u64le(item.unknown) || !r.read_u32le(item.price) || !r.read_u32le(item.weight_x10) ||
         !r.read_u32le(item.unknown_a))
         return Error{ErrorCode::format, "truncated ITM core"};
-    for (auto& v : item.unknown_b) if (!r.read_u32le(v)) return Error{ErrorCode::format, "truncated ITM core"};
+    for (auto& v : item.unknown_b) {
+        if (!r.read_u32le(v)) return Error{ErrorCode::format, "truncated ITM core"};
+    }
     if (!r.read_u32le(item.material)) return Error{ErrorCode::format, "truncated ITM material"};
     if (item.flags & (1u << 4)) {
         auto shell = read_string(r); if (!shell) return shell.error();
@@ -43,8 +46,11 @@ Result<Item> parse_item(std::span<const std::uint8_t> data) {
         return Error{ErrorCode::format, "truncated ITM requirements"};
     const std::uint32_t t = type;
     item.has_damage = (t <= 7) || (t >= 11 && t <= 15);
-    if (item.has_damage)
-        for (auto& v : item.damage) if (!r.read_u32le(v)) return Error{ErrorCode::format, "truncated ITM damage"};
+    if (item.has_damage) {
+        for (auto& v : item.damage) {
+            if (!r.read_u32le(v)) return Error{ErrorCode::format, "truncated ITM damage"};
+        }
+    }
     item.has_spell = (t == 6 || t == 21 || t == 22);
     if (item.has_spell) {
         std::uint32_t zero = 0;
@@ -57,8 +63,11 @@ Result<Item> parse_item(std::span<const std::uint8_t> data) {
     if (item.has_healing && (!r.read_u32le(item.healing_health) || !r.read_u32le(item.healing_mana)))
         return Error{ErrorCode::format, "truncated ITM healing"};
     item.has_recipe = (t == 26);
-    if (item.has_recipe)
-        for (auto& v : item.recipe) if (!r.read_u32le(v)) return Error{ErrorCode::format, "truncated ITM recipe"};
+    if (item.has_recipe) {
+        for (auto& v : item.recipe) {
+            if (!r.read_u32le(v)) return Error{ErrorCode::format, "truncated ITM recipe"};
+        }
+    }
     item.has_damage_type = (t == 8 || t == 9 || t == 10);
     if (item.has_damage_type && !r.read_u32le(item.damage_type))
         return Error{ErrorCode::format, "truncated ITM damage type"};
@@ -72,6 +81,7 @@ Result<Item> parse_item(std::span<const std::uint8_t> data) {
             !r.read_u8(e.delay.hi) || !r.read_u8(e.delay.lo))
             return Error{ErrorCode::format, "truncated ITM effect"};
     }
+    if (!r.at_end()) return Error{ErrorCode::format, "trailing ITM data"};
     return item;
 }
 }
