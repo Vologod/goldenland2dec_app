@@ -9,6 +9,7 @@ add_executable(gl_assets_tests
     test_csx.cpp
     test_sdb.cpp
     test_itm.cpp
+    test_image.cpp
 )
 target_include_directories(gl_assets_tests PRIVATE ${CMAKE_SOURCE_DIR}/third_party)
 target_link_libraries(gl_assets_tests PRIVATE gl_assets)
