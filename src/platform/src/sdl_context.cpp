@@ -10,7 +10,7 @@ namespace {
     throw std::runtime_error(std::string(what) + ": " + SDL_GetError());
 }
 
-} // namespace
+}
 
 SdlContext::SdlContext() {
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER) != 0) {
@@ -32,6 +32,9 @@ Window::Window(const char* title, int width, int height) {
     const Uint32 renderer_flags = SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC;
     renderer_ = SDL_CreateRenderer(window_, -1, renderer_flags);
     if (renderer_ == nullptr) {
+        renderer_ = SDL_CreateRenderer(window_, -1, SDL_RENDERER_SOFTWARE);
+    }
+    if (renderer_ == nullptr) {
         const std::string error = SDL_GetError();
         SDL_DestroyWindow(window_);
         window_ = nullptr;
@@ -48,4 +51,4 @@ Window::~Window() {
     }
 }
 
-} // namespace gl::platform
+}

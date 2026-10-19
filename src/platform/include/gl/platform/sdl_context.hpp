@@ -33,4 +33,4 @@ private:
     SDL_Renderer* renderer_ = nullptr;
 };
 
-} // namespace gl::platform
+}

@@ -7,13 +7,13 @@
 namespace {
 
 void print_usage() {
-    std::puts("Usage: glview [--help]\n"
+    std::puts("Usage: glview [-h | --help]\n"
               "\n"
               "Options:\n"
               "  -h, --help  Show this help and exit.");
 }
 
-} // namespace
+}
 
 int main(int argc, char** argv) {
     for (int i = 1; i < argc; ++i) {
@@ -24,7 +24,7 @@ int main(int argc, char** argv) {
         }
         std::fprintf(stderr, "glview: unknown argument: %s\n", argv[i]);
         print_usage();
-        return 2;
+        return 1;
     }
 
     try {
