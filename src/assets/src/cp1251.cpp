@@ -1,5 +1,5 @@
 #include "gl/assets/cp1251.hpp"
-#include <array>
+#include <cstddef>
 
 namespace gl::assets {
 namespace {
@@ -34,6 +34,44 @@ void append_utf8(std::string& out, char16_t cp) {
         out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
     }
 }
+
+bool is_continuation(unsigned char c) { return (c & 0xC0) == 0x80; }
+
+std::size_t utf8_sequence_length(unsigned char c) {
+    if (c < 0x80) return 1;
+    if ((c & 0xE0) == 0xC0) return 2;
+    if ((c & 0xF0) == 0xE0) return 3;
+    return 4;
+}
+
+bool is_valid_utf8(std::string_view s) {
+    std::size_t i = 0;
+    while (i < s.size()) {
+        const unsigned char c = static_cast<unsigned char>(s[i]);
+        if (c < 0x80) {
+            ++i;
+            continue;
+        }
+        std::size_t len = 0;
+        if (c >= 0xC2 && c <= 0xDF) len = 2;
+        else if (c >= 0xE0 && c <= 0xEF) len = 3;
+        else if (c >= 0xF0 && c <= 0xF4) len = 4;
+        else return false;
+        if (i + len > s.size()) return false;
+        for (std::size_t k = 1; k < len; ++k)
+            if (!is_continuation(static_cast<unsigned char>(s[i + k]))) return false;
+        const unsigned char c1 = static_cast<unsigned char>(s[i + 1]);
+        if (len == 3) {
+            if (c == 0xE0 && c1 < 0xA0) return false;
+            if (c == 0xED && c1 > 0x9F) return false;
+        } else if (len == 4) {
+            if (c == 0xF0 && c1 < 0x90) return false;
+            if (c == 0xF4 && c1 > 0x8F) return false;
+        }
+        i += len;
+    }
+    return true;
+}
 }
 
 std::string cp1251_to_utf8(std::span<const std::uint8_t> input) {
@@ -44,20 +82,25 @@ std::string cp1251_to_utf8(std::span<const std::uint8_t> input) {
 }
 
 std::string normalize_virtual_path(std::string_view path) {
+    const bool utf8 = is_valid_utf8(path);
     std::string out;
     out.reserve(path.size());
     bool last_slash = false;
     for (std::size_t i = 0; i < path.size();) {
         unsigned char c = static_cast<unsigned char>(path[i]);
-        if ((c == 0xD0 || c == 0xD1) && i + 1 < path.size() &&
-            (static_cast<unsigned char>(path[i + 1]) & 0xC0) == 0x80) {
-            char16_t cp = static_cast<char16_t>(((c & 0x1F) << 6) |
-                                                (static_cast<unsigned char>(path[i + 1]) & 0x3F));
-            if (cp >= 0x0410 && cp <= 0x042F) cp = static_cast<char16_t>(cp + 0x20);
-            else if (cp == 0x0401) cp = 0x0451;
-            append_utf8(out, cp);
+        if (utf8 && c >= 0x80) {
+            const std::size_t len = utf8_sequence_length(c);
+            if (c == 0xD0 || c == 0xD1) {
+                char16_t cp = static_cast<char16_t>(
+                    ((c & 0x1F) << 6) | (static_cast<unsigned char>(path[i + 1]) & 0x3F));
+                if (cp >= 0x0410 && cp <= 0x042F) cp = static_cast<char16_t>(cp + 0x20);
+                else if (cp == 0x0401) cp = 0x0451;
+                append_utf8(out, cp);
+            } else {
+                out.append(path.data() + i, len);
+            }
             last_slash = false;
-            i += 2;
+            i += len;
             continue;
         }
         ++i;
@@ -65,7 +108,7 @@ std::string normalize_virtual_path(std::string_view path) {
         if (c == '/' && last_slash) continue;
         last_slash = c == '/';
         if (c >= 'A' && c <= 'Z') c = static_cast<unsigned char>(c - 'A' + 'a');
-        else if (c >= 0xC0 && c <= 0xDF) c = static_cast<unsigned char>(c + 0x20);
+        else if (!utf8 && c >= 0xC0 && c <= 0xDF) c = static_cast<unsigned char>(c + 0x20);
         out.push_back(static_cast<char>(c));
     }
     std::size_t begin = 0;
