@@ -18,11 +18,22 @@ P0 завершена и принята. Текущая фаза — P1: заг�
 
 Task 2 завершён: `gl::assets::parse_lvl` (`lvl.hpp`/`lvl.cpp`) разбирает 12 блоков LVL
 в строгом порядке, строки cp1251→UTF-8, проверяет имена/размеры/counts/границы;
-SENV/WTHR/DOOR валидируются без моделирования. Тесты: `test_lvl.cpp` (10 cases,
-78 unit cases всего, 462 assertions) и `test_real_levels.cpp` — 175/175 реальных
-`levels/lvl/*.lvl` из `levels.pak`, 0 ошибок. Полный `ctest` с `GL_GAME_DIR`: 3/3 passed.
+SENV/WTHR/DOOR валидируются без моделирования. После fix round: overflow-safe проверка
+`BLK_MHDR`, структурная валидация SENV (path + 48-byte запись), D-017.
+Тесты: `test_lvl.cpp` (unit 79 cases, 475 assertions) и `test_real_levels.cpp` —
+175/175 реальных `levels/lvl/*.lvl` из `levels.pak`, 0 ошибок.
+Полный `ctest` с `GL_GAME_DIR`: 3/3 passed.
 
 Следующая задача — **P1 Task 3: LAO + SEF parsers** (`docs/plans/2026-10-19-p1-level-viewer.md`).
+
+## Как продолжить (пауза 2026-10-19)
+
+- Ветка: `p1-level-viewer` (локальная, не запушена). HEAD — коммит с этим STATUS.
+- Тулчейн: `.local/toolchains`; перед сборкой:
+  `$env:PATH = "I:\goldenland2dec\.local\toolchains\llvm-mingw-20261006-ucrt-x86_64\bin;I:\goldenland2dec\.local\toolchains\ninja;I:\goldenland2dec\.local\toolchains\cmake\cmake-4.4.4-windows-x86_64\bin;$env:PATH"`
+- Тесты: `$env:GL_GAME_DIR = "I:\Games\Златогорье-2"`; `ctest --test-dir build --output-on-failure`.
+- SDD-леджер: `.superpowers/sdd/2026-10-19-p1-level-viewer/progress.md` (Tasks 1–2 complete).
+- Дальше: взять Task 3 brief из плана и продолжить subagent-driven цикл.
 
 **P0 — Ассеты и форматы.** Реализация и приёмка завершены (Tasks 0–10).
 
