@@ -1,5 +1,10 @@
 #include <doctest/doctest.h>
 #include "gl/assets/image.hpp"
+#include <chrono>
+#include <climits>
+#include <filesystem>
+#include <fstream>
+#include <iterator>
 
 using namespace gl::assets;
 
@@ -41,4 +46,58 @@ TEST_CASE("Image: rejects garbage") {
     const std::uint8_t data[] = {1,2,3,4};
     auto image = decode_image(data);
     CHECK_FALSE(image.has_value());
+}
+
+TEST_CASE("Image: rejects buffers above INT_MAX") {
+    const std::uint8_t byte = 0;
+    std::span<const std::uint8_t> huge(&byte, static_cast<std::size_t>(INT_MAX) + 1);
+    auto image = decode_image(huge);
+    REQUIRE_FALSE(image.has_value());
+    CHECK(image.error().code == gl::ErrorCode::format);
+    CHECK(image.error().message.find("too large") != std::string::npos);
+}
+
+TEST_CASE("Image: write_png round-trips RGBA pixels") {
+    Image input;
+    input.width = 2;
+    input.height = 2;
+    input.rgba = {Rgba{255, 0, 0, 255}, Rgba{0, 255, 0, 255},
+                  Rgba{0, 0, 255, 128}, Rgba{255, 255, 255, 0}};
+    const auto path = std::filesystem::temp_directory_path() /
+        ("gl_image_roundtrip_" +
+         std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()) + ".png");
+
+    const bool wrote = write_png(path, input);
+    CHECK(wrote);
+    if (wrote) {
+        std::ifstream file(path, std::ios::binary);
+        Bytes png((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+        auto decoded = decode_image(png);
+        CHECK(decoded.has_value());
+        if (decoded.has_value()) {
+            CHECK(decoded->width == 2);
+            CHECK(decoded->height == 2);
+            CHECK(decoded->rgba.size() == 4);
+            if (decoded->rgba.size() == 4) {
+                CHECK(decoded->rgba[0].r == 255);
+                CHECK(decoded->rgba[0].a == 255);
+                CHECK(decoded->rgba[2].b == 255);
+                CHECK(decoded->rgba[2].a == 128);
+                CHECK(decoded->rgba[3].r == 255);
+                CHECK(decoded->rgba[3].g == 255);
+                CHECK(decoded->rgba[3].b == 255);
+                CHECK(decoded->rgba[3].a == 0);
+            }
+        }
+    }
+    std::error_code ec;
+    std::filesystem::remove(path, ec);
+}
+
+TEST_CASE("Image: write_png rejects inconsistent pixel buffers") {
+    Image image;
+    image.width = 2;
+    image.height = 2;
+    image.rgba = {Rgba{255, 0, 0, 255}};
+    CHECK_FALSE(write_png("unused.png", image));
 }
