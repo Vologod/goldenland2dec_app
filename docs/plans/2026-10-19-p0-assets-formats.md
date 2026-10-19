@@ -1037,7 +1037,7 @@ git commit -m "feat(assets): parse PAK archives and decompress zlib entries"
 **Interfaces:**
 - Produces:
   - `struct ArchiveInfo { std::string name; std::size_t entry_count; bool is_update; int update_number; };`
-  - `struct VfsEntry { std::string path; std::uint64_t size; std::string source; };`
+  - `struct VfsEntry { std::string path; std::uint64_t compressed_size; std::string source; };`
   - `class GameVfs`:
     - `static Result<GameVfs> mount(const std::filesystem::path& game_dir)`
     - `Result<Bytes> read(std::string_view virtual_path) const`
@@ -1165,7 +1165,7 @@ struct ArchiveInfo {
 
 struct VfsEntry {
     std::string path;
-    std::uint64_t size = 0;
+    std::uint64_t compressed_size = 0;
     std::string source;
 };
 

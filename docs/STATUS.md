@@ -13,8 +13,8 @@
 - `docs/specs/2026-10-19-goldenland2-android-port-design.md` (раздел 6).
 - `docs/plans/2026-10-19-p0-assets-formats.md` (10 задач, TDD, приёмка).
 
-Следующий шаг: исполнение плана (subagent-driven). Tasks 0–3 завершены, review пройден;
-далее Task 4 (GameVfs).
+Следующий шаг: исполнение плана (subagent-driven). Tasks 0–4 завершены, review пройден;
+далее Task 5 (CSX).
 
 ## Критерии приёмки P0 (кратко)
 
