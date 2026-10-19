@@ -28,8 +28,21 @@ stb_image_write (commit `013ac3beddff3dbffafd5177e7972067cd2b5083`), doctest v2.
   - `scripts.pak`: 4485 files, 9 324 686 uncompressed bytes.
   - `sdb.pak`: 45 files, 1 411 188 bytes.
   - `items.pak`: 3786 files, 28 847 595 bytes.
-  - `engineres.pak`: 974 files.
+  - `engineres.pak`: 1041 files (в установке `I:\Games\Златогорье-2`; 974 — в сборке ХН).
 - Target game directory for integration/acceptance: `I:\Games\Златогорье-2`.
+
+## Corrections during execution
+
+Реальные данные опровергли часть этого плана; актуальная истина — в `docs/DECISIONS.md`
+и `docs/research/formats.md`:
+
+- **D-013 (PAK payload).** `size` в FAT — несжатый размер; по `offset`: `mode:u32`
+  (`0` — raw ровно `size` байт, иначе `stored:u32` + zlib-поток длиной `stored` → `size`).
+  Кодовые блоки Task 3/Task 4 ниже, описывающие обратное, устарели.
+- **VfsEntry** использует поле `uncompressed_size` (не `compressed_size`).
+- **D-014 (ITM).** `damage`: типы 0–7, 11–14, **28**; блок эффектов есть у всех типов, кроме
+  **21 (книги)**.
+- `engineres.pak` в целевой установке — **1041** файл (974 — в сборке «Холодные небеса»).
 
 ## File Structure
 
@@ -1037,7 +1050,7 @@ git commit -m "feat(assets): parse PAK archives and decompress zlib entries"
 **Interfaces:**
 - Produces:
   - `struct ArchiveInfo { std::string name; std::size_t entry_count; bool is_update; int update_number; };`
-  - `struct VfsEntry { std::string path; std::uint64_t compressed_size; std::string source; };`
+  - `struct VfsEntry { std::string path; std::uint64_t uncompressed_size; std::string source; };`
   - `class GameVfs`:
     - `static Result<GameVfs> mount(const std::filesystem::path& game_dir)`
     - `Result<Bytes> read(std::string_view virtual_path) const`
@@ -1165,7 +1178,7 @@ struct ArchiveInfo {
 
 struct VfsEntry {
     std::string path;
-    std::uint64_t compressed_size = 0;
+    std::uint64_t uncompressed_size = 0;
     std::string source;
 };
 
@@ -1720,13 +1733,14 @@ git commit -m "feat(assets): parse SDB string databases with xor fallback"
   - `Result<Item> parse_item(std::span<const std::uint8_t> data);`
 
 Conditional blocks:
-- damage: type 0..7 or 11..15; 6 × u32.
+- damage: type 0..7, 11..14 или 28; 6 × u32.
 - spell: type 6, 21, 22; spell_id u32 + zero u32.
 - charge: type 6; u32.
 - healing: type 19 or 20; health u32 + mana u32.
 - recipe: type 26; 3 × u32.
 - damage_type: type 8, 9, 10; u32.
-- effects: always `count u32`, then `count × (type u32, amount u32, flags u32, duration hi/lo, delay hi/lo)`.
+- effects: `count u32`, then `count × (type u32, amount u32, flags u32, duration hi/lo, delay hi/lo)`;
+  присутствует для всех типов, **кроме 21 (книги)** — книги заканчиваются после блока заклинания.
 
 - [ ] **Step 1: Write failing tests**
 
@@ -1922,7 +1936,7 @@ Result<Item> parse_item(std::span<const std::uint8_t> data) {
         !r.read_u32le(item.perception) || !r.read_u32le(item.agility))
         return Error{ErrorCode::format, "truncated ITM requirements"};
     const std::uint32_t t = type;
-    item.has_damage = (t <= 7) || (t >= 11 && t <= 15);
+    item.has_damage = (t <= 7) || (t >= 11 && t <= 14) || (t == 28);
     if (item.has_damage)
         for (auto& v : item.damage) if (!r.read_u32le(v)) return Error{ErrorCode::format, "truncated ITM damage"};
     item.has_spell = (t == 6 || t == 21 || t == 22);
@@ -1942,15 +1956,17 @@ Result<Item> parse_item(std::span<const std::uint8_t> data) {
     item.has_damage_type = (t == 8 || t == 9 || t == 10);
     if (item.has_damage_type && !r.read_u32le(item.damage_type))
         return Error{ErrorCode::format, "truncated ITM damage type"};
-    std::uint32_t count = 0;
-    if (!r.read_u32le(count)) return Error{ErrorCode::format, "truncated ITM effects count"};
-    if (count > 1000) return Error{ErrorCode::format, "unreasonable ITM effects count"};
-    item.effects.resize(count);
-    for (auto& e : item.effects) {
-        if (!r.read_u32le(e.type) || !r.read_u32le(e.amount) || !r.read_u32le(e.flags) ||
-            !r.read_u8(e.duration.hi) || !r.read_u8(e.duration.lo) ||
-            !r.read_u8(e.delay.hi) || !r.read_u8(e.delay.lo))
-            return Error{ErrorCode::format, "truncated ITM effect"};
+    if (t != 21) {
+        std::uint32_t count = 0;
+        if (!r.read_u32le(count)) return Error{ErrorCode::format, "truncated ITM effects count"};
+        if (count > 1000) return Error{ErrorCode::format, "unreasonable ITM effects count"};
+        item.effects.resize(count);
+        for (auto& e : item.effects) {
+            if (!r.read_u32le(e.type) || !r.read_u32le(e.amount) || !r.read_u32le(e.flags) ||
+                !r.read_u8(e.duration.hi) || !r.read_u8(e.duration.lo) ||
+                !r.read_u8(e.delay.hi) || !r.read_u8(e.delay.lo))
+                return Error{ErrorCode::format, "truncated ITM effect"};
+        }
     }
     return item;
 }
@@ -2177,7 +2193,7 @@ build\bin\glpak.exe info "I:\Games\Златогорье-2"
 ```
 
 Expected: prints archive names and counts; `scripts.pak` shows 4485, `sdb.pak` 45,
-`items.pak` 3786, `engineres.pak` 974.
+`items.pak` 3786, `engineres.pak` 1041.
 
 - [ ] **Step 3: Commit**
 
@@ -2227,7 +2243,7 @@ TEST_CASE("real data: archive counts and samples") {
     CHECK(count_for("scripts.pak") == 4485);
     CHECK(count_for("sdb.pak") == 45);
     CHECK(count_for("items.pak") == 3786);
-    CHECK(count_for("engineres.pak") == 974);
+    CHECK(count_for("engineres.pak") == 1041);
 
     auto hero = vfs->read("sdb/hero.sdb");
     REQUIRE(hero.has_value());
@@ -2289,7 +2305,7 @@ Expected:
 scripts:   4485 files, 9324686 bytes
 sdb:       45 files, 1411188 bytes
 items:     3786 files, 28847595 bytes
-engineres: 974 files
+engineres: 1041 files
 ```
 
 If a number differs, do not adjust the expected value — investigate the decoder first.

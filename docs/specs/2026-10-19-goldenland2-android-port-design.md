@@ -157,8 +157,9 @@ tests/assets/*.cpp
 - `itm.hpp` — `Item` со всеми полями из `docs/research/formats.md`;
   условные блоки разбираются по флагам/типу.
 - `image.hpp` — `Image { width, height, rgba }` через `stb_image` (BMP/PNG/JPG).
-- `pak` использует `miniz` (`mz_uncompress`) для `compressed == 0`
-  (`unpacked_size` + zlib-поток); иначе — raw-байты (подтверждается тестом на всех архивах).
+- `pak` использует `miniz` (`mz_uncompress`): FAT `size` — несжатый размер; по `offset`
+  лежит `mode : uint32`: `0` — raw ровно `size` байт, иначе — `stored : uint32` + zlib-поток
+  длиной `stored`, разворачивающийся до `size` (подтверждено на реальных архивах, D-013).
 
 ### 6.5 CLI `glpak`
 
@@ -198,7 +199,7 @@ Integration (включаются только при заданном `GL_GAME_
 `I:\Games\Златогорье-2`):
 
 - открытие всех 15 архивов;
-- количества: `scripts.pak` 4485, `sdb.pak` 45, `items.pak` 3786, `engineres.pak` 974;
+- количества: `scripts.pak` 4485, `sdb.pak` 45, `items.pak` 3786, `engineres.pak` 1041;
 - суммарные размеры: scripts 9 324 686, sdb 1 411 188, items 28 847 595;
 - для остальных архивов эталонные количества и размеры фиксируются в
   `docs/research/00-game-build.md` после первого успешного прогона и проверяются на повторяемость;
