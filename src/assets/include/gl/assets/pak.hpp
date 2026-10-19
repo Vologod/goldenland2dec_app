@@ -4,6 +4,7 @@
 #include "gl/assets/result.hpp"
 #include <cstdint>
 #include <filesystem>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -31,7 +32,8 @@ public:
 
 private:
     PakArchive() = default;
-    static Result<PakArchive> parse_memory(ByteReader& reader, std::uint64_t file_size);
+    static Result<PakArchive> parse_memory(std::span<const std::uint8_t> data);
+    std::string describe_entry(const PakEntry& entry) const;
 
     std::filesystem::path path_;
     Bytes memory_;

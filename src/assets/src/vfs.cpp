@@ -117,7 +117,9 @@ Result<GameVfs> GameVfs::mount(const std::filesystem::path& game_dir) {
     std::vector<Loaded> loaded;
     for (const auto& path : pak_paths) {
         auto archive = PakArchive::open_from_file(path);
-        if (!archive) return archive.error();
+        if (!archive)
+            return Error{archive.error().code,
+                         "cannot mount archive '" + path.string() + "': " + archive.error().message};
         const int n = update_number(path.filename().string());
         const std::int64_t priority =
             n < 0 ? 0 : 1000 + static_cast<std::int64_t>(n);
@@ -150,15 +152,21 @@ Result<Bytes> GameVfs::read(std::string_view vp) const {
     if (const auto loose = loose_path(vp)) {
         std::error_code ec;
         const std::uintmax_t size = std::filesystem::file_size(*loose, ec);
-        if (ec) return Error{ErrorCode::io, "cannot size loose file"};
+        if (ec)
+            return Error{ErrorCode::io, "cannot size loose file '" + loose->string() + "' for '" +
+                                            std::string(vp) + "'"};
         if (size > std::numeric_limits<std::size_t>::max())
-            return Error{ErrorCode::io, "loose file too large"};
+            return Error{ErrorCode::io, "loose file too large: '" + loose->string() + "' for '" +
+                                            std::string(vp) + "'"};
         std::ifstream in(*loose, std::ios::binary);
-        if (!in) return Error{ErrorCode::io, "cannot open loose file"};
+        if (!in)
+            return Error{ErrorCode::io, "cannot open loose file '" + loose->string() + "' for '" +
+                                            std::string(vp) + "'"};
         Bytes out(static_cast<std::size_t>(size));
         if (!out.empty() &&
             !in.read(reinterpret_cast<char*>(out.data()), static_cast<std::streamsize>(out.size())))
-            return Error{ErrorCode::io, "cannot read loose file"};
+            return Error{ErrorCode::io, "cannot read loose file '" + loose->string() + "' for '" +
+                                            std::string(vp) + "'"};
         return out;
     }
     const auto it = index_.find(normalize_virtual_path(vp));

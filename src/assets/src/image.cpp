@@ -14,6 +14,12 @@ Result<Image> decode_image(std::span<const std::uint8_t> data) {
     if (data.size() > static_cast<std::size_t>(INT_MAX))
         return Error{ErrorCode::format, "image too large"};
     int w = 0, h = 0, channels = 0;
+    if (!stbi_info_from_memory(data.data(), static_cast<int>(data.size()), &w, &h, &channels))
+        return Error{ErrorCode::format, stbi_failure_reason()};
+    if (w <= 0 || h <= 0) return Error{ErrorCode::format, "bad image dimensions"};
+    auto pixel_count = static_cast<std::uint64_t>(w) * static_cast<std::uint64_t>(h);
+    if (pixel_count > kMaxImagePixels)
+        return Error{ErrorCode::format, "image pixel limit exceeded"};
     stbi_uc* pixels = stbi_load_from_memory(data.data(), static_cast<int>(data.size()),
                                             &w, &h, &channels, 4);
     if (!pixels) return Error{ErrorCode::format, stbi_failure_reason()};
@@ -21,7 +27,7 @@ Result<Image> decode_image(std::span<const std::uint8_t> data) {
         stbi_image_free(pixels);
         return Error{ErrorCode::format, "bad image dimensions"};
     }
-    const auto pixel_count = static_cast<std::uint64_t>(w) * static_cast<std::uint64_t>(h);
+    pixel_count = static_cast<std::uint64_t>(w) * static_cast<std::uint64_t>(h);
     if (pixel_count > kMaxImagePixels) {
         stbi_image_free(pixels);
         return Error{ErrorCode::format, "image pixel limit exceeded"};

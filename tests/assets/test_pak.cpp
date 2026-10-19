@@ -63,6 +63,22 @@ Bytes make_pak_from_payloads(const std::vector<PayloadFile>& files) {
     for (const auto& file : files) pak.insert(pak.end(), file.payload.begin(), file.payload.end());
     return pak;
 }
+std::uint32_t get_u32(const Bytes& b, std::size_t pos) {
+    return std::uint32_t(b[pos]) | (std::uint32_t(b[pos + 1]) << 8) |
+           (std::uint32_t(b[pos + 2]) << 16) | (std::uint32_t(b[pos + 3]) << 24);
+}
+void put_u32_at(Bytes& b, std::size_t pos, std::uint32_t v) {
+    b[pos] = static_cast<std::uint8_t>(v & 0xFF);
+    b[pos + 1] = static_cast<std::uint8_t>((v >> 8) & 0xFF);
+    b[pos + 2] = static_cast<std::uint8_t>((v >> 16) & 0xFF);
+    b[pos + 3] = static_cast<std::uint8_t>((v >> 24) & 0xFF);
+}
+std::size_t fat_offset_position(const Bytes& pak, std::size_t index) {
+    std::size_t pos = 12;
+    for (std::size_t i = 0; i < index; ++i)
+        pos += 4 + get_u32(pak, pos) + 8;
+    return pos + 4 + get_u32(pak, pos) + 4;
+}
 std::filesystem::path unique_temp_path() {
     static std::atomic<unsigned> counter{0};
     const auto stamp = std::chrono::steady_clock::now().time_since_epoch().count();
@@ -201,4 +217,47 @@ TEST_CASE("PAK: rejects corrupt zlib") {
     auto data = archive->read(archive->entries()[0]);
     REQUIRE_FALSE(data.has_value());
     CHECK(data.error().code == gl::ErrorCode::format);
+    CHECK(data.error().message.find("bad.bin") != std::string::npos);
+    CHECK(data.error().message.find("offset") != std::string::npos);
+}
+
+TEST_CASE("PAK: rejects duplicate normalized entry names") {
+    Bytes pak = make_pak({{"Dir/A.txt", {'x'}}, {"dir\\a.TXT", {'y'}}});
+    auto archive = PakArchive::open_from_memory(std::move(pak));
+    REQUIRE_FALSE(archive.has_value());
+    CHECK(archive.error().code == gl::ErrorCode::format);
+    CHECK(archive.error().message.find("duplicate") != std::string::npos);
+}
+
+TEST_CASE("PAK: rejects shared and overlapping payload offsets") {
+    Bytes pak = make_pak_from_payloads(
+        {{"first.bin", 8, raw_payload({'a','b','c','d','e','f','g','h'})},
+         {"second.bin", 8, raw_payload({'i','j','k','l','m','n','o','p'})}});
+    const std::uint32_t first_offset = get_u32(pak, fat_offset_position(pak, 0));
+    put_u32_at(pak, fat_offset_position(pak, 1), first_offset);
+    auto archive = PakArchive::open_from_memory(std::move(pak));
+    REQUIRE_FALSE(archive.has_value());
+    CHECK(archive.error().code == gl::ErrorCode::format);
+    CHECK(archive.error().message.find("overlap") != std::string::npos);
+}
+
+TEST_CASE("PAK: rejects offsets without a full payload header") {
+    Bytes pak = make_pak({{"a", {'x'}}});
+    put_u32_at(pak, fat_offset_position(pak, 0),
+               static_cast<std::uint32_t>(pak.size() - 3));
+    auto archive = PakArchive::open_from_memory(std::move(pak));
+    REQUIRE_FALSE(archive.has_value());
+    CHECK(archive.error().code == gl::ErrorCode::format);
+}
+
+TEST_CASE("PAK: rejects stored payload beyond end of archive") {
+    Bytes payload;
+    put_u32(payload, 1);
+    put_u32(payload, 1000);
+    const Bytes garbage = {0xDE,0xAD};
+    payload.insert(payload.end(), garbage.begin(), garbage.end());
+    Bytes pak = make_pak_from_payloads({{"bad.bin", 8, payload}});
+    auto archive = PakArchive::open_from_memory(std::move(pak));
+    REQUIRE_FALSE(archive.has_value());
+    CHECK(archive.error().code == gl::ErrorCode::format);
 }

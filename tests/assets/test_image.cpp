@@ -9,6 +9,17 @@
 using namespace gl::assets;
 
 namespace {
+Bytes make_bmp_header(std::uint32_t width, std::uint32_t height) {
+    Bytes b;
+    auto u16 = [&](std::uint16_t v) { b.push_back(v & 0xFF); b.push_back((v >> 8) & 0xFF); };
+    auto u32 = [&](std::uint32_t v) { b.push_back(v & 0xFF); b.push_back((v >> 8) & 0xFF);
+                                      b.push_back((v >> 16) & 0xFF); b.push_back((v >> 24) & 0xFF); };
+    b.push_back('B'); b.push_back('M');
+    u32(54); u32(0); u32(54);
+    u32(40); u32(width); u32(height); u16(1); u16(24);
+    u32(0); u32(0); u32(2835); u32(2835); u32(0); u32(0);
+    return b;
+}
 Bytes make_2x2_bmp() {
     Bytes b;
     auto u16 = [&](std::uint16_t v) { b.push_back(v & 0xFF); b.push_back((v >> 8) & 0xFF); };
@@ -46,6 +57,13 @@ TEST_CASE("Image: rejects garbage") {
     const std::uint8_t data[] = {1,2,3,4};
     auto image = decode_image(data);
     CHECK_FALSE(image.has_value());
+}
+
+TEST_CASE("Image: rejects an oversized header before pixel decoding") {
+    Bytes bmp = make_bmp_header(100000, 100000);
+    auto image = decode_image(bmp);
+    REQUIRE_FALSE(image.has_value());
+    CHECK(image.error().message.find("pixel limit") != std::string::npos);
 }
 
 TEST_CASE("Image: rejects buffers above INT_MAX") {
