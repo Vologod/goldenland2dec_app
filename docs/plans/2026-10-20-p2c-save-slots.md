@@ -79,12 +79,14 @@ public:
 ```
 Scan `slot<N>.sav` (case-insensitive), parse index, read the first 128 bytes, set `valid=false`
 on parse failure; sort by slot; missing directory → empty list (not an error). Add a
-`slot_index_from_filename` helper (tested).
+`slot_index_from_filename` helper (tested). Non-slot `*.sav` files are retained as invalid
+entries with `slot=-1`; `find(-1)` returns null.
 
 Tests (synthetic): temp dir with `slot0.sav`, `slot3.sav`, `broken.sav`, `other.txt`;
-indexes/sort/valid/find; missing dir; has_valid_slots.
+indexes/sort/valid/find; missing dir; has_valid_slots; non-slot valid-header `.sav` stays invalid.
 Integration (`GL_GAME_DIR`): 28 slots, all valid, version 17, slot0 title `Quick save`,
-slot16 contains `Семейство`, slot25 contains `Прохождение`; year/month match file mtimes.
+slot16 contains `Убмйство`, slot25 contains `Продаем`; year/month match file mtimes. The real
+titles for slots 16/25 look corrupted/typo'd; the parser returns them unchanged.
 
 - [ ] TDD, implement, commit.
 

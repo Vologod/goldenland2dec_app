@@ -29,5 +29,5 @@ private:
     std::vector<SaveSlotInfo> slots_;
 };
 
-std::optional<int> save_slot_from_filename(std::string_view filename);
+std::optional<int> slot_index_from_filename(std::string_view filename);
 }

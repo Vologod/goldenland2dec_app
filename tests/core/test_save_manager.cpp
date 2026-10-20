@@ -66,6 +66,7 @@ TEST_CASE("SaveManager: scans slots, sorts by index and retains broken saves") {
     write_bytes(dir / "slot3.sav", make_save("Third"));
     write_bytes(dir / "slot0.sav", make_save("Quick save"));
     write_bytes(dir / "Slot10.SAV", make_save("Tenth"));
+    write_bytes(dir / "slot5.sav", make_save("Broken slot", true));
     write_bytes(dir / "broken.sav", make_save("Broken", true));
     write_bytes(dir / "other.txt", "not a save");
 
@@ -73,7 +74,7 @@ TEST_CASE("SaveManager: scans slots, sorts by index and retains broken saves") {
     REQUIRE(scanned.has_value());
     const std::vector<gl::core::SaveSlotInfo>& slots = scanned->slots();
 
-    REQUIRE(slots.size() == 4);
+    REQUIRE(slots.size() == 5);
     CHECK(slots[0].slot == -1);
     CHECK_FALSE(slots[0].valid);
     CHECK(slots[1].slot == 0);
@@ -82,16 +83,21 @@ TEST_CASE("SaveManager: scans slots, sorts by index and retains broken saves") {
     CHECK(slots[1].file_size == 128);
     CHECK(slots[2].slot == 3);
     CHECK(slots[2].valid);
-    CHECK(slots[3].slot == 10);
-    CHECK(slots[3].valid);
-    CHECK(slots[3].header.title == "Tenth");
-    CHECK(slots[3].path.filename() == "Slot10.SAV");
+    CHECK(slots[3].slot == 5);
+    CHECK_FALSE(slots[3].valid);
+    CHECK(slots[4].slot == 10);
+    CHECK(slots[4].valid);
+    CHECK(slots[4].header.title == "Tenth");
+    CHECK(slots[4].path.filename() == "Slot10.SAV");
 
     REQUIRE(scanned->find(0) != nullptr);
     CHECK(scanned->find(0)->header.year == 2022);
     CHECK(scanned->find(3) != nullptr);
+    REQUIRE(scanned->find(5) != nullptr);
+    CHECK_FALSE(scanned->find(5)->valid);
     CHECK(scanned->find(10) != nullptr);
     CHECK(scanned->find(4) == nullptr);
+    CHECK(scanned->find(-1) == nullptr);
     CHECK(scanned->find(999) == nullptr);
     CHECK(scanned->has_valid_slots());
 
@@ -117,14 +123,32 @@ TEST_CASE("SaveManager: missing directory and non-directory yield empty success"
     std::filesystem::remove_all(base);
 }
 
-TEST_CASE("save_slot_from_filename: parses valid slot names and rejects others") {
-    CHECK(gl::core::save_slot_from_filename("slot0.sav") == std::optional<int>{0});
-    CHECK(gl::core::save_slot_from_filename("SLOT12.SAV") == std::optional<int>{12});
-    CHECK(gl::core::save_slot_from_filename("slot007.sav") == std::optional<int>{7});
-    CHECK_FALSE(gl::core::save_slot_from_filename("slot.sav").has_value());
-    CHECK_FALSE(gl::core::save_slot_from_filename("slot1x.sav").has_value());
-    CHECK_FALSE(gl::core::save_slot_from_filename("xslot1.sav").has_value());
-    CHECK_FALSE(gl::core::save_slot_from_filename("slot1.txt").has_value());
-    CHECK_FALSE(gl::core::save_slot_from_filename("slot2147483648.sav").has_value());
-    CHECK_FALSE(gl::core::save_slot_from_filename("").has_value());
+TEST_CASE("SaveManager: non-slot save with a valid header stays invalid") {
+    const auto dir = unique_temp_dir();
+    write_bytes(dir / "backup.sav", make_save("Backup"));
+
+    auto scanned = gl::core::SaveManager::scan(dir);
+    REQUIRE(scanned.has_value());
+    const std::vector<gl::core::SaveSlotInfo>& slots = scanned->slots();
+
+    REQUIRE(slots.size() == 1);
+    CHECK(slots[0].slot == -1);
+    CHECK_FALSE(slots[0].valid);
+    CHECK(slots[0].header.title.empty());
+    CHECK(scanned->find(-1) == nullptr);
+    CHECK_FALSE(scanned->has_valid_slots());
+
+    std::filesystem::remove_all(dir);
+}
+
+TEST_CASE("slot_index_from_filename: parses valid slot names and rejects others") {
+    CHECK(gl::core::slot_index_from_filename("slot0.sav") == std::optional<int>{0});
+    CHECK(gl::core::slot_index_from_filename("SLOT12.SAV") == std::optional<int>{12});
+    CHECK(gl::core::slot_index_from_filename("slot007.sav") == std::optional<int>{7});
+    CHECK_FALSE(gl::core::slot_index_from_filename("slot.sav").has_value());
+    CHECK_FALSE(gl::core::slot_index_from_filename("slot1x.sav").has_value());
+    CHECK_FALSE(gl::core::slot_index_from_filename("xslot1.sav").has_value());
+    CHECK_FALSE(gl::core::slot_index_from_filename("slot1.txt").has_value());
+    CHECK_FALSE(gl::core::slot_index_from_filename("slot2147483648.sav").has_value());
+    CHECK_FALSE(gl::core::slot_index_from_filename("").has_value());
 }

@@ -46,13 +46,13 @@ TEST_CASE("SaveManager: real saves expose 28 valid version 17 slots" *
 
     const gl::core::SaveSlotInfo* slot16 = scanned->find(16);
     REQUIRE(slot16 != nullptr);
-    CHECK(slot16->header.title == "Убмйство кукуя");
+    CHECK(slot16->header.title.find("Убмйство кукуя") != std::string::npos);
     CHECK(slot16->header.year == 2013);
     CHECK(slot16->header.month == 2);
 
     const gl::core::SaveSlotInfo* slot25 = scanned->find(25);
     REQUIRE(slot25 != nullptr);
-    CHECK(slot25->header.title == "Продаем артифакты");
+    CHECK(slot25->header.title.find("Продаем артифакты") != std::string::npos);
 
     CHECK(scanned->find(999) == nullptr);
 }

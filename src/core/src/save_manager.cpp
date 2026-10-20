@@ -59,7 +59,7 @@ void load_slot(SaveSlotInfo& slot) {
 }
 }
 
-std::optional<int> save_slot_from_filename(std::string_view filename) {
+std::optional<int> slot_index_from_filename(std::string_view filename) {
     const std::size_t separator = filename.find_last_of("/\\");
     if (separator != std::string_view::npos) filename.remove_prefix(separator + 1);
     if (!has_save_extension(filename)) return std::nullopt;
@@ -102,7 +102,7 @@ gl::Result<SaveManager> SaveManager::scan(const std::filesystem::path& save_dir)
 
         SaveSlotInfo slot;
         slot.path = entry.path();
-        const std::optional<int> index = save_slot_from_filename(filename);
+        const std::optional<int> index = slot_index_from_filename(filename);
         slot.slot = index.value_or(-1);
 
         const std::uintmax_t size = entry.file_size(file_ec);
@@ -111,7 +111,7 @@ gl::Result<SaveManager> SaveManager::scan(const std::filesystem::path& save_dir)
         const std::filesystem::file_time_type modified = entry.last_write_time(file_ec);
         if (!file_ec) slot.modified = modified;
 
-        load_slot(slot);
+        if (index.has_value()) load_slot(slot);
         manager.slots_.push_back(std::move(slot));
     }
 
@@ -125,6 +125,7 @@ gl::Result<SaveManager> SaveManager::scan(const std::filesystem::path& save_dir)
 const std::vector<SaveSlotInfo>& SaveManager::slots() const { return slots_; }
 
 const SaveSlotInfo* SaveManager::find(int slot) const {
+    if (slot < 0) return nullptr;
     for (const SaveSlotInfo& info : slots_) {
         if (info.slot == slot) return &info;
     }
