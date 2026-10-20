@@ -4,11 +4,18 @@
 
 ## Текущая фаза
 
-P0 завершена и принята. Текущая фаза — P1: загрузчик и viewer реального уровня (Windows).
+P0 завершена и принята. P1 завершена и принята (2026-10-20). Следующая фаза —
+**P1b: Android/touch** (follow-up P1), затем P2 — ядро движка.
 
 ## Текущая задача
 
-**P1 — Level viewer.** Task 1 завершён: SDL2 (`release-2.32.10`, FetchContent),
+**P1 — Level viewer завершена и принята 2026-10-20.** Все критерии §9 выполнены:
+реальный `l1_1` грузится и рисуется (фон, 2 статики, 2 анимации), панорама/зум
+работают, `--screenshot` создаёт PNG 1280×720, unit/integration/render-тесты зелёные.
+
+### История задач P1
+
+Task 1 завершён: SDL2 (`release-2.32.10`, FetchContent),
 `gl_platform` (`SdlContext`, `Window`), placeholder-таргеты `gl_render`/`gl_game`,
 `glview` с `--help` и окном 1280×720 (закрытие по Esc/quit).
 Проверено: сборка без предупреждений в first-party коде; `ctest` без `GL_GAME_DIR` —
@@ -74,16 +81,18 @@ Fix round 1: все текстуры создаются с `SDL_BLENDMODE_BLEND`
 тестовые PNG и временные каталоги освобождаются RAII. Полный `ctest` с `GL_GAME_DIR`:
 4/4 passed (real-data 421.25 s, render 8.73 s).
 
-Следующая задача — **P1 Task 8: Input, debug overlay, acceptance** (`docs/plans/2026-10-19-p1-level-viewer.md`).
-
-## Как продолжить (пауза 2026-10-19)
-
-- Ветка: `p1-level-viewer` (локальная, не запушена). HEAD — коммит с этим STATUS.
-- Тулчейн: `.local/toolchains`; перед сборкой:
-  `$env:PATH = "I:\goldenland2dec\.local\toolchains\llvm-mingw-20261006-ucrt-x86_64\bin;I:\goldenland2dec\.local\toolchains\ninja;I:\goldenland2dec\.local\toolchains\cmake\cmake-4.4.4-windows-x86_64\bin;$env:PATH"`
-- Тесты: `$env:GL_GAME_DIR = "I:\Games\Златогорье-2"`; `ctest --test-dir build --output-on-failure`.
-- SDD-леджер: `.superpowers/sdd/2026-10-19-p1-level-viewer/progress.md` (Tasks 1–7 complete).
-- Дальше: взять Task 8 brief из плана и продолжить subagent-driven цикл.
+Task 8 завершён (приёмка P1): в `glview` добавлены камера (WASD/стрелки `600/zoom`,
+drag ЛКМ, wheel-зум к курсору `0.25…4.0` шагом `1.1`, `Home`, `Esc`), clamp к границам
+карты (карта меньше окна центрируется), `F1` — рамки статики/анимаций, info-лог
+`level '<name>' (pack '<pack>'): WxH px, N statics, M animations`.
+Логика clamp/зума вынесена в `gl_render` (`clamp_camera`, `zoom_camera_at`), unit
+`camera_tests` — 5 cases / 22 assertions. Скриншот `l1_1` 1280×720: exit 0, PNG
+3 122 294 байта, лог `2760x2016 px, 2 statics, 2 animations`. Интерактивное окно
+открывается и закрывается; панорама drag и wheel-зум проверены на реальном уровне
+эмуляцией ввода (software renderer): отличие кадров 2932/14442 и 5383/14442 при
+фоновом различии анимации 207/14442. WASD/стрелки проверены кодом и unit-тестами
+clamp; синтетический фокус-ввод клавиатуры в headless-сессии недоступен.
+Полный `ctest` с `GL_GAME_DIR`: 5/5 passed (real-data 377.08 s, render 8.71 s).
 
 **P0 — Ассеты и форматы.** Реализация и приёмка завершены (Tasks 0–10).
 
@@ -108,7 +117,7 @@ Fix round 1: все текстуры создаются с `SDL_BLENDMODE_BLEND`
   (загрузка через System.Drawing, размеры совпали); визуальная проверка не выполнялась.
   `engineres/editor/person.csx` → 32×81 PNG.
 
-Следующая задача: P1 Task 3 — LAO + SEF parsers (`docs/plans/2026-10-19-p1-level-viewer.md`).
+P0 закрыт 2026-10-19; далее выполнялись задачи P1 (см. выше).
 
 ## Критерии приёмки P0 (кратко)
 
@@ -150,10 +159,13 @@ Fix round 1: все текстуры создаются с `SDL_BLENDMODE_BLEND`
   (load/background/screenshot); render-тест на реальном `l1_1`, `ctest` 4/4.
 - 2026-10-20: P1 Task 7 — `draw_texture`, текстуры статики/анимаций, детерминированный
   `--frames`, `--background-only`; render-тест на различие с фоном, `ctest` 4/4.
+- 2026-10-20: P1 Task 8 — камера/ввод, `F1` overlay, clamp в `gl_render`,
+  `camera_tests`, приёмка P1 (`ctest` 5/5); P1 закрыта.
 
 ## Следующие задачи
 
-1. P1 Task 8: Input, debug overlay, acceptance.
+1. P1b: Android/touch — тач-управление камерой, упаковка ассетов, жизненный цикл.
+2. P2: ядро движка — цикл, `.ini`, консоль/команды, save/load, состояния.
 
 ## Открытые вопросы
 

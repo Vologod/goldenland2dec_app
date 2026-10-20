@@ -14,6 +14,13 @@ struct Camera {
 
 SDL_FRect to_screen(const Camera& camera, float world_x, float world_y, float w, float h);
 
+void clamp_camera(Camera& camera, float world_width, float world_height, int screen_w,
+                  int screen_h);
+
+void zoom_camera_at(Camera& camera, float screen_x, float screen_y, float factor,
+                    float world_width, float world_height, int screen_w, int screen_h,
+                    float min_zoom, float max_zoom);
+
 void draw_background(SDL_Renderer* renderer, const Texture& texture, const Camera& camera,
                      int screen_w, int screen_h);
 

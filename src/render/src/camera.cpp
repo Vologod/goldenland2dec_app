@@ -10,6 +10,44 @@ SDL_FRect to_screen(const Camera& camera, float world_x, float world_y, float w,
                      w * camera.zoom, h * camera.zoom};
 }
 
+void clamp_camera(Camera& camera, float world_width, float world_height, int screen_w,
+                  int screen_h) {
+    if (!(camera.zoom > 0.0f) || !std::isfinite(camera.zoom)) return;
+    if (!(world_width > 0.0f) || !(world_height > 0.0f)) return;
+    if (!std::isfinite(world_width) || !std::isfinite(world_height)) return;
+    if (screen_w <= 0 || screen_h <= 0) return;
+
+    const float view_width = static_cast<float>(screen_w) / camera.zoom;
+    const float view_height = static_cast<float>(screen_h) / camera.zoom;
+
+    if (view_width >= world_width) {
+        camera.x = (world_width - view_width) * 0.5f;
+    } else {
+        camera.x = std::clamp(camera.x, 0.0f, world_width - view_width);
+    }
+
+    if (view_height >= world_height) {
+        camera.y = (world_height - view_height) * 0.5f;
+    } else {
+        camera.y = std::clamp(camera.y, 0.0f, world_height - view_height);
+    }
+}
+
+void zoom_camera_at(Camera& camera, float screen_x, float screen_y, float factor,
+                    float world_width, float world_height, int screen_w, int screen_h,
+                    float min_zoom, float max_zoom) {
+    if (!(camera.zoom > 0.0f) || !std::isfinite(camera.zoom)) return;
+    if (!(factor > 0.0f) || !std::isfinite(factor)) return;
+    if (!std::isfinite(screen_x) || !std::isfinite(screen_y)) return;
+
+    const float world_x = camera.x + screen_x / camera.zoom;
+    const float world_y = camera.y + screen_y / camera.zoom;
+    camera.zoom = std::clamp(camera.zoom * factor, min_zoom, max_zoom);
+    camera.x = world_x - screen_x / camera.zoom;
+    camera.y = world_y - screen_y / camera.zoom;
+    clamp_camera(camera, world_width, world_height, screen_w, screen_h);
+}
+
 void draw_background(SDL_Renderer* renderer, const Texture& texture, const Camera& camera,
                      int screen_w, int screen_h) {
     if (renderer == nullptr || texture.get() == nullptr) return;

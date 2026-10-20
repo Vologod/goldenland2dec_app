@@ -8,8 +8,11 @@
 #include <SDL.h>
 #include <stb_image_write.h>
 
+#include <algorithm>
 #include <charconv>
 #include <climits>
+#include <cmath>
+#include <cstddef>
 #include <cstdint>
 #include <cstdio>
 #include <exception>
@@ -191,9 +194,53 @@ void report_error(std::string_view context, const gl::Error& error) {
                  error.message.c_str());
 }
 
+constexpr float kPanSpeed = 600.0f;
+constexpr float kMinZoom = 0.25f;
+constexpr float kMaxZoom = 4.0f;
+constexpr float kZoomStep = 1.1f;
+
+std::size_t animation_frame_index(const Animation& animation, std::uint64_t elapsed_ms) {
+    if (animation.frames.empty() || animation.delay_ms == 0) return 0;
+    return static_cast<std::size_t>((elapsed_ms / animation.delay_ms) %
+                                    animation.frames.size());
+}
+
+bool rect_visible(const SDL_FRect& rect, int width, int height) {
+    return rect.x + rect.w > 0.0f && rect.y + rect.h > 0.0f &&
+           rect.x < static_cast<float>(width) && rect.y < static_cast<float>(height);
+}
+
+void draw_debug_overlay(SDL_Renderer* renderer, const LevelGraphics& graphics,
+                        const gl::render::Camera& camera, int width, int height,
+                        std::uint64_t elapsed_ms) {
+    SDL_SetRenderDrawColor(renderer, 0, 255, 0, 255);
+    for (const auto& sprite : graphics.statics) {
+        const SDL_FRect rect =
+            gl::render::to_screen(camera, static_cast<float>(sprite.x),
+                                  static_cast<float>(sprite.y),
+                                  static_cast<float>(sprite.texture.width()),
+                                  static_cast<float>(sprite.texture.height()));
+        if (rect_visible(rect, width, height)) SDL_RenderDrawRectF(renderer, &rect);
+    }
+
+    SDL_SetRenderDrawColor(renderer, 255, 255, 0, 255);
+    for (const auto& animation : graphics.animations) {
+        if (animation.frames.empty()) continue;
+        const gl::render::Texture& frame =
+            animation.frames[animation_frame_index(animation, elapsed_ms)];
+        const SDL_FRect rect =
+            gl::render::to_screen(camera, static_cast<float>(animation.x),
+                                  static_cast<float>(animation.y),
+                                  static_cast<float>(frame.width()),
+                                  static_cast<float>(frame.height()));
+        if (rect_visible(rect, width, height)) SDL_RenderDrawRectF(renderer, &rect);
+    }
+}
+
 void draw_frame(SDL_Renderer* renderer, const gl::render::Texture& background,
                 const LevelGraphics& graphics, const gl::render::Camera& camera, int width,
-                int height, std::uint64_t elapsed_ms, bool background_only) {
+                int height, std::uint64_t elapsed_ms, bool background_only,
+                bool debug_overlay) {
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
     SDL_RenderClear(renderer);
     gl::render::draw_background(renderer, background, camera, width, height);
@@ -207,14 +254,14 @@ void draw_frame(SDL_Renderer* renderer, const gl::render::Texture& background,
 
     for (const auto& animation : graphics.animations) {
         if (animation.frames.empty()) continue;
-        std::size_t index = 0;
-        if (animation.delay_ms > 0) {
-            index = static_cast<std::size_t>((elapsed_ms / animation.delay_ms) %
-                                             animation.frames.size());
-        }
+        const std::size_t index = animation_frame_index(animation, elapsed_ms);
         gl::render::draw_texture(renderer, animation.frames[index], camera,
                                  static_cast<float>(animation.x),
                                  static_cast<float>(animation.y), width, height);
+    }
+
+    if (debug_overlay) {
+        draw_debug_overlay(renderer, graphics, camera, width, height, elapsed_ms);
     }
 }
 
@@ -240,7 +287,7 @@ int save_screenshot(SDL_Renderer* renderer, const std::filesystem::path& path, i
     for (int frame = 0; frame < frames; ++frame) {
         const std::uint64_t elapsed_ms = static_cast<std::uint64_t>(frame + 1) * 16;
         draw_frame(renderer, background, graphics, camera, width, height, elapsed_ms,
-                   background_only);
+                   background_only, false);
         if (frame + 1 == frames) {
             if (SDL_RenderReadPixels(renderer, nullptr, SDL_PIXELFORMAT_RGBA32, pixels.data(),
                                      pitch) != 0) {
@@ -263,20 +310,16 @@ int save_screenshot(SDL_Renderer* renderer, const std::filesystem::path& path, i
 }
 
 int run_interactive(SDL_Renderer* renderer, const gl::render::Texture& background,
-                    const LevelGraphics& graphics, const gl::render::Camera& camera,
-                    bool background_only) {
+                    const LevelGraphics& graphics, gl::render::Camera camera,
+                    float world_width, float world_height, bool background_only) {
     const std::uint64_t start_ticks = SDL_GetTicks64();
+    std::uint64_t previous_counter = SDL_GetPerformanceCounter();
+    const double counter_frequency = static_cast<double>(SDL_GetPerformanceFrequency());
     bool running = true;
-    while (running) {
-        SDL_Event event;
-        while (SDL_PollEvent(&event) != 0) {
-            if (event.type == SDL_QUIT) {
-                running = false;
-            } else if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_ESCAPE) {
-                running = false;
-            }
-        }
+    bool dragging = false;
+    bool debug_overlay = false;
 
+    while (running) {
         int width = 0;
         int height = 0;
         if (SDL_GetRendererOutputSize(renderer, &width, &height) != 0 || width <= 0 ||
@@ -285,9 +328,69 @@ int run_interactive(SDL_Renderer* renderer, const gl::render::Texture& backgroun
                          SDL_GetError());
             return 2;
         }
+        gl::render::clamp_camera(camera, world_width, world_height, width, height);
+
+        const std::uint64_t now_counter = SDL_GetPerformanceCounter();
+        double delta_seconds =
+            static_cast<double>(now_counter - previous_counter) / counter_frequency;
+        previous_counter = now_counter;
+        delta_seconds = std::min(delta_seconds, 0.1);
+        const float delta = static_cast<float>(delta_seconds);
+
+        SDL_Event event;
+        while (SDL_PollEvent(&event) != 0) {
+            if (event.type == SDL_QUIT) {
+                running = false;
+            } else if (event.type == SDL_KEYDOWN) {
+                if (event.key.repeat != 0) continue;
+                if (event.key.keysym.sym == SDLK_ESCAPE) {
+                    running = false;
+                } else if (event.key.keysym.sym == SDLK_F1) {
+                    debug_overlay = !debug_overlay;
+                } else if (event.key.keysym.sym == SDLK_HOME) {
+                    camera = gl::render::Camera{};
+                    gl::render::clamp_camera(camera, world_width, world_height, width, height);
+                }
+            } else if (event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_LEFT) {
+                dragging = true;
+            } else if (event.type == SDL_MOUSEBUTTONUP && event.button.button == SDL_BUTTON_LEFT) {
+                dragging = false;
+            } else if (event.type == SDL_MOUSEMOTION && dragging) {
+                camera.x -= static_cast<float>(event.motion.xrel) / camera.zoom;
+                camera.y -= static_cast<float>(event.motion.yrel) / camera.zoom;
+                gl::render::clamp_camera(camera, world_width, world_height, width, height);
+            } else if (event.type == SDL_MOUSEWHEEL && event.wheel.y != 0) {
+                int mouse_x = 0;
+                int mouse_y = 0;
+                SDL_GetMouseState(&mouse_x, &mouse_y);
+                const float factor = event.wheel.y > 0 ? kZoomStep : 1.0f / kZoomStep;
+                gl::render::zoom_camera_at(camera, static_cast<float>(mouse_x),
+                                           static_cast<float>(mouse_y), factor, world_width,
+                                           world_height, width, height, kMinZoom, kMaxZoom);
+            } else if (event.type == SDL_WINDOWEVENT &&
+                       (event.window.event == SDL_WINDOWEVENT_LEAVE ||
+                        event.window.event == SDL_WINDOWEVENT_FOCUS_LOST)) {
+                dragging = false;
+            }
+        }
+
+        float move_x = 0.0f;
+        float move_y = 0.0f;
+        const Uint8* keys = SDL_GetKeyboardState(nullptr);
+        if (keys[SDL_SCANCODE_A] || keys[SDL_SCANCODE_LEFT]) move_x -= 1.0f;
+        if (keys[SDL_SCANCODE_D] || keys[SDL_SCANCODE_RIGHT]) move_x += 1.0f;
+        if (keys[SDL_SCANCODE_W] || keys[SDL_SCANCODE_UP]) move_y -= 1.0f;
+        if (keys[SDL_SCANCODE_S] || keys[SDL_SCANCODE_DOWN]) move_y += 1.0f;
+        if (move_x != 0.0f || move_y != 0.0f) {
+            const float length = std::sqrt(move_x * move_x + move_y * move_y);
+            const float step = kPanSpeed / camera.zoom * delta;
+            camera.x += move_x / length * step;
+            camera.y += move_y / length * step;
+            gl::render::clamp_camera(camera, world_width, world_height, width, height);
+        }
 
         draw_frame(renderer, background, graphics, camera, width, height,
-                   SDL_GetTicks64() - start_ticks, background_only);
+                   SDL_GetTicks64() - start_ticks, background_only, debug_overlay);
         SDL_RenderPresent(renderer);
     }
     return 0;
@@ -318,6 +421,12 @@ int main(int argc, char** argv) {
             report_error("cannot load level", level.error());
             return exit_code_for(level.error());
         }
+
+        gl::log(gl::LogLevel::info,
+                "level '" + level->name + "' (pack '" + level->pack + "'): " +
+                    std::to_string(level->width) + "x" + std::to_string(level->height) +
+                    " px, " + std::to_string(level->statics.size()) + " statics, " +
+                    std::to_string(level->animations.size()) + " animations");
 
         gl::platform::SdlContext context;
         gl::platform::Window window("Goldenland 2 - Level Viewer", options.width, options.height);
@@ -374,7 +483,8 @@ int main(int argc, char** argv) {
                                    options.background_only);
         }
         return run_interactive(window.renderer(), background.value(), graphics, camera,
-                               options.background_only);
+                               static_cast<float>(level->width),
+                               static_cast<float>(level->height), options.background_only);
     } catch (const std::exception& e) {
         std::fprintf(stderr, "glview: %s\n", e.what());
         return 2;

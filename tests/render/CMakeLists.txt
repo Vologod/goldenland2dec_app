@@ -1,3 +1,10 @@
+add_executable(camera_tests test_camera.cpp)
+target_include_directories(camera_tests PRIVATE ${CMAKE_SOURCE_DIR}/third_party/doctest)
+target_link_libraries(camera_tests PRIVATE gl_render SDL2::SDL2)
+gl_enable_warnings(camera_tests)
+
+add_test(NAME camera_tests COMMAND camera_tests)
+
 add_executable(glview_screenshot_tests test_glview_screenshot.cpp)
 target_include_directories(glview_screenshot_tests PRIVATE ${CMAKE_SOURCE_DIR}/third_party/doctest
                                                            ${CMAKE_SOURCE_DIR}/third_party/stb)
