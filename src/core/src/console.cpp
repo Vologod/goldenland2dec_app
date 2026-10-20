@@ -1,7 +1,17 @@
 #include "gl/core/console.hpp"
+#include <string_view>
 #include <utility>
 
 namespace gl::core {
+namespace {
+bool is_blank(std::string_view text) {
+    for (const char c : text) {
+        if (c != ' ' && c != '\t' && c != '\r' && c != '\n') return false;
+    }
+    return true;
+}
+}
+
 void ConsoleBuffer::push(std::string line) {
     lines_.push_back(std::move(line));
     while (lines_.size() > max_lines)
@@ -11,6 +21,7 @@ void ConsoleBuffer::push(std::string line) {
 const std::deque<std::string>& ConsoleBuffer::lines() const { return lines_; }
 
 void ConsoleBuffer::add_history(std::string line) {
+    if (is_blank(line)) return;
     history_.push_back(std::move(line));
     while (history_.size() > max_history)
         history_.pop_front();

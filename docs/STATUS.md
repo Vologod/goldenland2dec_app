@@ -14,9 +14,12 @@ P0 завершена и принята. P1 — Level viewer: реализаци
 (меню, уровень через `LevelScreen`, консоль `~`, команды, конфиг/`cl_username`
 round-trip); `gl_core` отклоняет дубли имён команд. `--screenshot` меню/уровня,
 `--exec`, коды выхода 0/1/2/3. Тесты `glgame_screenshot_tests` (skip 77 без
-`GL_GAME_DIR`): меню и уровень 1280×720, `help`+unknown не фатальны, `cl_username`
-сохраняется с `bind`/комментариями. Полный `ctest` с `GL_GAME_DIR`: 8/8 passed
-(real-data 517.27 s, glgame 12.70 s).
+`GL_GAME_DIR`, управляемый temp INI): CLI `--width/--height` приоритетнее
+`r_resolution`, меню и уровень 1280×720, `help`+unknown не фатальны, `cl_username`
+сохраняется с `bind`/комментариями, `gv_pause`/`r_windowed` персистятся.
+`d_console` применяется из конфига при старте, server-события проходят через
+`ClientCore`. Полный `ctest` с `GL_GAME_DIR`: 8/8 passed (real-data 503.11 s,
+glgame 11.22 s).
 
 **P2a — Task 5 (state machine + ServerCore/ClientCore skeleton) завершён 2026-10-20.**
 В SDL-free `gl_core` добавлены `StateMachine` (`boot→menu→level→menu`, `level` reload,
@@ -219,6 +222,10 @@ P0 закрыт 2026-10-19; далее выполнялись задачи P1 (�
   `r_resolution`/`r_windowed`/`cl_username`/`game_save`, сохранение Config);
   `glgame_screenshot_tests`, отказ от дублей команд в `gl_core`; `ctest` с
   `GL_GAME_DIR` 8/8.
+- 2026-10-20: P2a Task 6 fix round 1 — CLI `--width/--height` приоритетнее
+  `r_resolution`, `gv_pause` персистится, `d_console` применяется при старте,
+  server-события идут через `ClientCore`, пустые строки не попадают в консоль/историю,
+  результаты команд логируются; тесты на persistence и пустую историю; `ctest` 8/8.
 
 ## Следующие задачи
 
@@ -233,9 +240,10 @@ P0 закрыт 2026-10-19; далее выполнялись задачи P1 (�
 - P1: финальный manual desktop pass — WASD/стрелки, `Home` и визуальный `F1` toggle
   на обычном рабочем столе. В текущей headless-сессии клавиатурный фокус недоступен;
   drag-панорама и wheel-зум проверены инъекцией мыши, overlay — screenshot-тестом.
-- P2a Task 6: интерактивный ввод (New Game/`~`/Enter) в headless-сессии не прогнан
-  end-to-end; проверены screenshot-тесты меню/уровня, путь `--exec` и живость окна
-  (меню и уровень); manual desktop pass остаётся для Task 7.
+- **P2a Task 6 acceptance gate (Task 7):** manual desktop pass — New Game → `l1_1`,
+  `~`, `help`, `gv_pause`, `exit` на обычном рабочем столе. В headless-сессии
+  клавиатурный/мышиный ввод end-to-end не проверен; screenshot-тесты, `--exec` и
+  живость окна не заменяют этот прогон. Без него P2a не принимать.
 - SDL2 `release-2.32.10` выдаёт CMake deprecation warning из-за своего
   `cmake_minimum_required`; следить при обновлении CMake/SDL.
 - `.clang-format` (LLVM base) не совпадает со стилем исходников P0; repo-wide

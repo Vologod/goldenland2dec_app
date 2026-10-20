@@ -12,6 +12,7 @@
 #include <memory>
 #include <set>
 #include <string>
+#include <string_view>
 #include <system_error>
 #include <vector>
 #ifndef _WIN32
@@ -106,11 +107,27 @@ int run_glgame(const std::vector<std::string>& arguments) {
 #endif
 }
 
-std::vector<std::string> screenshot_arguments(const fs::path& game_dir, const fs::path& png,
+fs::path write_test_config(const fs::path& dir, bool with_resolution = false) {
+    const fs::path config = dir / "test.ini";
+    std::ofstream out(config, std::ios::binary);
+    out << "// deterministic test config\n"
+           "cl_username Tester\n"
+           "d_console 0\n"
+           "gv_pause 0\n"
+           "r_windowed 1\n"
+           "bind DIK_F8, vk_screenshot\n";
+    if (with_resolution) out << "r_resolution 640 480\n";
+    REQUIRE(out);
+    return config;
+}
+
+std::vector<std::string> screenshot_arguments(const fs::path& game_dir, const fs::path& config,
+                                              const fs::path& png,
                                               const std::vector<std::string>& extra = {}) {
     std::vector<std::string> arguments = {
-        "--game-dir", game_dir.string(), "--screenshot", png.string(),
-        "--width",    "1280",             "--height",    "720"};
+        "--game-dir", game_dir.string(), "--config",   config.string(),
+        "--screenshot", png.string(),    "--width",    "1280",
+        "--height",   "720"};
     arguments.insert(arguments.end(), extra.begin(), extra.end());
     return arguments;
 }
@@ -148,6 +165,20 @@ bool has_line(const std::vector<std::string>& lines, const std::string& expected
     return false;
 }
 
+std::string setting_value(const std::vector<std::string>& lines, std::string_view key) {
+    for (const std::string& line : lines) {
+        const std::string trimmed = trim_left(line);
+        if (trimmed.compare(0, key.size(), key) != 0) continue;
+        if (trimmed.size() == key.size()) return {};
+        if (trimmed[key.size()] != ' ' && trimmed[key.size()] != '\t') continue;
+        std::string value = trim_left(trimmed.substr(key.size()));
+        const std::size_t end = value.find_first_of(" \t");
+        if (end != std::string::npos) value.resize(end);
+        return value;
+    }
+    return {};
+}
+
 void check_png(const fs::path& png, int expected_width, int expected_height) {
     int width = 0;
     int height = 0;
@@ -181,8 +212,9 @@ TEST_CASE("glgame renders the menu into a 1280x720 PNG") {
     REQUIRE(game_dir != nullptr);
 
     TempDir temp;
+    const fs::path config = write_test_config(temp.path, true);
     const fs::path png = temp.path / "menu.png";
-    const int code = run_glgame(screenshot_arguments(game_dir, png, {"--menu"}));
+    const int code = run_glgame(screenshot_arguments(game_dir, config, png, {"--menu"}));
     CAPTURE(code);
     REQUIRE(fs::exists(png));
     CHECK(code == 0);
@@ -194,9 +226,10 @@ TEST_CASE("glgame renders a preloaded level into a 1280x720 PNG") {
     REQUIRE(game_dir != nullptr);
 
     TempDir temp;
+    const fs::path config = write_test_config(temp.path);
     const fs::path png = temp.path / "level.png";
-    const int code =
-        run_glgame(screenshot_arguments(game_dir, png, {"--level", "l1_1", "--exec", "gv_pause 1"}));
+    const int code = run_glgame(
+        screenshot_arguments(game_dir, config, png, {"--level", "l1_1", "--exec", "gv_pause 1"}));
     CAPTURE(code);
     REQUIRE(fs::exists(png));
     CHECK(code == 0);
@@ -208,9 +241,10 @@ TEST_CASE("glgame tolerates help and unknown commands from --exec") {
     REQUIRE(game_dir != nullptr);
 
     TempDir temp;
+    const fs::path config = write_test_config(temp.path);
     const fs::path png = temp.path / "exec.png";
-    const int code = run_glgame(
-        screenshot_arguments(game_dir, png, {"--menu", "--exec", "help", "--exec", "unknown"}));
+    const int code = run_glgame(screenshot_arguments(
+        game_dir, config, png, {"--menu", "--exec", "help", "--exec", "unknown"}));
     CAPTURE(code);
     REQUIRE(fs::exists(png));
     CHECK(code == 0);
@@ -232,7 +266,7 @@ TEST_CASE("glgame persists cl_username and keeps binds/comments") {
 
     const fs::path png = temp.path / "config.png";
     const int code = run_glgame(screenshot_arguments(
-        game_dir, png, {"--config", config.string(), "--menu", "--exec", "cl_username TestUser"}));
+        game_dir, config, png, {"--menu", "--exec", "cl_username TestUser"}));
     CAPTURE(code);
     REQUIRE(fs::exists(png));
     CHECK(code == 0);
@@ -259,4 +293,23 @@ TEST_CASE("glgame persists cl_username and keeps binds/comments") {
     }
     CAPTURE(preserved);
     CHECK(preserved > 0);
+}
+
+TEST_CASE("glgame persists gv_pause and r_windowed") {
+    const char* game_dir = std::getenv("GL_GAME_DIR");
+    REQUIRE(game_dir != nullptr);
+
+    TempDir temp;
+    const fs::path config = write_test_config(temp.path);
+    const fs::path png = temp.path / "persist.png";
+    const int code = run_glgame(screenshot_arguments(
+        game_dir, config, png,
+        {"--menu", "--exec", "gv_pause 1", "--exec", "r_windowed 0"}));
+    CAPTURE(code);
+    REQUIRE(fs::exists(png));
+    CHECK(code == 0);
+
+    const std::vector<std::string> lines = split_lines(read_file(config));
+    CHECK(setting_value(lines, "gv_pause") == "1");
+    CHECK(setting_value(lines, "r_windowed") == "0");
 }

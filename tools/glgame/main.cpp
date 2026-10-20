@@ -49,6 +49,8 @@ struct Options {
     bool menu = false;
     int width = kDefaultWidth;
     int height = kDefaultHeight;
+    bool width_set = false;
+    bool height_set = false;
     fs::path screenshot;
     std::vector<std::string> exec;
 };
@@ -162,6 +164,7 @@ ParseStatus parse_args(int argc, char** argv, Options& options) {
                              static_cast<int>(value.size()), value.data());
                 return ParseStatus::error;
             }
+            options.width_set = true;
         } else if (arg == "--height") {
             if (!next_value(arg, value)) return ParseStatus::error;
             if (!parse_dimension(value, options.height)) {
@@ -169,6 +172,7 @@ ParseStatus parse_args(int argc, char** argv, Options& options) {
                              static_cast<int>(value.size()), value.data());
                 return ParseStatus::error;
             }
+            options.height_set = true;
         } else if (arg == "--menu") {
             options.menu = true;
         } else if (arg == "--screenshot") {
@@ -216,6 +220,20 @@ bool is_blank(std::string_view text) {
     return true;
 }
 
+const char* state_name(gl::core::AppState state) {
+    switch (state) {
+        case gl::core::AppState::boot:
+            return "boot";
+        case gl::core::AppState::menu:
+            return "menu";
+        case gl::core::AppState::level:
+            return "level";
+        case gl::core::AppState::exit:
+            return "exit";
+    }
+    return "unknown";
+}
+
 void erase_last_utf8(std::string& text) {
     if (text.empty()) return;
     std::size_t index = text.size() - 1;
@@ -246,6 +264,7 @@ class Game {
         if (!state_.transition(gl::core::AppState::menu)) return 3;
 
         apply_initial_server_config();
+        if (config_.get_bool("d_console", false)) set_console_visible(true);
 
         if (options_.has_level && !options_.menu) {
             if (!load_level(level_name_)) return 3;
@@ -257,6 +276,12 @@ class Game {
         for (const std::string& command : options_.exec) {
             execute_line(command, false);
         }
+
+        gl::log(gl::LogLevel::info,
+                "glgame: boot complete, state=" + std::string(state_name(state_.state())) +
+                    ", commands=" + std::to_string(registry_.commands().size()) +
+                    ", archives=" + std::to_string(vfs_.archives().size()) +
+                    ", console=" + std::string(console_visible_ ? "1" : "0"));
         return 0;
     }
 
@@ -464,8 +489,16 @@ class Game {
 
     void process_server_events() {
         for (const gl::core::Event& event : server_.drain_events()) {
+            client_.on_event(event);
+        }
+        for (const gl::core::Event& event : client_.events()) {
             switch (event.type) {
                 case gl::core::EventType::paused_changed:
+                    if (config_.get_bool("gv_pause", false) != event.flag) {
+                        config_.set_int("gv_pause", event.flag ? 1 : 0);
+                        dirty_ = true;
+                        save_config();
+                    }
                     console_print(event.flag ? "paused = 1" : "paused = 0");
                     break;
                 case gl::core::EventType::config_changed:
@@ -481,6 +514,7 @@ class Game {
                     break;
             }
         }
+        client_.clear_events();
     }
 
     bool save_config() {
@@ -496,8 +530,9 @@ class Game {
     }
 
     void console_print(std::string_view text) {
+        if (text.empty()) return;
         std::size_t start = 0;
-        while (start <= text.size()) {
+        while (start < text.size()) {
             const std::size_t end = text.find('\n', start);
             if (end == std::string_view::npos) {
                 console_lines_.push(std::string(text.substr(start)));
@@ -517,6 +552,7 @@ class Game {
             gl::log(gl::LogLevel::warning, result.error().message);
             return;
         }
+        if (!result.value().empty()) gl::log(gl::LogLevel::info, result.value());
         console_print(result.value());
     }
 
@@ -894,6 +930,7 @@ class Game {
     gl::platform::Window& window_;
     gl::core::StateMachine state_;
     gl::core::ServerCore server_;
+    gl::core::ClientCore client_;
     gl::core::CommandRegistry registry_;
     gl::core::ConsoleBuffer console_lines_;
     std::optional<gl::app::LevelScreen> level_;
@@ -942,8 +979,8 @@ int main(int argc, char** argv) {
 
         const Resolution resolution = parse_resolution(config.value().get("r_resolution"));
         if (resolution.valid) {
-            options.width = resolution.width;
-            options.height = resolution.height;
+            if (!options.width_set) options.width = resolution.width;
+            if (!options.height_set) options.height = resolution.height;
         }
 
         auto vfs = gl::assets::GameVfs::mount(options.game_dir);

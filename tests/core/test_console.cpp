@@ -48,6 +48,19 @@ TEST_CASE("ConsoleBuffer: adding history resets navigation") {
     CHECK(buffer.history_prev() == "a");
 }
 
+TEST_CASE("ConsoleBuffer: empty and whitespace history is not stored") {
+    gl::core::ConsoleBuffer buffer;
+    buffer.add_history("");
+    buffer.add_history("   ");
+    buffer.add_history("\t\r\n");
+
+    CHECK(buffer.history_prev().empty());
+
+    buffer.add_history("real");
+    CHECK(buffer.history_prev() == "real");
+    CHECK(buffer.history_prev().empty());
+}
+
 TEST_CASE("ConsoleBuffer: history is capped at 64 entries") {
     gl::core::ConsoleBuffer buffer;
     for (int i = 0; i < 100; ++i)
