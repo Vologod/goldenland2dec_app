@@ -38,11 +38,12 @@ Task 4 завершён: `gl::assets::slice_csx_frames` (`csx_frames.hpp`/`csx_f
 Полный `ctest` с `GL_GAME_DIR`: 3/3 passed.
 
 Task 5 завершён: `gl::game::load_level` (`level.hpp`/`level_loader.cpp`) загружает
-SEF→pack, LVL, фон, статику и анимации из `GameVfs`; отсутствующие необязательные файлы —
-warning и пропуск, фатальны только SEF/LVL/фон. `gl_game` — статическая библиотека без SDL,
-зависит только от `gl_assets`. Интеграционный тест `l1_1`: 2760×2016, 2 статики, 2 анимации,
-кадры соответствуют LAO; отсутствующий уровень → io/format. Полный `ctest` с `GL_GAME_DIR`:
-3/3 passed (real-data 371.52 s).
+SEF→pack, LVL, фон, статику и анимации из `GameVfs`; статика сортируется по `number`
+(порядок отрисовки), отсутствующие необязательные файлы — warning и пропуск, фатальны только
+SEF/LVL/фон. `gl_game` — статическая библиотека без SDL, зависит только от `gl_assets`.
+Интеграционные тесты: `l1_1` — 2760×2016, 2 статики, 2 анимации, позиции, кадры и ceil-размер
+соответствуют CSX/LAO; `l6_2_2` — статика в порядке `number`; отсутствующий уровень → io/format.
+Полный `ctest` с `GL_GAME_DIR`: 3/3 passed (real-data 389.13 s).
 
 Следующая задача — **P1 Task 6: Renderer, camera, background, screenshot** (`docs/plans/2026-10-19-p1-level-viewer.md`).
 

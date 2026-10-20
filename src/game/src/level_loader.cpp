@@ -105,8 +105,13 @@ Result<Level> load_level(GameVfs &vfs, std::string_view level_name) {
                  std::to_string(lvl->map_size.pixel_height));
         }
 
-        level.statics.reserve(lvl->statics.size());
-        for (const auto &description : lvl->statics) {
+        std::vector<LvlDescription> static_descriptions = lvl->statics;
+        std::stable_sort(
+            static_descriptions.begin(), static_descriptions.end(),
+            [](const LvlDescription &a, const LvlDescription &b) { return a.number < b.number; });
+
+        level.statics.reserve(static_descriptions.size());
+        for (const auto &description : static_descriptions) {
             const std::string path = pack_path(
                 level.pack, "bitmaps/static/static_" + std::to_string(description.number) + ".csx");
             auto data = vfs.read(path);
@@ -128,19 +133,22 @@ Result<Level> load_level(GameVfs &vfs, std::string_view level_name) {
             level.statics.push_back(std::move(object));
         }
 
-        const std::string lao_file = pack_path(level.pack, "data/animated/" + level.pack + ".lao");
         std::vector<LaoInfo> lao;
-        auto lao_data = vfs.read(lao_file);
-        if (!lao_data) {
-            warn("level '" + level.name +
-                 "': " + contextual(lao_data.error(), "skipping animations", lao_file).message);
-        } else {
-            auto parsed = parse_lao(lao_data.value());
-            if (!parsed) {
+        if (!lvl->animations.empty()) {
+            const std::string lao_file =
+                pack_path(level.pack, "data/animated/" + level.pack + ".lao");
+            auto lao_data = vfs.read(lao_file);
+            if (!lao_data) {
                 warn("level '" + level.name +
-                     "': " + contextual(parsed.error(), "skipping animations", lao_file).message);
+                     "': " + contextual(lao_data.error(), "skipping animations", lao_file).message);
             } else {
-                lao = std::move(parsed.value());
+                auto parsed = parse_lao(lao_data.value());
+                if (!parsed) {
+                    warn("level '" + level.name + "': " +
+                         contextual(parsed.error(), "skipping animations", lao_file).message);
+                } else {
+                    lao = std::move(parsed.value());
+                }
             }
         }
 
