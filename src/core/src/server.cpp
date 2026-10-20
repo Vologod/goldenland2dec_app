@@ -211,4 +211,8 @@ void ClientCore::on_event(const Event &event) { events_.push_back(event); }
 const std::vector<Event> &ClientCore::events() const { return events_; }
 
 void ClientCore::clear_events() { events_.clear(); }
+
+void ClientCore::on_snapshot(const ServerSnapshot &snapshot) { snapshot_ = snapshot; }
+
+const ServerSnapshot &ClientCore::snapshot() const { return snapshot_; }
 } // namespace gl::core

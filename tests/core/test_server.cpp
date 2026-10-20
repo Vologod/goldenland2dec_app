@@ -479,6 +479,61 @@ TEST_CASE("ServerCore: snapshot mirrors pause, free camera, tick and time") {
     CHECK(snap.free_camera == server.free_camera());
 }
 
+TEST_CASE("ClientCore: default snapshot is zeroed and unpaused") {
+    const ClientCore client;
+
+    const ServerSnapshot snap = client.snapshot();
+    CHECK_FALSE(snap.paused);
+    CHECK_FALSE(snap.free_camera);
+    CHECK(snap.tick_index == 0);
+    CHECK(snap.simulation_time_ms == 0);
+}
+
+TEST_CASE("ClientCore: on_snapshot mirrors paused, free camera, tick and time") {
+    ClientCore client;
+
+    ServerSnapshot snap;
+    snap.paused = true;
+    snap.free_camera = true;
+    snap.tick_index = 42;
+    snap.simulation_time_ms = 700;
+    client.on_snapshot(snap);
+
+    CHECK(client.snapshot().paused);
+    CHECK(client.snapshot().free_camera);
+    CHECK(client.snapshot().tick_index == 42);
+    CHECK(client.snapshot().simulation_time_ms == 700);
+
+    snap.paused = false;
+    snap.free_camera = false;
+    snap.tick_index = 1;
+    snap.simulation_time_ms = 16;
+    client.on_snapshot(snap);
+
+    CHECK_FALSE(client.snapshot().paused);
+    CHECK_FALSE(client.snapshot().free_camera);
+    CHECK(client.snapshot().tick_index == 1);
+    CHECK(client.snapshot().simulation_time_ms == 16);
+}
+
+TEST_CASE("ClientCore: later server ticks leave the stored snapshot unchanged") {
+    ServerCore server;
+    ClientCore client;
+
+    client.on_snapshot(server.snapshot());
+
+    server.tick(0.25);
+    REQUIRE(server.tick_index() == 15);
+
+    const ServerSnapshot copy = client.snapshot();
+    CHECK(copy.tick_index == 0);
+    CHECK(copy.simulation_time_ms == 0);
+
+    server.tick(0.25);
+    CHECK(client.snapshot().tick_index == 0);
+    CHECK(client.snapshot().simulation_time_ms == 0);
+}
+
 TEST_CASE("ClientCore: stores events until cleared") {
     ClientCore client;
     CHECK(client.events().empty());

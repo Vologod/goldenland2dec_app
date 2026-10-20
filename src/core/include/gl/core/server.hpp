@@ -67,8 +67,11 @@ class ClientCore {
     void on_event(const Event &event);
     const std::vector<Event> &events() const;
     void clear_events();
+    void on_snapshot(const ServerSnapshot &snapshot);
+    const ServerSnapshot &snapshot() const;
 
   private:
     std::vector<Event> events_;
+    ServerSnapshot snapshot_;
 };
 } // namespace gl::core
