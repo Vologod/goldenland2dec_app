@@ -7,6 +7,7 @@ add_executable(gl_assets_tests
     test_pak.cpp
     test_vfs.cpp
     test_csx.cpp
+    test_csx_frames.cpp
     test_sdb.cpp
     test_itm.cpp
     test_image.cpp

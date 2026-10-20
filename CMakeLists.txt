@@ -18,6 +18,7 @@ add_library(gl_assets STATIC
     src/assets/src/pak.cpp
     src/assets/src/vfs.cpp
     src/assets/src/csx.cpp
+    src/assets/src/csx_frames.cpp
     src/assets/src/sdb.cpp
     src/assets/src/itm.cpp
     src/assets/src/lvl.cpp

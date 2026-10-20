@@ -144,9 +144,9 @@ Result<std::vector<Image>> slice_csx_frames(const CsxImage& image, std::uint32_t
 Reject `frame_height == 0` or `frame_height > image.height`. Produce `ceil(height/frame_height)`
 frames; the last may be shorter. Each frame copies its RGBA rows.
 
-- [ ] **Step 1:** Unit test with a synthetic 2×6 image, frame_height 2 → 3 frames, correct pixels.
-- [ ] **Step 2:** Implement.
-- [ ] **Step 3:** Commit.
+- [x] **Step 1:** Unit test with a synthetic 2×6 image, frame_height 2 → 3 frames, correct pixels.
+- [x] **Step 2:** Implement.
+- [x] **Step 3:** Commit.
 
 ---
 

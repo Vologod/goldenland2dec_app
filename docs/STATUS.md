@@ -31,7 +31,13 @@ Task 3 завершён: `gl::assets::parse_lao` (`lao.hpp`/`lao.cpp`) и `parse
 нормализуется в ASCII-lowercase (D-018). Unit: 86 cases / 506 assertions.
 Полный `ctest` с `GL_GAME_DIR`: 3/3 passed.
 
-Следующая задача — **P1 Task 4: CSX frame slicing** (`docs/plans/2026-10-19-p1-level-viewer.md`).
+Task 4 завершён: `gl::assets::slice_csx_frames` (`csx_frames.hpp`/`csx_frames.cpp`) режет
+декодированный CSX на вертикальные кадры фиксированной высоты; последний кадр может быть
+короче. Отклоняются нулевые размеры, `frame_height == 0`, `frame_height > image.height`
+и несоответствие размера RGBA-буфера. Unit: 90 cases / 547 assertions (+4 cases / +41).
+Полный `ctest` с `GL_GAME_DIR`: 3/3 passed.
+
+Следующая задача — **P1 Task 5: LevelLoader + Level model** (`docs/plans/2026-10-19-p1-level-viewer.md`).
 
 ## Как продолжить (пауза 2026-10-19)
 
@@ -39,7 +45,7 @@ Task 3 завершён: `gl::assets::parse_lao` (`lao.hpp`/`lao.cpp`) и `parse
 - Тулчейн: `.local/toolchains`; перед сборкой:
   `$env:PATH = "I:\goldenland2dec\.local\toolchains\llvm-mingw-20261006-ucrt-x86_64\bin;I:\goldenland2dec\.local\toolchains\ninja;I:\goldenland2dec\.local\toolchains\cmake\cmake-4.4.4-windows-x86_64\bin;$env:PATH"`
 - Тесты: `$env:GL_GAME_DIR = "I:\Games\Златогорье-2"`; `ctest --test-dir build --output-on-failure`.
-- SDD-леджер: `.superpowers/sdd/2026-10-19-p1-level-viewer/progress.md` (Tasks 1–3 complete).
+- SDD-леджер: `.superpowers/sdd/2026-10-19-p1-level-viewer/progress.md` (Tasks 1–4 complete).
 - Дальше: взять Task 4 brief из плана и продолжить subagent-driven цикл.
 
 **P0 — Ассеты и форматы.** Реализация и приёмка завершены (Tasks 0–10).
@@ -102,10 +108,11 @@ Task 3 завершён: `gl::assets::parse_lao` (`lao.hpp`/`lao.cpp`) и `parse
   тесты (175/175 уровней), `ctest` 3/3.
 - 2026-10-20: P1 Task 3 — парсеры LAO (`parse_lao`) и минимального SEF (`parse_sef`);
   33/33 LAO и `l1_1.sef` на реальных данных, `ctest` 3/3.
+- 2026-10-20: P1 Task 4 — `slice_csx_frames`: нарезка CSX на кадры, unit 90/547, `ctest` 3/3.
 
 ## Следующие задачи
 
-1. P1 Task 4: CSX frame slicing.
+1. P1 Task 5: LevelLoader + Level model.
 
 ## Открытые вопросы
 
