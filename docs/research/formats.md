@@ -109,6 +109,20 @@ weight_x10   : uint32
 - `BLK_DOOR`: `u32 count`, затем `count*6` строк; payload расходуется ровно.
 - `BLK_LFLS`: ровно 4 байта (`u32 levelFloors`).
 
+## LAO и SEF (метаданные уровня)
+
+Подтверждено на `levels.pak` (`I:\Games\Златогорье-2`):
+
+- `.lao`: 33 записи `levels/pack/<pack>/data/animated/*.lao`, ровно по одной на
+  33 pack-каталога. Формат — последовательность LE-пар `(u32 height, u32 delay)`;
+  размер файла кратен 8. Пустой файл (0 пар) допустим.
+- `levels/single/l1_1/l1_1.sef` (9534 байта, cp1251): верхнеуровневые ключи `version`,
+  `pack: "L1_1"`, `internal_location`, `exit_to_globalmap`, `weather`; далее секции
+  `persons`, `cell_groups`, `triggers`, `points_entrance`. Реальный ключ называется
+  `exit_to_globalmap` (без `_map`); парсер принимает оба написания. `pack` нормализуется
+  в нижний регистр (`L1_1` → `l1_1`), т.к. VFS регистронезависим. Комментарии `//`
+  до конца строки, CRLF и табы допускаются; блок-комментариев в файле нет.
+
 ## Прочие форматы (следующие подпроекты)
 
 - `LVL`, `PAD`, `MDF`, `SEF`, `LAO` — уровни/маски/метаданные (`DarkContact/GoldenLandEditor`).

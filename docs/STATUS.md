@@ -1,6 +1,6 @@
 # STATUS
 
-Обновлено: 2026-10-19
+Обновлено: 2026-10-20
 
 ## Текущая фаза
 
@@ -24,7 +24,14 @@ SENV/WTHR/DOOR валидируются без моделирования. По�
 175/175 реальных `levels/lvl/*.lvl` из `levels.pak`, 0 ошибок.
 Полный `ctest` с `GL_GAME_DIR`: 3/3 passed.
 
-Следующая задача — **P1 Task 3: LAO + SEF parsers** (`docs/plans/2026-10-19-p1-level-viewer.md`).
+Task 3 завершён: `gl::assets::parse_lao` (`lao.hpp`/`lao.cpp`) и `parse_sef`
+(`sef.hpp`/`sef.cpp`). LAO: 33/33 `data/animated/*.lao` из `levels.pak` (33 pack-каталога),
+0 ошибок; пустой файл допустим. SEF: `levels/single/l1_1/l1_1.sef` → pack `l1_1`;
+реальный ключ `exit_to_globalmap` принимается как алиас `exit_to_global_map`, pack
+нормализуется в ASCII-lowercase (D-018). Unit: 86 cases / 506 assertions.
+Полный `ctest` с `GL_GAME_DIR`: 3/3 passed.
+
+Следующая задача — **P1 Task 4: CSX frame slicing** (`docs/plans/2026-10-19-p1-level-viewer.md`).
 
 ## Как продолжить (пауза 2026-10-19)
 
@@ -32,8 +39,8 @@ SENV/WTHR/DOOR валидируются без моделирования. По�
 - Тулчейн: `.local/toolchains`; перед сборкой:
   `$env:PATH = "I:\goldenland2dec\.local\toolchains\llvm-mingw-20261006-ucrt-x86_64\bin;I:\goldenland2dec\.local\toolchains\ninja;I:\goldenland2dec\.local\toolchains\cmake\cmake-4.4.4-windows-x86_64\bin;$env:PATH"`
 - Тесты: `$env:GL_GAME_DIR = "I:\Games\Златогорье-2"`; `ctest --test-dir build --output-on-failure`.
-- SDD-леджер: `.superpowers/sdd/2026-10-19-p1-level-viewer/progress.md` (Tasks 1–2 complete).
-- Дальше: взять Task 3 brief из плана и продолжить subagent-driven цикл.
+- SDD-леджер: `.superpowers/sdd/2026-10-19-p1-level-viewer/progress.md` (Tasks 1–3 complete).
+- Дальше: взять Task 4 brief из плана и продолжить subagent-driven цикл.
 
 **P0 — Ассеты и форматы.** Реализация и приёмка завершены (Tasks 0–10).
 
@@ -93,10 +100,12 @@ SENV/WTHR/DOOR валидируются без моделирования. По�
   контекст ошибок архив/файл/offset.
 - 2026-10-19: P1 Task 2 — парсер LVL (`gl_assets::parse_lvl`), synthetic + real-data
   тесты (175/175 уровней), `ctest` 3/3.
+- 2026-10-20: P1 Task 3 — парсеры LAO (`parse_lao`) и минимального SEF (`parse_sef`);
+  33/33 LAO и `l1_1.sef` на реальных данных, `ctest` 3/3.
 
 ## Следующие задачи
 
-1. P1 Task 3: LAO + SEF parsers.
+1. P1 Task 4: CSX frame slicing.
 
 ## Открытые вопросы
 
