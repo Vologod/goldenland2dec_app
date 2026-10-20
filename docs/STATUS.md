@@ -7,11 +7,26 @@
 P0 завершена и принята. P1 — Level viewer: реализация и автоматизированная приёмка
 завершены (2026-10-20); открыт финальный manual desktop pass (см. Open Questions).
 P2a — оболочка игры и консоль: реализация, автоматизированная приёмка и manual desktop
-gate завершены (2026-10-20); P2a принята. P2b — детерминированный тик: реализация и
-автоматизированная приёмка завершены (2026-10-20); открыт manual interactive gate
-(анимации, `gv_pause 1/0`). Следующие подпроекты — P2c (save/load каркас) и P2 backfill.
+gate завершены (2026-10-20); P2a принята. P2b — детерминированный тик: реализация,
+автоматизированная приёмка и manual interactive gate завершены (2026-10-20); P2b принята.
+P2c — save/load каркас: реализация и автоматизированная приёмка завершены (2026-10-20);
+открыт manual UI gate (Continue → слоты, Esc). Следующие подпроекты — P3 (скрипты) или
+P1b (Android/touch); P2 backfill отложен.
 
 ## Текущая задача
+
+**P2c — Task 4 (automated acceptance + docs) завершён 2026-10-20.**
+`cmake --build build` — `ninja: no work to do` (exit 0); полный `ctest --test-dir build
+--output-on-failure` с `GL_GAME_DIR` — **8/8 passed**, 395.96 s (real-data 366.67 s,
+glview 17.44 s, glgame 11.55 s). `glgame --game-dir "I:\Games\Златогорье-2" --list-saves`
+— exit 0, **28 строк**, slot0 `2022-11-06  Quick save  642409`; реальные заголовки
+slot16 `Убмйство кукуя`, slot25 `Продаем артифакты` выводятся без изменений. P2c
+automated acceptance passed. **Manual UI gate OPEN:** запустить
+`glgame --game-dir "I:\Games\Златогорье-2"`, меню → `Continue` (активен при наличии
+валидных слотов) → экран `Save slots`; проверить прокрутку списка при маленьком
+разрешении, `Enter` → сообщение `world deserialization not implemented (P2c)`,
+`Esc` → возврат в меню. Кириллица в заголовках отображается как `?` (ограничение
+`stb_easy_font`, вынесено в P7). Следующая задача — P3 (скрипт-машина) или P1b.
 
 **P2b — Task 4 (automated acceptance + docs) завершён 2026-10-20.**
 `cmake --build build` — `ninja: no work to do`; полный `ctest --test-dir build
@@ -19,11 +34,8 @@ gate завершены (2026-10-20); P2a принята. P2b — детерми
 glview 18.80 s, glgame 12.14 s). Все три screenshot-прогона `glgame` — exit 0,
 PNG 1280×720 и не одноцветные: menu 38 273 B / 15 цветов, level 2 715 273 B /
 115 244 цвета, paused 2 714 099 B / 115 177 цветов (SHA-256 в task-4-report).
-P2b automated acceptance passed. **Manual interactive gate OPEN:** запустить
-`glgame --game-dir "I:\Games\Златогорье-2"`, New Game → `l1_1`; если конфиг сохранён
-с `gv_pause 1`, сначала выполнить `gv_pause 0`, затем убедиться, что анимации идут;
-`gv_pause 1` — анимации и `PAUSED` замирают; `gv_pause 0` — возобновляются.
-Следующая задача — P2c (save/load). P1 manual desktop pass остаётся открытым.
+P2b automated acceptance passed; manual interactive gate пройден пользователем
+2026-10-20 (анимации `l1_1`, `gv_pause 1/0`). P1 manual desktop pass остаётся открытым.
 
 **P2a — Task 7 (automated acceptance + docs) завершён 2026-10-20.**
 `cmake --build build` — `ninja: no work to do`; полный `ctest --test-dir build
@@ -271,20 +283,34 @@ P0 закрыт 2026-10-19; далее выполнялись задачи P1 (�
   `docs/research/p2b-deterministic-tick.md`.
 - 2026-10-20: P2b manual interactive gate пройден пользователем (анимации `l1_1`,
   `gv_pause 1/0` замирание/возобновление); P2b принят.
+- 2026-10-20: P2c Task 1 — `gl::assets::parse_save_header` (magic 20 B, version/date/times,
+  title[64] cp1251→UTF-8, offset 40; короткий файл/битый magic → `format`), unit-тесты.
+- 2026-10-20: P2c Task 2 — `gl::core::SaveManager` (скан `Saves`, `slot<N>.sav`
+  регистронезависимо, сортировка, `valid=false` для битых/не-slot файлов, отсутствующий
+  каталог → пустой список), unit и real-data тесты (28 слотов, version 17).
+- 2026-10-20: P2c Task 3 — `glgame`: пункт меню `Continue`, экран `Save slots`
+  (Up/Down/мышь, прокрутка, `Enter` → сообщение, `Esc` → меню), команда `saves`,
+  CLI `--list-saves` (28 строк, exit 0), screenshot-тест меню.
+- 2026-10-20: P2c Task 4 — automated acceptance: `ctest` 8/8 (395.96 s),
+  `--list-saves` 28 строк / exit 0; research note `docs/research/p2c-save-slots.md`.
+  Manual UI gate остаётся открытым; P1 manual desktop pass остаётся открытым.
 
 ## Следующие задачи
 
-1. P2c: save/load каркас — spec/plan готовы
-   (`docs/specs/2026-10-20-p2c-save-slots-design.md`, `docs/plans/2026-10-20-p2c-save-slots.md`);
-   начать с Task 1 (SaveHeader).
-2. P2 backfill: интерполяция/сеть/игровые системы — отложены до появления сущностей.
+1. P2c: manual UI gate — меню `Continue` → список слотов, прокрутка при маленьком
+   разрешении, `Enter`/`Esc` (см. «Текущая задача»).
+2. P3: скрипт-машина (CS VM, AgeScript, диалоги, SDB) — следующий подпроект.
 3. P1b: Android/touch — отложенный follow-up P1.
+4. P2 backfill: интерполяция/сеть/игровые системы — отложены до появления сущностей.
 
 ## Открытые вопросы
 
 - P1: финальный manual desktop pass — WASD/стрелки, `Home` и визуальный `F1` toggle
   на обычном рабочем столе. В текущей headless-сессии клавиатурный фокус недоступен;
   drag-панорама и wheel-зум проверены инъекцией мыши, overlay — screenshot-тестом.
+- P2c: manual UI gate OPEN — меню `Continue` → `Save slots`, прокрутка при маленьком
+  разрешении, `Enter` (сообщение) и `Esc` (назад в меню) на обычном рабочем столе.
+  Автоматизированная приёмка P2c пройдена, но UI-поведение подтверждается только вручную.
 - P2c: Cyrillic/cp1251 save-slot titles render as `?` in `glgame` because `gl_render` uses
   `stb_easy_font` (ASCII-only). Accepted P2c limitation; a proper font with cp1251 glyphs is
   tracked as P7 backlog.

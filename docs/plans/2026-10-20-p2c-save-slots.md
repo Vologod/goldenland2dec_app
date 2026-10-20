@@ -53,7 +53,7 @@ the first NUL, cp1251→UTF-8, trim trailing spaces/NULs. Bad magic/short → `f
 Tests: synthetic header (ASCII title `Quick save`; cp1251 title; empty title; no NUL within 64;
 short; bad magic).
 
-- [ ] TDD, implement, commit.
+- [x] TDD, implement, commit.
 
 ---
 
@@ -88,7 +88,7 @@ Integration (`GL_GAME_DIR`): 28 slots, all valid, version 17, slot0 title `Quick
 slot16 contains `Убмйство`, slot25 contains `Продаем`; year/month match file mtimes. The real
 titles for slots 16/25 look corrupted/typo'd; the parser returns them unchanged.
 
-- [ ] TDD, implement, commit.
+- [x] TDD, implement, commit.
 
 ---
 
@@ -110,18 +110,23 @@ titles for slots 16/25 look corrupted/typo'd; the parser returns them unchanged.
 Tests (`tests/app`): `glgame --game-dir ... --list-saves` → exit 0, contains `slot0` and 28
 lines; menu screenshot still 1280×720.
 
-- [ ] Implement, tests, commit.
+- [x] Implement, tests, commit.
 
 ---
 
 ### Task 4: Acceptance + docs
 
-- Full `ctest` with `GL_GAME_DIR`.
-- `glgame --game-dir ... --list-saves` output evidence.
-- Manual: menu `Continue` → slot list, Esc back.
-- Docs: STATUS/PROJECT (P2c accepted; next P3 or P1b), research note (save header facts),
-  plan checkboxes.
-- Commit.
+- [x] Full `ctest` with `GL_GAME_DIR` — 8/8 passed, 395.96 s (2026-10-20).
+- [x] `glgame --game-dir ... --list-saves` output evidence — exit 0, 28 lines, slot0
+  `2022-11-06  Quick save  642409`.
+- [ ] Manual: menu `Continue` → slot list, Esc back. **OPEN** (human gate; automated
+  acceptance cannot verify UI input/scroll/back-navigation).
+- [x] Docs: STATUS/PROJECT (P2c automated accepted; next P3 or P1b), research note
+  (save header facts), plan checkboxes.
+- [x] Commit.
+
+Note: P2c automated acceptance is complete; the manual UI gate remains open and P2c is not
+fully accepted until it is performed. No code changes were made in Task 4.
 
 ## Self-Review
 
