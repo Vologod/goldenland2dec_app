@@ -65,16 +65,50 @@ void ServerCore::submit(std::string_view command_line) {
 }
 
 void ServerCore::tick(double dt) {
-    (void)dt;
     std::vector<Command> pending;
     pending.swap(pending_);
     for (const Command &command : pending)
         process(command);
+
+    if (paused_) {
+        accumulator_ = 0.0;
+        return;
+    }
+
+    if (dt < 0.0)
+        dt = 0.0;
+    if (dt > kMaxFrameDt)
+        dt = kMaxFrameDt;
+    accumulator_ += dt;
+
+    int steps = 0;
+    while (accumulator_ >= kFixedDt && steps < kMaxStepsPerTick) {
+        ++tick_index_;
+        accumulator_ -= kFixedDt;
+        ++steps;
+    }
+    if (steps == kMaxStepsPerTick)
+        accumulator_ = 0.0;
+
+    simulation_time_ms_ = tick_index_ * 1000 / static_cast<std::uint64_t>(kTickHz);
 }
 
 bool ServerCore::paused() const { return paused_; }
 
 bool ServerCore::free_camera() const { return free_camera_; }
+
+std::uint64_t ServerCore::tick_index() const { return tick_index_; }
+
+std::uint64_t ServerCore::simulation_time_ms() const { return simulation_time_ms_; }
+
+ServerSnapshot ServerCore::snapshot() const {
+    ServerSnapshot snap;
+    snap.paused = paused_;
+    snap.free_camera = free_camera_;
+    snap.tick_index = tick_index_;
+    snap.simulation_time_ms = simulation_time_ms_;
+    return snap;
+}
 
 std::vector<Event> ServerCore::drain_events() {
     std::vector<Event> events;

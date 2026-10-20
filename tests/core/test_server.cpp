@@ -1,5 +1,6 @@
 #include "gl/core/server.hpp"
 #include <doctest/doctest.h>
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -7,7 +8,12 @@ using gl::core::ClientCore;
 using gl::core::Command;
 using gl::core::Event;
 using gl::core::EventType;
+using gl::core::kFixedDt;
+using gl::core::kMaxFrameDt;
+using gl::core::kMaxStepsPerTick;
+using gl::core::kTickHz;
 using gl::core::ServerCore;
+using gl::core::ServerSnapshot;
 
 namespace {
 bool contains(const std::string &haystack, const std::string &needle) {
@@ -289,6 +295,164 @@ TEST_CASE("ServerCore: empty input is a no-op") {
 
     CHECK(server.drain_events().empty());
     CHECK_FALSE(server.paused());
+}
+
+TEST_CASE("ServerCore: fixed clock advances 60 ticks in four quarter-second frames") {
+    ServerCore server;
+    CHECK(server.tick_index() == 0);
+    CHECK(server.simulation_time_ms() == 0);
+
+    for (int i = 0; i < 4; ++i)
+        server.tick(0.25);
+
+    CHECK(server.tick_index() == 60);
+    CHECK(server.simulation_time_ms() == 1000);
+}
+
+TEST_CASE("ServerCore: two quarter-second frames advance 30 ticks") {
+    ServerCore server;
+
+    server.tick(0.25);
+    CHECK(server.tick_index() == 15);
+    CHECK(server.simulation_time_ms() == 250);
+
+    server.tick(0.25);
+    CHECK(server.tick_index() == 30);
+    CHECK(server.simulation_time_ms() == 500);
+}
+
+TEST_CASE("ServerCore: 100 frames of 0.01 accumulate to 60 ticks") {
+    ServerCore server;
+
+    for (int i = 0; i < 100; ++i)
+        server.tick(0.01);
+
+    CHECK(server.tick_index() == 60);
+    CHECK(server.simulation_time_ms() == 1000);
+}
+
+TEST_CASE("ServerCore: 60 frames of one fixed step advance 60 ticks") {
+    ServerCore server;
+
+    for (int i = 0; i < kTickHz; ++i)
+        server.tick(kFixedDt);
+
+    CHECK(server.tick_index() == 60);
+    CHECK(server.simulation_time_ms() == 1000);
+}
+
+TEST_CASE("ServerCore: frame dt is clamped to kMaxFrameDt") {
+    ServerCore server;
+
+    server.tick(1.0);
+    CHECK(server.tick_index() == 15);
+    CHECK(server.simulation_time_ms() == 250);
+
+    server.tick(0.5);
+    CHECK(server.tick_index() == 30);
+    CHECK(server.simulation_time_ms() == 500);
+}
+
+TEST_CASE("ServerCore: negative dt does not rewind the clock") {
+    ServerCore server;
+
+    server.tick(0.25);
+    server.tick(-1.0);
+
+    CHECK(server.tick_index() == 15);
+    CHECK(server.simulation_time_ms() == 250);
+}
+
+TEST_CASE("ServerCore: pause freezes the clock and gv_pause 0 resumes") {
+    ServerCore server;
+
+    server.tick(1.0);
+    REQUIRE(server.tick_index() == 15);
+    REQUIRE(server.simulation_time_ms() == 250);
+
+    server.submit("gv_pause 1");
+    server.tick(1.0);
+    CHECK(server.paused());
+    CHECK(server.tick_index() == 15);
+    CHECK(server.simulation_time_ms() == 250);
+
+    server.submit("gv_pause 0");
+    server.tick(0.1);
+    CHECK_FALSE(server.paused());
+    CHECK(server.tick_index() == 21);
+    CHECK(server.simulation_time_ms() == 350);
+}
+
+TEST_CASE("ServerCore: long frame hits the step cap and resets the accumulator") {
+    ServerCore server;
+
+    server.tick(10.0);
+    CHECK(server.tick_index() <= static_cast<std::uint64_t>(kMaxStepsPerTick));
+    CHECK(server.tick_index() == 15);
+
+    server.tick(0.0);
+    CHECK(server.tick_index() == 15);
+    CHECK(server.simulation_time_ms() == 250);
+}
+
+TEST_CASE("ServerCore: commands wait for tick and events fire once") {
+    ServerCore server;
+
+    server.submit("gv_pause 1");
+    CHECK_FALSE(server.paused());
+    CHECK(server.tick_index() == 0);
+
+    server.tick(0.0);
+    CHECK(server.paused());
+    CHECK(server.tick_index() == 0);
+
+    const std::vector<Event> events = server.drain_events();
+    REQUIRE(events.size() == 1);
+    CHECK(events[0].type == EventType::paused_changed);
+    CHECK(events[0].flag);
+    CHECK(server.drain_events().empty());
+}
+
+TEST_CASE("ServerCore: identical dt sequences are deterministic") {
+    const auto run = [] {
+        ServerCore server;
+        const double deltas[] = {0.016, 0.017, 0.033, 0.001, 0.100, 0.250, 0.008, 0.042};
+        for (double dt : deltas)
+            server.tick(dt);
+        return std::pair<std::uint64_t, std::uint64_t>{server.tick_index(),
+                                                       server.simulation_time_ms()};
+    };
+
+    const auto first = run();
+    const auto second = run();
+    CHECK(first.first == second.first);
+    CHECK(first.second == second.second);
+    CHECK(first.first > 0);
+}
+
+TEST_CASE("ServerCore: snapshot mirrors pause, free camera, tick and time") {
+    ServerCore server;
+
+    const ServerSnapshot initial = server.snapshot();
+    CHECK_FALSE(initial.paused);
+    CHECK_FALSE(initial.free_camera);
+    CHECK(initial.tick_index == 0);
+    CHECK(initial.simulation_time_ms == 0);
+
+    server.submit("gv_free_camera 1");
+    server.tick(0.25);
+    server.submit("gv_pause 1");
+    server.tick(0.25);
+
+    const ServerSnapshot snap = server.snapshot();
+    CHECK(snap.paused);
+    CHECK(snap.free_camera);
+    CHECK(snap.tick_index == 15);
+    CHECK(snap.simulation_time_ms == 250);
+    CHECK(snap.tick_index == server.tick_index());
+    CHECK(snap.simulation_time_ms == server.simulation_time_ms());
+    CHECK(snap.paused == server.paused());
+    CHECK(snap.free_camera == server.free_camera());
 }
 
 TEST_CASE("ClientCore: stores events until cleared") {
