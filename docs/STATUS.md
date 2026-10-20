@@ -206,3 +206,15 @@ P0 закрыт 2026-10-19; далее выполнялись задачи P1 (�
 - CLI: недостижимый код выхода 4; `--prefix` не учитывает границу сегмента;
   тест не проверяет запись ошибки в stderr; ANSI-пути Windows.
 - Сборка/тесты: `${CMAKE_SOURCE_DIR}` в tests (не embeddable); нет тестов `log`.
+
+## Backlog P1b/P2 (после P1)
+
+- Manual desktop pass: WASD/стрелки, Home, F1 (см. Open Questions).
+- Screenshot/write_png: поддержка не-ASCII путей (wide/_wfopen или stbi_write_png_to_func + ofstream).
+- SEF: учитывать brace depth/секции; отвергать `pack: ""`; интеграционный прогон всех `levels/single/*/*.sef`.
+- LevelLoader: предупреждение при пустом LAO и непустых ADSC; отличать I/O от format для required-файлов; тесты missing optional.
+- Память: освобождать CPU-копии Image после загрузки текстур (background/static/anim frames).
+- Проверить соответствие `anim_<i>` ↔ `description.number` на уровне с несортированными/непоследовательными ADSC.
+- Сборка без SDL2: опция `GL_BUILD_VIEWER` и условный FetchContent.
+- Platform/render nits: SOFTWARE fallback без vsync; null-renderer ErrorCode; `<utility>` include; теоретический uint32 wrap в CSX-нарезке.
+- CI: пометить real-data тест как slow / кэшировать фикстуры (~7 мин).
