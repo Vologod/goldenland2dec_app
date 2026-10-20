@@ -200,6 +200,61 @@ TEST_CASE("glview draws statics and animations over the background") {
     CHECK(differing_pixels > 1000);
 }
 
+TEST_CASE("glview debug overlay draws visible sprite rectangles") {
+    const char* game_dir = std::getenv("GL_GAME_DIR");
+    REQUIRE(game_dir != nullptr);
+
+    TempDir temp;
+    const fs::path plain_png = temp.path / "plain.png";
+    const fs::path debug_png = temp.path / "debug.png";
+
+    const int plain_code =
+        run_glview(glview_arguments(game_dir, plain_png, {"--frames", "5"}));
+    const int debug_code = run_glview(
+        glview_arguments(game_dir, debug_png, {"--frames", "5", "--debug-overlay"}));
+    CAPTURE(plain_code);
+    CAPTURE(debug_code);
+    REQUIRE(fs::exists(plain_png));
+    REQUIRE(fs::exists(debug_png));
+    CHECK(plain_code == 0);
+    CHECK(debug_code == 0);
+
+    int plain_width = 0;
+    int plain_height = 0;
+    int plain_channels = 0;
+    const StbiImage plain_pixels =
+        load_png(plain_png, plain_width, plain_height, plain_channels);
+    REQUIRE(plain_pixels != nullptr);
+
+    int debug_width = 0;
+    int debug_height = 0;
+    int debug_channels = 0;
+    const StbiImage debug_pixels =
+        load_png(debug_png, debug_width, debug_height, debug_channels);
+    REQUIRE(debug_pixels != nullptr);
+
+    CHECK(plain_width == 1280);
+    CHECK(plain_height == 720);
+    CHECK(debug_width == 1280);
+    CHECK(debug_height == 720);
+
+    std::uint64_t differing_pixels = 0;
+    if (plain_width == debug_width && plain_height == debug_height) {
+        const std::size_t pixel_count =
+            static_cast<std::size_t>(plain_width) * static_cast<std::size_t>(plain_height);
+        for (std::size_t i = 0; i < pixel_count; ++i) {
+            const unsigned char* a = plain_pixels.get() + i * 4;
+            const unsigned char* b = debug_pixels.get() + i * 4;
+            if (a[0] != b[0] || a[1] != b[1] || a[2] != b[2] || a[3] != b[3]) {
+                ++differing_pixels;
+            }
+        }
+    }
+
+    CAPTURE(differing_pixels);
+    CHECK(differing_pixels > 0);
+}
+
 TEST_CASE("Texture::from_image enables alpha blending") {
     use_dummy_video();
     gl::platform::SdlContext context;

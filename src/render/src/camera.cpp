@@ -33,6 +33,23 @@ void clamp_camera(Camera& camera, float world_width, float world_height, int scr
     }
 }
 
+void pan_camera(Camera& camera, float direction_x, float direction_y,
+                float speed_px_per_second, float delta_seconds, float world_width,
+                float world_height, int screen_w, int screen_h) {
+    if (!(camera.zoom > 0.0f) || !std::isfinite(camera.zoom)) return;
+    if (!std::isfinite(direction_x) || !std::isfinite(direction_y)) return;
+    if (!(speed_px_per_second > 0.0f) || !std::isfinite(speed_px_per_second)) return;
+    if (!(delta_seconds > 0.0f) || !std::isfinite(delta_seconds)) return;
+
+    const float length = std::sqrt(direction_x * direction_x + direction_y * direction_y);
+    if (!(length > 0.0f)) return;
+
+    const float step = speed_px_per_second / camera.zoom * delta_seconds;
+    camera.x += direction_x / length * step;
+    camera.y += direction_y / length * step;
+    clamp_camera(camera, world_width, world_height, screen_w, screen_h);
+}
+
 void zoom_camera_at(Camera& camera, float screen_x, float screen_y, float factor,
                     float world_width, float world_height, int screen_w, int screen_h,
                     float min_zoom, float max_zoom) {

@@ -4,6 +4,8 @@
 
 #include <doctest.h>
 
+#include <cmath>
+
 TEST_CASE("clamp_camera keeps a large map inside the view") {
     gl::render::Camera camera;
     camera.x = -120.0f;
@@ -26,6 +28,33 @@ TEST_CASE("clamp_camera centers a map smaller than the window") {
     gl::render::clamp_camera(camera, 100.0f, 100.0f, 1280, 720);
     CHECK(camera.x == doctest::Approx(-590.0f));
     CHECK(camera.y == doctest::Approx(-310.0f));
+}
+
+TEST_CASE("pan_camera moves at speed/zoom and clamps") {
+    gl::render::Camera camera;
+    gl::render::pan_camera(camera, 1.0f, 0.0f, 600.0f, 0.5f, 2760.0f, 2016.0f, 1280, 720);
+    CHECK(camera.x == doctest::Approx(300.0f));
+    CHECK(camera.y == doctest::Approx(0.0f));
+
+    camera = gl::render::Camera{};
+    camera.zoom = 2.0f;
+    gl::render::pan_camera(camera, 0.0f, -1.0f, 600.0f, 0.5f, 2760.0f, 2016.0f, 1280, 720);
+    CHECK(camera.x == doctest::Approx(0.0f));
+    CHECK(camera.y == doctest::Approx(0.0f));
+
+    camera = gl::render::Camera{};
+    gl::render::pan_camera(camera, 1.0f, 1.0f, 600.0f, 1.0f, 2760.0f, 2016.0f, 1280, 720);
+    CHECK(camera.x == doctest::Approx(600.0f / std::sqrt(2.0f)));
+    CHECK(camera.y == doctest::Approx(600.0f / std::sqrt(2.0f)));
+
+    camera = gl::render::Camera{};
+    gl::render::pan_camera(camera, 1.0f, 0.0f, 600.0f, 10.0f, 2760.0f, 2016.0f, 1280, 720);
+    CHECK(camera.x == doctest::Approx(1480.0f));
+
+    camera = gl::render::Camera{};
+    gl::render::pan_camera(camera, 0.0f, 0.0f, 600.0f, 1.0f, 2760.0f, 2016.0f, 1280, 720);
+    CHECK(camera.x == doctest::Approx(0.0f));
+    CHECK(camera.y == doctest::Approx(0.0f));
 }
 
 TEST_CASE("zoom_camera_at keeps the world point under the cursor") {

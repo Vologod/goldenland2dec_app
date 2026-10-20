@@ -11,7 +11,6 @@
 #include <algorithm>
 #include <charconv>
 #include <climits>
-#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
@@ -33,6 +32,7 @@ struct Options {
     int height = 720;
     int frames = 1;
     bool background_only = false;
+    bool debug_overlay = false;
 };
 
 struct Sprite {
@@ -66,6 +66,7 @@ void print_usage() {
               "  --screenshot <png> Render frames, save PNG and exit\n"
               "  --frames <n>       Frames to render before screenshot (default: 1)\n"
               "  --background-only  Draw only the background (skip statics and animations)\n"
+              "  --debug-overlay    Draw sprite debug rectangles in screenshot mode\n"
               "  -h, --help         Show this help and exit\n"
               "\n"
               "Exit codes: 0 success, 1 arguments, 2 I/O, 3 format/load.");
@@ -161,6 +162,8 @@ ParseStatus parse_args(int argc, char** argv, Options& options) {
             }
         } else if (arg == "--background-only") {
             options.background_only = true;
+        } else if (arg == "--debug-overlay") {
+            options.debug_overlay = true;
         } else {
             std::fprintf(stderr, "glview: unknown argument: %s\n", argv[i]);
             print_usage();
@@ -267,7 +270,8 @@ void draw_frame(SDL_Renderer* renderer, const gl::render::Texture& background,
 
 int save_screenshot(SDL_Renderer* renderer, const std::filesystem::path& path, int frames,
                     const gl::render::Texture& background, const LevelGraphics& graphics,
-                    const gl::render::Camera& camera, bool background_only) {
+                    const gl::render::Camera& camera, bool background_only,
+                    bool debug_overlay) {
     int width = 0;
     int height = 0;
     if (SDL_GetRendererOutputSize(renderer, &width, &height) != 0 || width <= 0 || height <= 0) {
@@ -287,7 +291,7 @@ int save_screenshot(SDL_Renderer* renderer, const std::filesystem::path& path, i
     for (int frame = 0; frame < frames; ++frame) {
         const std::uint64_t elapsed_ms = static_cast<std::uint64_t>(frame + 1) * 16;
         draw_frame(renderer, background, graphics, camera, width, height, elapsed_ms,
-                   background_only, false);
+                   background_only, debug_overlay);
         if (frame + 1 == frames) {
             if (SDL_RenderReadPixels(renderer, nullptr, SDL_PIXELFORMAT_RGBA32, pixels.data(),
                                      pitch) != 0) {
@@ -382,11 +386,8 @@ int run_interactive(SDL_Renderer* renderer, const gl::render::Texture& backgroun
         if (keys[SDL_SCANCODE_W] || keys[SDL_SCANCODE_UP]) move_y -= 1.0f;
         if (keys[SDL_SCANCODE_S] || keys[SDL_SCANCODE_DOWN]) move_y += 1.0f;
         if (move_x != 0.0f || move_y != 0.0f) {
-            const float length = std::sqrt(move_x * move_x + move_y * move_y);
-            const float step = kPanSpeed / camera.zoom * delta;
-            camera.x += move_x / length * step;
-            camera.y += move_y / length * step;
-            gl::render::clamp_camera(camera, world_width, world_height, width, height);
+            gl::render::pan_camera(camera, move_x, move_y, kPanSpeed, delta, world_width,
+                                   world_height, width, height);
         }
 
         draw_frame(renderer, background, graphics, camera, width, height,
@@ -480,7 +481,7 @@ int main(int argc, char** argv) {
         if (!options.screenshot.empty()) {
             return save_screenshot(window.renderer(), options.screenshot, options.frames,
                                    background.value(), graphics, camera,
-                                   options.background_only);
+                                   options.background_only, options.debug_overlay);
         }
         return run_interactive(window.renderer(), background.value(), graphics, camera,
                                static_cast<float>(level->width),
