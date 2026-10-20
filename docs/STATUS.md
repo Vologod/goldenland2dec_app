@@ -101,6 +101,12 @@ drag ЛКМ, wheel-зум к курсору `0.25…4.0` шагом `1.1`, `Home
 математика панорамы/зума — unit-тестами.
 Полный `ctest` с `GL_GAME_DIR`: 5/5 passed (real-data 377.04 s, render 12.77 s).
 
+Финальная волна правок P1 (2026-10-20): тайминг анимации вынесен в
+`gl_render::animation_frame_index` с unit-тестами; screenshot-тест `--frames 1` vs `--frames 8`
+подтверждает смену кадра; alpha-blend тест перенесён в негейтед `camera_tests`
+(`SDL_VIDEODRIVER=dummy`). Полный `ctest` с `GL_GAME_DIR`: 5/5 passed (real-data 401.94 s,
+render 18.73 s).
+
 **P0 — Ассеты и форматы.** Реализация и приёмка завершены (Tasks 0–10).
 
 Перед запуском `glpak` и тестов LLVM-MinGW `bin` должен быть в `PATH`

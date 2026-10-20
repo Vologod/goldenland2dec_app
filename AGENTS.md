@@ -57,6 +57,7 @@ cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
 cmake --build build
 ctest --test-dir build --output-on-failure
 build\bin\glpak.exe info "I:\Games\Златогорье-2"
+build\bin\glview.exe --game-dir "I:\Games\Златогорье-2" --level l1_1
 ```
 
 ## Запрещено

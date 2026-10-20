@@ -52,7 +52,7 @@ tests/render/{CMakeLists.txt,test_glview_screenshot.cpp}
   `glview` with `--help` and a window that closes on Esc.
 - Produces `cmake/SDL2.cmake` exposing `SDL2::SDL2` and `SDL2::SDL2main`.
 
-- [ ] **Step 1:** Add `cmake/SDL2.cmake` with pinned FetchContent:
+- [x] **Step 1:** Add `cmake/SDL2.cmake` with pinned FetchContent:
   ```cmake
   include(FetchContent)
   set(SDL_SHARED OFF CACHE BOOL "" FORCE)
@@ -63,12 +63,12 @@ tests/render/{CMakeLists.txt,test_glview_screenshot.cpp}
   FetchContent_MakeAvailable(SDL2)
   ```
   Root CMake includes it and adds `gl_platform` (links `SDL2::SDL2`), `gl_render`, `gl_game`, `tools/glview`.
-- [ ] **Step 2:** Implement `SdlContext` (SDL_Init(SDL_INIT_VIDEO|TIMER), SDL_Quit) and
+- [x] **Step 2:** Implement `SdlContext` (SDL_Init(SDL_INIT_VIDEO|TIMER), SDL_Quit) and
   `Window` (1280×720 resizable, `SDL_RENDERER_ACCELERATED|SDL_RENDERER_PRESENTVSYNC`,
   `SDL_HINT_RENDER_SCALE_QUALITY=0`).
-- [ ] **Step 3:** `glview --help` prints usage and exits 0. Without `--help`, open the window,
+- [x] **Step 3:** `glview --help` prints usage and exits 0. Without `--help`, open the window,
   pump events, close on Esc/quit. Build and run.
-- [ ] **Step 4:** Commit `feat(platform): add SDL2 context and glview window`.
+- [x] **Step 4:** Commit `feat(platform): add SDL2 context and glview window`.
 
 ---
 
@@ -125,11 +125,11 @@ Result<SefData> parse_sef(std::span<const std::uint8_t> data);
 LAO: file size % 8 == 0; pairs `(height, delay)`. SEF: text, lines may have `//` comments;
 extract `pack: "..."`, `internal_location: N`, `exit_to_global_map: N`, `weather: N`.
 
-- [ ] **Step 1:** Unit tests for both (including CRLF/tabs/comments).
-- [ ] **Step 2:** Implement.
-- [ ] **Step 3:** Integration: parse all `data/animated/*.lao` (0 failures) and `levels/single/l1_1/l1_1.sef`
+- [x] **Step 1:** Unit tests for both (including CRLF/tabs/comments).
+- [x] **Step 2:** Implement.
+- [x] **Step 3:** Integration: parse all `data/animated/*.lao` (0 failures) and `levels/single/l1_1/l1_1.sef`
   (`pack == "l1_1"`).
-- [ ] **Step 4:** Commit.
+- [x] **Step 4:** Commit.
 
 ---
 
@@ -228,10 +228,10 @@ Screenshot: `SDL_RenderReadPixels` → RGBA → `stbi_write_png`.
 - Clamp camera to the map.
 - Status: `gl::log` info level prints level size/counts on load.
 - [ ] **Step 1:** Manual run `glview --game-dir I:\Games\Златогорье-2 --level l1_1`; pan/zoom.
-- [ ] **Step 2:** Run screenshot + ctest (unit/integration/render) green.
-- [ ] **Step 3:** Update `docs/STATUS.md` (P1 accepted), `docs/PROJECT.md` P1 `[x]`,
+- [x] **Step 2:** Run screenshot + ctest (unit/integration/render) green.
+- [x] **Step 3:** Update `docs/STATUS.md` (P1 accepted), `docs/PROJECT.md` P1 `[x]`,
   `docs/research/` with level/anchor facts.
-- [ ] **Step 4:** Commit.
+- [x] **Step 4:** Commit.
 
 ---
 
