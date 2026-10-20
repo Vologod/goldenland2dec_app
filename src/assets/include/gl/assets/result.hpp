@@ -1,4 +1,5 @@
 #pragma once
+#include <optional>
 #include <string>
 #include <utility>
 #include <variant>
@@ -19,6 +20,18 @@ public:
     const Error& error() const { return std::get<1>(storage_); }
 private:
     std::variant<T, Error> storage_;
+};
+template <>
+class Result<void> {
+public:
+    Result() = default;
+    Result(Error error) : error_(std::move(error)) {}
+    bool has_value() const { return !error_.has_value(); }
+    explicit operator bool() const { return has_value(); }
+    void value() const {}
+    const Error& error() const { return *error_; }
+private:
+    std::optional<Error> error_;
 };
 using VoidResult = Result<std::monostate>;
 }

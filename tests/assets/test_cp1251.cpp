@@ -1,6 +1,16 @@
 #include <doctest/doctest.h>
 #include "gl/assets/cp1251.hpp"
+#include <cstdint>
+#include <span>
 #include <string>
+#include <string_view>
+
+namespace {
+std::string from_cp1251(std::string_view bytes) {
+    return gl::assets::cp1251_to_utf8(std::span<const std::uint8_t>(
+        reinterpret_cast<const std::uint8_t*>(bytes.data()), bytes.size()));
+}
+}
 
 TEST_CASE("cp1251: ASCII passes through") {
     const std::uint8_t s[] = {'H','e','l','l','o'};
@@ -42,6 +52,22 @@ TEST_CASE("paths fall back to cp1251 for non-UTF-8 input") {
     const std::string sestry_upper("\xD1\xB8\xF1\xF2\xF0\xFB", 6);
     const std::string sestry_lower("\xF1\xB8\xF1\xF2\xF0\xFB", 6);
     CHECK(gl::assets::normalize_virtual_path(sestry_upper) == sestry_lower);
+}
+
+TEST_CASE("cp1251: UTF-8 to cp1251 round-trip") {
+    const std::string utf8 = "Привет, Ёё€№!";
+    const std::string bytes = gl::assets::utf8_to_cp1251(utf8);
+    CHECK(from_cp1251(bytes) == utf8);
+}
+
+TEST_CASE("cp1251: UTF-8 ASCII passes through") {
+    CHECK(gl::assets::utf8_to_cp1251("Hello, world!") == "Hello, world!");
+}
+
+TEST_CASE("cp1251: unmappable UTF-8 becomes question mark") {
+    CHECK(gl::assets::utf8_to_cp1251("\xF0\x9F\x98\x80") == "?");
+    CHECK(gl::assets::utf8_to_cp1251("caf\xC3\xA9") == "caf?");
+    CHECK(gl::assets::utf8_to_cp1251("\xFF") == "?");
 }
 
 TEST_CASE("unsafe paths are rejected") {

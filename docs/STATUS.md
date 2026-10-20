@@ -10,11 +10,15 @@ P0 завершена и принята. P1 — Level viewer: реализаци
 
 ## Текущая задача
 
-**P1 — Level viewer: автоматизированная приёмка завершена 2026-10-20.** Реальный `l1_1`
-грузится и рисуется (фон, 2 статики, 2 анимации), drag-панорама и wheel-зум проверены,
-`--screenshot` создаёт PNG 1280×720, unit/integration/render-тесты зелёные.
-Финальный manual desktop pass (WASD/стрелки, `Home`, визуальный `F1`) остаётся открытым
-(см. Open Questions).
+**P2a — Task 1 (`gl_core` + Config) завершён 2026-10-20.** Добавлены
+`gl::assets::utf8_to_cp1251` (обратная таблица, `?` для непредставимых code points) и
+SDL-free `gl_core` с `gl::core::Config`: чтение/запись cp1251 INI с сохранением
+неизвестных строк, комментариев, `bind`, порядка и смешанных CRLF/LF; `get`/`set`
+строк/int/float/bool, inline-комментарии. Тесты `gl_core_tests` (Config) и обратное
+преобразование cp1251 в `gl_assets_tests` зелёные. Следующее — P2a Tasks 2+.
+
+P1 — Level viewer: автоматизированная приёмка завершена 2026-10-20; финальный manual
+desktop pass (WASD/стрелки, `Home`, визуальный `F1`) остаётся открытым (Open Questions).
 
 ### История задач P1
 
@@ -175,11 +179,15 @@ P0 закрыт 2026-10-19; далее выполнялись задачи P1 (�
 - 2026-10-20: P1 Task 8 — камера/ввод, `F1` overlay, `clamp_camera`/`pan_camera`/
   `zoom_camera_at` в `gl_render`, `camera_tests`; `--debug-overlay` и render-тест
   оверлея; автоматизированная приёмка P1 (`ctest` 5/5); открыт manual desktop pass.
+- 2026-10-20: P2a Task 1 — `gl_core` (`Config`: cp1251 INI, комментарии/`bind`/порядок,
+  byte-identical round-trip, `get`/`set`/`set_int`), `utf8_to_cp1251` в `gl_assets`,
+  `gl_core_tests`; сборка без предупреждений, `ctest` без `GL_GAME_DIR`: 4 passed,
+  2 skipped.
 
 ## Следующие задачи
 
 1. P2a: оболочка игры и консоль — `docs/specs/2026-10-20-p2a-game-shell-design.md`,
-   `docs/plans/2026-10-20-p2a-game-shell.md` (Task 1: `gl_core` + Config).
+   `docs/plans/2026-10-20-p2a-game-shell.md` (Task 1 завершён; дальше Task 2).
 2. P2b: ServerCore/ClientCore + детерминированный тик (после P2a).
 3. P1b: Android/touch — отложенный follow-up P1.
 

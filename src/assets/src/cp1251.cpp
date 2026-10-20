@@ -81,6 +81,67 @@ std::string cp1251_to_utf8(std::span<const std::uint8_t> input) {
     return out;
 }
 
+std::string utf8_to_cp1251(std::string_view input) {
+    std::string out;
+    out.reserve(input.size());
+    for (std::size_t i = 0; i < input.size();) {
+        const unsigned char c = static_cast<unsigned char>(input[i]);
+        if (c < 0x80) {
+            out.push_back(static_cast<char>(c));
+            ++i;
+            continue;
+        }
+        std::size_t len = 0;
+        char32_t cp = 0;
+        if ((c & 0xE0) == 0xC0) {
+            len = 2;
+            cp = c & 0x1F;
+        } else if ((c & 0xF0) == 0xE0) {
+            len = 3;
+            cp = c & 0x0F;
+        } else if ((c & 0xF8) == 0xF0) {
+            len = 4;
+            cp = c & 0x07;
+        }
+        if (len == 0 || i + len > input.size()) {
+            out.push_back('?');
+            ++i;
+            continue;
+        }
+        bool valid = true;
+        for (std::size_t k = 1; k < len; ++k) {
+            const unsigned char b = static_cast<unsigned char>(input[i + k]);
+            if (!is_continuation(b)) {
+                valid = false;
+                break;
+            }
+            cp = (cp << 6) | (b & 0x3F);
+        }
+        if (!valid) {
+            out.push_back('?');
+            ++i;
+            continue;
+        }
+        if ((len == 2 && cp < 0x80) || (len == 3 && cp < 0x800) ||
+            (len == 4 && cp < 0x10000) || cp > 0x10FFFF ||
+            (cp >= 0xD800 && cp <= 0xDFFF)) {
+            out.push_back('?');
+            i += len;
+            continue;
+        }
+        char mapped = '?';
+        for (std::size_t k = 0; k < 128; ++k) {
+            if (static_cast<char32_t>(kCp1251[k]) == cp) {
+                mapped = static_cast<char>(0x80 + k);
+                break;
+            }
+        }
+        out.push_back(mapped);
+        i += len;
+    }
+    return out;
+}
+
 std::string normalize_virtual_path(std::string_view path) {
     const bool utf8 = is_valid_utf8(path);
     std::string out;
