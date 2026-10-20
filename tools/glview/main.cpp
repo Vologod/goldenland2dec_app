@@ -9,7 +9,6 @@
 #include <algorithm>
 #include <charconv>
 #include <climits>
-#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
@@ -177,7 +176,6 @@ void report_error(std::string_view context, const gl::Error& error) {
                  error.message.c_str());
 }
 
-constexpr float kPanSpeed = 600.0f;
 constexpr float kZoomStep = 1.1f;
 
 int save_screenshot(SDL_Renderer* renderer, const std::filesystem::path& path, int frames,
@@ -201,7 +199,7 @@ int save_screenshot(SDL_Renderer* renderer, const std::filesystem::path& path, i
 
     for (int frame = 0; frame < frames; ++frame) {
         const std::uint64_t elapsed_ms = static_cast<std::uint64_t>(frame + 1) * 16;
-        screen.render(renderer, screen_options, elapsed_ms, width, height);
+        screen.render(renderer, screen_options, elapsed_ms);
         if (frame + 1 == frames) {
             if (SDL_RenderReadPixels(renderer, nullptr, SDL_PIXELFORMAT_RGBA32, pixels.data(),
                                      pitch) != 0) {
@@ -224,13 +222,16 @@ int save_screenshot(SDL_Renderer* renderer, const std::filesystem::path& path, i
 }
 
 int run_interactive(SDL_Renderer* renderer, gl::app::LevelScreen& screen,
-                    const gl::app::LevelScreenOptions& options) {
+                    const gl::app::LevelScreenOptions& options, int initial_width,
+                    int initial_height) {
     const std::uint64_t start_ticks = SDL_GetTicks64();
     std::uint64_t previous_counter = SDL_GetPerformanceCounter();
     const double counter_frequency = static_cast<double>(SDL_GetPerformanceFrequency());
     bool running = true;
     bool dragging = false;
     bool debug_overlay = false;
+    int last_width = initial_width;
+    int last_height = initial_height;
 
     while (running) {
         int width = 0;
@@ -241,7 +242,11 @@ int run_interactive(SDL_Renderer* renderer, gl::app::LevelScreen& screen,
                          SDL_GetError());
             return 2;
         }
-        screen.set_viewport(width, height);
+        if (width != last_width || height != last_height) {
+            screen.set_viewport(width, height);
+            last_width = width;
+            last_height = height;
+        }
 
         const std::uint64_t now_counter = SDL_GetPerformanceCounter();
         double delta_seconds =
@@ -277,7 +282,7 @@ int run_interactive(SDL_Renderer* renderer, gl::app::LevelScreen& screen,
                 SDL_GetMouseState(&mouse_x, &mouse_y);
                 const float factor = event.wheel.y > 0 ? kZoomStep : 1.0f / kZoomStep;
                 screen.zoom_at(factor, static_cast<float>(mouse_x),
-                               static_cast<float>(mouse_y), width, height);
+                               static_cast<float>(mouse_y));
             } else if (event.type == SDL_WINDOWEVENT &&
                        (event.window.event == SDL_WINDOWEVENT_LEAVE ||
                         event.window.event == SDL_WINDOWEVENT_FOCUS_LOST)) {
@@ -285,25 +290,20 @@ int run_interactive(SDL_Renderer* renderer, gl::app::LevelScreen& screen,
             }
         }
 
-        float move_x = 0.0f;
-        float move_y = 0.0f;
+        int move_x = 0;
+        int move_y = 0;
         const Uint8* keys = SDL_GetKeyboardState(nullptr);
-        if (keys[SDL_SCANCODE_A] || keys[SDL_SCANCODE_LEFT]) move_x -= 1.0f;
-        if (keys[SDL_SCANCODE_D] || keys[SDL_SCANCODE_RIGHT]) move_x += 1.0f;
-        if (keys[SDL_SCANCODE_W] || keys[SDL_SCANCODE_UP]) move_y -= 1.0f;
-        if (keys[SDL_SCANCODE_S] || keys[SDL_SCANCODE_DOWN]) move_y += 1.0f;
-        if (move_x != 0.0f || move_y != 0.0f) {
-            const float zoom = screen.camera().zoom;
-            if (std::isfinite(zoom) && zoom > 0.0f && std::isfinite(delta) && delta > 0.0f) {
-                const float length = std::sqrt(move_x * move_x + move_y * move_y);
-                const float step = kPanSpeed / zoom * delta;
-                screen.pan(move_x / length * step, move_y / length * step);
-            }
+        if (keys[SDL_SCANCODE_A] || keys[SDL_SCANCODE_LEFT]) move_x -= 1;
+        if (keys[SDL_SCANCODE_D] || keys[SDL_SCANCODE_RIGHT]) move_x += 1;
+        if (keys[SDL_SCANCODE_W] || keys[SDL_SCANCODE_UP]) move_y -= 1;
+        if (keys[SDL_SCANCODE_S] || keys[SDL_SCANCODE_DOWN]) move_y += 1;
+        if (move_x != 0 || move_y != 0) {
+            screen.pan_input(move_x, move_y, delta);
         }
 
         gl::app::LevelScreenOptions frame_options = options;
         frame_options.debug_overlay = debug_overlay;
-        screen.render(renderer, frame_options, SDL_GetTicks64() - start_ticks, width, height);
+        screen.render(renderer, frame_options, SDL_GetTicks64() - start_ticks);
         SDL_RenderPresent(renderer);
     }
     return 0;
@@ -338,13 +338,23 @@ int main(int argc, char** argv) {
             return exit_code_for(screen.error());
         }
 
+        int width = 0;
+        int height = 0;
+        if (SDL_GetRendererOutputSize(window.renderer(), &width, &height) != 0 || width <= 0 ||
+            height <= 0) {
+            std::fprintf(stderr, "glview: cannot query renderer output size: %s\n",
+                         SDL_GetError());
+            return 2;
+        }
+        screen.value().set_viewport(width, height);
+
         const gl::app::LevelScreenOptions screen_options{options.background_only,
                                                          options.debug_overlay};
         if (!options.screenshot.empty()) {
             return save_screenshot(window.renderer(), options.screenshot, options.frames,
                                    screen.value(), screen_options);
         }
-        return run_interactive(window.renderer(), screen.value(), screen_options);
+        return run_interactive(window.renderer(), screen.value(), screen_options, width, height);
     } catch (const std::exception& e) {
         std::fprintf(stderr, "glview: %s\n", e.what());
         return 2;

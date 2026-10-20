@@ -122,20 +122,28 @@ Tests: text_width > 0; a dummy/software renderer produces non-empty pixels for a
 **Interfaces:**
 ```cpp
 namespace gl::app {
-struct LevelScreenOptions { bool background_only=false; bool debug_overlay=false; std::uint64_t frames=0; };
+struct LevelScreenOptions { bool background_only=false; bool debug_overlay=false; };
 class LevelScreen {
 public:
     static Result<LevelScreen> load(SDL_Renderer*, gl::assets::GameVfs&, std::string_view level);
     void render(SDL_Renderer*, const LevelScreenOptions&, std::uint64_t elapsed_ms);
-    // camera/input methods used by glview/glgame
-    void pan(float dx, float dy); void zoom_at(float factor, float sx, float sy, int w, int h);
+    void set_viewport(int screen_w, int screen_h);
+    void pan(float world_dx, float world_dy);
+    void pan_input(int x_axis, int y_axis, float delta_seconds);
+    void zoom_at(float factor, float screen_x, float screen_y);
     void reset_camera();
+    const gl::render::Camera& camera() const;
+    const gl::game::Level& level() const;
 };
 }
 ```
-Move loading/texture upload/draw/camera from `glview` into `LevelScreen`; `glview` keeps its CLI and input, calls the screen. No behavior change; screenshot test still passes.
+`elapsed_ms` determines animation frame timing; there is no separate frame count. The stored
+viewport set by `set_viewport` is the single source for culling/clamping. Move
+loading/texture upload/draw/camera from `glview` into `LevelScreen`; `glview` keeps its CLI and
+input, sets the viewport on init/resize, and calls the screen. No behavior change; screenshot
+test still passes.
 
-- [ ] TDD/refactor, verify existing tests, commit.
+- [x] TDD/refactor, verify existing tests, commit.
 
 ---
 

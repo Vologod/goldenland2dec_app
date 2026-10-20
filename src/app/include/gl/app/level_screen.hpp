@@ -1,5 +1,7 @@
 #pragma once
 
+#include <SDL.h>
+
 #include <gl/assets/result.hpp>
 #include <gl/assets/vfs.hpp>
 #include <gl/game/level.hpp>
@@ -23,10 +25,11 @@ public:
                                     std::string_view level_name);
 
     void render(SDL_Renderer* renderer, const LevelScreenOptions& options,
-                std::uint64_t elapsed_ms, int screen_w, int screen_h);
+                std::uint64_t elapsed_ms);
 
     void pan(float world_dx, float world_dy);
-    void zoom_at(float factor, float screen_x, float screen_y, int screen_w, int screen_h);
+    void pan_input(int x_axis, int y_axis, float delta_seconds);
+    void zoom_at(float factor, float screen_x, float screen_y);
     void reset_camera();
     void set_viewport(int screen_w, int screen_h);
 

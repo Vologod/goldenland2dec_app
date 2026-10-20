@@ -15,6 +15,7 @@ namespace {
 
 constexpr float kMinZoom = 0.25f;
 constexpr float kMaxZoom = 4.0f;
+constexpr float kPanSpeed = 600.0f;
 
 bool rect_visible(const SDL_FRect& rect, int width, int height) {
     return rect.x + rect.w > 0.0f && rect.y + rect.h > 0.0f &&
@@ -86,30 +87,20 @@ Result<LevelScreen> LevelScreen::load(SDL_Renderer* renderer, gl::assets::GameVf
             Animation{std::move(frames), object.x, object.y, object.delay_ms});
     }
 
-    int width = 0;
-    int height = 0;
-    if (SDL_GetRendererOutputSize(renderer, &width, &height) == 0) {
-        screen.screen_w_ = width;
-        screen.screen_h_ = height;
-    }
-
     return screen;
 }
 
 void LevelScreen::render(SDL_Renderer* renderer, const LevelScreenOptions& options,
-                         std::uint64_t elapsed_ms, int screen_w, int screen_h) {
-    screen_w_ = screen_w;
-    screen_h_ = screen_h;
-
+                         std::uint64_t elapsed_ms) {
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
     SDL_RenderClear(renderer);
-    gl::render::draw_background(renderer, background_, camera_, screen_w, screen_h);
+    gl::render::draw_background(renderer, background_, camera_, screen_w_, screen_h_);
     if (options.background_only) return;
 
     for (const auto& sprite : statics_) {
         gl::render::draw_texture(renderer, sprite.texture, camera_,
                                  static_cast<float>(sprite.x), static_cast<float>(sprite.y),
-                                 screen_w, screen_h);
+                                 screen_w_, screen_h_);
     }
 
     for (const auto& animation : animations_) {
@@ -118,11 +109,11 @@ void LevelScreen::render(SDL_Renderer* renderer, const LevelScreenOptions& optio
             elapsed_ms, animation.delay_ms, animation.frames.size());
         gl::render::draw_texture(renderer, animation.frames[index], camera_,
                                  static_cast<float>(animation.x),
-                                 static_cast<float>(animation.y), screen_w, screen_h);
+                                 static_cast<float>(animation.y), screen_w_, screen_h_);
     }
 
     if (options.debug_overlay) {
-        draw_debug_overlay(renderer, screen_w, screen_h, elapsed_ms);
+        draw_debug_overlay(renderer, screen_w_, screen_h_, elapsed_ms);
     }
 }
 
@@ -160,10 +151,14 @@ void LevelScreen::pan(float world_dx, float world_dy) {
     gl::render::clamp_camera(camera_, world_width(), world_height(), screen_w_, screen_h_);
 }
 
-void LevelScreen::zoom_at(float factor, float screen_x, float screen_y, int screen_w,
-                          int screen_h) {
-    screen_w_ = screen_w;
-    screen_h_ = screen_h;
+void LevelScreen::pan_input(int x_axis, int y_axis, float delta_seconds) {
+    if (x_axis == 0 && y_axis == 0) return;
+    gl::render::pan_camera(camera_, static_cast<float>(x_axis), static_cast<float>(y_axis),
+                           kPanSpeed, delta_seconds, world_width(), world_height(), screen_w_,
+                           screen_h_);
+}
+
+void LevelScreen::zoom_at(float factor, float screen_x, float screen_y) {
     gl::render::zoom_camera_at(camera_, screen_x, screen_y, factor, world_width(),
                                world_height(), screen_w_, screen_h_, kMinZoom, kMaxZoom);
 }
