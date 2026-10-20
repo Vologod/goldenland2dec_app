@@ -175,10 +175,10 @@ Loader:
 5. animations: read `data/animated/<pack>.lao`; for `i` in `[0, min(ADSC.size, lao.size))`,
    read `bitmaps/animated/anim_<i>.csx`, `slice_csx_frames(image, lao[i].height)`, position from ADSC
    sorted by `number`; delay = lao[i].delay; missing → warning, skip.
-- [ ] **Step 1:** Integration test `l1_1`: width/height 2760×2016, statics 2, animations 2,
+- [x] **Step 1:** Integration test `l1_1`: width/height 2760×2016, statics 2, animations 2,
   animation frame counts equal `image.height / lao.height`.
-- [ ] **Step 2:** Implement.
-- [ ] **Step 3:** Commit.
+- [x] **Step 2:** Implement.
+- [x] **Step 3:** Commit.
 
 ---
 

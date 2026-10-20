@@ -1,2 +1,6 @@
-add_library(gl_game INTERFACE)
-target_link_libraries(gl_game INTERFACE gl_assets gl_platform)
+add_library(gl_game STATIC
+    src/level_loader.cpp
+)
+target_include_directories(gl_game PUBLIC include)
+target_link_libraries(gl_game PUBLIC gl_assets)
+gl_enable_warnings(gl_game)

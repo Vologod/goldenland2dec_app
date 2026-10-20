@@ -37,7 +37,14 @@ Task 4 завершён: `gl::assets::slice_csx_frames` (`csx_frames.hpp`/`csx_f
 и несоответствие размера RGBA-буфера. Unit: 90 cases / 547 assertions (+4 cases / +41).
 Полный `ctest` с `GL_GAME_DIR`: 3/3 passed.
 
-Следующая задача — **P1 Task 5: LevelLoader + Level model** (`docs/plans/2026-10-19-p1-level-viewer.md`).
+Task 5 завершён: `gl::game::load_level` (`level.hpp`/`level_loader.cpp`) загружает
+SEF→pack, LVL, фон, статику и анимации из `GameVfs`; отсутствующие необязательные файлы —
+warning и пропуск, фатальны только SEF/LVL/фон. `gl_game` — статическая библиотека без SDL,
+зависит только от `gl_assets`. Интеграционный тест `l1_1`: 2760×2016, 2 статики, 2 анимации,
+кадры соответствуют LAO; отсутствующий уровень → io/format. Полный `ctest` с `GL_GAME_DIR`:
+3/3 passed (real-data 371.52 s).
+
+Следующая задача — **P1 Task 6: Renderer, camera, background, screenshot** (`docs/plans/2026-10-19-p1-level-viewer.md`).
 
 ## Как продолжить (пауза 2026-10-19)
 
@@ -45,8 +52,8 @@ Task 4 завершён: `gl::assets::slice_csx_frames` (`csx_frames.hpp`/`csx_f
 - Тулчейн: `.local/toolchains`; перед сборкой:
   `$env:PATH = "I:\goldenland2dec\.local\toolchains\llvm-mingw-20261006-ucrt-x86_64\bin;I:\goldenland2dec\.local\toolchains\ninja;I:\goldenland2dec\.local\toolchains\cmake\cmake-4.4.4-windows-x86_64\bin;$env:PATH"`
 - Тесты: `$env:GL_GAME_DIR = "I:\Games\Златогорье-2"`; `ctest --test-dir build --output-on-failure`.
-- SDD-леджер: `.superpowers/sdd/2026-10-19-p1-level-viewer/progress.md` (Tasks 1–4 complete).
-- Дальше: взять Task 4 brief из плана и продолжить subagent-driven цикл.
+- SDD-леджер: `.superpowers/sdd/2026-10-19-p1-level-viewer/progress.md` (Tasks 1–5 complete).
+- Дальше: взять Task 6 brief из плана и продолжить subagent-driven цикл.
 
 **P0 — Ассеты и форматы.** Реализация и приёмка завершены (Tasks 0–10).
 
