@@ -274,7 +274,9 @@ P0 закрыт 2026-10-19; далее выполнялись задачи P1 (�
 
 ## Следующие задачи
 
-1. P2c: save/load каркас (`.sav` заголовок, слоты; полная десериализация позже).
+1. P2c: save/load каркас — spec/plan готовы
+   (`docs/specs/2026-10-20-p2c-save-slots-design.md`, `docs/plans/2026-10-20-p2c-save-slots.md`);
+   начать с Task 1 (SaveHeader).
 2. P2 backfill: интерполяция/сеть/игровые системы — отложены до появления сущностей.
 3. P1b: Android/touch — отложенный follow-up P1.
 
