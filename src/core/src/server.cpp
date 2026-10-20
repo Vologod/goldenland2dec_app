@@ -1,7 +1,10 @@
 #include "gl/core/server.hpp"
 #include "gl/core/command.hpp"
+#include <charconv>
 #include <cstddef>
 #include <optional>
+#include <string>
+#include <system_error>
 #include <utility>
 
 namespace gl::core {
@@ -12,6 +15,17 @@ std::optional<bool> parse_bool(std::string_view value) {
     if (value == "1")
         return true;
     return std::nullopt;
+}
+
+std::optional<int> parse_positive_int(std::string_view value) {
+    if (value.empty())
+        return std::nullopt;
+    int parsed = 0;
+    const char* const end = value.data() + value.size();
+    const auto [ptr, error] = std::from_chars(value.data(), end, parsed);
+    if (error != std::errc{} || ptr != end || parsed <= 0)
+        return std::nullopt;
+    return parsed;
 }
 
 Event make_log(std::string message) {
@@ -132,6 +146,25 @@ void ServerCore::process(const Command &command) {
             return;
         }
         events_.push_back(make_config_change("r_windowed", *value ? "1" : "0", *value));
+        return;
+    }
+
+    if (name == "r_resolution") {
+        if (args.size() != 2) {
+            events_.push_back(make_log("usage: r_resolution <width> <height>"));
+            return;
+        }
+        const std::optional<int> width = parse_positive_int(args[0]);
+        const std::optional<int> height = parse_positive_int(args[1]);
+        if (!width || !height) {
+            events_.push_back(make_log("invalid argument for r_resolution: " + args[0] + " " +
+                                       args[1]));
+            return;
+        }
+        events_.push_back(make_config_change("r_resolution",
+                                             std::to_string(*width) + " " +
+                                                 std::to_string(*height),
+                                             false));
         return;
     }
 

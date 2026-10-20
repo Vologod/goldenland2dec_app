@@ -110,6 +110,63 @@ TEST_CASE("Config: reads strings, numbers and bools; strips inline comments") {
     std::filesystem::remove_all(dir);
 }
 
+TEST_CASE("Config: treats // as a comment only at line start or after whitespace") {
+    const auto dir = unique_temp_dir();
+    const auto path = dir / "comments.ini";
+    write_bytes(path,
+                "url http://example.com\r\n"
+                "path C://games//set\r\n"
+                "value keep // drop\r\n"
+                "empty // only\r\n");
+
+    auto loaded = gl::core::Config::load(path);
+    REQUIRE(loaded.has_value());
+    const gl::core::Config& config = loaded.value();
+
+    CHECK(config.get("url") == "http://example.com");
+    CHECK(config.get("path") == "C://games//set");
+    CHECK(config.get("value") == "keep");
+    REQUIRE(config.get("empty").has_value());
+    CHECK(config.get("empty")->empty());
+
+    std::filesystem::remove_all(dir);
+}
+
+TEST_CASE("Config: set rejects values containing newlines and leaves the old value") {
+    const auto dir = unique_temp_dir();
+    const auto path = dir / "newlines.ini";
+
+    gl::core::Config config;
+    config.set("safe", "ok");
+    config.set("safe", "bad\rvalue");
+    config.set("fresh", "bad\nvalue");
+
+    REQUIRE(config.get("safe") == "ok");
+    CHECK_FALSE(config.get("fresh").has_value());
+    REQUIRE(config.save(path).has_value());
+    CHECK(read_bytes(path) == "safe ok\r\n");
+
+    std::filesystem::remove_all(dir);
+}
+
+TEST_CASE("Config: save replaces an existing file without leaving a temp file") {
+    const auto dir = unique_temp_dir();
+    const auto path = dir / "replace.ini";
+    write_bytes(path, "keep 1\r\n");
+
+    auto loaded = gl::core::Config::load(path);
+    REQUIRE(loaded.has_value());
+    loaded->set("keep", "2");
+    REQUIRE(loaded->save(path).has_value());
+
+    CHECK(read_bytes(path) == "keep 2\r\n");
+    std::filesystem::path temp_path = path;
+    temp_path += ".tmp";
+    CHECK_FALSE(std::filesystem::exists(temp_path));
+
+    std::filesystem::remove_all(dir);
+}
+
 TEST_CASE("Config: set preserves layout, comments and order; save reload") {
     const auto dir = unique_temp_dir();
     const auto input = dir / "GoldenLand.ini";

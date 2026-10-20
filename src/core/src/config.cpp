@@ -56,7 +56,11 @@ void Config::parse_line(Line& line) {
     }
 
     line.prefix = line.raw.substr(0, value_start);
-    const std::size_t comment = raw.find("//", value_start);
+    std::size_t comment = value_start;
+    while ((comment = raw.find("//", comment)) != std::string_view::npos) {
+        if (comment == 0 || raw[comment - 1] == ' ' || raw[comment - 1] == '\t') break;
+        comment += 2;
+    }
     std::size_t value_end = comment == std::string_view::npos ? raw.size() : comment;
     while (value_end > value_start && (raw[value_end - 1] == ' ' || raw[value_end - 1] == '\t')) {
         --value_end;
@@ -103,14 +107,30 @@ gl::Result<void> Config::save(const std::filesystem::path& path) const {
         if (ec) return Error{ErrorCode::io, "cannot create config directory: " + parent.string()};
     }
 
-    std::ofstream out(path, std::ios::binary | std::ios::trunc);
-    if (!out) return Error{ErrorCode::io, "cannot open config for writing: " + path.string()};
+    std::filesystem::path temp_path = path;
+    temp_path += ".tmp";
+    std::ofstream out(temp_path, std::ios::binary | std::ios::trunc);
+    if (!out) {
+        return Error{ErrorCode::io, "cannot open config for writing: " + temp_path.string()};
+    }
     for (const Line& line : lines_) {
         out.write(line.raw.data(), static_cast<std::streamsize>(line.raw.size()));
         out.write(line.eol.data(), static_cast<std::streamsize>(line.eol.size()));
     }
     out.close();
-    if (!out) return Error{ErrorCode::io, "cannot write config: " + path.string()};
+    if (!out) {
+        std::error_code ignored;
+        std::filesystem::remove(temp_path, ignored);
+        return Error{ErrorCode::io, "cannot write config: " + temp_path.string()};
+    }
+
+    std::error_code rename_error;
+    std::filesystem::rename(temp_path, path, rename_error);
+    if (rename_error) {
+        std::error_code ignored;
+        std::filesystem::remove(temp_path, ignored);
+        return Error{ErrorCode::io, "cannot replace config: " + path.string()};
+    }
     return gl::Result<void>{};
 }
 
@@ -152,6 +172,11 @@ bool Config::get_bool(std::string_view key, bool fallback) const {
 }
 
 void Config::set(std::string_view key, std::string_view value) {
+    if (value.find_first_of("\r\n") != std::string_view::npos) {
+        gl::log(gl::LogLevel::warning,
+                "config: ignoring value with newline for key '" + std::string(key) + "'");
+        return;
+    }
     const std::string cp_value = gl::assets::utf8_to_cp1251(value);
     for (std::size_t i = 0; i < lines_.size(); ++i) {
         Line& line = lines_[i];

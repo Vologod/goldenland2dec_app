@@ -36,6 +36,7 @@ namespace fs = std::filesystem;
 constexpr int kDefaultWidth = 1280;
 constexpr int kDefaultHeight = 720;
 constexpr int kMaxDimension = 16384;
+constexpr std::string_view kNewGameLevel = "l1_1";
 constexpr float kZoomStep = 1.1f;
 constexpr float kScale = 2.0f;
 constexpr float kTitleScale = 3.0f;
@@ -44,7 +45,7 @@ constexpr std::size_t kConsoleOutputLines = 10;
 struct Options {
     fs::path game_dir;
     fs::path config_path;
-    std::string level = "l1_1";
+    std::string level = std::string(kNewGameLevel);
     bool has_level = false;
     bool menu = false;
     int width = kDefaultWidth;
@@ -428,24 +429,7 @@ class Game {
 
         registry_.add("r_resolution", "set window resolution: r_resolution <width> <height>",
                       [this](gl::core::Args args) -> gl::Result<std::string> {
-                          if (args.size() != 2) {
-                              return gl::Error{gl::ErrorCode::argument,
-                                               "usage: r_resolution <width> <height>"};
-                          }
-                          int width = 0;
-                          int height = 0;
-                          if (!parse_dimension(args[0], width) ||
-                              !parse_dimension(args[1], height)) {
-                              return gl::Error{gl::ErrorCode::argument,
-                                               "usage: r_resolution <width> <height>"};
-                          }
-                          config_.set("r_resolution",
-                                      std::to_string(width) + " " + std::to_string(height));
-                          dirty_ = true;
-                          save_config();
-                          apply_resolution(width, height);
-                          return "resolution = " + std::to_string(width) + "x" +
-                                 std::to_string(height);
+                          return route_server("r_resolution", args);
                       });
 
         registry_.add("r_windowed", "set windowed/fullscreen: r_windowed <0|1>",
@@ -502,9 +486,24 @@ class Game {
                     console_print(event.flag ? "paused = 1" : "paused = 0");
                     break;
                 case gl::core::EventType::config_changed:
-                    config_.set(event.key, event.value);
-                    dirty_ = true;
-                    if (event.key == "r_windowed") apply_windowed(event.flag);
+                    if (event.key == "r_resolution") {
+                        const Resolution resolution =
+                            parse_resolution(std::optional<std::string>(event.value));
+                        if (!resolution.valid) {
+                            const std::string message =
+                                "invalid resolution: " + event.value;
+                            console_print(message);
+                            gl::log(gl::LogLevel::warning, message);
+                            break;
+                        }
+                        config_.set(event.key, event.value);
+                        dirty_ = true;
+                        apply_resolution(resolution.width, resolution.height);
+                    } else {
+                        config_.set(event.key, event.value);
+                        dirty_ = true;
+                        if (event.key == "r_windowed") apply_windowed(event.flag);
+                    }
                     save_config();
                     console_print(event.key + " = " + event.value);
                     break;
@@ -790,7 +789,7 @@ class Game {
 
     void menu_activate(int index) {
         if (index == 0) {
-            if (!load_level(level_name_)) return;
+            if (!load_level(kNewGameLevel)) return;
             if (state_.transition(gl::core::AppState::level)) {
                 dragging_ = false;
                 debug_overlay_ = false;

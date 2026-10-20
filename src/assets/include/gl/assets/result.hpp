@@ -1,4 +1,5 @@
 #pragma once
+#include <cassert>
 #include <optional>
 #include <string>
 #include <utility>
@@ -29,7 +30,10 @@ public:
     bool has_value() const { return !error_.has_value(); }
     explicit operator bool() const { return has_value(); }
     void value() const {}
-    const Error& error() const { return *error_; }
+    const Error& error() const {
+        assert(error_.has_value());
+        return *error_;
+    }
 private:
     std::optional<Error> error_;
 };

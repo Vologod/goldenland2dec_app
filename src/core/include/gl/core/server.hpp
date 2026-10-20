@@ -9,7 +9,8 @@ enum class EventType { paused_changed, config_changed, log };
 // Event payload convention:
 // - paused_changed: flag = new pause state, key/value/text empty.
 // - config_changed: key = setting name, value = new value, text = value
-//   (flag = bool value for r_windowed, false for string settings).
+//   (flag = bool value for r_windowed; r_resolution carries "<width> <height>";
+//   false for other string settings).
 // - log: text = message, key/value empty.
 struct Event {
     EventType type = EventType::log;

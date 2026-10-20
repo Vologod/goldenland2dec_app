@@ -204,6 +204,40 @@ TEST_CASE("ServerCore: r_windowed requires a valid 0/1 argument") {
     CHECK(contains(events[0].text, "invalid argument for r_windowed"));
 }
 
+TEST_CASE("ServerCore: r_resolution emits a config change for two positive ints") {
+    ServerCore server;
+
+    server.submit("r_resolution 800 600");
+    server.tick(0.016);
+
+    const std::vector<Event> events = server.drain_events();
+    REQUIRE(events.size() == 1);
+    CHECK(events[0].type == EventType::config_changed);
+    CHECK(events[0].key == "r_resolution");
+    CHECK(events[0].value == "800 600");
+    CHECK(events[0].text == "800 600");
+    CHECK_FALSE(events[0].flag);
+}
+
+TEST_CASE("ServerCore: r_resolution rejects missing, extra and invalid dimensions") {
+    ServerCore server;
+
+    server.submit("r_resolution");
+    server.submit("r_resolution 800");
+    server.submit("r_resolution 800 600 extra");
+    server.submit("r_resolution 0 600");
+    server.submit("r_resolution 800 -1");
+    server.submit("r_resolution wide 600");
+    server.tick(0.016);
+
+    const std::vector<Event> events = server.drain_events();
+    REQUIRE(events.size() == 6);
+    for (const Event &event : events) {
+        CHECK(event.type == EventType::log);
+        CHECK(contains(event.text, "r_resolution"));
+    }
+}
+
 TEST_CASE("ServerCore: cl_username requires a name") {
     ServerCore server;
 

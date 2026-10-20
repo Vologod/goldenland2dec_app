@@ -59,7 +59,14 @@ bool has_non_black_pixel(const std::vector<std::uint32_t> &pixels) {
 
 TEST_CASE("text metrics scale with the requested size") {
     CHECK(gl::render::text_width("ABC", 2.0f) > 0.0f);
+    CHECK(gl::render::text_width("ABC", 2.0f) ==
+          doctest::Approx(2.0f * gl::render::text_width("ABC", 1.0f)));
     CHECK(gl::render::text_height(1.0f) > 0.0f);
+}
+
+TEST_CASE("non-ASCII bytes are substituted with question marks") {
+    CHECK(gl::render::text_width("\xD0\x90", 1.0f) ==
+          gl::render::text_width("??", 1.0f));
 }
 
 TEST_CASE("draw_text renders visible pixels") {

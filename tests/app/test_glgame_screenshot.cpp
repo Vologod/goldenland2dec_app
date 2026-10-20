@@ -295,6 +295,42 @@ TEST_CASE("glgame persists cl_username and keeps binds/comments") {
     CHECK(preserved > 0);
 }
 
+TEST_CASE("glgame starts from defaults when --config is missing and creates it on save") {
+    const char* game_dir = std::getenv("GL_GAME_DIR");
+    REQUIRE(game_dir != nullptr);
+
+    TempDir temp;
+    const fs::path config = temp.path / "missing" / "GoldenLand.ini";
+    const fs::path png = temp.path / "missing.png";
+    const int code = run_glgame(screenshot_arguments(
+        game_dir, config, png, {"--menu", "--exec", "cl_username Missing"}));
+    CAPTURE(code);
+    REQUIRE(fs::exists(png));
+    CHECK(code == 0);
+    check_png(png, 1280, 720);
+
+    REQUIRE(fs::exists(config));
+    const std::vector<std::string> lines = split_lines(read_file(config));
+    CHECK(setting_value(lines, "cl_username") == "Missing");
+}
+
+TEST_CASE("glgame persists r_resolution through ServerCore") {
+    const char* game_dir = std::getenv("GL_GAME_DIR");
+    REQUIRE(game_dir != nullptr);
+
+    TempDir temp;
+    const fs::path config = write_test_config(temp.path);
+    const fs::path png = temp.path / "resolution.png";
+    const int code = run_glgame(screenshot_arguments(
+        game_dir, config, png, {"--menu", "--exec", "r_resolution 800 600"}));
+    CAPTURE(code);
+    REQUIRE(fs::exists(png));
+    CHECK(code == 0);
+
+    const std::vector<std::string> lines = split_lines(read_file(config));
+    CHECK(has_line(lines, "r_resolution 800 600"));
+}
+
 TEST_CASE("glgame persists gv_pause and r_windowed") {
     const char* game_dir = std::getenv("GL_GAME_DIR");
     REQUIRE(game_dir != nullptr);
