@@ -152,6 +152,15 @@ TEST_CASE("CommandRegistry: completion with a single command") {
     CHECK_FALSE(registry.complete("z").has_value());
 }
 
+TEST_CASE("CommandRegistry: duplicate names are rejected") {
+    gl::core::CommandRegistry registry;
+    registry.add("dup", "first", [](gl::core::Args) { return std::string{}; });
+    registry.add("dup", "second", [](gl::core::Args) { return std::string{}; });
+
+    REQUIRE(registry.commands().size() == 1);
+    CHECK(registry.commands()[0].help == "first");
+}
+
 TEST_CASE("CommandRegistry: commands keeps registration order") {
     gl::core::CommandRegistry registry;
     registry.add("zeta", "last", [](gl::core::Args) { return std::string{}; });

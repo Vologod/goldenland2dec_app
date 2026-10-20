@@ -198,7 +198,7 @@ Event payload convention (Task 6 relies on this):
 - Tests: screenshot menu + level 1280×720 ≥2 colors; `--exec help`/unknown don't crash; config round-trip after `--exec "cl_username Test"` (inspect INI).
 - Acceptance: manual menu/console run.
 
-- [ ] Implement, tests, commit.
+- [x] Implement, tests, commit.
 
 ---
 

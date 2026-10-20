@@ -1,4 +1,5 @@
 #include "gl/core/command.hpp"
+#include "gl/assets/log.hpp"
 #include <algorithm>
 #include <cstddef>
 #include <utility>
@@ -54,6 +55,12 @@ std::vector<std::string> split_command_line(std::string_view line) {
 }
 
 void CommandRegistry::add(std::string name, std::string help, Handler handler) {
+    for (const CommandInfo& command : commands_) {
+        if (command.name == name) {
+            gl::log(gl::LogLevel::error, "duplicate command registration: " + name);
+            return;
+        }
+    }
     commands_.push_back(CommandInfo{std::move(name), std::move(help), std::move(handler)});
 }
 

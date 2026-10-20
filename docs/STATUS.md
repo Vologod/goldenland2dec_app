@@ -10,6 +10,14 @@ P0 завершена и принята. P1 — Level viewer: реализаци
 
 ## Текущая задача
 
+**P2a — Task 6 (`glgame` shell) завершён 2026-10-20.** Добавлен `tools/glgame`
+(меню, уровень через `LevelScreen`, консоль `~`, команды, конфиг/`cl_username`
+round-trip); `gl_core` отклоняет дубли имён команд. `--screenshot` меню/уровня,
+`--exec`, коды выхода 0/1/2/3. Тесты `glgame_screenshot_tests` (skip 77 без
+`GL_GAME_DIR`): меню и уровень 1280×720, `help`+unknown не фатальны, `cl_username`
+сохраняется с `bind`/комментариями. Полный `ctest` с `GL_GAME_DIR`: 8/8 passed
+(real-data 517.27 s, glgame 12.70 s).
+
 **P2a — Task 5 (state machine + ServerCore/ClientCore skeleton) завершён 2026-10-20.**
 В SDL-free `gl_core` добавлены `StateMachine` (`boot→menu→level→menu`, `level` reload,
 `exit` final) и `ServerCore`/`ClientCore`: `submit(Command)` + парсящий overload,
@@ -206,11 +214,17 @@ P0 закрыт 2026-10-19; далее выполнялись задачи P1 (�
 - 2026-10-20: P2a Task 5 — `StateMachine` и `ServerCore`/`ClientCore` skeleton;
   `Command`/`Event` (`key`/`value`) контракт зафиксирован для Task 6; fix round 1
   добавил `submit(Command)`, usage-ошибки на лишние аргументы и тесты payload.
+- 2026-10-20: P2a Task 6 — `glgame` (меню, `LevelScreen`, консоль с историей и
+  автодополнением, команды `help`/`exit`/`d_console`/`gv_pause`/`gv_free_camera`/
+  `r_resolution`/`r_windowed`/`cl_username`/`game_save`, сохранение Config);
+  `glgame_screenshot_tests`, отказ от дублей команд в `gl_core`; `ctest` с
+  `GL_GAME_DIR` 8/8.
 
 ## Следующие задачи
 
 1. P2a: оболочка игры и консоль — `docs/specs/2026-10-20-p2a-game-shell-design.md`,
-   `docs/plans/2026-10-20-p2a-game-shell.md` (Tasks 1–5 завершены; дальше Task 6).
+   `docs/plans/2026-10-20-p2a-game-shell.md` (Tasks 1–6 завершены; дальше Task 7 —
+   acceptance + docs).
 2. P2b: ServerCore/ClientCore + детерминированный тик (после P2a).
 3. P1b: Android/touch — отложенный follow-up P1.
 
@@ -219,6 +233,9 @@ P0 закрыт 2026-10-19; далее выполнялись задачи P1 (�
 - P1: финальный manual desktop pass — WASD/стрелки, `Home` и визуальный `F1` toggle
   на обычном рабочем столе. В текущей headless-сессии клавиатурный фокус недоступен;
   drag-панорама и wheel-зум проверены инъекцией мыши, overlay — screenshot-тестом.
+- P2a Task 6: интерактивный ввод (New Game/`~`/Enter) в headless-сессии не прогнан
+  end-to-end; проверены screenshot-тесты меню/уровня, путь `--exec` и живость окна
+  (меню и уровень); manual desktop pass остаётся для Task 7.
 - SDL2 `release-2.32.10` выдаёт CMake deprecation warning из-за своего
   `cmake_minimum_required`; следить при обновлении CMake/SDL.
 - `.clang-format` (LLVM base) не совпадает со стилем исходников P0; repo-wide
