@@ -197,11 +197,11 @@ void draw_background(SDL_Renderer*, const Texture&, const Camera&, int screen_w,
 `glview`: parse `--game-dir`, `--level` (default `l1_1`), `--width/--height` (default 1280×720),
 `--screenshot <png>`, `--frames N`. Loop: read input, update camera, draw background, present.
 Screenshot: `SDL_RenderReadPixels` → RGBA → `stbi_write_png`.
-- [ ] **Step 1:** Render test: `SDL_VIDEODRIVER=dummy`, `SDL_RENDER_DRIVER=software`,
+- [x] **Step 1:** Render test: `SDL_VIDEODRIVER=dummy`, `SDL_RENDER_DRIVER=software`,
   `glview --level l1_1 --screenshot out.png --width 1280 --height 720`; assert PNG exists,
   1280×720, and has ≥2 distinct pixel colors.
-- [ ] **Step 2:** Implement window/background/camera/screenshot.
-- [ ] **Step 3:** Commit.
+- [x] **Step 2:** Implement window/background/camera/screenshot.
+- [x] **Step 3:** Commit.
 
 ---
 

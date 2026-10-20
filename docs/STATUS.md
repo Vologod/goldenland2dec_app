@@ -45,7 +45,15 @@ SEF/LVL/фон. `gl_game` — статическая библиотека без
 соответствуют CSX/LAO; `l6_2_2` — статика в порядке `number`; отсутствующий уровень → io/format.
 Полный `ctest` с `GL_GAME_DIR`: 3/3 passed (real-data 389.13 s).
 
-Следующая задача — **P1 Task 6: Renderer, camera, background, screenshot** (`docs/plans/2026-10-19-p1-level-viewer.md`).
+Task 6 завершён: `gl_render` (`Texture`, `Camera`, `to_screen`, `draw_background`) и `glview`
+с `--game-dir/--level/--width/--height/--screenshot/--frames`. Фон рисуется одним
+`SDL_RenderCopyF` из видимой области текстуры, скриншот — `SDL_RenderReadPixels` RGBA →
+`stbi_write_png`. Пути из `argv` конвертируются из UTF-8 (SDL2main на Windows). Render-тест
+`glview_screenshot_tests`: `l1_1`, 1280×720, ≥2 цветов; без `GL_GAME_DIR` — skipped (77).
+Полный `ctest` с `GL_GAME_DIR`: 4/4 passed (real-data 389.59 s); без `GL_GAME_DIR`: 2 passed,
+2 skipped. Реальное окно открыто (процесс жив через 3 с), PNG с реальным драйвером — 1280×720.
+
+Следующая задача — **P1 Task 7: Draw statics and animations** (`docs/plans/2026-10-19-p1-level-viewer.md`).
 
 ## Как продолжить (пауза 2026-10-19)
 
@@ -53,8 +61,8 @@ SEF/LVL/фон. `gl_game` — статическая библиотека без
 - Тулчейн: `.local/toolchains`; перед сборкой:
   `$env:PATH = "I:\goldenland2dec\.local\toolchains\llvm-mingw-20261006-ucrt-x86_64\bin;I:\goldenland2dec\.local\toolchains\ninja;I:\goldenland2dec\.local\toolchains\cmake\cmake-4.4.4-windows-x86_64\bin;$env:PATH"`
 - Тесты: `$env:GL_GAME_DIR = "I:\Games\Златогорье-2"`; `ctest --test-dir build --output-on-failure`.
-- SDD-леджер: `.superpowers/sdd/2026-10-19-p1-level-viewer/progress.md` (Tasks 1–5 complete).
-- Дальше: взять Task 6 brief из плана и продолжить subagent-driven цикл.
+- SDD-леджер: `.superpowers/sdd/2026-10-19-p1-level-viewer/progress.md` (Tasks 1–6 complete).
+- Дальше: взять Task 7 brief из плана и продолжить subagent-driven цикл.
 
 **P0 — Ассеты и форматы.** Реализация и приёмка завершены (Tasks 0–10).
 
@@ -117,10 +125,12 @@ SEF/LVL/фон. `gl_game` — статическая библиотека без
 - 2026-10-20: P1 Task 3 — парсеры LAO (`parse_lao`) и минимального SEF (`parse_sef`);
   33/33 LAO и `l1_1.sef` на реальных данных, `ctest` 3/3.
 - 2026-10-20: P1 Task 4 — `slice_csx_frames`: нарезка CSX на кадры, unit 90/547, `ctest` 3/3.
+- 2026-10-20: P1 Task 6 — `gl_render` (Texture/Camera/background) и `glview`
+  (load/background/screenshot); render-тест на реальном `l1_1`, `ctest` 4/4.
 
 ## Следующие задачи
 
-1. P1 Task 5: LevelLoader + Level model.
+1. P1 Task 7: Draw statics and animations.
 
 ## Открытые вопросы
 

@@ -42,3 +42,7 @@ ctest --test-dir build --output-on-failure
 - `winget` не использовать; при следующей задаче просто выставить PATH как выше.
 - LLVM-MinGW использует UCRT; целевые Windows-бинарники самодостаточны.
 - Для Android (P9) потребуется NDK r28+ и JDK 17 — устанавливаются отдельно.
+- `SDL2::SDL2main` на Windows формирует `argv` из `GetCommandLineW` в UTF-8
+  (`SDL_windows_main.c`, `WIN_StringToUTF8W`), а не в ACP. Поэтому пути из аргументов
+  нельзя передавать в `std::filesystem::path` как ACP-строку: `glview` конвертирует их
+  через `std::u8string` (проверено на `I:\Games\Златогорье-2`).

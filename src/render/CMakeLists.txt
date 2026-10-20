@@ -1,2 +1,7 @@
-add_library(gl_render INTERFACE)
-target_link_libraries(gl_render INTERFACE gl_platform)
+add_library(gl_render STATIC
+    src/texture.cpp
+    src/camera.cpp
+)
+target_include_directories(gl_render PUBLIC include)
+target_link_libraries(gl_render PUBLIC gl_platform gl_game)
+gl_enable_warnings(gl_render)
