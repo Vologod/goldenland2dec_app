@@ -1,4 +1,4 @@
-add_executable(camera_tests test_camera.cpp test_animation.cpp test_texture.cpp)
+add_executable(camera_tests test_camera.cpp test_animation.cpp test_texture.cpp test_text.cpp)
 target_include_directories(camera_tests PRIVATE ${CMAKE_SOURCE_DIR}/third_party/doctest)
 target_link_libraries(camera_tests PRIVATE gl_render SDL2::SDL2)
 gl_enable_warnings(camera_tests)
