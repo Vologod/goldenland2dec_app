@@ -5,6 +5,7 @@ add_executable(gl_core_tests
     test_console.cpp
     test_state.cpp
     test_server.cpp
+    test_save_manager.cpp
 )
 target_include_directories(gl_core_tests PRIVATE ${CMAKE_SOURCE_DIR}/third_party)
 target_link_libraries(gl_core_tests PRIVATE gl_core)
@@ -15,6 +16,7 @@ add_test(NAME gl_core_tests COMMAND gl_core_tests)
 add_executable(gl_core_real_tests
     test_real_main.cpp
     test_real_config.cpp
+    test_real_saves.cpp
 )
 target_include_directories(gl_core_real_tests PRIVATE ${CMAKE_SOURCE_DIR}/third_party)
 target_link_libraries(gl_core_real_tests PRIVATE gl_core)
