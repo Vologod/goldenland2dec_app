@@ -239,15 +239,14 @@ P0 закрыт 2026-10-19; далее выполнялись задачи P1 (�
   server-события идут через `ClientCore`, пустые строки не попадают в консоль/историю,
   результаты команд логируются; тесты на persistence и пустую историю; `ctest` 8/8.
 - 2026-10-20: P2a Task 7 — automated acceptance: `ctest` 8/8 (550.76 s), menu/level
-  screenshots 1280×720 (exit 0), research note `docs/research/p2a-game-shell.md`;
-  manual desktop gate оставлен открытым.
+  screenshots 1280×720 (exit 0), research note `docs/research/p2a-game-shell.md`.
+- 2026-10-20: P2a manual desktop gate пройден пользователем (меню, New Game → `l1_1`,
+  `~`, `help`, `gv_pause`, `exit`); P2a принята.
 
 ## Следующие задачи
 
-1. **P2a manual desktop gate:** `glgame --game-dir I:\Games\Златогорье-2`, New Game →
-   `l1_1`, `~`, `help`, `gv_pause`, `exit` с реальной клавиатурой/мышью. Без него P2a
-   не принята.
-2. P2b: ServerCore/ClientCore + детерминированный тик (после P2a).
+1. P2b: ServerCore/ClientCore + детерминированный тик (после P2a).
+2. P2c: save/load каркас (`.sav` заголовок, слоты; полная десериализация позже).
 3. P1b: Android/touch — отложенный follow-up P1.
 
 ## Открытые вопросы
@@ -255,12 +254,6 @@ P0 закрыт 2026-10-19; далее выполнялись задачи P1 (�
 - P1: финальный manual desktop pass — WASD/стрелки, `Home` и визуальный `F1` toggle
   на обычном рабочем столе. В текущей headless-сессии клавиатурный фокус недоступен;
   drag-панорама и wheel-зум проверены инъекцией мыши, overlay — screenshot-тестом.
-- **P2a manual desktop gate (Task 7, OPEN):** run
-  `glgame --game-dir I:\Games\Златогорье-2`, then New Game → `l1_1`, `~`, `help`,
-  `gv_pause`, `exit` on a normal desktop with real keyboard/mouse. Automated
-  acceptance passed (`ctest` 8/8, screenshots), but headless screenshot tests,
-  `--exec` and a live window do not replace this end-to-end run. **P2a is not
-  accepted until this gate passes.**
 - SDL2 `release-2.32.10` выдаёт CMake deprecation warning из-за своего
   `cmake_minimum_required`; следить при обновлении CMake/SDL.
 - `.clang-format` (LLVM base) не совпадает со стилем исходников P0; repo-wide

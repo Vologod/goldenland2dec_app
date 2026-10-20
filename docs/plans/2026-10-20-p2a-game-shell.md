@@ -197,8 +197,8 @@ Event payload convention (Task 6 relies on this):
 - `--exec` runs commands at boot; `--screenshot` renders menu (with `--menu`) or level.
 - Tests: screenshot menu + level 1280×720 ≥2 colors; `--exec help`/unknown don't crash; config round-trip after `--exec "cl_username Test"` (inspect INI).
 - [x] Implement, tests, commit.
-- [ ] Manual acceptance: run menu/console on a normal desktop (New Game `l1_1`, `~`,
-  `help`, `gv_pause`, `exit`). **OPEN** — see `docs/STATUS.md`.
+- [x] Manual acceptance: run menu/console on a normal desktop (New Game `l1_1`, `~`,
+  `help`, `gv_pause`, `exit`). Подтверждено пользователем 2026-10-20.
 
 ---
 
@@ -209,9 +209,8 @@ Event payload convention (Task 6 relies on this):
 - [x] Update STATUS/PROJECT/research; record P2a automated acceptance; next P2b.
   DECISIONS unchanged (no architectural deviation).
 - [x] Commit.
-- [ ] Manual desktop acceptance: `glgame --game-dir I:\Games\Златогорье-2`, menu,
-  New Game `l1_1`, `~`, `help`, `gv_pause`, `exit`. **OPEN** — headless session;
-  do not claim verified until run on a normal desktop.
+- [x] Manual desktop acceptance: `glgame --game-dir I:\Games\Златогорье-2`, menu,
+  New Game `l1_1`, `~`, `help`, `gv_pause`, `exit`. Подтверждено пользователем 2026-10-20.
 
 ## Self-Review
 
