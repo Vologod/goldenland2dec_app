@@ -104,8 +104,8 @@ Tests: mirror updates; default snapshot; snapshot independent of later server ch
 
 - [x] Full `ctest` with `GL_GAME_DIR`: 8/8 passed (541.46 s).
 - [x] Screenshot acceptance: menu/level/paused exit 0, each 1280×720, non-uniform.
-- [ ] Manual interactive: run `glgame --game-dir I:\Games\Златогорье-2`; if started paused, `gv_pause 0`; animations run; `gv_pause 1/0` freezes/resumes. **OPEN — not verified; requires a human on a desktop session.**
-- [x] `docs/STATUS.md`: P2b accepted (automated; manual gate open), next P2c.
+- [x] Manual interactive: run `glgame --game-dir I:\Games\Златогорье-2`; if started paused, `gv_pause 0`; animations run; `gv_pause 1/0` freezes/resumes. Подтверждено пользователем 2026-10-20.
+- [x] `docs/STATUS.md`: P2b accepted (manual passed), next P2c.
 - [x] `docs/PROJECT.md`: P2 progress.
 - [x] `docs/DECISIONS.md`: D-021 fixed 60 Hz, max frame dt 0.25, max 15 steps.
 - [x] `docs/research/`: tick/time facts.

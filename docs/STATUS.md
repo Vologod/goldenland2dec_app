@@ -268,25 +268,21 @@ P0 закрыт 2026-10-19; далее выполнялись задачи P1 (�
   ручной `animation_ms_` удалён, screenshot-режим остаётся детерминированным.
 - 2026-10-20: P2b Task 4 — automated acceptance: `ctest` 8/8 (541.46 s), menu/level/paused
   screenshots exit 0, 1280×720, не одноцветные; research note
-  `docs/research/p2b-deterministic-tick.md`; manual interactive gate открыт.
+  `docs/research/p2b-deterministic-tick.md`.
+- 2026-10-20: P2b manual interactive gate пройден пользователем (анимации `l1_1`,
+  `gv_pause 1/0` замирание/возобновление); P2b принят.
 
 ## Следующие задачи
 
 1. P2c: save/load каркас (`.sav` заголовок, слоты; полная десериализация позже).
-2. P2b manual interactive gate: анимации на `l1_1`, `gv_pause 1/0` (см. Open Questions).
-3. P2 backfill: интерполяция/сеть/игровые системы — отложены до появления сущностей.
-4. P1b: Android/touch — отложенный follow-up P1.
+2. P2 backfill: интерполяция/сеть/игровые системы — отложены до появления сущностей.
+3. P1b: Android/touch — отложенный follow-up P1.
 
 ## Открытые вопросы
 
 - P1: финальный manual desktop pass — WASD/стрелки, `Home` и визуальный `F1` toggle
   на обычном рабочем столе. В текущей headless-сессии клавиатурный фокус недоступен;
   drag-панорама и wheel-зум проверены инъекцией мыши, overlay — screenshot-тестом.
-- P2b: manual interactive gate — на обычном рабочем столе запустить
-  `glgame --game-dir "I:\Games\Златогорье-2"`, New Game → `l1_1`; если конфиг сохранён
-  с `gv_pause 1`, сначала `gv_pause 0`, затем убедиться, что анимации идут;
-  `gv_pause 1` — анимации и `PAUSED` замирают, `gv_pause 0` — возобновляются.
-  Автоматизированная приёмка это не проверяет; gate остаётся OPEN до подтверждения.
 - SDL2 `release-2.32.10` выдаёт CMake deprecation warning из-за своего
   `cmake_minimum_required`; следить при обновлении CMake/SDL.
 - `.clang-format` (LLVM base) не совпадает со стилем исходников P0; repo-wide
@@ -330,3 +326,11 @@ P0 закрыт 2026-10-19; далее выполнялись задачи P1 (�
 - ServerCore _resolution: зафиксировать допустимые границы в контракте события (сейчас shell ограничивает, сервер — нет).
 - Тесты: 	est_real_main возвращает 77 безусловно при отсутствии GL_GAME_DIR; text height scaling; non-ASCII UI — P7.
 - Уточнить exit code в spec §7: отсутствующий обязательный аргумент CLI — 1, отсутствующий каталог — 2.
+
+## Backlog P2b → P2c
+
+- Добавить determinism-тест «разные последовательности dt с одинаковой суммой → одинаковые tick/time».
+- glgame: вынести sync-последовательность 	ick → on_snapshot → process events в helper.
+- Screenshot-тесты проверяют размеры, не пиксели; золотые хэши — позже.
+- Анимации стартуют от глобального simulation_time_ms; для one-shot анимаций уровня понадобится фаза/сброс.
+- 	est_server: non-finite тест переупорядочить (Inf → NaN), чтобы он реально ловил регрессию.
