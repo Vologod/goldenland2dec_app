@@ -229,8 +229,8 @@ Screenshot: `SDL_RenderReadPixels` → RGBA → `stbi_write_png`.
 - Status: `gl::log` info level prints level size/counts on load.
 - [ ] **Step 1:** Manual run `glview --game-dir I:\Games\Златогорье-2 --level l1_1`; pan/zoom.
 - [x] **Step 2:** Run screenshot + ctest (unit/integration/render) green.
-- [x] **Step 3:** Update `docs/STATUS.md` (P1 accepted), `docs/PROJECT.md` P1 `[x]`,
-  `docs/research/` with level/anchor facts.
+- [x] **Step 3:** Update `docs/STATUS.md` (automated acceptance passed; manual pass pending),
+  `docs/PROJECT.md` P1 `[~]`, `docs/research/` with level/anchor facts.
 - [x] **Step 4:** Commit.
 
 ---
