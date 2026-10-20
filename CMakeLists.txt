@@ -39,6 +39,7 @@ add_subdirectory(src/platform)
 add_subdirectory(src/render)
 add_subdirectory(src/game)
 add_subdirectory(src/core)
+add_subdirectory(src/app)
 
 if (GL_BUILD_TOOLS)
     add_subdirectory(tools/glpak)
