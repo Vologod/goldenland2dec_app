@@ -68,6 +68,12 @@ Render-тест: normal `--frames 5` и `--background-only` — оба 1280×720
 > 1000 пикселей. Полный `ctest` с `GL_GAME_DIR`: 4/4 passed (real-data 392.15 s,
 render 8.27 s).
 
+Fix round 1: все текстуры создаются с `SDL_BLENDMODE_BLEND` (проверяется render-тестом),
+`delay_ms == 0` всегда даёт кадр 0, viewport запрашивается один раз на кадр и передаётся
+в `draw_texture`, предупреждения о пропущенных текстурах содержат уровень/номер/позицию,
+тестовые PNG и временные каталоги освобождаются RAII. Полный `ctest` с `GL_GAME_DIR`:
+4/4 passed (real-data 421.25 s, render 8.73 s).
+
 Следующая задача — **P1 Task 8: Input, debug overlay, acceptance** (`docs/plans/2026-10-19-p1-level-viewer.md`).
 
 ## Как продолжить (пауза 2026-10-19)
@@ -76,8 +82,8 @@ render 8.27 s).
 - Тулчейн: `.local/toolchains`; перед сборкой:
   `$env:PATH = "I:\goldenland2dec\.local\toolchains\llvm-mingw-20261006-ucrt-x86_64\bin;I:\goldenland2dec\.local\toolchains\ninja;I:\goldenland2dec\.local\toolchains\cmake\cmake-4.4.4-windows-x86_64\bin;$env:PATH"`
 - Тесты: `$env:GL_GAME_DIR = "I:\Games\Златогорье-2"`; `ctest --test-dir build --output-on-failure`.
-- SDD-леджер: `.superpowers/sdd/2026-10-19-p1-level-viewer/progress.md` (Tasks 1–6 complete).
-- Дальше: взять Task 7 brief из плана и продолжить subagent-driven цикл.
+- SDD-леджер: `.superpowers/sdd/2026-10-19-p1-level-viewer/progress.md` (Tasks 1–7 complete).
+- Дальше: взять Task 8 brief из плана и продолжить subagent-driven цикл.
 
 **P0 — Ассеты и форматы.** Реализация и приёмка завершены (Tasks 0–10).
 

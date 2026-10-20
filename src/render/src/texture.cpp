@@ -59,6 +59,12 @@ Result<Texture> Texture::from_image(SDL_Renderer* renderer, const assets::Image&
     if (texture == nullptr)
         return Error{ErrorCode::io, std::string("SDL_CreateTexture failed: ") + SDL_GetError()};
 
+    if (SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_BLEND) != 0) {
+        const std::string error = SDL_GetError();
+        SDL_DestroyTexture(texture);
+        return Error{ErrorCode::io, "SDL_SetTextureBlendMode failed: " + error};
+    }
+
     if (SDL_UpdateTexture(texture, nullptr, image.rgba.data(), width * 4) != 0) {
         const std::string error = SDL_GetError();
         SDL_DestroyTexture(texture);

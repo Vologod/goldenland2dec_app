@@ -1,4 +1,9 @@
 #define DOCTEST_CONFIG_IMPLEMENT
+#include "gl/assets/image.hpp"
+#include "gl/platform/sdl_context.hpp"
+#include "gl/render/texture.hpp"
+
+#include <SDL.h>
 #include <doctest.h>
 #include <stb_image.h>
 
@@ -7,8 +12,10 @@
 #include <cstdint>
 #include <cstdlib>
 #include <filesystem>
+#include <memory>
 #include <set>
 #include <string>
+#include <system_error>
 #include <vector>
 #ifndef _WIN32
 #include <sys/wait.h>
@@ -32,6 +39,43 @@ fs::path unique_temp_dir() {
            ("gl_glview_shot_" + std::to_string(stamp) + "_" + std::to_string(counter.fetch_add(1)));
 }
 
+struct TempDir {
+    TempDir() : path(unique_temp_dir()) {
+        fs::remove_all(path);
+        fs::create_directories(path);
+    }
+
+    ~TempDir() {
+        std::error_code error;
+        fs::remove_all(path, error);
+    }
+
+    TempDir(const TempDir&) = delete;
+    TempDir& operator=(const TempDir&) = delete;
+
+    fs::path path;
+};
+
+struct StbiImageDeleter {
+    void operator()(unsigned char* pixels) const noexcept { stbi_image_free(pixels); }
+};
+
+using StbiImage = std::unique_ptr<unsigned char, StbiImageDeleter>;
+
+StbiImage load_png(const fs::path& path, int& width, int& height, int& channels) {
+    return StbiImage(stbi_load(path.string().c_str(), &width, &height, &channels, 4));
+}
+
+void use_dummy_video() {
+#ifdef _WIN32
+    _putenv_s("SDL_VIDEODRIVER", "dummy");
+    _putenv_s("SDL_RENDER_DRIVER", "software");
+#else
+    setenv("SDL_VIDEODRIVER", "dummy", 1);
+    setenv("SDL_RENDER_DRIVER", "software", 1);
+#endif
+}
+
 std::vector<std::string> glview_arguments(const fs::path& game_dir, const fs::path& png,
                                           const std::vector<std::string>& extra = {}) {
     std::vector<std::string> arguments = {"--game-dir", game_dir.string(), "--level", "l1_1",
@@ -42,10 +86,9 @@ std::vector<std::string> glview_arguments(const fs::path& game_dir, const fs::pa
 }
 
 int run_glview(const std::vector<std::string>& arguments) {
-#ifdef _WIN32
-    _putenv_s("SDL_VIDEODRIVER", "dummy");
-    _putenv_s("SDL_RENDER_DRIVER", "software");
+    use_dummy_video();
 
+#ifdef _WIN32
     std::vector<std::string> owned;
     owned.push_back(g_glview_exe.string());
     for (const auto& arg : arguments) owned.push_back(arg);
@@ -55,9 +98,6 @@ int run_glview(const std::vector<std::string>& arguments) {
     argv.push_back(nullptr);
     return static_cast<int>(_spawnv(_P_WAIT, g_glview_exe.string().c_str(), argv.data()));
 #else
-    setenv("SDL_VIDEODRIVER", "dummy", 1);
-    setenv("SDL_RENDER_DRIVER", "software", 1);
-
     std::string command = "\"" + g_glview_exe.string() + "\"";
     for (const auto& arg : arguments) command += " \"" + arg + "\"";
     const int status = std::system(command.c_str());
@@ -76,10 +116,8 @@ TEST_CASE("glview renders the l1_1 background into a 1280x720 PNG") {
     const char* game_dir = std::getenv("GL_GAME_DIR");
     REQUIRE(game_dir != nullptr);
 
-    const fs::path temp = unique_temp_dir();
-    fs::remove_all(temp);
-    fs::create_directories(temp);
-    const fs::path png = temp / "l1_1.png";
+    TempDir temp;
+    const fs::path png = temp.path / "l1_1.png";
 
     const int code = run_glview(glview_arguments(game_dir, png));
     CAPTURE(code);
@@ -89,36 +127,31 @@ TEST_CASE("glview renders the l1_1 background into a 1280x720 PNG") {
     int width = 0;
     int height = 0;
     int channels = 0;
-    unsigned char* pixels = stbi_load(png.string().c_str(), &width, &height, &channels, 4);
+    const StbiImage pixels = load_png(png, width, height, channels);
     REQUIRE(pixels != nullptr);
     CHECK(width == 1280);
     CHECK(height == 720);
 
     std::set<std::uint32_t> colors;
     for (int i = 0; i < width * height; ++i) {
-        const unsigned char* pixel = pixels + static_cast<std::size_t>(i) * 4;
+        const unsigned char* pixel = pixels.get() + static_cast<std::size_t>(i) * 4;
         colors.insert((static_cast<std::uint32_t>(pixel[0]) << 24) |
                       (static_cast<std::uint32_t>(pixel[1]) << 16) |
                       (static_cast<std::uint32_t>(pixel[2]) << 8) |
                       static_cast<std::uint32_t>(pixel[3]));
     }
-    stbi_image_free(pixels);
 
     CAPTURE(colors.size());
     CHECK(colors.size() >= 2);
-
-    fs::remove_all(temp);
 }
 
 TEST_CASE("glview draws statics and animations over the background") {
     const char* game_dir = std::getenv("GL_GAME_DIR");
     REQUIRE(game_dir != nullptr);
 
-    const fs::path temp = unique_temp_dir();
-    fs::remove_all(temp);
-    fs::create_directories(temp);
-    const fs::path normal_png = temp / "normal.png";
-    const fs::path background_png = temp / "background.png";
+    TempDir temp;
+    const fs::path normal_png = temp.path / "normal.png";
+    const fs::path background_png = temp.path / "background.png";
 
     const int normal_code =
         run_glview(glview_arguments(game_dir, normal_png, {"--frames", "5"}));
@@ -134,16 +167,15 @@ TEST_CASE("glview draws statics and animations over the background") {
     int normal_width = 0;
     int normal_height = 0;
     int normal_channels = 0;
-    unsigned char* normal_pixels =
-        stbi_load(normal_png.string().c_str(), &normal_width, &normal_height, &normal_channels, 4);
+    const StbiImage normal_pixels =
+        load_png(normal_png, normal_width, normal_height, normal_channels);
     REQUIRE(normal_pixels != nullptr);
 
     int background_width = 0;
     int background_height = 0;
     int background_channels = 0;
-    unsigned char* background_pixels = stbi_load(background_png.string().c_str(),
-                                                 &background_width, &background_height,
-                                                 &background_channels, 4);
+    const StbiImage background_pixels =
+        load_png(background_png, background_width, background_height, background_channels);
     REQUIRE(background_pixels != nullptr);
 
     CHECK(normal_width == 1280);
@@ -156,28 +188,41 @@ TEST_CASE("glview draws statics and animations over the background") {
         const std::size_t pixel_count =
             static_cast<std::size_t>(normal_width) * static_cast<std::size_t>(normal_height);
         for (std::size_t i = 0; i < pixel_count; ++i) {
-            const unsigned char* a = normal_pixels + i * 4;
-            const unsigned char* b = background_pixels + i * 4;
+            const unsigned char* a = normal_pixels.get() + i * 4;
+            const unsigned char* b = background_pixels.get() + i * 4;
             if (a[0] != b[0] || a[1] != b[1] || a[2] != b[2] || a[3] != b[3]) {
                 ++differing_pixels;
             }
         }
     }
-    stbi_image_free(normal_pixels);
-    stbi_image_free(background_pixels);
 
     CAPTURE(differing_pixels);
     CHECK(differing_pixels > 1000);
+}
 
-    fs::remove_all(temp);
+TEST_CASE("Texture::from_image enables alpha blending") {
+    use_dummy_video();
+    gl::platform::SdlContext context;
+    gl::platform::Window window("blend mode test", 64, 64);
+
+    gl::assets::Image image;
+    image.width = 2;
+    image.height = 1;
+    image.rgba = {{255, 0, 0, 255}, {0, 255, 0, 0}};
+
+    auto texture = gl::render::Texture::from_image(window.renderer(), image);
+    REQUIRE(texture.has_value());
+
+    SDL_BlendMode mode = SDL_BLENDMODE_NONE;
+    REQUIRE(SDL_GetTextureBlendMode(texture->get(), &mode) == 0);
+    CHECK(mode == SDL_BLENDMODE_BLEND);
 }
 
 TEST_CASE("glview exits 3 when required level data is missing") {
-    const fs::path temp = unique_temp_dir();
-    fs::remove_all(temp);
-    const fs::path game_dir = temp / "game";
+    TempDir temp;
+    const fs::path game_dir = temp.path / "game";
     fs::create_directories(game_dir);
-    const fs::path png = temp / "missing.png";
+    const fs::path png = temp.path / "missing.png";
 
     const std::vector<std::string> arguments = {
         "--game-dir", game_dir.string(), "--level", "l1_1", "--screenshot", png.string(),
@@ -186,6 +231,4 @@ TEST_CASE("glview exits 3 when required level data is missing") {
     CAPTURE(code);
     CHECK(code == 3);
     CHECK_FALSE(fs::exists(png));
-
-    fs::remove_all(temp);
 }

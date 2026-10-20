@@ -9,11 +9,13 @@
 
 namespace gl::game {
 struct LevelStatic {
+    std::uint32_t number = 0;
     std::int32_t x = 0, y = 0;
     gl::assets::Image image;
 };
 
 struct LevelAnimation {
+    std::uint32_t number = 0;
     std::int32_t x = 0, y = 0;
     std::uint32_t delay_ms = 0;
     std::vector<gl::assets::Image> frames;

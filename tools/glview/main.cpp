@@ -201,17 +201,20 @@ void draw_frame(SDL_Renderer* renderer, const gl::render::Texture& background,
 
     for (const auto& sprite : graphics.statics) {
         gl::render::draw_texture(renderer, sprite.texture, camera,
-                                 static_cast<float>(sprite.x), static_cast<float>(sprite.y));
+                                 static_cast<float>(sprite.x), static_cast<float>(sprite.y),
+                                 width, height);
     }
 
     for (const auto& animation : graphics.animations) {
         if (animation.frames.empty()) continue;
-        const std::uint64_t delay = animation.delay_ms == 0 ? 1 : animation.delay_ms;
-        const std::size_t index =
-            static_cast<std::size_t>((elapsed_ms / delay) % animation.frames.size());
+        std::size_t index = 0;
+        if (animation.delay_ms > 0) {
+            index = static_cast<std::size_t>((elapsed_ms / animation.delay_ms) %
+                                             animation.frames.size());
+        }
         gl::render::draw_texture(renderer, animation.frames[index], camera,
                                  static_cast<float>(animation.x),
-                                 static_cast<float>(animation.y));
+                                 static_cast<float>(animation.y), width, height);
     }
 }
 
@@ -331,7 +334,10 @@ int main(int argc, char** argv) {
             auto created = gl::render::Texture::from_image(window.renderer(), object.image);
             if (!created) {
                 gl::log(gl::LogLevel::warning,
-                        "skipping static texture: " + created.error().message);
+                        "level '" + level->name + "': skipping static " +
+                            std::to_string(object.number) + " at (" +
+                            std::to_string(object.x) + ", " + std::to_string(object.y) +
+                            "): " + created.error().message);
                 continue;
             }
             graphics.statics.push_back(
@@ -347,7 +353,10 @@ int main(int argc, char** argv) {
                 auto created = gl::render::Texture::from_image(window.renderer(), image);
                 if (!created) {
                     gl::log(gl::LogLevel::warning,
-                            "skipping animation texture: " + created.error().message);
+                            "level '" + level->name + "': skipping animation " +
+                                std::to_string(object.number) + " at (" +
+                                std::to_string(object.x) + ", " + std::to_string(object.y) +
+                                "): " + created.error().message);
                     complete = false;
                     break;
                 }

@@ -132,6 +132,7 @@ Result<Level> load_level(GameVfs &vfs, std::string_view level_name) {
                 continue;
             }
             LevelStatic object;
+            object.number = description.number;
             object.x = description.x;
             object.y = description.y;
             object.image = to_image(csx.value());
@@ -195,6 +196,7 @@ Result<Level> load_level(GameVfs &vfs, std::string_view level_name) {
                 }
 
                 LevelAnimation animation;
+                animation.number = descriptions[i].number;
                 animation.x = descriptions[i].x;
                 animation.y = descriptions[i].y;
                 animation.delay_ms = lao[i].delay;

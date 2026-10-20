@@ -18,6 +18,6 @@ void draw_background(SDL_Renderer* renderer, const Texture& texture, const Camer
                      int screen_w, int screen_h);
 
 void draw_texture(SDL_Renderer* renderer, const Texture& texture, const Camera& camera,
-                  float world_x, float world_y);
+                  float world_x, float world_y, int screen_w, int screen_h);
 
 }

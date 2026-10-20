@@ -48,9 +48,10 @@ void draw_background(SDL_Renderer* renderer, const Texture& texture, const Camer
 }
 
 void draw_texture(SDL_Renderer* renderer, const Texture& texture, const Camera& camera,
-                  float world_x, float world_y) {
+                  float world_x, float world_y, int screen_w, int screen_h) {
     if (renderer == nullptr || texture.get() == nullptr) return;
     if (texture.width() <= 0 || texture.height() <= 0) return;
+    if (screen_w <= 0 || screen_h <= 0) return;
     if (!(camera.zoom > 0.0f) || !std::isfinite(camera.zoom)) return;
     if (!std::isfinite(camera.x) || !std::isfinite(camera.y)) return;
     if (!std::isfinite(world_x) || !std::isfinite(world_y)) return;
@@ -59,16 +60,11 @@ void draw_texture(SDL_Renderer* renderer, const Texture& texture, const Camera& 
         to_screen(camera, world_x, world_y, static_cast<float>(texture.width()),
                   static_cast<float>(texture.height()));
 
-    int screen_w = 0;
-    int screen_h = 0;
-    if (SDL_GetRendererOutputSize(renderer, &screen_w, &screen_h) == 0 && screen_w > 0 &&
-        screen_h > 0) {
-        const float screen_width = static_cast<float>(screen_w);
-        const float screen_height = static_cast<float>(screen_h);
-        if (destination.x + destination.w <= 0.0f || destination.y + destination.h <= 0.0f ||
-            destination.x >= screen_width || destination.y >= screen_height) {
-            return;
-        }
+    const float screen_width = static_cast<float>(screen_w);
+    const float screen_height = static_cast<float>(screen_h);
+    if (destination.x + destination.w <= 0.0f || destination.y + destination.h <= 0.0f ||
+        destination.x >= screen_width || destination.y >= screen_height) {
+        return;
     }
 
     SDL_RenderCopyF(renderer, texture.get(), nullptr, &destination);
