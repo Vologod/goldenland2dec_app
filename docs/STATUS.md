@@ -6,9 +6,9 @@
 
 P0 завершена и принята. P1 — Level viewer: реализация и автоматизированная приёмка
 завершены (2026-10-20); открыт финальный manual desktop pass (см. Open Questions).
-P2a — оболочка игры и консоль: реализация и автоматизированная приёмка завершены
-(2026-10-20); открыт manual desktop gate (см. Open Questions). P2a не принята до его
-прохождения.
+P2a — оболочка игры и консоль: реализация, автоматизированная приёмка и manual desktop
+gate завершены (2026-10-20); P2a принята. Следующие подпроекты — P2b (Server/Client
+tick) и P2c (save/load каркас).
 
 ## Текущая задача
 
@@ -18,9 +18,9 @@ P2a — оболочка игры и консоль: реализация и а�
 glview 25.30 s, glgame 12.16 s). `glgame --menu --screenshot` и `--level l1_1
 --screenshot` — exit 0, оба PNG 1280×720 (menu.png 38 273 B, 15 цветов;
 level.png 2 715 273 B, 115 244 цвета; SHA-256 в task-7-report). Manual desktop gate
-**OPEN**: New Game → `l1_1`, `~`, `help`, `gv_pause`, `exit` на обычном рабочем столе
-с реальным вводом не пройден (headless-сессия). Следующая задача — P2b
-(Server/Client tick). P1 manual desktop pass также остаётся открытым.
+**пройден 2026-10-20** (подтверждено пользователем): New Game → `l1_1`, `~`, `help`,
+`gv_pause`, `exit` на обычном рабочем столе с реальным вводом. P2a принята. Следующая
+задача — P2b (Server/Client tick). P1 manual desktop pass остаётся открытым.
 
 **P2a — Task 6 (`glgame` shell) завершён 2026-10-20.** Добавлен `tools/glgame`
 (меню, уровень через `LevelScreen`, консоль `~`, команды, конфиг/`cl_username`
@@ -242,6 +242,10 @@ P0 закрыт 2026-10-19; далее выполнялись задачи P1 (�
   screenshots 1280×720 (exit 0), research note `docs/research/p2a-game-shell.md`.
 - 2026-10-20: P2a manual desktop gate пройден пользователем (меню, New Game → `l1_1`,
   `~`, `help`, `gv_pause`, `exit`); P2a принята.
+- 2026-10-20: P2a final fix round — `r_resolution` идёт через `ServerCore`
+  (`config_changed`), атомарная запись Config, `//` внутри значения не комментарий,
+  отказ от `\r`/`\n` в `set`, New Game всегда `l1_1`, D-020 (отсутствующий INI =
+  defaults + warning); `gv_free_camera`/`gv_skip_logo` помечены как P2a-заглушки.
 
 ## Следующие задачи
 

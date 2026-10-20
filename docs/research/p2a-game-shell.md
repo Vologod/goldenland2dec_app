@@ -14,8 +14,12 @@
 - `glgame` по умолчанию читает `<game-dir>/GoldenLand.ini` (или `--config`).
   Неизвестные строки, комментарии, `bind`, порядок и EOL сохраняются; запись идёт
   построчно в cp1251. `cl_username`, `r_windowed`, `r_resolution`, `d_console`,
-  `gv_pause` читаются/пишутся оболочкой; `gv_free_camera` — только runtime-состояние
-  (в INI не сохраняется).
+  `gv_pause` читаются/пишутся оболочкой. Отсутствующий INI — defaults + warning,
+  `save` создаёт файл (D-020). Запись идёт через temp-файл с последующим rename.
+- `//` считается комментарием только в начале строки или после пробела/таба; внутри
+  значения (например, `http://`) сохраняется. `set` игнорирует значения с `\r`/`\n`.
+- `gv_free_camera` — P2a-заглушка: меняет runtime-флаг и не влияет на камеру;
+  в INI не сохраняется. `gv_skip_logo` — no-op (логотип в P2a не показывается).
 
 ## Заголовок `.sav`
 
@@ -32,10 +36,12 @@
 - Реализованный набор (9 команд): `help`, `exit`, `d_console [0|1]`,
   `gv_pause [0|1]`, `gv_free_camera [0|1]`, `r_resolution <width> <height>`,
   `r_windowed <0|1>`, `cl_username <name>`, `game_save <slot>` (заглушка).
-- `gv_pause`, `gv_free_camera`, `r_windowed`, `cl_username` идут через
+- `gv_pause`, `gv_free_camera`, `r_windowed`, `r_resolution`, `cl_username` идут через
   `ServerCore::submit`/`tick`; оболочка применяет события `config_changed`/
-  `paused_changed` к `Config` и окну. `gv_free_camera` меняет только runtime-состояние
-  и не персистится. Неизвестная команда/лишние аргументы — лог, не фатальны.
+  `paused_changed` к `Config` и окну. `r_resolution` приходит как
+  `config_changed` с `value = "<w> <h>"`; resize и запись в INI делает оболочка.
+  `gv_free_camera` меняет только runtime-состояние и не персистится. Неизвестная
+  команда/лишние аргументы — лог, не фатальны.
 - `d_console` из INI применяется при старте; `gv_pause`/`r_windowed`/`cl_username`
   персистятся без потери `bind`/комментариев.
 

@@ -207,7 +207,8 @@ Event payload convention (Task 6 relies on this):
 - [x] `cmake --build build` and full `ctest` with `GL_GAME_DIR`: 8/8 passed.
 - [x] `--screenshot` menu + level 1280×720 with exit 0 (non-uniform PNGs).
 - [x] Update STATUS/PROJECT/research; record P2a automated acceptance; next P2b.
-  DECISIONS unchanged (no architectural deviation).
+  DECISIONS updated: D-019 (`Result<void>`) and D-020 (missing config = defaults +
+  warning, `save` creates it).
 - [x] Commit.
 - [x] Manual desktop acceptance: `glgame --game-dir I:\Games\Златогорье-2`, menu,
   New Game `l1_1`, `~`, `help`, `gv_pause`, `exit`. Подтверждено пользователем 2026-10-20.
