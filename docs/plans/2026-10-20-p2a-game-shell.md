@@ -1,0 +1,195 @@
+# P2a — Game Shell and Console Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: superpowers:subagent-driven-development or executing-plans. Steps use `- [ ]`.
+
+**Goal:** Add `glgame` — a game shell over the existing level viewer: read/write `GoldenLand.ini`, show a menu, load a level, open the `~` console, execute engine commands, and keep a `ServerCore`/`ClientCore` command/event boundary.
+
+**Architecture:** New SDL-free `gl_core` (Config, commands, console buffer, state machine, server/client skeleton). `gl_render` gains ASCII text. A new SDL `gl_app` extracts the level screen from `glview` so `glgame` and `glview` share it. `glgame` wires menu/console/states.
+
+**Tech Stack:** C++20, SDL2 2.32.10, stb (image, easy_font), doctest, miniz.
+
+## Global Constraints
+
+- C++20; `-Wall -Wextra -Werror`.
+- `gl_assets`/`gl_game`/`gl_core` SDL-free; SDL only in `platform`/`render`/`app`/tools.
+- Config is cp1251 on disk; API strings UTF-8; preserve comments/unknown lines/binds.
+- No game assets committed; game dir via `--game-dir`/`GL_GAME_DIR`.
+- P2a text UI is ASCII; Russian UI is P7.
+- Every task ends with a commit.
+
+## File Structure
+
+```
+third_party/stb/stb_easy_font.h              (add, pinned)
+src/core/include/gl/core/{config,command,console,state,server}.hpp
+src/core/src/{config,command,console,state,server}.cpp
+src/render/include/gl/render/text.hpp
+src/render/src/text.cpp
+src/app/include/gl/app/level_screen.hpp
+src/app/src/level_screen.cpp
+src/app/CMakeLists.txt
+tools/glgame/main.cpp, CMakeLists.txt
+tests/core/{CMakeLists.txt,test_main.cpp,test_config.cpp,test_command.cpp,test_console.cpp,test_state.cpp,test_server.cpp}
+tests/app/{CMakeLists.txt,test_glgame_screenshot.cpp}
+```
+
+---
+
+### Task 1: `gl_core` + Config
+
+**Files:** `src/core/**`, `tests/core/**`, root CMake.
+
+**Interfaces:**
+```cpp
+namespace gl::core {
+class Config {
+public:
+    static Result<Config> load(const std::filesystem::path& path);
+    Result<void> save(const std::filesystem::path& path) const;
+    std::optional<std::string> get(std::string_view key) const;
+    std::optional<int> get_int(std::string_view key) const;
+    std::optional<double> get_float(std::string_view key) const;
+    bool get_bool(std::string_view key, bool fallback) const;
+    void set(std::string_view key, std::string_view value);
+    void set_int(std::string_view key, int value);
+    const std::vector<std::string>& raw_lines() const;
+};
+}
+```
+Line model: keep `raw` (cp1251 bytes), parse `key`, `value`, `kind` (key/bind/comment/blank). `set` replaces the value in the raw line (preserving the key, whitespace prefix, comment suffix) or appends `key value`. Binds preserved as raw. Add `utf8_to_cp1251` to `gl_assets` (reverse table, `?` for unmappable). `load`/`save` use raw bytes; `get` returns UTF-8.
+Tests: comments, binds, user name with Cyrillic, int/float/bool, round-trip byte-identical for untouched files, set preserves comments/order, missing file → empty config error on load / save creates.
+
+- [ ] TDD, implement, test, commit.
+
+---
+
+### Task 2: Command registry and console
+
+**Files:** `src/core/{command,console}.*`, `tests/core/{test_command,test_console}.cpp`.
+
+**Interfaces:**
+```cpp
+using Args = std::span<const std::string_view>;
+using Handler = std::function<Result<std::string>(Args)>;
+struct CommandInfo { std::string name, help; Handler handler; };
+class CommandRegistry {
+public:
+    void add(std::string name, std::string help, Handler);
+    Result<std::string> execute(std::string_view line) const;
+    std::string help() const;
+    std::optional<std::string> complete(std::string_view prefix) const;
+    const std::vector<CommandInfo>& commands() const;
+};
+std::vector<std::string> split_command_line(std::string_view line); // quotes, escapes
+class ConsoleBuffer {
+public:
+    void push(std::string line);
+    const std::deque<std::string>& lines() const;
+    std::string history_prev(); std::string history_next();
+    void add_history(std::string line);
+};
+```
+Tests: quoted args, empty line, unknown command, help, completion, history navigation.
+
+- [ ] TDD, implement, commit.
+
+---
+
+### Task 3: ASCII text renderer
+
+**Files:** add `third_party/stb/stb_easy_font.h` (pinned stb commit), `src/render/{include/gl/render/text.hpp,src/text.cpp}`, `tests/render/test_text.cpp`.
+
+**Interfaces:**
+```cpp
+namespace gl::render {
+struct Color { std::uint8_t r,g,b,a; };
+void draw_text(SDL_Renderer*, std::string_view ascii, float x, float y, float scale, Color);
+float text_width(std::string_view ascii, float scale);
+float text_height(float scale);
+}
+```
+Use `stb_easy_font_print` to produce quads, convert to `SDL_Vertex` and draw with `SDL_RenderGeometry` (triangles). Non-ASCII bytes render as `?`.
+Tests: text_width > 0; a dummy/software renderer produces non-empty pixels for a string; empty string is a no-op.
+
+- [ ] TDD, implement, commit.
+
+---
+
+### Task 4: Extract `LevelScreen`
+
+**Files:** `src/app/**` (new `gl_app`), refactor `tools/glview/main.cpp`, `tests/render` unchanged.
+
+**Interfaces:**
+```cpp
+namespace gl::app {
+struct LevelScreenOptions { bool background_only=false; bool debug_overlay=false; std::uint64_t frames=0; };
+class LevelScreen {
+public:
+    static Result<LevelScreen> load(SDL_Renderer*, gl::assets::GameVfs&, std::string_view level);
+    void render(SDL_Renderer*, const LevelScreenOptions&, std::uint64_t elapsed_ms);
+    // camera/input methods used by glview/glgame
+    void pan(float dx, float dy); void zoom_at(float factor, float sx, float sy, int w, int h);
+    void reset_camera();
+};
+}
+```
+Move loading/texture upload/draw/camera from `glview` into `LevelScreen`; `glview` keeps its CLI and input, calls the screen. No behavior change; screenshot test still passes.
+
+- [ ] TDD/refactor, verify existing tests, commit.
+
+---
+
+### Task 5: State machine + ServerCore/ClientCore skeleton
+
+**Files:** `src/core/{state,server}.*`, `tests/core/{test_state,test_server}.cpp`.
+
+**Interfaces:**
+```cpp
+enum class AppState { boot, menu, level, exit };
+class StateMachine { bool transition(AppState); AppState state() const; };
+
+enum class EventType { paused_changed, config_changed, log };
+struct Event { EventType type; bool flag=false; std::string text; };
+class ServerCore {
+public:
+    void submit(Command);
+    void tick(double dt);
+    bool paused() const;
+    std::vector<Event> drain_events();
+};
+class ClientCore { public: void on_event(const Event&); const std::vector<Event>& events() const; };
+```
+Tests: allowed/forbidden transitions; submit `gv_pause` toggles pause only on tick; events drained once; config_changed event.
+
+- [ ] TDD, implement, commit.
+
+---
+
+### Task 6: `glgame` shell (menu, console, commands, config)
+
+**Files:** `tools/glgame/main.cpp`, `tools/glgame/CMakeLists.txt`, tests `tests/app/**`.
+
+- Args: `--game-dir` (required unless screenshot/menu), `--config`, `--level`, `--width/--height`, `--menu`, `--screenshot`, `--exec` (repeatable).
+- Load config from `<game-dir>/GoldenLand.ini` (or `--config`); apply `r_windowed`, `r_resolution`, `cl_username`.
+- States: Menu (title + New Game/Continue(disabled)/Exit, arrows/Enter/mouse), Level (LevelScreen), Console overlay (`~`, text input, history, completion).
+- Commands: `help`, `exit`, `d_console`, `gv_pause`, `gv_free_camera`, `r_resolution <w> <h>`, `r_windowed <0/1>`, `cl_username <name>`, `game_save <slot>` (stub).
+- Config persistence: `r_windowed`/`r_resolution`/`cl_username` update Config; save on exit and after setters.
+- `--exec` runs commands at boot; `--screenshot` renders menu (with `--menu`) or level.
+- Tests: screenshot menu + level 1280×720 ≥2 colors; `--exec help`/unknown don't crash; config round-trip after `--exec "cl_username Test"` (inspect INI).
+- Acceptance: manual menu/console run.
+
+- [ ] Implement, tests, commit.
+
+---
+
+### Task 7: Acceptance + docs
+
+- Run `glgame --game-dir I:\Games\Златогорье-2` (menu, New Game l1_1, `~`, `help`, `gv_pause`, `exit`).
+- `--screenshot` menu + level; full `ctest`.
+- Update STATUS/PROJECT/DECISIONS/research; record P2a accepted; next P2b.
+- Commit.
+
+## Self-Review
+
+- Spec coverage: config, console/commands, states, menu, level, Server/Client skeleton, tests.
+- Deferred: full `.sav`, full command set, Russian UI, Android.
