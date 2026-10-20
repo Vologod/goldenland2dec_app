@@ -111,7 +111,7 @@ float text_height(float scale);
 Use `stb_easy_font_print` to produce quads, convert to `SDL_Vertex` and draw with `SDL_RenderGeometry` (triangles). Non-ASCII bytes render as `?`.
 Tests: text_width > 0; a dummy/software renderer produces non-empty pixels for a string; empty string is a no-op.
 
-- [ ] TDD, implement, commit.
+- [x] TDD, implement, commit.
 
 ---
 
@@ -196,18 +196,22 @@ Event payload convention (Task 6 relies on this):
 - Config persistence: `r_windowed`/`r_resolution`/`cl_username` update Config; save on exit and after setters.
 - `--exec` runs commands at boot; `--screenshot` renders menu (with `--menu`) or level.
 - Tests: screenshot menu + level 1280×720 ≥2 colors; `--exec help`/unknown don't crash; config round-trip after `--exec "cl_username Test"` (inspect INI).
-- Acceptance: manual menu/console run.
-
 - [x] Implement, tests, commit.
+- [ ] Manual acceptance: run menu/console on a normal desktop (New Game `l1_1`, `~`,
+  `help`, `gv_pause`, `exit`). **OPEN** — see `docs/STATUS.md`.
 
 ---
 
 ### Task 7: Acceptance + docs
 
-- Run `glgame --game-dir I:\Games\Златогорье-2` (menu, New Game l1_1, `~`, `help`, `gv_pause`, `exit`).
-- `--screenshot` menu + level; full `ctest`.
-- Update STATUS/PROJECT/DECISIONS/research; record P2a accepted; next P2b.
-- Commit.
+- [x] `cmake --build build` and full `ctest` with `GL_GAME_DIR`: 8/8 passed.
+- [x] `--screenshot` menu + level 1280×720 with exit 0 (non-uniform PNGs).
+- [x] Update STATUS/PROJECT/research; record P2a automated acceptance; next P2b.
+  DECISIONS unchanged (no architectural deviation).
+- [x] Commit.
+- [ ] Manual desktop acceptance: `glgame --game-dir I:\Games\Златогорье-2`, menu,
+  New Game `l1_1`, `~`, `help`, `gv_pause`, `exit`. **OPEN** — headless session;
+  do not claim verified until run on a normal desktop.
 
 ## Self-Review
 

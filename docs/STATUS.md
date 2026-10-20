@@ -6,9 +6,21 @@
 
 P0 завершена и принята. P1 — Level viewer: реализация и автоматизированная приёмка
 завершены (2026-10-20); открыт финальный manual desktop pass (см. Open Questions).
-Текущая фаза — **P2a: оболочка игры и консоль** (spec и план готовы).
+P2a — оболочка игры и консоль: реализация и автоматизированная приёмка завершены
+(2026-10-20); открыт manual desktop gate (см. Open Questions). P2a не принята до его
+прохождения.
 
 ## Текущая задача
+
+**P2a — Task 7 (automated acceptance + docs) завершён 2026-10-20.**
+`cmake --build build` — `ninja: no work to do`; полный `ctest --test-dir build
+--output-on-failure` с `GL_GAME_DIR` — **8/8 passed**, 550.76 s (real-data 512.93 s,
+glview 25.30 s, glgame 12.16 s). `glgame --menu --screenshot` и `--level l1_1
+--screenshot` — exit 0, оба PNG 1280×720 (menu.png 38 273 B, 15 цветов;
+level.png 2 715 273 B, 115 244 цвета; SHA-256 в task-7-report). Manual desktop gate
+**OPEN**: New Game → `l1_1`, `~`, `help`, `gv_pause`, `exit` на обычном рабочем столе
+с реальным вводом не пройден (headless-сессия). Следующая задача — P2b
+(Server/Client tick). P1 manual desktop pass также остаётся открытым.
 
 **P2a — Task 6 (`glgame` shell) завершён 2026-10-20.** Добавлен `tools/glgame`
 (меню, уровень через `LevelScreen`, консоль `~`, команды, конфиг/`cl_username`
@@ -226,12 +238,15 @@ P0 закрыт 2026-10-19; далее выполнялись задачи P1 (�
   `r_resolution`, `gv_pause` персистится, `d_console` применяется при старте,
   server-события идут через `ClientCore`, пустые строки не попадают в консоль/историю,
   результаты команд логируются; тесты на persistence и пустую историю; `ctest` 8/8.
+- 2026-10-20: P2a Task 7 — automated acceptance: `ctest` 8/8 (550.76 s), menu/level
+  screenshots 1280×720 (exit 0), research note `docs/research/p2a-game-shell.md`;
+  manual desktop gate оставлен открытым.
 
 ## Следующие задачи
 
-1. P2a: оболочка игры и консоль — `docs/specs/2026-10-20-p2a-game-shell-design.md`,
-   `docs/plans/2026-10-20-p2a-game-shell.md` (Tasks 1–6 завершены; дальше Task 7 —
-   acceptance + docs).
+1. **P2a manual desktop gate:** `glgame --game-dir I:\Games\Златогорье-2`, New Game →
+   `l1_1`, `~`, `help`, `gv_pause`, `exit` с реальной клавиатурой/мышью. Без него P2a
+   не принята.
 2. P2b: ServerCore/ClientCore + детерминированный тик (после P2a).
 3. P1b: Android/touch — отложенный follow-up P1.
 
@@ -240,10 +255,12 @@ P0 закрыт 2026-10-19; далее выполнялись задачи P1 (�
 - P1: финальный manual desktop pass — WASD/стрелки, `Home` и визуальный `F1` toggle
   на обычном рабочем столе. В текущей headless-сессии клавиатурный фокус недоступен;
   drag-панорама и wheel-зум проверены инъекцией мыши, overlay — screenshot-тестом.
-- **P2a Task 6 acceptance gate (Task 7):** manual desktop pass — New Game → `l1_1`,
-  `~`, `help`, `gv_pause`, `exit` на обычном рабочем столе. В headless-сессии
-  клавиатурный/мышиный ввод end-to-end не проверен; screenshot-тесты, `--exec` и
-  живость окна не заменяют этот прогон. Без него P2a не принимать.
+- **P2a manual desktop gate (Task 7, OPEN):** run
+  `glgame --game-dir I:\Games\Златогорье-2`, then New Game → `l1_1`, `~`, `help`,
+  `gv_pause`, `exit` on a normal desktop with real keyboard/mouse. Automated
+  acceptance passed (`ctest` 8/8, screenshots), but headless screenshot tests,
+  `--exec` and a live window do not replace this end-to-end run. **P2a is not
+  accepted until this gate passes.**
 - SDL2 `release-2.32.10` выдаёт CMake deprecation warning из-за своего
   `cmake_minimum_required`; следить при обновлении CMake/SDL.
 - `.clang-format` (LLVM base) не совпадает со стилем исходников P0; repo-wide
