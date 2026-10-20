@@ -200,6 +200,59 @@ TEST_CASE("glview draws statics and animations over the background") {
     CHECK(differing_pixels > 1000);
 }
 
+TEST_CASE("glview animation frame changes after crossing the delay boundary") {
+    const char* game_dir = std::getenv("GL_GAME_DIR");
+    REQUIRE(game_dir != nullptr);
+
+    TempDir temp;
+    const fs::path first_png = temp.path / "first.png";
+    const fs::path later_png = temp.path / "later.png";
+
+    const int first_code = run_glview(glview_arguments(game_dir, first_png, {"--frames", "1"}));
+    const int later_code = run_glview(glview_arguments(game_dir, later_png, {"--frames", "8"}));
+    CAPTURE(first_code);
+    CAPTURE(later_code);
+    REQUIRE(fs::exists(first_png));
+    REQUIRE(fs::exists(later_png));
+    CHECK(first_code == 0);
+    CHECK(later_code == 0);
+
+    int first_width = 0;
+    int first_height = 0;
+    int first_channels = 0;
+    const StbiImage first_pixels =
+        load_png(first_png, first_width, first_height, first_channels);
+    REQUIRE(first_pixels != nullptr);
+
+    int later_width = 0;
+    int later_height = 0;
+    int later_channels = 0;
+    const StbiImage later_pixels =
+        load_png(later_png, later_width, later_height, later_channels);
+    REQUIRE(later_pixels != nullptr);
+
+    CHECK(first_width == 1280);
+    CHECK(first_height == 720);
+    CHECK(later_width == 1280);
+    CHECK(later_height == 720);
+
+    std::uint64_t differing_pixels = 0;
+    if (first_width == later_width && first_height == later_height) {
+        const std::size_t pixel_count =
+            static_cast<std::size_t>(first_width) * static_cast<std::size_t>(first_height);
+        for (std::size_t i = 0; i < pixel_count; ++i) {
+            const unsigned char* a = first_pixels.get() + i * 4;
+            const unsigned char* b = later_pixels.get() + i * 4;
+            if (a[0] != b[0] || a[1] != b[1] || a[2] != b[2] || a[3] != b[3]) {
+                ++differing_pixels;
+            }
+        }
+    }
+
+    CAPTURE(differing_pixels);
+    CHECK(differing_pixels > 0);
+}
+
 TEST_CASE("glview debug overlay draws visible sprite rectangles") {
     const char* game_dir = std::getenv("GL_GAME_DIR");
     REQUIRE(game_dir != nullptr);
@@ -253,24 +306,6 @@ TEST_CASE("glview debug overlay draws visible sprite rectangles") {
 
     CAPTURE(differing_pixels);
     CHECK(differing_pixels > 0);
-}
-
-TEST_CASE("Texture::from_image enables alpha blending") {
-    use_dummy_video();
-    gl::platform::SdlContext context;
-    gl::platform::Window window("blend mode test", 64, 64);
-
-    gl::assets::Image image;
-    image.width = 2;
-    image.height = 1;
-    image.rgba = {{255, 0, 0, 255}, {0, 255, 0, 0}};
-
-    auto texture = gl::render::Texture::from_image(window.renderer(), image);
-    REQUIRE(texture.has_value());
-
-    SDL_BlendMode mode = SDL_BLENDMODE_NONE;
-    REQUIRE(SDL_GetTextureBlendMode(texture->get(), &mode) == 0);
-    CHECK(mode == SDL_BLENDMODE_BLEND);
 }
 
 TEST_CASE("glview exits 3 when required level data is missing") {

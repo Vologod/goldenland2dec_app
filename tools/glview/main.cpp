@@ -2,6 +2,7 @@
 #include <gl/assets/vfs.hpp>
 #include <gl/game/level.hpp>
 #include <gl/platform/sdl_context.hpp>
+#include <gl/render/animation.hpp>
 #include <gl/render/camera.hpp>
 #include <gl/render/texture.hpp>
 
@@ -202,12 +203,6 @@ constexpr float kMinZoom = 0.25f;
 constexpr float kMaxZoom = 4.0f;
 constexpr float kZoomStep = 1.1f;
 
-std::size_t animation_frame_index(const Animation& animation, std::uint64_t elapsed_ms) {
-    if (animation.frames.empty() || animation.delay_ms == 0) return 0;
-    return static_cast<std::size_t>((elapsed_ms / animation.delay_ms) %
-                                    animation.frames.size());
-}
-
 bool rect_visible(const SDL_FRect& rect, int width, int height) {
     return rect.x + rect.w > 0.0f && rect.y + rect.h > 0.0f &&
            rect.x < static_cast<float>(width) && rect.y < static_cast<float>(height);
@@ -230,7 +225,8 @@ void draw_debug_overlay(SDL_Renderer* renderer, const LevelGraphics& graphics,
     for (const auto& animation : graphics.animations) {
         if (animation.frames.empty()) continue;
         const gl::render::Texture& frame =
-            animation.frames[animation_frame_index(animation, elapsed_ms)];
+            animation.frames[gl::render::animation_frame_index(elapsed_ms, animation.delay_ms,
+                                                               animation.frames.size())];
         const SDL_FRect rect =
             gl::render::to_screen(camera, static_cast<float>(animation.x),
                                   static_cast<float>(animation.y),
@@ -257,7 +253,8 @@ void draw_frame(SDL_Renderer* renderer, const gl::render::Texture& background,
 
     for (const auto& animation : graphics.animations) {
         if (animation.frames.empty()) continue;
-        const std::size_t index = animation_frame_index(animation, elapsed_ms);
+        const std::size_t index = gl::render::animation_frame_index(
+            elapsed_ms, animation.delay_ms, animation.frames.size());
         gl::render::draw_texture(renderer, animation.frames[index], camera,
                                  static_cast<float>(animation.x),
                                  static_cast<float>(animation.y), width, height);
