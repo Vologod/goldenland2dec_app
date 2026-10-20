@@ -91,7 +91,7 @@ public:
 ```
 Tests: quoted args, empty line, unknown command, help, completion, history navigation.
 
-- [ ] TDD, implement, commit.
+- [x] TDD, implement, commit.
 
 ---
 

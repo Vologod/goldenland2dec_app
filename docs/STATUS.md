@@ -10,12 +10,15 @@ P0 завершена и принята. P1 — Level viewer: реализаци
 
 ## Текущая задача
 
-**P2a — Task 1 (`gl_core` + Config) завершён 2026-10-20.** Добавлены
-`gl::assets::utf8_to_cp1251` (обратная таблица, `?` для непредставимых code points) и
-SDL-free `gl_core` с `gl::core::Config`: чтение/запись cp1251 INI с сохранением
-неизвестных строк, комментариев, `bind`, порядка и смешанных CRLF/LF; `get`/`set`
-строк/int/float/bool, inline-комментарии. Тесты `gl_core_tests` (Config) и обратное
-преобразование cp1251 в `gl_assets_tests` зелёные. Следующее — P2a Tasks 2+.
+**P2a — Task 2 (реестр команд и консоль) завершён 2026-10-20.** В SDL-free `gl_core`
+добавлены `CommandRegistry` (регистрация, execute, `help` с сортировкой, автодополнение
+по префиксу), `split_command_line` (пробелы, кавычки, экранирование `\"`/`\\`) и
+`ConsoleBuffer` (вывод до 256 строк, история до 64 с навигацией и сбросом). Тесты
+`test_command.cpp`/`test_console.cpp` в `gl_core_tests` зелёные. Следующее — P2a Task 3.
+
+P2a — Task 1 (`gl_core` + Config) завершён 2026-10-20: `gl::assets::utf8_to_cp1251` и
+SDL-free `gl::core::Config` (cp1251 INI, сохранение неизвестных строк/комментариев/`bind`,
+порядка и смешанных CRLF/LF; `get`/`set` строк/int/float/bool).
 
 P1 — Level viewer: автоматизированная приёмка завершена 2026-10-20; финальный manual
 desktop pass (WASD/стрелки, `Home`, визуальный `F1`) остаётся открытым (Open Questions).
@@ -187,11 +190,14 @@ P0 закрыт 2026-10-19; далее выполнялись задачи P1 (�
   defaults (с warning), `save` создаёт файл; real-data round-trip `GoldenLand.ini`
   (`gl_core_real_tests`, skip 77); `get_float` через `from_chars`; append использует
   доминирующий EOL; D-019 (`Result<void>`); план Task 1 отмечен `[x]`.
+- 2026-10-20: P2a Task 2 — `CommandRegistry`/`split_command_line`/`ConsoleBuffer` в
+  `gl_core`; тесты `gl_core_tests` 25 cases / 227 assertions; полный `ctest` без
+  `GL_GAME_DIR`: 4 passed, 3 skipped.
 
 ## Следующие задачи
 
 1. P2a: оболочка игры и консоль — `docs/specs/2026-10-20-p2a-game-shell-design.md`,
-   `docs/plans/2026-10-20-p2a-game-shell.md` (Task 1 завершён; дальше Task 2).
+   `docs/plans/2026-10-20-p2a-game-shell.md` (Tasks 1–2 завершены; дальше Task 3).
 2. P2b: ServerCore/ClientCore + детерминированный тик (после P2a).
 3. P1b: Android/touch — отложенный follow-up P1.
 
