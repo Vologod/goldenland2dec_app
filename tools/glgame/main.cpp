@@ -244,27 +244,39 @@ const char* state_name(gl::core::AppState state) {
 }
 
 std::string format_save_date(const gl::assets::SaveHeader& header) {
-    char buffer[16] = {};
+    char buffer[32] = {};
     std::snprintf(buffer, sizeof(buffer), "%04u-%02u-%02u", static_cast<unsigned>(header.year),
                   static_cast<unsigned>(header.month), static_cast<unsigned>(header.day));
     return buffer;
 }
 
+std::string display_title(const gl::assets::SaveHeader& header) {
+    return header.title.empty() ? std::string("(no title)") : header.title;
+}
+
 std::string format_save_row(const gl::core::SaveSlotInfo& slot) {
-    const std::string title =
-        slot.header.title.empty() ? std::string("(no title)") : slot.header.title;
     const std::uint64_t kilobytes = (slot.file_size + 1023) / 1024;
     return "Slot " + std::to_string(slot.slot) + "  " + format_save_date(slot.header) + "  " +
-           title + "  (" + std::to_string(kilobytes) + " KB)";
+           display_title(slot.header) + "  (" + std::to_string(kilobytes) + " KB)";
 }
 
 std::string format_save_list_line(const gl::core::SaveSlotInfo& slot) {
     return "slot" + std::to_string(slot.slot) + "\t" + format_save_date(slot.header) + "\t" +
-           slot.header.title + "\t" + std::to_string(slot.file_size);
+           display_title(slot.header) + "\t" + std::to_string(slot.file_size);
 }
 
 bool is_displayable(const gl::core::SaveSlotInfo& slot) {
     return slot.slot >= 0 && slot.valid;
+}
+
+std::string summarize_output(std::string_view line, std::string_view text) {
+    if (text.find('\n') == std::string_view::npos) return std::string(text);
+    const std::size_t lines =
+        static_cast<std::size_t>(std::count(text.begin(), text.end(), '\n')) + 1;
+    const std::size_t end = line.find_first_of(" \t");
+    const std::string command(line.substr(0, end));
+    if (command == "saves") return "saves: " + std::to_string(lines) + " slot(s)";
+    return command + ": " + std::to_string(lines) + " line(s)";
 }
 
 void erase_last_utf8(std::string& text) {
@@ -300,9 +312,10 @@ class Game {
         } else {
             saves_ = std::move(saves.value());
         }
+        rebuild_display_saves();
         gl::log(gl::LogLevel::info,
                 "glgame: save slots=" + std::to_string(saves_.slots().size()) + ", valid=" +
-                    std::to_string(visible_saves().size()));
+                    std::to_string(display_saves_.size()));
 
         if (!state_.transition(gl::core::AppState::menu)) return 3;
 
@@ -606,7 +619,9 @@ class Game {
             gl::log(gl::LogLevel::warning, result.error().message);
             return;
         }
-        if (!result.value().empty()) gl::log(gl::LogLevel::info, result.value());
+        if (!result.value().empty()) {
+            gl::log(gl::LogLevel::info, summarize_output(line, result.value()));
+        }
         console_print(result.value());
     }
 
@@ -872,34 +887,68 @@ class Game {
             if (!saves_.has_valid_slots()) return;
             save_slots_ = true;
             save_selected_ = 0;
+            save_scroll_ = 0;
             save_message_.clear();
         } else if (index == 2) {
             request_exit();
         }
     }
 
-    std::vector<const gl::core::SaveSlotInfo*> visible_saves() const {
-        std::vector<const gl::core::SaveSlotInfo*> result;
+    void rebuild_display_saves() {
+        display_saves_.clear();
         for (const gl::core::SaveSlotInfo& slot : saves_.slots()) {
-            if (is_displayable(slot)) result.push_back(&slot);
+            if (is_displayable(slot)) display_saves_.push_back(&slot);
         }
-        return result;
+    }
+
+    const std::vector<const gl::core::SaveSlotInfo*>& visible_saves() const {
+        return display_saves_;
     }
 
     std::string saves_text() const {
         std::string text;
-        for (const gl::core::SaveSlotInfo& slot : saves_.slots()) {
-            if (!is_displayable(slot)) continue;
+        for (const gl::core::SaveSlotInfo* slot : display_saves_) {
             if (!text.empty()) text.push_back('\n');
-            text += format_save_row(slot);
+            text += format_save_row(*slot);
         }
         if (text.empty()) return "no saves";
         return text;
     }
 
+    float save_rows_top() const {
+        return std::max(110.0f, static_cast<float>(viewport_height_) * 0.22f);
+    }
+
+    float save_rows_bottom() const {
+        return static_cast<float>(viewport_height_) - 80.0f;
+    }
+
+    int save_visible_row_count() const {
+        const float available = save_rows_bottom() - save_rows_top();
+        if (available < kSaveRowHeight) return 1;
+        return std::max(1, static_cast<int>(available / kSaveRowHeight));
+    }
+
+    void save_ensure_visible() {
+        const int count = static_cast<int>(display_saves_.size());
+        if (count <= 0) {
+            save_selected_ = 0;
+            save_scroll_ = 0;
+            return;
+        }
+        save_selected_ = std::clamp(save_selected_, 0, count - 1);
+        const int visible = save_visible_row_count();
+        const int max_scroll = std::max(0, count - visible);
+        if (save_selected_ < save_scroll_) save_scroll_ = save_selected_;
+        if (save_selected_ >= save_scroll_ + visible) {
+            save_scroll_ = save_selected_ - visible + 1;
+        }
+        save_scroll_ = std::clamp(save_scroll_, 0, max_scroll);
+    }
+
     float save_row_y(int index) const {
-        return static_cast<float>(viewport_height_) * 0.22f +
-               static_cast<float>(index) * kSaveRowHeight;
+        const int row = index - save_scroll_;
+        return save_rows_top() + static_cast<float>(row) * kSaveRowHeight;
     }
 
     SDL_FRect save_row_rect(int index) const {
@@ -909,14 +958,16 @@ class Game {
     }
 
     void save_move(int delta) {
-        const int count = static_cast<int>(visible_saves().size());
+        const int count = static_cast<int>(display_saves_.size());
         if (count <= 0) return;
         save_selected_ = (save_selected_ + delta + count) % count;
+        save_ensure_visible();
     }
 
     void save_hover(int x, int y) {
-        const int count = static_cast<int>(visible_saves().size());
-        for (int index = 0; index < count; ++index) {
+        const int count = static_cast<int>(display_saves_.size());
+        const int end = std::min(count, save_scroll_ + save_visible_row_count());
+        for (int index = save_scroll_; index < end; ++index) {
             const SDL_FRect rect = save_row_rect(index);
             if (static_cast<float>(x) >= rect.x && static_cast<float>(x) < rect.x + rect.w &&
                 static_cast<float>(y) >= rect.y && static_cast<float>(y) < rect.y + rect.h) {
@@ -927,8 +978,9 @@ class Game {
     }
 
     void save_click(int x, int y) {
-        const int count = static_cast<int>(visible_saves().size());
-        for (int index = 0; index < count; ++index) {
+        const int count = static_cast<int>(display_saves_.size());
+        const int end = std::min(count, save_scroll_ + save_visible_row_count());
+        for (int index = save_scroll_; index < end; ++index) {
             const SDL_FRect rect = save_row_rect(index);
             if (static_cast<float>(x) >= rect.x && static_cast<float>(x) < rect.x + rect.w &&
                 static_cast<float>(y) >= rect.y && static_cast<float>(y) < rect.y + rect.h) {
@@ -940,7 +992,7 @@ class Game {
     }
 
     void save_activate() {
-        if (visible_saves().empty()) return;
+        if (display_saves_.empty()) return;
         save_message_ = "world deserialization not implemented (P2c)";
     }
 
@@ -973,17 +1025,26 @@ class Game {
         SDL_SetRenderDrawColor(renderer, 12, 14, 20, 255);
         SDL_RenderClear(renderer);
 
+        save_ensure_visible();
+
         const std::string_view title = "SAVE SLOTS";
         const float title_width = gl::render::text_width(title, kTitleScale);
+        const float title_y =
+            std::max(16.0f, static_cast<float>(viewport_height_) * 0.1f);
         gl::render::draw_text(renderer, title,
-                              (static_cast<float>(viewport_width_) - title_width) * 0.5f, 72.0f,
+                              (static_cast<float>(viewport_width_) - title_width) * 0.5f, title_y,
                               kTitleScale, gl::render::Color{232, 201, 112, 255});
 
-        const std::vector<const gl::core::SaveSlotInfo*> slots = visible_saves();
+        const std::vector<const gl::core::SaveSlotInfo*>& slots = visible_saves();
+        const int count = static_cast<int>(slots.size());
+        const int end = std::min(count, save_scroll_ + save_visible_row_count());
         SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-        for (std::size_t index = 0; index < slots.size(); ++index) {
-            const SDL_FRect rect = save_row_rect(static_cast<int>(index));
-            const bool selected = save_selected_ == static_cast<int>(index);
+        const SDL_Rect clip{0, static_cast<int>(save_rows_top()) - 2, viewport_width_,
+                            static_cast<int>(save_rows_bottom() - save_rows_top()) + 4};
+        SDL_RenderSetClipRect(renderer, &clip);
+        for (int index = save_scroll_; index < end; ++index) {
+            const SDL_FRect rect = save_row_rect(index);
+            const bool selected = save_selected_ == index;
             if (selected) {
                 SDL_SetRenderDrawColor(renderer, 60, 52, 24, 210);
                 SDL_RenderFillRectF(renderer, &rect);
@@ -993,10 +1054,12 @@ class Game {
             const gl::render::Color color =
                 selected ? gl::render::Color{255, 232, 160, 255}
                          : gl::render::Color{220, 220, 220, 255};
-            gl::render::draw_text(renderer, format_save_row(*slots[index]), rect.x + 12.0f,
-                                  rect.y + (rect.h - gl::render::text_height(kSaveRowScale)) * 0.5f,
-                                  kSaveRowScale, color);
+            gl::render::draw_text(
+                renderer, format_save_row(*slots[static_cast<std::size_t>(index)]), rect.x + 12.0f,
+                rect.y + (rect.h - gl::render::text_height(kSaveRowScale)) * 0.5f, kSaveRowScale,
+                color);
         }
+        SDL_RenderSetClipRect(renderer, nullptr);
 
         if (slots.empty()) {
             const std::string_view empty = "no saves";
@@ -1132,6 +1195,7 @@ class Game {
     gl::platform::Window& window_;
     gl::core::StateMachine state_;
     gl::core::SaveManager saves_;
+    std::vector<const gl::core::SaveSlotInfo*> display_saves_;
     gl::core::ServerCore server_;
     gl::core::ClientCore client_;
     gl::core::CommandRegistry registry_;
@@ -1148,6 +1212,7 @@ class Game {
     int viewport_height_ = 0;
     int menu_selected_ = 0;
     int save_selected_ = 0;
+    int save_scroll_ = 0;
     bool save_slots_ = false;
     std::string save_message_;
 };

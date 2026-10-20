@@ -285,6 +285,9 @@ P0 закрыт 2026-10-19; далее выполнялись задачи P1 (�
 - P1: финальный manual desktop pass — WASD/стрелки, `Home` и визуальный `F1` toggle
   на обычном рабочем столе. В текущей headless-сессии клавиатурный фокус недоступен;
   drag-панорама и wheel-зум проверены инъекцией мыши, overlay — screenshot-тестом.
+- P2c: Cyrillic/cp1251 save-slot titles render as `?` in `glgame` because `gl_render` uses
+  `stb_easy_font` (ASCII-only). Accepted P2c limitation; a proper font with cp1251 glyphs is
+  tracked as P7 backlog.
 - SDL2 `release-2.32.10` выдаёт CMake deprecation warning из-за своего
   `cmake_minimum_required`; следить при обновлении CMake/SDL.
 - `.clang-format` (LLVM base) не совпадает со стилем исходников P0; repo-wide
@@ -328,6 +331,11 @@ P0 закрыт 2026-10-19; далее выполнялись задачи P1 (�
 - ServerCore _resolution: зафиксировать допустимые границы в контракте события (сейчас shell ограничивает, сервер — нет).
 - Тесты: 	est_real_main возвращает 77 безусловно при отсутствии GL_GAME_DIR; text height scaling; non-ASCII UI — P7.
 - Уточнить exit code в spec §7: отсутствующий обязательный аргумент CLI — 1, отсутствующий каталог — 2.
+
+## Backlog P2c → P7
+
+- Proper font / cp1251 glyphs: save-slot titles currently show `?` for Cyrillic bytes
+  (`stb_easy_font` is ASCII-only); accepted P2c limitation, implement in P7.
 
 ## Backlog P2b → P2c
 

@@ -262,14 +262,22 @@ TEST_CASE("glgame --list-saves prints the real save slots and exits") {
     const std::vector<std::string> lines = split_lines(output);
     std::size_t slot_lines = 0;
     bool has_slot0 = false;
+    bool slot0_has_date = false;
+    bool slot0_has_title = false;
     for (const std::string& line : lines) {
         if (line.rfind("slot", 0) != 0) continue;
         ++slot_lines;
-        if (line.rfind("slot0\t", 0) == 0) has_slot0 = true;
+        if (line.rfind("slot0\t", 0) == 0) {
+            has_slot0 = true;
+            slot0_has_date = line.find("\t2022-11-06\t") != std::string::npos;
+            slot0_has_title = line.find("\tQuick save\t") != std::string::npos;
+        }
     }
     CAPTURE(slot_lines);
     CHECK(slot_lines == 28);
     CHECK(has_slot0);
+    CHECK(slot0_has_date);
+    CHECK(slot0_has_title);
 }
 
 TEST_CASE("glgame renders a preloaded level into a 1280x720 PNG") {
