@@ -5,6 +5,7 @@
 #include <atomic>
 #include <chrono>
 #include <cstdint>
+#include <cstdio>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -103,6 +104,33 @@ int run_glgame(const std::vector<std::string>& arguments) {
     std::string command = "\"" + g_glgame_exe.string() + "\"";
     for (const auto& arg : arguments) command += " \"" + arg + "\"";
     const int status = std::system(command.c_str());
+    return WIFEXITED(status) ? WEXITSTATUS(status) : status;
+#endif
+}
+
+int run_glgame_capture(const std::vector<std::string>& arguments, std::string& output) {
+    use_dummy_video();
+
+#ifdef _WIN32
+    std::string command = quote_argument(g_glgame_exe.string());
+    for (const auto& arg : arguments) command += " " + quote_argument(arg);
+    FILE* pipe = _popen(command.c_str(), "rb");
+#else
+    std::string command = "\"" + g_glgame_exe.string() + "\"";
+    for (const auto& arg : arguments) command += " \"" + arg + "\"";
+    FILE* pipe = popen(command.c_str(), "r");
+#endif
+    if (pipe == nullptr) return -1;
+
+    char buffer[4096];
+    std::size_t count = 0;
+    while ((count = std::fread(buffer, 1, sizeof(buffer), pipe)) > 0) {
+        output.append(buffer, count);
+    }
+#ifdef _WIN32
+    return _pclose(pipe);
+#else
+    const int status = pclose(pipe);
     return WIFEXITED(status) ? WEXITSTATUS(status) : status;
 #endif
 }
@@ -219,6 +247,29 @@ TEST_CASE("glgame renders the menu into a 1280x720 PNG") {
     REQUIRE(fs::exists(png));
     CHECK(code == 0);
     check_png(png, 1280, 720);
+}
+
+TEST_CASE("glgame --list-saves prints the real save slots and exits") {
+    const char* game_dir = std::getenv("GL_GAME_DIR");
+    REQUIRE(game_dir != nullptr);
+
+    std::string output;
+    const int code =
+        run_glgame_capture({"--game-dir", game_dir, "--list-saves"}, output);
+    CAPTURE(code);
+    CHECK(code == 0);
+
+    const std::vector<std::string> lines = split_lines(output);
+    std::size_t slot_lines = 0;
+    bool has_slot0 = false;
+    for (const std::string& line : lines) {
+        if (line.rfind("slot", 0) != 0) continue;
+        ++slot_lines;
+        if (line.rfind("slot0\t", 0) == 0) has_slot0 = true;
+    }
+    CAPTURE(slot_lines);
+    CHECK(slot_lines == 28);
+    CHECK(has_slot0);
 }
 
 TEST_CASE("glgame renders a preloaded level into a 1280x720 PNG") {

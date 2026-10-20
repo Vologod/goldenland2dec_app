@@ -4,6 +4,7 @@
 #include <gl/core/command.hpp>
 #include <gl/core/config.hpp>
 #include <gl/core/console.hpp>
+#include <gl/core/save_manager.hpp>
 #include <gl/core/server.hpp>
 #include <gl/core/state.hpp>
 #include <gl/platform/sdl_context.hpp>
@@ -41,6 +42,8 @@ constexpr float kZoomStep = 1.1f;
 constexpr float kScale = 2.0f;
 constexpr float kTitleScale = 3.0f;
 constexpr std::size_t kConsoleOutputLines = 10;
+constexpr float kSaveRowScale = 1.0f;
+constexpr float kSaveRowHeight = 17.0f;
 
 struct Options {
     fs::path game_dir;
@@ -48,6 +51,7 @@ struct Options {
     std::string level = std::string(kNewGameLevel);
     bool has_level = false;
     bool menu = false;
+    bool list_saves = false;
     int width = kDefaultWidth;
     int height = kDefaultHeight;
     bool width_set = false;
@@ -69,10 +73,12 @@ void print_usage() {
         "  --width <px>         Window width (default: 1280)\n"
         "  --height <px>        Window height (default: 720)\n"
         "  --menu               Force starting in the main menu\n"
+        "  --list-saves         Print save slots as tab-separated lines and exit\n"
         "  --screenshot <png>   Render the current state, save PNG and exit\n"
         "  --exec \"<command>\"   Run a console command after boot (repeatable)\n"
         "  -h, --help           Show this help and exit\n"
         "\n"
+        "Console commands include: help, exit, saves.\n"
         "Exit codes: 0 success, 1 arguments, 2 I/O, 3 format/load.");
 }
 
@@ -176,6 +182,8 @@ ParseStatus parse_args(int argc, char** argv, Options& options) {
             options.height_set = true;
         } else if (arg == "--menu") {
             options.menu = true;
+        } else if (arg == "--list-saves") {
+            options.list_saves = true;
         } else if (arg == "--screenshot") {
             if (!next_value(arg, value)) return ParseStatus::error;
             if (value.empty()) {
@@ -235,6 +243,30 @@ const char* state_name(gl::core::AppState state) {
     return "unknown";
 }
 
+std::string format_save_date(const gl::assets::SaveHeader& header) {
+    char buffer[16] = {};
+    std::snprintf(buffer, sizeof(buffer), "%04u-%02u-%02u", static_cast<unsigned>(header.year),
+                  static_cast<unsigned>(header.month), static_cast<unsigned>(header.day));
+    return buffer;
+}
+
+std::string format_save_row(const gl::core::SaveSlotInfo& slot) {
+    const std::string title =
+        slot.header.title.empty() ? std::string("(no title)") : slot.header.title;
+    const std::uint64_t kilobytes = (slot.file_size + 1023) / 1024;
+    return "Slot " + std::to_string(slot.slot) + "  " + format_save_date(slot.header) + "  " +
+           title + "  (" + std::to_string(kilobytes) + " KB)";
+}
+
+std::string format_save_list_line(const gl::core::SaveSlotInfo& slot) {
+    return "slot" + std::to_string(slot.slot) + "\t" + format_save_date(slot.header) + "\t" +
+           slot.header.title + "\t" + std::to_string(slot.file_size);
+}
+
+bool is_displayable(const gl::core::SaveSlotInfo& slot) {
+    return slot.slot >= 0 && slot.valid;
+}
+
 void erase_last_utf8(std::string& text) {
     if (text.empty()) return;
     std::size_t index = text.size() - 1;
@@ -261,6 +293,16 @@ class Game {
         gl::log(gl::LogLevel::info,
                 "glgame: user '" + username.value_or("") + "', windowed=" +
                     std::string(config_.get_bool("r_windowed", true) ? "1" : "0"));
+
+        auto saves = gl::core::SaveManager::scan(options_.game_dir / "Saves");
+        if (!saves) {
+            gl::log(gl::LogLevel::warning, "save: " + saves.error().message);
+        } else {
+            saves_ = std::move(saves.value());
+        }
+        gl::log(gl::LogLevel::info,
+                "glgame: save slots=" + std::to_string(saves_.slots().size()) + ", valid=" +
+                    std::to_string(visible_saves().size()));
 
         if (!state_.transition(gl::core::AppState::menu)) return 3;
 
@@ -443,6 +485,14 @@ class Game {
         registry_.add("cl_username", "set player name: cl_username <name>",
                       [this](gl::core::Args args) -> gl::Result<std::string> {
                           return route_server("cl_username", args);
+                      });
+
+        registry_.add("saves", "list save slots",
+                      [this](gl::core::Args args) -> gl::Result<std::string> {
+                          if (!args.empty()) {
+                              return gl::Error{gl::ErrorCode::argument, "usage: saves"};
+                          }
+                          return saves_text();
                       });
 
         registry_.add("game_save", "save the game (stub): game_save <slot>",
@@ -633,7 +683,9 @@ class Game {
                 return;
             case SDL_MOUSEMOTION:
                 if (console_visible_) return;
-                if (state_.state() == gl::core::AppState::menu) {
+                if (save_slots_) {
+                    save_hover(event.motion.x, event.motion.y);
+                } else if (state_.state() == gl::core::AppState::menu) {
                     menu_hover(event.motion.x, event.motion.y);
                 } else if (state_.state() == gl::core::AppState::level && dragging_ &&
                            level_) {
@@ -644,7 +696,9 @@ class Game {
                 return;
             case SDL_MOUSEBUTTONDOWN:
                 if (console_visible_ || event.button.button != SDL_BUTTON_LEFT) return;
-                if (state_.state() == gl::core::AppState::menu) {
+                if (save_slots_) {
+                    save_click(event.button.x, event.button.y);
+                } else if (state_.state() == gl::core::AppState::menu) {
                     menu_click(event.button.x, event.button.y);
                 } else if (state_.state() == gl::core::AppState::level) {
                     dragging_ = true;
@@ -691,6 +745,20 @@ class Game {
             return;
         }
         if (key.repeat != 0 && symbol != SDLK_HOME) return;
+
+        if (save_slots_) {
+            if (symbol == SDLK_UP) {
+                save_move(-1);
+            } else if (symbol == SDLK_DOWN) {
+                save_move(1);
+            } else if (symbol == SDLK_RETURN || symbol == SDLK_KP_ENTER) {
+                save_activate();
+            } else if (symbol == SDLK_ESCAPE) {
+                save_slots_ = false;
+                save_message_.clear();
+            }
+            return;
+        }
 
         if (state_.state() == gl::core::AppState::menu) {
             if (symbol == SDLK_UP) {
@@ -739,7 +807,9 @@ class Game {
         }
     }
 
-    static bool menu_item_enabled(int index) { return index != 1; }
+    bool menu_item_enabled(int index) const {
+        return index != 1 || saves_.has_valid_slots();
+    }
 
     float menu_item_height() const { return gl::render::text_height(kScale) + 18.0f; }
 
@@ -798,9 +868,80 @@ class Game {
                 dragging_ = false;
                 debug_overlay_ = false;
             }
+        } else if (index == 1) {
+            if (!saves_.has_valid_slots()) return;
+            save_slots_ = true;
+            save_selected_ = 0;
+            save_message_.clear();
         } else if (index == 2) {
             request_exit();
         }
+    }
+
+    std::vector<const gl::core::SaveSlotInfo*> visible_saves() const {
+        std::vector<const gl::core::SaveSlotInfo*> result;
+        for (const gl::core::SaveSlotInfo& slot : saves_.slots()) {
+            if (is_displayable(slot)) result.push_back(&slot);
+        }
+        return result;
+    }
+
+    std::string saves_text() const {
+        std::string text;
+        for (const gl::core::SaveSlotInfo& slot : saves_.slots()) {
+            if (!is_displayable(slot)) continue;
+            if (!text.empty()) text.push_back('\n');
+            text += format_save_row(slot);
+        }
+        if (text.empty()) return "no saves";
+        return text;
+    }
+
+    float save_row_y(int index) const {
+        return static_cast<float>(viewport_height_) * 0.22f +
+               static_cast<float>(index) * kSaveRowHeight;
+    }
+
+    SDL_FRect save_row_rect(int index) const {
+        const float width = static_cast<float>(viewport_width_) * 0.7f;
+        const float x = (static_cast<float>(viewport_width_) - width) * 0.5f;
+        return SDL_FRect{x, save_row_y(index), width, kSaveRowHeight - 2.0f};
+    }
+
+    void save_move(int delta) {
+        const int count = static_cast<int>(visible_saves().size());
+        if (count <= 0) return;
+        save_selected_ = (save_selected_ + delta + count) % count;
+    }
+
+    void save_hover(int x, int y) {
+        const int count = static_cast<int>(visible_saves().size());
+        for (int index = 0; index < count; ++index) {
+            const SDL_FRect rect = save_row_rect(index);
+            if (static_cast<float>(x) >= rect.x && static_cast<float>(x) < rect.x + rect.w &&
+                static_cast<float>(y) >= rect.y && static_cast<float>(y) < rect.y + rect.h) {
+                save_selected_ = index;
+                return;
+            }
+        }
+    }
+
+    void save_click(int x, int y) {
+        const int count = static_cast<int>(visible_saves().size());
+        for (int index = 0; index < count; ++index) {
+            const SDL_FRect rect = save_row_rect(index);
+            if (static_cast<float>(x) >= rect.x && static_cast<float>(x) < rect.x + rect.w &&
+                static_cast<float>(y) >= rect.y && static_cast<float>(y) < rect.y + rect.h) {
+                save_selected_ = index;
+                save_activate();
+                return;
+            }
+        }
+    }
+
+    void save_activate() {
+        if (visible_saves().empty()) return;
+        save_message_ = "world deserialization not implemented (P2c)";
     }
 
     void render(std::uint64_t now_ms, std::uint64_t animation_ms) {
@@ -817,11 +958,69 @@ class Game {
                                       24.0f, kTitleScale,
                                       gl::render::Color{255, 210, 90, 255});
             }
+        } else if (save_slots_) {
+            render_save_slots();
         } else {
             render_menu();
         }
 
         if (console_visible_) render_console(now_ms);
+    }
+
+    void render_save_slots() {
+        SDL_Renderer* renderer = window_.renderer();
+        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
+        SDL_SetRenderDrawColor(renderer, 12, 14, 20, 255);
+        SDL_RenderClear(renderer);
+
+        const std::string_view title = "SAVE SLOTS";
+        const float title_width = gl::render::text_width(title, kTitleScale);
+        gl::render::draw_text(renderer, title,
+                              (static_cast<float>(viewport_width_) - title_width) * 0.5f, 72.0f,
+                              kTitleScale, gl::render::Color{232, 201, 112, 255});
+
+        const std::vector<const gl::core::SaveSlotInfo*> slots = visible_saves();
+        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+        for (std::size_t index = 0; index < slots.size(); ++index) {
+            const SDL_FRect rect = save_row_rect(static_cast<int>(index));
+            const bool selected = save_selected_ == static_cast<int>(index);
+            if (selected) {
+                SDL_SetRenderDrawColor(renderer, 60, 52, 24, 210);
+                SDL_RenderFillRectF(renderer, &rect);
+                SDL_SetRenderDrawColor(renderer, 232, 201, 112, 255);
+                SDL_RenderDrawRectF(renderer, &rect);
+            }
+            const gl::render::Color color =
+                selected ? gl::render::Color{255, 232, 160, 255}
+                         : gl::render::Color{220, 220, 220, 255};
+            gl::render::draw_text(renderer, format_save_row(*slots[index]), rect.x + 12.0f,
+                                  rect.y + (rect.h - gl::render::text_height(kSaveRowScale)) * 0.5f,
+                                  kSaveRowScale, color);
+        }
+
+        if (slots.empty()) {
+            const std::string_view empty = "no saves";
+            const float width = gl::render::text_width(empty, kScale);
+            gl::render::draw_text(renderer, empty,
+                                  (static_cast<float>(viewport_width_) - width) * 0.5f,
+                                  static_cast<float>(viewport_height_) * 0.4f, kScale,
+                                  gl::render::Color{160, 160, 168, 255});
+        }
+
+        if (!save_message_.empty()) {
+            const float width = gl::render::text_width(save_message_, 1.0f);
+            gl::render::draw_text(renderer, save_message_,
+                                  (static_cast<float>(viewport_width_) - width) * 0.5f,
+                                  static_cast<float>(viewport_height_) - 64.0f, 1.0f,
+                                  gl::render::Color{255, 210, 90, 255});
+        }
+
+        const std::string_view hint = "Arrows / mouse to select, Enter to load, Esc to go back";
+        const float hint_width = gl::render::text_width(hint, 1.0f);
+        gl::render::draw_text(renderer, hint,
+                              (static_cast<float>(viewport_width_) - hint_width) * 0.5f,
+                              static_cast<float>(viewport_height_) - 30.0f, 1.0f,
+                              gl::render::Color{100, 100, 110, 255});
     }
 
     void render_menu() {
@@ -932,6 +1131,7 @@ class Game {
     gl::assets::GameVfs& vfs_;
     gl::platform::Window& window_;
     gl::core::StateMachine state_;
+    gl::core::SaveManager saves_;
     gl::core::ServerCore server_;
     gl::core::ClientCore client_;
     gl::core::CommandRegistry registry_;
@@ -947,6 +1147,9 @@ class Game {
     int viewport_width_ = 0;
     int viewport_height_ = 0;
     int menu_selected_ = 0;
+    int save_selected_ = 0;
+    bool save_slots_ = false;
+    std::string save_message_;
 };
 
 } // namespace
@@ -968,6 +1171,22 @@ int main(int argc, char** argv) {
             std::fprintf(stderr, "glgame: game directory not found: %s\n",
                          options.game_dir.string().c_str());
             return 2;
+        }
+
+        if (options.list_saves) {
+            auto saves = gl::core::SaveManager::scan(options.game_dir / "Saves");
+            if (!saves) {
+                std::fprintf(stderr, "glgame: %s\n", saves.error().message.c_str());
+                return exit_code_for(saves.error());
+            }
+            std::string output;
+            for (const gl::core::SaveSlotInfo& slot : saves.value().slots()) {
+                if (!is_displayable(slot)) continue;
+                output += format_save_list_line(slot);
+                output.push_back('\n');
+            }
+            std::fputs(output.c_str(), stdout);
+            return 0;
         }
 
         const fs::path config_path =
