@@ -52,6 +52,10 @@ Task 6 завершён: `gl_render` (`Texture`, `Camera`, `to_screen`, `draw_ba
 `glview_screenshot_tests`: `l1_1`, 1280×720, ≥2 цветов; без `GL_GAME_DIR` — skipped (77).
 Полный `ctest` с `GL_GAME_DIR`: 4/4 passed (real-data 389.59 s); без `GL_GAME_DIR`: 2 passed,
 2 skipped. Реальное окно открыто (процесс жив через 3 с), PNG с реальным драйвером — 1280×720.
+Fix round 1: `gl_render` зависит от `gl_platform` + `gl_assets` (не от `gl_game`);
+отсутствие обязательных SEF/LVL/фона возвращает `ErrorCode::format` (exit 3), добавлен
+CLI-тест на пустой каталог; `parse_args` обёрнут в try/catch (exit 1). Полный `ctest`
+после правок: 4/4 passed (real-data 392.88 s).
 
 Следующая задача — **P1 Task 7: Draw statics and animations** (`docs/plans/2026-10-19-p1-level-viewer.md`).
 

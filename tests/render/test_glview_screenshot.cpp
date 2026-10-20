@@ -1,5 +1,5 @@
 #define DOCTEST_CONFIG_IMPLEMENT
-#include <doctest/doctest.h>
+#include <doctest.h>
 #include <stb_image.h>
 
 #include <atomic>
@@ -102,6 +102,24 @@ TEST_CASE("glview renders the l1_1 background into a 1280x720 PNG") {
 
     CAPTURE(colors.size());
     CHECK(colors.size() >= 2);
+
+    fs::remove_all(temp);
+}
+
+TEST_CASE("glview exits 3 when required level data is missing") {
+    const fs::path temp = unique_temp_dir();
+    fs::remove_all(temp);
+    const fs::path game_dir = temp / "game";
+    fs::create_directories(game_dir);
+    const fs::path png = temp / "missing.png";
+
+    const std::vector<std::string> arguments = {
+        "--game-dir", game_dir.string(), "--level", "l1_1", "--screenshot", png.string(),
+        "--width", "1280", "--height", "720"};
+    const int code = run_glview(arguments);
+    CAPTURE(code);
+    CHECK(code == 3);
+    CHECK_FALSE(fs::exists(png));
 
     fs::remove_all(temp);
 }

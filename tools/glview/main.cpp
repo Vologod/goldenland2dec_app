@@ -186,7 +186,10 @@ int save_screenshot(SDL_Renderer* renderer, const std::filesystem::path& path, i
 
     const std::uint64_t pixel_count = static_cast<std::uint64_t>(width) *
                                       static_cast<std::uint64_t>(height);
-    if (pixel_count > static_cast<std::uint64_t>(INT_MAX) || width > INT_MAX / 4) return 3;
+    if (pixel_count > static_cast<std::uint64_t>(INT_MAX) || width > INT_MAX / 4) {
+        std::fprintf(stderr, "glview: renderer output too large: %dx%d\n", width, height);
+        return 3;
+    }
     const int pitch = width * 4;
     std::vector<std::uint8_t> pixels(static_cast<std::size_t>(pixel_count) * 4);
 
@@ -245,9 +248,14 @@ int run_interactive(SDL_Renderer* renderer, const gl::render::Texture& texture,
 
 int main(int argc, char** argv) {
     Options options;
-    const ParseStatus status = parse_args(argc, argv, options);
-    if (status == ParseStatus::help) return 0;
-    if (status == ParseStatus::error) return 1;
+    try {
+        const ParseStatus status = parse_args(argc, argv, options);
+        if (status == ParseStatus::help) return 0;
+        if (status == ParseStatus::error) return 1;
+    } catch (const std::exception& e) {
+        std::fprintf(stderr, "glview: %s\n", e.what());
+        return 1;
+    }
 
     try {
         auto vfs = gl::assets::GameVfs::mount(options.game_dir);

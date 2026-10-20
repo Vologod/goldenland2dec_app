@@ -22,6 +22,11 @@ Error contextual(Error error, std::string_view action, std::string_view path) {
                  std::string(action) + " '" + std::string(path) + "': " + error.message};
 }
 
+Error required(Error error, std::string_view action, std::string_view path) {
+    error.code = ErrorCode::format;
+    return contextual(error, action, path);
+}
+
 void warn(std::string_view message) { gl::log(gl::LogLevel::warning, message); }
 
 std::string sef_path(std::string_view name) {
@@ -68,7 +73,7 @@ Result<Level> load_level(GameVfs &vfs, std::string_view level_name) {
         const std::string sef_file = sef_path(level.name);
         auto sef_data = vfs.read(sef_file);
         if (!sef_data)
-            return contextual(sef_data.error(), "cannot read level SEF", sef_file);
+            return required(sef_data.error(), "cannot read level SEF", sef_file);
         auto sef = parse_sef(sef_data.value());
         if (!sef)
             return contextual(sef.error(), "cannot parse level SEF", sef_file);
@@ -79,7 +84,7 @@ Result<Level> load_level(GameVfs &vfs, std::string_view level_name) {
         const std::string lvl_file = lvl_path(level.pack);
         auto lvl_data = vfs.read(lvl_file);
         if (!lvl_data)
-            return contextual(lvl_data.error(), "cannot read level LVL", lvl_file);
+            return required(lvl_data.error(), "cannot read level LVL", lvl_file);
         auto lvl = parse_lvl(lvl_data.value());
         if (!lvl)
             return contextual(lvl.error(), "cannot parse level LVL", lvl_file);
@@ -87,8 +92,8 @@ Result<Level> load_level(GameVfs &vfs, std::string_view level_name) {
         const std::string background_file = pack_path(level.pack, "bitmaps/layer.jpg");
         auto background_data = vfs.read(background_file);
         if (!background_data)
-            return contextual(background_data.error(), "cannot read level background",
-                              background_file);
+            return required(background_data.error(), "cannot read level background",
+                            background_file);
         auto background = decode_image(background_data.value());
         if (!background)
             return contextual(background.error(), "cannot decode level background",

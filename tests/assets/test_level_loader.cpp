@@ -103,5 +103,5 @@ TEST_CASE("level loader: missing level reports an error" * doctest::skip(!game_d
 
     auto level = gl::game::load_level(vfs.value(), "no_such_level");
     REQUIRE_FALSE(level.has_value());
-    CHECK((level.error().code == gl::ErrorCode::io || level.error().code == gl::ErrorCode::format));
+    CHECK(level.error().code == gl::ErrorCode::format);
 }
