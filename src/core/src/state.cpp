@@ -13,18 +13,12 @@ bool StateMachine::transition(AppState next) {
     }
 
     bool allowed = false;
-    switch (state_) {
-    case AppState::boot:
+    if (state_ == AppState::boot) {
         allowed = next == AppState::menu;
-        break;
-    case AppState::menu:
+    } else if (state_ == AppState::menu) {
         allowed = next == AppState::level;
-        break;
-    case AppState::level:
+    } else if (state_ == AppState::level) {
         allowed = next == AppState::menu || next == AppState::level;
-        break;
-    case AppState::exit:
-        break;
     }
 
     if (allowed)

@@ -10,11 +10,21 @@ P0 завершена и принята. P1 — Level viewer: реализаци
 
 ## Текущая задача
 
-**P2a — Task 2 (реестр команд и консоль) завершён 2026-10-20.** В SDL-free `gl_core`
-добавлены `CommandRegistry` (регистрация, execute, `help` с сортировкой, автодополнение
-по префиксу), `split_command_line` (пробелы, кавычки, экранирование `\"`/`\\`) и
-`ConsoleBuffer` (вывод до 256 строк, история до 64 с навигацией и сбросом). Тесты
-`test_command.cpp`/`test_console.cpp` в `gl_core_tests` зелёные. Следующее — P2a Task 3.
+**P2a — Task 5 (state machine + ServerCore/ClientCore skeleton) завершён 2026-10-20.**
+В SDL-free `gl_core` добавлены `StateMachine` (`boot→menu→level→menu`, `level` reload,
+`exit` final) и `ServerCore`/`ClientCore`: `submit(Command)` + парсящий overload,
+`tick`, `paused()`/`free_camera()`, `drain_events()`. Контракт `Event`:
+`paused_changed` — `flag` = новое состояние; `config_changed` — `key`/`value`/`text`
+(`flag` = bool для `r_windowed`); `log` — `text` = сообщение. `ServerCore` не пишет файлы;
+`Config` применяет оболочка (Task 6). `level→level` — reload только на уровне state machine,
+`ServerCore` не сбрасывается, reload мира принадлежит оболочке. Лишние аргументы
+`gv_pause`/`r_windowed`/`cl_username` дают usage-log и ничего не меняют. Тесты
+`test_state.cpp`/`test_server.cpp` в `gl_core_tests` зелёные.
+
+P2a — Task 2 (реестр команд и консоль) завершён 2026-10-20: `CommandRegistry`
+(регистрация, execute, `help` с сортировкой, автодополнение по префиксу),
+`split_command_line` (пробелы, кавычки, экранирование `\"`/`\\`) и `ConsoleBuffer`
+(вывод до 256 строк, история до 64 с навигацией и сбросом).
 
 P2a — Task 1 (`gl_core` + Config) завершён 2026-10-20: `gl::assets::utf8_to_cp1251` и
 SDL-free `gl::core::Config` (cp1251 INI, сохранение неизвестных строк/комментариев/`bind`,
@@ -193,11 +203,14 @@ P0 закрыт 2026-10-19; далее выполнялись задачи P1 (�
 - 2026-10-20: P2a Task 2 — `CommandRegistry`/`split_command_line`/`ConsoleBuffer` в
   `gl_core`; тесты `gl_core_tests` 25 cases / 227 assertions; полный `ctest` без
   `GL_GAME_DIR`: 4 passed, 3 skipped.
+- 2026-10-20: P2a Task 5 — `StateMachine` и `ServerCore`/`ClientCore` skeleton;
+  `Command`/`Event` (`key`/`value`) контракт зафиксирован для Task 6; fix round 1
+  добавил `submit(Command)`, usage-ошибки на лишние аргументы и тесты payload.
 
 ## Следующие задачи
 
 1. P2a: оболочка игры и консоль — `docs/specs/2026-10-20-p2a-game-shell-design.md`,
-   `docs/plans/2026-10-20-p2a-game-shell.md` (Tasks 1–2 завершены; дальше Task 3).
+   `docs/plans/2026-10-20-p2a-game-shell.md` (Tasks 1–5 завершены; дальше Task 6).
 2. P2b: ServerCore/ClientCore + детерминированный тик (после P2a).
 3. P1b: Android/touch — отложенный follow-up P1.
 

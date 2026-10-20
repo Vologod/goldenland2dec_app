@@ -169,7 +169,19 @@ class ClientCore { public: void on_event(const Event&); const std::vector<Event>
 ```
 Tests: allowed/forbidden transitions; submit `gv_pause` toggles pause only on tick; events drained once; config_changed event.
 
-- [ ] TDD, implement, commit.
+Event payload convention (Task 6 relies on this):
+
+- `paused_changed`: `flag` = new pause state; `key`/`value`/`text` empty.
+- `config_changed`: `key` = setting name, `value` = new value, `text` = `value`;
+  `flag` = bool value for `r_windowed`, `false` for string settings (`cl_username`).
+- `log`: `text` = message; `key`/`value` empty.
+- `ServerCore` never writes files; the shell owns `Config` and applies `config_changed`.
+- `submit(Command)` is the parsed path; `submit(std::string_view)` is a parsing convenience.
+- Extra arguments to `gv_pause`/`r_windowed`/`cl_username` log a usage error and change nothing.
+- `level → level` is a reload transition at the state-machine level only: `ServerCore` is not
+  reset; reload/world reset is owned by the shell.
+
+- [x] TDD, implement, commit.
 
 ---
 
