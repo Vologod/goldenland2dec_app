@@ -57,9 +57,9 @@ public:
 }
 ```
 Line model: keep `raw` (cp1251 bytes), parse `key`, `value`, `kind` (key/bind/comment/blank). `set` replaces the value in the raw line (preserving the key, whitespace prefix, comment suffix) or appends `key value`. Binds preserved as raw. Add `utf8_to_cp1251` to `gl_assets` (reverse table, `?` for unmappable). `load`/`save` use raw bytes; `get` returns UTF-8.
-Tests: comments, binds, user name with Cyrillic, int/float/bool, round-trip byte-identical for untouched files, set preserves comments/order, missing file → empty config error on load / save creates.
+Tests: comments, binds, user name with Cyrillic, int/float/bool, round-trip byte-identical for untouched files, set preserves comments/order, missing file → empty config / save creates.
 
-- [ ] TDD, implement, test, commit.
+- [x] TDD, implement, test, commit.
 
 ---
 

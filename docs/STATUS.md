@@ -183,6 +183,10 @@ P0 закрыт 2026-10-19; далее выполнялись задачи P1 (�
   byte-identical round-trip, `get`/`set`/`set_int`), `utf8_to_cp1251` в `gl_assets`,
   `gl_core_tests`; сборка без предупреждений, `ctest` без `GL_GAME_DIR`: 4 passed,
   2 skipped.
+- 2026-10-20: P2a Task 1 fix round 1 — пустой `Config` и загрузка отсутствующего INI как
+  defaults (с warning), `save` создаёт файл; real-data round-trip `GoldenLand.ini`
+  (`gl_core_real_tests`, skip 77); `get_float` через `from_chars`; append использует
+  доминирующий EOL; D-019 (`Result<void>`); план Task 1 отмечен `[x]`.
 
 ## Следующие задачи
 

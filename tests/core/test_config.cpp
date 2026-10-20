@@ -180,26 +180,61 @@ TEST_CASE("Config: untouched file round-trips byte-identically with mixed EOLs")
     std::filesystem::remove_all(dir);
 }
 
-TEST_CASE("Config: missing file is an error; save creates parent directories") {
+TEST_CASE("Config: missing file yields empty config; save creates parent directories") {
     const auto dir = unique_temp_dir();
-    const auto missing = dir / "missing.ini";
+    const auto missing = dir / "nested" / "deeper" / "GoldenLand.ini";
 
-    auto failed = gl::core::Config::load(missing);
-    REQUIRE_FALSE(failed.has_value());
-    CHECK(failed.error().code == gl::ErrorCode::io);
-
-    const auto source = dir / "source.ini";
-    write_bytes(source, "value 42\r\n");
-    auto loaded = gl::core::Config::load(source);
+    auto loaded = gl::core::Config::load(missing);
     REQUIRE(loaded.has_value());
+    CHECK(loaded->raw_lines().empty());
+    CHECK_FALSE(loaded->get("value").has_value());
 
-    const auto nested = dir / "nested" / "deeper" / "out.ini";
-    REQUIRE(loaded->save(nested).has_value());
-    CHECK(std::filesystem::exists(nested));
+    loaded->set("value", "42");
+    REQUIRE(loaded->save(missing).has_value());
+    CHECK(std::filesystem::exists(missing));
 
-    auto reloaded = gl::core::Config::load(nested);
+    auto reloaded = gl::core::Config::load(missing);
     REQUIRE(reloaded.has_value());
     CHECK(reloaded->get_int("value") == 42);
+
+    std::filesystem::remove_all(dir);
+}
+
+TEST_CASE("Config: default-constructed empty config saves keys") {
+    const auto dir = unique_temp_dir();
+    const auto path = dir / "new" / "GoldenLand.ini";
+
+    gl::core::Config config;
+    CHECK(config.raw_lines().empty());
+    CHECK_FALSE(config.get("cl_username").has_value());
+    config.set("cl_username", "Пётр");
+    config.set_int("r_windowed", 1);
+
+    REQUIRE(config.save(path).has_value());
+    CHECK(std::filesystem::exists(path));
+
+    auto reloaded = gl::core::Config::load(path);
+    REQUIRE(reloaded.has_value());
+    const auto username = reloaded->get("cl_username");
+    REQUIRE(username.has_value());
+    CHECK(*username == "Пётр");
+    CHECK(reloaded->get_int("r_windowed") == 1);
+
+    std::filesystem::remove_all(dir);
+}
+
+TEST_CASE("Config: appending keeps an LF-only file LF-only") {
+    const auto dir = unique_temp_dir();
+    const auto input = dir / "lf.ini";
+    const auto output = dir / "out.ini";
+    write_bytes(input, "a 1\nb 2\n");
+
+    auto loaded = gl::core::Config::load(input);
+    REQUIRE(loaded.has_value());
+    loaded->set("c", "3");
+    REQUIRE(loaded->save(output).has_value());
+
+    CHECK(read_bytes(output) == "a 1\nb 2\nc 3\n");
 
     std::filesystem::remove_all(dir);
 }

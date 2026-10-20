@@ -9,6 +9,8 @@
 namespace gl::core {
 class Config {
 public:
+    Config() = default;
+
     static gl::Result<Config> load(const std::filesystem::path& path);
     gl::Result<void> save(const std::filesystem::path& path) const;
 
@@ -36,11 +38,11 @@ private:
         std::string suffix;
     };
 
-    Config() = default;
     static void parse_line(Line& line);
     void parse_lines(std::string_view bytes);
 
     std::vector<Line> lines_;
     std::vector<std::string> raw_lines_;
+    std::string append_eol_ = "\r\n";
 };
 }

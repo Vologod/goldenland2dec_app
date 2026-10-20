@@ -1,8 +1,8 @@
 #include "gl/core/config.hpp"
 #include "gl/assets/cp1251.hpp"
+#include "gl/assets/log.hpp"
 #include <charconv>
 #include <cstdint>
-#include <cstdlib>
 #include <fstream>
 #include <span>
 #include <system_error>
@@ -67,7 +67,16 @@ void Config::parse_line(Line& line) {
 
 gl::Result<Config> Config::load(const std::filesystem::path& path) {
     std::ifstream in(path, std::ios::binary);
-    if (!in) return Error{ErrorCode::io, "cannot open config: " + path.string()};
+    if (!in) {
+        std::error_code ec;
+        const bool exists = std::filesystem::exists(path, ec);
+        if (!exists && !ec) {
+            gl::log(gl::LogLevel::warning,
+                    "config not found, using defaults: " + path.string());
+            return Config{};
+        }
+        return Error{ErrorCode::io, "cannot open config: " + path.string()};
+    }
 
     in.seekg(0, std::ios::end);
     const std::streamoff size = in.tellg();
@@ -126,9 +135,11 @@ std::optional<int> Config::get_int(std::string_view key) const {
 std::optional<double> Config::get_float(std::string_view key) const {
     const std::optional<std::string> value = get(key);
     if (!value || value->empty()) return std::nullopt;
-    char* end = nullptr;
-    const double out = std::strtod(value->c_str(), &end);
-    if (end == value->c_str() || end != value->c_str() + value->size()) return std::nullopt;
+    double out = 0.0;
+    const char* begin = value->data();
+    const char* end = begin + value->size();
+    const auto [ptr, ec] = std::from_chars(begin, end, out, std::chars_format::general);
+    if (ec != std::errc{} || ptr != end) return std::nullopt;
     return out;
 }
 
@@ -155,7 +166,7 @@ void Config::set(std::string_view key, std::string_view value) {
         return;
     }
 
-    if (!lines_.empty() && lines_.back().eol.empty()) lines_.back().eol = "\r\n";
+    if (!lines_.empty() && lines_.back().eol.empty()) lines_.back().eol = append_eol_;
 
     Line line;
     line.kind = LineKind::setting;
@@ -163,7 +174,7 @@ void Config::set(std::string_view key, std::string_view value) {
     line.prefix = gl::assets::utf8_to_cp1251(key) + " ";
     line.value = cp_value;
     line.raw = line.prefix + line.value;
-    line.eol = "\r\n";
+    line.eol = append_eol_;
     line.raw_utf8 = to_utf8(line.raw);
     raw_lines_.push_back(line.raw_utf8);
     lines_.push_back(std::move(line));
@@ -197,6 +208,17 @@ void Config::parse_lines(std::string_view bytes) {
         parse_line(line);
         lines_.push_back(std::move(line));
     }
-    for (const Line& line : lines_) raw_lines_.push_back(line.raw_utf8);
+
+    std::size_t crlf_count = 0;
+    std::size_t lf_count = 0;
+    for (const Line& line : lines_) {
+        if (line.eol == "\r\n") {
+            ++crlf_count;
+        } else if (line.eol == "\n") {
+            ++lf_count;
+        }
+        raw_lines_.push_back(line.raw_utf8);
+    }
+    append_eol_ = lf_count > crlf_count ? "\n" : "\r\n";
 }
 }
