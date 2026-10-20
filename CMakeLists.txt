@@ -24,6 +24,7 @@ add_library(gl_assets STATIC
     src/assets/src/lvl.cpp
     src/assets/src/lao.cpp
     src/assets/src/sef.cpp
+    src/assets/src/save.cpp
     src/assets/src/image.cpp
     src/assets/src/stb_impl.cpp
 )

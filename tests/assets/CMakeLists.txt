@@ -14,6 +14,7 @@ add_executable(gl_assets_tests
     test_lvl.cpp
     test_lao.cpp
     test_sef.cpp
+    test_save.cpp
 )
 target_include_directories(gl_assets_tests PRIVATE ${CMAKE_SOURCE_DIR}/third_party)
 target_link_libraries(gl_assets_tests PRIVATE gl_assets)
