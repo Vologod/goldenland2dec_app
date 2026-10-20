@@ -212,10 +212,10 @@ Screenshot: `SDL_RenderReadPixels` → RGBA → `stbi_write_png`.
 - Load statics/animations into `Texture`s at load time.
 - Draw statics at `(x,y)` top-left, then animations; animation frame = `(now - start) / delay` looped.
 - Optional `--frames N` advances N frames for deterministic screenshots.
-- [ ] **Step 1:** Extend the screenshot test: capture after 5 frames; assert the image differs from
+- [x] **Step 1:** Extend the screenshot test: capture after 5 frames; assert the image differs from
   a background-only render (sprite pixels present) and dimensions are correct.
-- [ ] **Step 2:** Implement.
-- [ ] **Step 3:** Commit.
+- [x] **Step 2:** Implement.
+- [x] **Step 3:** Commit.
 
 ---
 

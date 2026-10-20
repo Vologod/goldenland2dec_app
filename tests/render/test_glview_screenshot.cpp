@@ -32,9 +32,13 @@ fs::path unique_temp_dir() {
            ("gl_glview_shot_" + std::to_string(stamp) + "_" + std::to_string(counter.fetch_add(1)));
 }
 
-std::vector<std::string> glview_arguments(const fs::path& game_dir, const fs::path& png) {
-    return {"--game-dir", game_dir.string(), "--level", "l1_1", "--screenshot", png.string(),
-            "--width", "1280", "--height", "720"};
+std::vector<std::string> glview_arguments(const fs::path& game_dir, const fs::path& png,
+                                          const std::vector<std::string>& extra = {}) {
+    std::vector<std::string> arguments = {"--game-dir", game_dir.string(), "--level", "l1_1",
+                                          "--screenshot", png.string(), "--width", "1280",
+                                          "--height", "720"};
+    arguments.insert(arguments.end(), extra.begin(), extra.end());
+    return arguments;
 }
 
 int run_glview(const std::vector<std::string>& arguments) {
@@ -102,6 +106,68 @@ TEST_CASE("glview renders the l1_1 background into a 1280x720 PNG") {
 
     CAPTURE(colors.size());
     CHECK(colors.size() >= 2);
+
+    fs::remove_all(temp);
+}
+
+TEST_CASE("glview draws statics and animations over the background") {
+    const char* game_dir = std::getenv("GL_GAME_DIR");
+    REQUIRE(game_dir != nullptr);
+
+    const fs::path temp = unique_temp_dir();
+    fs::remove_all(temp);
+    fs::create_directories(temp);
+    const fs::path normal_png = temp / "normal.png";
+    const fs::path background_png = temp / "background.png";
+
+    const int normal_code =
+        run_glview(glview_arguments(game_dir, normal_png, {"--frames", "5"}));
+    const int background_code = run_glview(
+        glview_arguments(game_dir, background_png, {"--frames", "5", "--background-only"}));
+    CAPTURE(normal_code);
+    CAPTURE(background_code);
+    REQUIRE(fs::exists(normal_png));
+    REQUIRE(fs::exists(background_png));
+    CHECK(normal_code == 0);
+    CHECK(background_code == 0);
+
+    int normal_width = 0;
+    int normal_height = 0;
+    int normal_channels = 0;
+    unsigned char* normal_pixels =
+        stbi_load(normal_png.string().c_str(), &normal_width, &normal_height, &normal_channels, 4);
+    REQUIRE(normal_pixels != nullptr);
+
+    int background_width = 0;
+    int background_height = 0;
+    int background_channels = 0;
+    unsigned char* background_pixels = stbi_load(background_png.string().c_str(),
+                                                 &background_width, &background_height,
+                                                 &background_channels, 4);
+    REQUIRE(background_pixels != nullptr);
+
+    CHECK(normal_width == 1280);
+    CHECK(normal_height == 720);
+    CHECK(background_width == 1280);
+    CHECK(background_height == 720);
+
+    std::uint64_t differing_pixels = 0;
+    if (normal_width == background_width && normal_height == background_height) {
+        const std::size_t pixel_count =
+            static_cast<std::size_t>(normal_width) * static_cast<std::size_t>(normal_height);
+        for (std::size_t i = 0; i < pixel_count; ++i) {
+            const unsigned char* a = normal_pixels + i * 4;
+            const unsigned char* b = background_pixels + i * 4;
+            if (a[0] != b[0] || a[1] != b[1] || a[2] != b[2] || a[3] != b[3]) {
+                ++differing_pixels;
+            }
+        }
+    }
+    stbi_image_free(normal_pixels);
+    stbi_image_free(background_pixels);
+
+    CAPTURE(differing_pixels);
+    CHECK(differing_pixels > 1000);
 
     fs::remove_all(temp);
 }

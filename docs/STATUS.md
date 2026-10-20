@@ -57,7 +57,18 @@ Fix round 1: `gl_render` зависит от `gl_platform` + `gl_assets` (не �
 CLI-тест на пустой каталог; `parse_args` обёрнут в try/catch (exit 1). Полный `ctest`
 после правок: 4/4 passed (real-data 392.88 s).
 
-Следующая задача — **P1 Task 7: Draw statics and animations** (`docs/plans/2026-10-19-p1-level-viewer.md`).
+Task 7 завершён: `gl_render::draw_texture` (`SDL_RenderCopyF` в `to_screen`, пропуск
+невидимых спрайтов) и отрисовка статики/анимаций в `glview`. Текстуры статики и кадров
+анимаций создаются при загрузке (SDL-зависимость осталась только в app/render);
+порядок — фон → статика (по `number`) → анимации. Кадр анимации:
+`(elapsed_ms / delay_ms) % frames.size()`, при `delay_ms == 0` — первый кадр.
+Интерактивный режим использует `SDL_GetTicks64`, скриншот — детерминированные
+`elapsed_ms = N * 16`. Добавлен флаг `--background-only` (описан в `--help`).
+Render-тест: normal `--frames 5` и `--background-only` — оба 1280×720, различие
+> 1000 пикселей. Полный `ctest` с `GL_GAME_DIR`: 4/4 passed (real-data 392.15 s,
+render 8.27 s).
+
+Следующая задача — **P1 Task 8: Input, debug overlay, acceptance** (`docs/plans/2026-10-19-p1-level-viewer.md`).
 
 ## Как продолжить (пауза 2026-10-19)
 
@@ -131,10 +142,12 @@ CLI-тест на пустой каталог; `parse_args` обёрнут в tr
 - 2026-10-20: P1 Task 4 — `slice_csx_frames`: нарезка CSX на кадры, unit 90/547, `ctest` 3/3.
 - 2026-10-20: P1 Task 6 — `gl_render` (Texture/Camera/background) и `glview`
   (load/background/screenshot); render-тест на реальном `l1_1`, `ctest` 4/4.
+- 2026-10-20: P1 Task 7 — `draw_texture`, текстуры статики/анимаций, детерминированный
+  `--frames`, `--background-only`; render-тест на различие с фоном, `ctest` 4/4.
 
 ## Следующие задачи
 
-1. P1 Task 7: Draw statics and animations.
+1. P1 Task 8: Input, debug overlay, acceptance.
 
 ## Открытые вопросы
 

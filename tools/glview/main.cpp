@@ -17,6 +17,7 @@
 #include <string>
 #include <string_view>
 #include <system_error>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -28,6 +29,25 @@ struct Options {
     int width = 1280;
     int height = 720;
     int frames = 1;
+    bool background_only = false;
+};
+
+struct Sprite {
+    gl::render::Texture texture;
+    std::int32_t x = 0;
+    std::int32_t y = 0;
+};
+
+struct Animation {
+    std::vector<gl::render::Texture> frames;
+    std::int32_t x = 0;
+    std::int32_t y = 0;
+    std::uint32_t delay_ms = 0;
+};
+
+struct LevelGraphics {
+    std::vector<Sprite> statics;
+    std::vector<Animation> animations;
 };
 
 enum class ParseStatus { ok, help, error };
@@ -42,6 +62,7 @@ void print_usage() {
               "  --height <px>      Window height (default: 720)\n"
               "  --screenshot <png> Render frames, save PNG and exit\n"
               "  --frames <n>       Frames to render before screenshot (default: 1)\n"
+              "  --background-only  Draw only the background (skip statics and animations)\n"
               "  -h, --help         Show this help and exit\n"
               "\n"
               "Exit codes: 0 success, 1 arguments, 2 I/O, 3 format/load.");
@@ -135,6 +156,8 @@ ParseStatus parse_args(int argc, char** argv, Options& options) {
                              static_cast<int>(value.size()), value.data());
                 return ParseStatus::error;
             }
+        } else if (arg == "--background-only") {
+            options.background_only = true;
         } else {
             std::fprintf(stderr, "glview: unknown argument: %s\n", argv[i]);
             print_usage();
@@ -168,15 +191,33 @@ void report_error(std::string_view context, const gl::Error& error) {
                  error.message.c_str());
 }
 
-void draw_frame(SDL_Renderer* renderer, const gl::render::Texture& texture,
-                const gl::render::Camera& camera, int width, int height) {
+void draw_frame(SDL_Renderer* renderer, const gl::render::Texture& background,
+                const LevelGraphics& graphics, const gl::render::Camera& camera, int width,
+                int height, std::uint64_t elapsed_ms, bool background_only) {
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
     SDL_RenderClear(renderer);
-    gl::render::draw_background(renderer, texture, camera, width, height);
+    gl::render::draw_background(renderer, background, camera, width, height);
+    if (background_only) return;
+
+    for (const auto& sprite : graphics.statics) {
+        gl::render::draw_texture(renderer, sprite.texture, camera,
+                                 static_cast<float>(sprite.x), static_cast<float>(sprite.y));
+    }
+
+    for (const auto& animation : graphics.animations) {
+        if (animation.frames.empty()) continue;
+        const std::uint64_t delay = animation.delay_ms == 0 ? 1 : animation.delay_ms;
+        const std::size_t index =
+            static_cast<std::size_t>((elapsed_ms / delay) % animation.frames.size());
+        gl::render::draw_texture(renderer, animation.frames[index], camera,
+                                 static_cast<float>(animation.x),
+                                 static_cast<float>(animation.y));
+    }
 }
 
 int save_screenshot(SDL_Renderer* renderer, const std::filesystem::path& path, int frames,
-                    const gl::render::Texture& texture, const gl::render::Camera& camera) {
+                    const gl::render::Texture& background, const LevelGraphics& graphics,
+                    const gl::render::Camera& camera, bool background_only) {
     int width = 0;
     int height = 0;
     if (SDL_GetRendererOutputSize(renderer, &width, &height) != 0 || width <= 0 || height <= 0) {
@@ -194,7 +235,9 @@ int save_screenshot(SDL_Renderer* renderer, const std::filesystem::path& path, i
     std::vector<std::uint8_t> pixels(static_cast<std::size_t>(pixel_count) * 4);
 
     for (int frame = 0; frame < frames; ++frame) {
-        draw_frame(renderer, texture, camera, width, height);
+        const std::uint64_t elapsed_ms = static_cast<std::uint64_t>(frame + 1) * 16;
+        draw_frame(renderer, background, graphics, camera, width, height, elapsed_ms,
+                   background_only);
         if (frame + 1 == frames) {
             if (SDL_RenderReadPixels(renderer, nullptr, SDL_PIXELFORMAT_RGBA32, pixels.data(),
                                      pitch) != 0) {
@@ -216,8 +259,10 @@ int save_screenshot(SDL_Renderer* renderer, const std::filesystem::path& path, i
     return 0;
 }
 
-int run_interactive(SDL_Renderer* renderer, const gl::render::Texture& texture,
-                    const gl::render::Camera& camera) {
+int run_interactive(SDL_Renderer* renderer, const gl::render::Texture& background,
+                    const LevelGraphics& graphics, const gl::render::Camera& camera,
+                    bool background_only) {
+    const std::uint64_t start_ticks = SDL_GetTicks64();
     bool running = true;
     while (running) {
         SDL_Event event;
@@ -238,7 +283,8 @@ int run_interactive(SDL_Renderer* renderer, const gl::render::Texture& texture,
             return 2;
         }
 
-        draw_frame(renderer, texture, camera, width, height);
+        draw_frame(renderer, background, graphics, camera, width, height,
+                   SDL_GetTicks64() - start_ticks, background_only);
         SDL_RenderPresent(renderer);
     }
     return 0;
@@ -273,18 +319,53 @@ int main(int argc, char** argv) {
         gl::platform::SdlContext context;
         gl::platform::Window window("Goldenland 2 - Level Viewer", options.width, options.height);
 
-        auto texture = gl::render::Texture::from_image(window.renderer(), level->background);
-        if (!texture) {
-            report_error("cannot create background texture", texture.error());
-            return exit_code_for(texture.error());
+        auto background = gl::render::Texture::from_image(window.renderer(), level->background);
+        if (!background) {
+            report_error("cannot create background texture", background.error());
+            return exit_code_for(background.error());
+        }
+
+        LevelGraphics graphics;
+        graphics.statics.reserve(level->statics.size());
+        for (const auto& object : level->statics) {
+            auto created = gl::render::Texture::from_image(window.renderer(), object.image);
+            if (!created) {
+                gl::log(gl::LogLevel::warning,
+                        "skipping static texture: " + created.error().message);
+                continue;
+            }
+            graphics.statics.push_back(
+                Sprite{std::move(created.value()), object.x, object.y});
+        }
+
+        graphics.animations.reserve(level->animations.size());
+        for (const auto& object : level->animations) {
+            std::vector<gl::render::Texture> frames;
+            frames.reserve(object.frames.size());
+            bool complete = true;
+            for (const auto& image : object.frames) {
+                auto created = gl::render::Texture::from_image(window.renderer(), image);
+                if (!created) {
+                    gl::log(gl::LogLevel::warning,
+                            "skipping animation texture: " + created.error().message);
+                    complete = false;
+                    break;
+                }
+                frames.push_back(std::move(created.value()));
+            }
+            if (!complete || frames.empty()) continue;
+            graphics.animations.push_back(
+                Animation{std::move(frames), object.x, object.y, object.delay_ms});
         }
 
         const gl::render::Camera camera;
         if (!options.screenshot.empty()) {
             return save_screenshot(window.renderer(), options.screenshot, options.frames,
-                                   texture.value(), camera);
+                                   background.value(), graphics, camera,
+                                   options.background_only);
         }
-        return run_interactive(window.renderer(), texture.value(), camera);
+        return run_interactive(window.renderer(), background.value(), graphics, camera,
+                               options.background_only);
     } catch (const std::exception& e) {
         std::fprintf(stderr, "glview: %s\n", e.what());
         return 2;
