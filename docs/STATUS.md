@@ -249,7 +249,9 @@ P0 закрыт 2026-10-19; далее выполнялись задачи P1 (�
 
 ## Следующие задачи
 
-1. P2b: ServerCore/ClientCore + детерминированный тик (после P2a).
+1. P2b: ServerCore/ClientCore + детерминированный тик — spec/plan готовы
+   (`docs/specs/2026-10-20-p2b-deterministic-tick-design.md`, `docs/plans/2026-10-20-p2b-deterministic-tick.md`);
+   начать с Task 1.
 2. P2c: save/load каркас (`.sav` заголовок, слоты; полная десериализация позже).
 3. P1b: Android/touch — отложенный follow-up P1.
 
