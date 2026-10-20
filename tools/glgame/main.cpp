@@ -306,7 +306,7 @@ class Game {
 
         const int pitch = width * 4;
         std::vector<std::uint8_t> pixels(static_cast<std::size_t>(pixel_count) * 4);
-        render(0);
+        render(0, 0);
         if (SDL_RenderReadPixels(renderer, nullptr, SDL_PIXELFORMAT_RGBA32, pixels.data(),
                                  pitch) != 0) {
             std::fprintf(stderr, "glgame: SDL_RenderReadPixels failed: %s\n", SDL_GetError());
@@ -335,8 +335,7 @@ class Game {
             const std::uint64_t now = SDL_GetTicks64();
             std::uint64_t delta_ms = now - previous;
             previous = now;
-            if (delta_ms > 100) delta_ms = 100;
-            if (!server_.paused()) animation_ms_ += delta_ms;
+            if (delta_ms > 250) delta_ms = 250;
 
             const float delta_seconds = static_cast<float>(delta_ms) / 1000.0f;
             SDL_Event event;
@@ -344,6 +343,10 @@ class Game {
                 handle_event(event);
             }
             if (state_.state() == gl::core::AppState::exit) break;
+
+            server_.tick(delta_seconds);
+            client_.on_snapshot(server_.snapshot());
+            process_server_events();
 
             if (state_.state() == gl::core::AppState::level && level_ && !console_visible_) {
                 int move_x = 0;
@@ -358,7 +361,7 @@ class Game {
                 }
             }
 
-            render(SDL_GetTicks64());
+            render(SDL_GetTicks64(), client_.snapshot().simulation_time_ms);
             SDL_RenderPresent(window_.renderer());
             SDL_Delay(1);
         }
@@ -460,6 +463,7 @@ class Game {
         for (const std::string_view arg : args) command.args.emplace_back(arg);
         server_.submit(std::move(command));
         server_.tick(0.0);
+        client_.on_snapshot(server_.snapshot());
         process_server_events();
         return std::string{};
     }
@@ -468,6 +472,7 @@ class Game {
         if (config_.get_bool("gv_pause", false)) server_.submit("gv_pause 1");
         if (config_.get_bool("gv_free_camera", false)) server_.submit("gv_free_camera 1");
         server_.tick(0.0);
+        client_.on_snapshot(server_.snapshot());
         process_server_events();
     }
 
@@ -564,7 +569,6 @@ class Game {
         }
         level_.emplace(std::move(screen.value()));
         level_name_ = std::string(name);
-        animation_ms_ = 0;
         update_viewport();
         return true;
     }
@@ -799,13 +803,13 @@ class Game {
         }
     }
 
-    void render(std::uint64_t now_ms) {
+    void render(std::uint64_t now_ms, std::uint64_t animation_ms) {
         update_viewport();
         if (state_.state() == gl::core::AppState::level && level_) {
             gl::app::LevelScreenOptions options;
             options.debug_overlay = debug_overlay_;
-            level_->render(window_.renderer(), options, animation_ms_);
-            if (server_.paused()) {
+            level_->render(window_.renderer(), options, animation_ms);
+            if (client_.snapshot().paused) {
                 const std::string_view label = "PAUSED";
                 const float width = gl::render::text_width(label, kTitleScale);
                 gl::render::draw_text(window_.renderer(), label,
@@ -943,7 +947,6 @@ class Game {
     int viewport_width_ = 0;
     int viewport_height_ = 0;
     int menu_selected_ = 0;
-    std::uint64_t animation_ms_ = 0;
 };
 
 } // namespace
