@@ -61,9 +61,8 @@ class ServerCore {
 5. `simulation_time_ms = tick_index_ * 1000 / kTickHz`.
 
 Tests:
-- `tick(1.0)` → 60 ticks, 1000 ms (exact within double accumulation: 1.0 / (1/60) may yield 60; assert 60).
-- `tick(0.5)` → 30 ticks.
-- `0.01 × 60` → 60 ticks.
+- `tick(0.25)` → 15 ticks, 250 ms; `tick(1.0)` clamps to 0.25 → ≤15 ticks.
+- 60 × `tick(0.01)` (0.6 s total) → 36 ticks, 600 ms.
 - pause: `tick` does not advance; `gv_pause 0` submitted while paused applies on the next tick and advances.
 - `tick(10.0)` → ≤15 ticks and accumulator reset (next `tick(0)` no advance).
 - submit before tick does not apply until tick; events once.

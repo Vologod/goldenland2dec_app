@@ -1,7 +1,9 @@
 #include "gl/core/server.hpp"
 #include <doctest/doctest.h>
 #include <cstdint>
+#include <limits>
 #include <string>
+#include <utility>
 #include <vector>
 
 using gl::core::ClientCore;
@@ -9,8 +11,6 @@ using gl::core::Command;
 using gl::core::Event;
 using gl::core::EventType;
 using gl::core::kFixedDt;
-using gl::core::kMaxFrameDt;
-using gl::core::kMaxStepsPerTick;
 using gl::core::kTickHz;
 using gl::core::ServerCore;
 using gl::core::ServerSnapshot;
@@ -321,6 +321,16 @@ TEST_CASE("ServerCore: two quarter-second frames advance 30 ticks") {
     CHECK(server.simulation_time_ms() == 500);
 }
 
+TEST_CASE("ServerCore: 60 frames of 0.01 accumulate to 36 ticks") {
+    ServerCore server;
+
+    for (int i = 0; i < 60; ++i)
+        server.tick(0.01);
+
+    CHECK(server.tick_index() == 36);
+    CHECK(server.simulation_time_ms() == 600);
+}
+
 TEST_CASE("ServerCore: 100 frames of 0.01 accumulate to 60 ticks") {
     ServerCore server;
 
@@ -363,6 +373,20 @@ TEST_CASE("ServerCore: negative dt does not rewind the clock") {
     CHECK(server.simulation_time_ms() == 250);
 }
 
+TEST_CASE("ServerCore: non-finite dt cannot poison the accumulator") {
+    ServerCore server;
+
+    server.tick(0.25);
+    server.tick(std::numeric_limits<double>::quiet_NaN());
+    server.tick(std::numeric_limits<double>::infinity());
+    CHECK(server.tick_index() == 15);
+    CHECK(server.simulation_time_ms() == 250);
+
+    server.tick(0.0);
+    CHECK(server.tick_index() == 15);
+    CHECK(server.simulation_time_ms() == 250);
+}
+
 TEST_CASE("ServerCore: pause freezes the clock and gv_pause 0 resumes") {
     ServerCore server;
 
@@ -387,7 +411,6 @@ TEST_CASE("ServerCore: long frame hits the step cap and resets the accumulator")
     ServerCore server;
 
     server.tick(10.0);
-    CHECK(server.tick_index() <= static_cast<std::uint64_t>(kMaxStepsPerTick));
     CHECK(server.tick_index() == 15);
 
     server.tick(0.0);
@@ -425,9 +448,10 @@ TEST_CASE("ServerCore: identical dt sequences are deterministic") {
 
     const auto first = run();
     const auto second = run();
+    CHECK(first.first == 28);
+    CHECK(first.second == 466);
     CHECK(first.first == second.first);
     CHECK(first.second == second.second);
-    CHECK(first.first > 0);
 }
 
 TEST_CASE("ServerCore: snapshot mirrors pause, free camera, tick and time") {

@@ -1,6 +1,7 @@
 #include "gl/core/server.hpp"
 #include "gl/core/command.hpp"
 #include <charconv>
+#include <cmath>
 #include <cstddef>
 #include <optional>
 #include <string>
@@ -75,9 +76,9 @@ void ServerCore::tick(double dt) {
         return;
     }
 
-    if (dt < 0.0)
+    if (!std::isfinite(dt) || dt <= 0.0)
         dt = 0.0;
-    if (dt > kMaxFrameDt)
+    else if (dt > kMaxFrameDt)
         dt = kMaxFrameDt;
     accumulator_ += dt;
 
