@@ -68,7 +68,7 @@ Tests:
 - submit before tick does not apply until tick; events once.
 - determinism: same `dt` sequence → same tick/time; different sequences to the same total time → same totals (with tolerance where needed).
 
-- [ ] TDD, implement, commit.
+- [x] TDD, implement, commit.
 
 ---
 
@@ -83,7 +83,7 @@ class ClientCore {
 ```
 Tests: mirror updates; default snapshot; snapshot independent of later server changes.
 
-- [ ] TDD, implement, commit.
+- [x] TDD, implement, commit.
 
 ---
 
@@ -96,19 +96,20 @@ Tests: mirror updates; default snapshot; snapshot independent of later server ch
 - Keep input timing (`delta_seconds` for pan) independent of the simulation clock.
 - Verify existing screenshot/menu/level tests pass; add a test that `simulation_time_ms` stays constant while paused and advances after unpause (unit in `gl_core`, already Task 1) and that glgame screenshots are unchanged.
 
-- [ ] Implement, run tests, commit.
+- [x] Implement, run tests, commit.
 
 ---
 
 ### Task 4: Acceptance + docs
 
-- Full `ctest` with `GL_GAME_DIR`.
-- Run `glgame --game-dir I:\Games\Златогорье-2`; animations run; `gv_pause 1/0` freezes/resumes (manual).
-- `docs/STATUS.md`: P2b accepted (automated; manual note), next P2c.
-- `docs/PROJECT.md`: P2 progress.
-- `docs/DECISIONS.md`: D-021 fixed 60 Hz, max frame dt 0.25, max 15 steps.
-- `docs/research/`: tick/time facts.
-- Commit.
+- [x] Full `ctest` with `GL_GAME_DIR`: 8/8 passed (541.46 s).
+- [x] Screenshot acceptance: menu/level/paused exit 0, each 1280×720, non-uniform.
+- [ ] Manual interactive: run `glgame --game-dir I:\Games\Златогорье-2`; if started paused, `gv_pause 0`; animations run; `gv_pause 1/0` freezes/resumes. **OPEN — not verified; requires a human on a desktop session.**
+- [x] `docs/STATUS.md`: P2b accepted (automated; manual gate open), next P2c.
+- [x] `docs/PROJECT.md`: P2 progress.
+- [x] `docs/DECISIONS.md`: D-021 fixed 60 Hz, max frame dt 0.25, max 15 steps.
+- [x] `docs/research/`: tick/time facts.
+- [x] Commit.
 
 ## Self-Review
 

@@ -7,10 +7,23 @@
 P0 завершена и принята. P1 — Level viewer: реализация и автоматизированная приёмка
 завершены (2026-10-20); открыт финальный manual desktop pass (см. Open Questions).
 P2a — оболочка игры и консоль: реализация, автоматизированная приёмка и manual desktop
-gate завершены (2026-10-20); P2a принята. Следующие подпроекты — P2b (Server/Client
-tick) и P2c (save/load каркас).
+gate завершены (2026-10-20); P2a принята. P2b — детерминированный тик: реализация и
+автоматизированная приёмка завершены (2026-10-20); открыт manual interactive gate
+(анимации, `gv_pause 1/0`). Следующие подпроекты — P2c (save/load каркас) и P2 backfill.
 
 ## Текущая задача
+
+**P2b — Task 4 (automated acceptance + docs) завершён 2026-10-20.**
+`cmake --build build` — `ninja: no work to do`; полный `ctest --test-dir build
+--output-on-failure` с `GL_GAME_DIR` — **8/8 passed**, 541.46 s (real-data 510.18 s,
+glview 18.80 s, glgame 12.14 s). Все три screenshot-прогона `glgame` — exit 0,
+PNG 1280×720 и не одноцветные: menu 38 273 B / 15 цветов, level 2 715 273 B /
+115 244 цвета, paused 2 714 099 B / 115 177 цветов (SHA-256 в task-4-report).
+P2b automated acceptance passed. **Manual interactive gate OPEN:** запустить
+`glgame --game-dir "I:\Games\Златогорье-2"`, New Game → `l1_1`; если конфиг сохранён
+с `gv_pause 1`, сначала выполнить `gv_pause 0`, затем убедиться, что анимации идут;
+`gv_pause 1` — анимации и `PAUSED` замирают; `gv_pause 0` — возобновляются.
+Следующая задача — P2c (save/load). P1 manual desktop pass остаётся открытым.
 
 **P2a — Task 7 (automated acceptance + docs) завершён 2026-10-20.**
 `cmake --build build` — `ninja: no work to do`; полный `ctest --test-dir build
@@ -19,8 +32,7 @@ glview 25.30 s, glgame 12.16 s). `glgame --menu --screenshot` и `--level l1_1
 --screenshot` — exit 0, оба PNG 1280×720 (menu.png 38 273 B, 15 цветов;
 level.png 2 715 273 B, 115 244 цвета; SHA-256 в task-7-report). Manual desktop gate
 **пройден 2026-10-20** (подтверждено пользователем): New Game → `l1_1`, `~`, `help`,
-`gv_pause`, `exit` на обычном рабочем столе с реальным вводом. P2a принята. Следующая
-задача — P2b (Server/Client tick). P1 manual desktop pass остаётся открытым.
+`gv_pause`, `exit` на обычном рабочем столе с реальным вводом. P2a принята.
 
 **P2a — Task 6 (`glgame` shell) завершён 2026-10-20.** Добавлен `tools/glgame`
 (меню, уровень через `LevelScreen`, консоль `~`, команды, конфиг/`cl_username`
@@ -246,20 +258,35 @@ P0 закрыт 2026-10-19; далее выполнялись задачи P1 (�
   (`config_changed`), атомарная запись Config, `//` внутри значения не комментарий,
   отказ от `\r`/`\n` в `set`, New Game всегда `l1_1`, D-020 (отсутствующий INI =
   defaults + warning); `gv_free_camera`/`gv_skip_logo` помечены как P2a-заглушки.
+- 2026-10-20: P2b Task 1 — фиксированный 60 Гц `ServerCore` (`tick_index`,
+  `simulation_time_ms`, `snapshot`), лимиты `kMaxFrameDt=0.25`/`kMaxStepsPerTick=15`,
+  защита от отрицательного и нефинитного `dt`; D-021, unit-тесты детерминизма/паузы.
+- 2026-10-20: P2b Task 2 — `ClientCore::on_snapshot`/`snapshot`; snapshot не зависит
+  от последующих тиков сервера.
+- 2026-10-20: P2b Task 3 — `glgame` тикает сервер от frame delta (кап 250 мс), передаёт
+  snapshot клиенту, рисует анимации по `simulation_time_ms`, `PAUSED` — из snapshot;
+  ручной `animation_ms_` удалён, screenshot-режим остаётся детерминированным.
+- 2026-10-20: P2b Task 4 — automated acceptance: `ctest` 8/8 (541.46 s), menu/level/paused
+  screenshots exit 0, 1280×720, не одноцветные; research note
+  `docs/research/p2b-deterministic-tick.md`; manual interactive gate открыт.
 
 ## Следующие задачи
 
-1. P2b: ServerCore/ClientCore + детерминированный тик — spec/plan готовы
-   (`docs/specs/2026-10-20-p2b-deterministic-tick-design.md`, `docs/plans/2026-10-20-p2b-deterministic-tick.md`);
-   начать с Task 1.
-2. P2c: save/load каркас (`.sav` заголовок, слоты; полная десериализация позже).
-3. P1b: Android/touch — отложенный follow-up P1.
+1. P2c: save/load каркас (`.sav` заголовок, слоты; полная десериализация позже).
+2. P2b manual interactive gate: анимации на `l1_1`, `gv_pause 1/0` (см. Open Questions).
+3. P2 backfill: интерполяция/сеть/игровые системы — отложены до появления сущностей.
+4. P1b: Android/touch — отложенный follow-up P1.
 
 ## Открытые вопросы
 
 - P1: финальный manual desktop pass — WASD/стрелки, `Home` и визуальный `F1` toggle
   на обычном рабочем столе. В текущей headless-сессии клавиатурный фокус недоступен;
   drag-панорама и wheel-зум проверены инъекцией мыши, overlay — screenshot-тестом.
+- P2b: manual interactive gate — на обычном рабочем столе запустить
+  `glgame --game-dir "I:\Games\Златогорье-2"`, New Game → `l1_1`; если конфиг сохранён
+  с `gv_pause 1`, сначала `gv_pause 0`, затем убедиться, что анимации идут;
+  `gv_pause 1` — анимации и `PAUSED` замирают, `gv_pause 0` — возобновляются.
+  Автоматизированная приёмка это не проверяет; gate остаётся OPEN до подтверждения.
 - SDL2 `release-2.32.10` выдаёт CMake deprecation warning из-за своего
   `cmake_minimum_required`; следить при обновлении CMake/SDL.
 - `.clang-format` (LLVM base) не совпадает со стилем исходников P0; repo-wide
@@ -295,7 +322,7 @@ P0 закрыт 2026-10-19; далее выполнялись задачи P1 (�
 
 ## Backlog P2a → P2b/P7
 
-- P2b: реальный детерминированный тик (	ick(dt) сейчас игнорирует dt, пауза/время — P2b).
+- P2b: детерминированный тик выполнен (D-021); отложены интерполяция движения и сеть.
 - Вынести Game-логику из 	ools/glgame/main.cpp в тестируемый компонент (меню/консоль/состояния покрыты только subprocess-скриншотами и ручным gate).
 - gv_free_camera: заглушка P2a — подключить к камере (отключение clamp/следования) или убрать.
 - gv_skip_logo: no-op в P2a; удалить из активных ключей или реализовать при экране логотипа.
