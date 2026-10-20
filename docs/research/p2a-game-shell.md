@@ -14,7 +14,8 @@
 - `glgame` по умолчанию читает `<game-dir>/GoldenLand.ini` (или `--config`).
   Неизвестные строки, комментарии, `bind`, порядок и EOL сохраняются; запись идёт
   построчно в cp1251. `cl_username`, `r_windowed`, `r_resolution`, `d_console`,
-  `gv_pause`, `gv_free_camera` читаются/пишутся оболочкой.
+  `gv_pause` читаются/пишутся оболочкой; `gv_free_camera` — только runtime-состояние
+  (в INI не сохраняется).
 
 ## Заголовок `.sav`
 
@@ -33,8 +34,8 @@
   `r_windowed <0|1>`, `cl_username <name>`, `game_save <slot>` (заглушка).
 - `gv_pause`, `gv_free_camera`, `r_windowed`, `cl_username` идут через
   `ServerCore::submit`/`tick`; оболочка применяет события `config_changed`/
-  `paused_changed` к `Config` и окну. Неизвестная команда/лишние аргументы — лог,
-  не фатальны.
+  `paused_changed` к `Config` и окну. `gv_free_camera` меняет только runtime-состояние
+  и не персистится. Неизвестная команда/лишние аргументы — лог, не фатальны.
 - `d_console` из INI применяется при старте; `gv_pause`/`r_windowed`/`cl_username`
   персистятся без потери `bind`/комментариев.
 
