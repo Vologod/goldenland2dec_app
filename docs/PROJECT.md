@@ -44,7 +44,7 @@
 |---|---|---|---|---|
 | P0 | Ассеты и форматы | библиотека `gl_assets` + CLI `glpak`: VFS/PAK/zlib, CSX, SDB, ITM, BMP; unit + real-data тесты; 4 обязательных архива распакованы и сверены, остальные — по FAT | — | `[x]` |
 | P1 | Рендер изометрии и уровень | SDL2-рендер реальной локации, камера, анимации | P0 | `[~]` Tasks 1–8: platform, LVL, LAO/SEF, CSX frames, LevelLoader, background, statics/animations, camera/input, debug overlay, screenshot. P1 automated acceptance passed; manual desktop pass pending. Android/touch — P1b |
-| P2 | Ядро движка | цикл, `.ini`, консоль/команды, save/load, состояния | P0 | `[~]` P2a/P2b приняты; P2c реализован, automated acceptance passed, manual UI gate pending |
+| P2 | Ядро движка | цикл, `.ini`, консоль/команды, save/load, состояния | P0 | `[~]` P2a/P2b/P2c приняты; полная десериализация/запись save — позже |
 | P3 | Скрипт-машина | CS-байткод VM, AgeScript, диалоги, SDB | P2 | `[ ]` |
 | P4 | Персонажи/AI/триггеры | `.prs/.ssh/.inf`, поиск пути, встречи | P3 | `[ ]` |
 | P5 | Игровые системы | параметры/скиллы, инвентарь, магия, бой | P4 | `[ ]` |

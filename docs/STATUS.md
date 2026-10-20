@@ -293,27 +293,24 @@ P0 закрыт 2026-10-19; далее выполнялись задачи P1 (�
   CLI `--list-saves` (28 строк, exit 0), screenshot-тест меню.
 - 2026-10-20: P2c Task 4 — automated acceptance: `ctest` 8/8 (395.96 s),
   `--list-saves` 28 строк / exit 0; research note `docs/research/p2c-save-slots.md`.
-  Manual UI gate остаётся открытым; P1 manual desktop pass остаётся открытым.
+- 2026-10-20: P2c manual UI gate пройден пользователем (`Continue` → `Save slots`,
+  прокрутка, `Enter`/`Esc`); P2c принят. P1 manual desktop pass остаётся открытым.
 
 ## Следующие задачи
 
-1. P2c: manual UI gate — меню `Continue` → список слотов, прокрутка при маленьком
-   разрешении, `Enter`/`Esc` (см. «Текущая задача»).
-2. P3: скрипт-машина (CS VM, AgeScript, диалоги, SDB) — следующий подпроект.
-3. P1b: Android/touch — отложенный follow-up P1.
-4. P2 backfill: интерполяция/сеть/игровые системы — отложены до появления сущностей.
+1. P3: скрипт-машина (CS VM, AgeScript, диалоги, SDB) — следующий подпроект.
+2. P1b: Android/touch — отложенный follow-up P1.
+3. P2 backfill: интерполяция/сеть/игровые системы — отложены до появления сущностей.
 
 ## Открытые вопросы
 
 - P1: финальный manual desktop pass — WASD/стрелки, `Home` и визуальный `F1` toggle
   на обычном рабочем столе. В текущей headless-сессии клавиатурный фокус недоступен;
   drag-панорама и wheel-зум проверены инъекцией мыши, overlay — screenshot-тестом.
-- P2c: manual UI gate OPEN — меню `Continue` → `Save slots`, прокрутка при маленьком
-  разрешении, `Enter` (сообщение) и `Esc` (назад в меню) на обычном рабочем столе.
-  Автоматизированная приёмка P2c пройдена, но UI-поведение подтверждается только вручную.
 - P2c: Cyrillic/cp1251 save-slot titles render as `?` in `glgame` because `gl_render` uses
   `stb_easy_font` (ASCII-only). Accepted P2c limitation; a proper font with cp1251 glyphs is
   tracked as P7 backlog.
+- Полная десериализация `.sav` и запись сохранений не реализованы (P2c — read-only каркас).
 - SDL2 `release-2.32.10` выдаёт CMake deprecation warning из-за своего
   `cmake_minimum_required`; следить при обновлении CMake/SDL.
 - `.clang-format` (LLVM base) не совпадает со стилем исходников P0; repo-wide

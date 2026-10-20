@@ -119,14 +119,13 @@ lines; menu screenshot still 1280×720.
 - [x] Full `ctest` with `GL_GAME_DIR` — 8/8 passed, 395.96 s (2026-10-20).
 - [x] `glgame --game-dir ... --list-saves` output evidence — exit 0, 28 lines, slot0
   `2022-11-06  Quick save  642409`.
-- [ ] Manual: menu `Continue` → slot list, Esc back. **OPEN** (human gate; automated
-  acceptance cannot verify UI input/scroll/back-navigation).
-- [x] Docs: STATUS/PROJECT (P2c automated accepted; next P3 or P1b), research note
+- [x] Manual: menu `Continue` → slot list, scroll, `Enter`/`Esc`. Подтверждено пользователем 2026-10-20.
+- [x] Docs: STATUS/PROJECT (P2c accepted; next P3 or P1b), research note
   (save header facts), plan checkboxes.
 - [x] Commit.
 
-Note: P2c automated acceptance is complete; the manual UI gate remains open and P2c is not
-fully accepted until it is performed. No code changes were made in Task 4.
+Note: P2c accepted 2026-10-20 (automated + manual). No code changes were made in Task 4;
+full `.sav` deserialization/writing remain deferred.
 
 ## Self-Review
 
