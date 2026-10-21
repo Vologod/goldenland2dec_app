@@ -1,4 +1,4 @@
-# PROJECT — Goldenland 2: Android Port
+﻿# PROJECT — Goldenland 2: Android Port
 
 Живой план проекта. Обновляется после каждой задачи.
 
@@ -46,7 +46,7 @@
 | P1 | Рендер изометрии и уровень | SDL2-рендер реальной локации, камера, анимации | P0 | `[~]` Tasks 1–8: platform, LVL, LAO/SEF, CSX frames, LevelLoader, background, statics/animations, camera/input, debug overlay, screenshot. P1 automated acceptance passed; manual desktop pass pending. Android/touch — P1b |
 | P2 | Ядро движка | цикл, `.ini`, консоль/команды, save/load, состояния | P0 | `[~]` P2a/P2b/P2c приняты; полная десериализация/запись save — позже |
 | P3 | Скрипт-машина | CS-байткод VM, AgeScript, диалоги, SDB | P2 | `[~]` P3a принята: `.cs` parser, VM + globals, dialog flow + native registry, tools `glpak disasm-cs` / `glscript`, automated acceptance (11/11, 555/555 `.cs`); final hardening: eval budget, assign type coercion, opcodes `1/3..5/12/13/19/20`, sticky errors. P3a/P3c приняты: CS VM + dialogs + SDB + TTF (manual UI gate пройден 2026-10-21); P4 (NPC) pending |
-| P4 | Персонажи/AI/триггеры | `.prs/.ssh/.inf`, поиск пути, встречи | P3 | `[~]` P4a (NPC на уровне): Tasks 1–5, PAD/person `.scr`/SEF `persons`, загрузка и стоячая анимация 16 NPC `l1_1`; automated acceptance passed (15/15, 276/276 `.pad`); manual desktop gate pending. Далее P4b — движение/маршруты/AI |
+| P4 | Персонажи/AI/триггеры | `.prs/.ssh/.inf`, поиск пути, встречи | P3 | `[~]` P4a (NPC на уровне): Tasks 1–5, PAD/person `.scr`/SEF `persons`, загрузка и стоячая анимация 16 NPC `l1_1`; automated acceptance passed (15/15, 276/276 `.pad`); manual desktop gate passed; **P4a принят**. Далее P4b — движение/маршруты/AI |
 | P5 | Игровые системы | параметры/скиллы, инвентарь, магия, бой | P4 | `[ ]` |
 | P6 | Мир | глобальная карта, локации, квесты, дневник, торговля | P5 | `[ ]` |
 | P7 | UI | все экраны и тач-раскладка | P5 | `[ ]` |

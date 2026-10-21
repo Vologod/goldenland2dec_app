@@ -560,13 +560,17 @@ P0 закрыт 2026-10-19; далее выполнялись задачи P1 (�
 - 2026-10-21: P4a Task 5 — automated acceptance + docs: полный `ctest` **15/15**
   (849.95 s, exit 0); PAD **276/276**, 2450 анимаций, 0 ошибок; `l1_1` 16 persons;
   screenshot 1280x720 (`16 persons`, diff 3 828 px vs `--no-persons`, SHA-256
-  `8B377011...`); P4a automated acceptance passed; **manual desktop gate OPEN**.
+  `8B377011...`); P4a automated acceptance passed.
+- 2026-10-21: P4a manual desktop gate пройден пользователем: NPC в правильных позициях,
+  idle-анимация есть, `Esc`/меню работают; **P4a принят** (движение — P4b).
+- 2026-10-21: build — MinGW runtime DLLs (`libc++.dll`, `libunwind.dll`,
+  `libwinpthread-1.dll`) копируются в `build/bin`, запуск без toolchain в `PATH`;
+  commit `dd3445b`.
 
 ## Следующие задачи
 
 1. P4b: NPC движение/маршруты/поиск пути/AI; затем P4c (клик → диалог).
-2. P4a: manual desktop gate — см. Open Questions.
-3. P1b: Android/touch — отложенный follow-up P1.
+2. P1b: Android/touch — отложенный follow-up P1.
 4. P7-follow-up: свободный TTF для Android (P9), прокрутка длинных диалогов, layout-константы.
 
 ## Открытые вопросы
@@ -577,9 +581,6 @@ P0 закрыт 2026-10-19; далее выполнялись задачи P1 (�
 - P3c: `DialogSession::start()` intentionally calls `ScriptVm::restart(true)` — variables are
   rebuilt from globals and seeded runtime state is discarded. `start()`/`choose()` map
   `vm.failed()` to `ErrorCode::format`; `status()`/`failed()` remain available for diagnosis.
-- P4a: manual desktop gate — запустить `glgame --game-dir "I:\Games\Златогорье-2"
-  --level l1_1` на обычном рабочем столе, проверить видимых NPC (позиции/направления)
-  и `Esc`/меню. Агент GUI не запускал и manual pass не подтверждает.
 - Полная десериализация `.sav` и запись сохранений не реализованы (P2c — read-only каркас).
 - SDL2 `release-2.32.10` выдаёт CMake deprecation warning из-за своего
   `cmake_minimum_required`; следить при обновлении CMake/SDL.
