@@ -1,6 +1,6 @@
 # STATUS
 
-Обновлено: 2026-10-20
+Обновлено: 2026-10-21
 
 ## Текущая фаза
 
@@ -10,10 +10,23 @@ P2a — оболочка игры и консоль: реализация, ав�
 gate завершены (2026-10-20); P2a принята. P2b — детерминированный тик: реализация,
 автоматизированная приёмка и manual interactive gate завершены (2026-10-20); P2b принята.
 P2c — save/load каркас: реализация и автоматизированная приёмка завершены (2026-10-20);
-открыт manual UI gate (Continue → слоты, Esc). Следующие подпроекты — P3 (скрипты) или
-P1b (Android/touch); P2 backfill отложен.
+открыт manual UI gate (Continue → слоты, Esc). P3a — CS VM: Task 1 (парсер `.cs`)
+завершён 2026-10-21. Следующие подпроекты — продолжение P3a или P1b (Android/touch);
+P2 backfill отложен.
 
 ## Текущая задача
+
+**P3a — Task 1 (`.cs` parser + name tables) завершён 2026-10-21.**
+`gl_assets` получил `CsNode`, `parse_cs`, `cs_opcode_name`, `cs_function_name`,
+`cs_opcode_valid`; строки cp1251→UTF-8; строгая проверка размера/опкодов/усечения;
+func-аргументы до 9 с обязательным `-1`. Обнаружены 6 легаси-скриптов в `scripts.pak`
+с XOR-обфускацией тела (`plain[i] = data[i] ^ ((i + 0x55) & 0xFF)`, `i >= 4`);
+`parse_cs` распознаёт их fallback-разбором (подтверждено копиями из
+`scripts.update.3.pak`, см. `docs/research/p3a-cs-format.md`). Тесты:
+`gl_assets_tests` — 116 cases / 729 assertions; real-data — **555/555** `.cs`,
+0 ошибок, 338 977 узлов. `cmake --build build` — успех; `ctest -R gl_assets`
+с `GL_GAME_DIR` — **2/2 passed**, 412.94 s (real 412.83 s). Следующая задача —
+P3a Task 2 (VM core + globals).
 
 **P2c — Task 4 (automated acceptance + docs) завершён 2026-10-20.**
 `cmake --build build` — `ninja: no work to do` (exit 0); полный `ctest --test-dir build
@@ -295,12 +308,15 @@ P0 закрыт 2026-10-19; далее выполнялись задачи P1 (�
   `--list-saves` 28 строк / exit 0; research note `docs/research/p2c-save-slots.md`.
 - 2026-10-20: P2c manual UI gate пройден пользователем (`Continue` → `Save slots`,
   прокрутка, `Enter`/`Esc`); P2c принят. P1 manual desktop pass остаётся открытым.
+- 2026-10-21: P3a Task 1 — `gl_assets`: `parse_cs`/`CsNode`/таблицы имён опкодов и
+  функций, cp1251→UTF-8, строгая валидация, fallback для 6 XOR-обфусцированных
+  легаси-скриптов; `test_cs.cpp` и `test_real_cs.cpp` (555/555, 0 ошибок,
+  338 977 узлов); research note `docs/research/p3a-cs-format.md`.
 
 ## Следующие задачи
 
-1. P3a: CS VM core — spec/plan готовы
-   (`docs/specs/2026-10-20-p3a-cs-vm-design.md`, `docs/plans/2026-10-20-p3a-cs-vm.md`);
-   начать с Task 1 (парсер `.cs`).
+1. P3a: CS VM core — Task 1 (парсер `.cs`) завершён; следующая — Task 2 (VM + globals)
+   (`docs/specs/2026-10-20-p3a-cs-vm-design.md`, `docs/plans/2026-10-20-p3a-cs-vm.md`).
 2. P3b/P3c: AgeScript-компилятор, диалоги/SDB, полный набор native-функций.
 3. P1b: Android/touch — отложенный follow-up P1.
 4. P2 backfill: интерполяция/сеть/игровые системы — отложены до появления сущностей.
