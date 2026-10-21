@@ -109,9 +109,9 @@ class DialogSession {
 ### Task 4: Acceptance + docs
 
 - [x] Full `ctest` with `GL_GAME_DIR`; dialog screenshot; glscript `--sdb` evidence.
-- [ ] Manual dialog UI gate (human): run `glgame --dialog ...`, read Cyrillic, choose an
-  answer, Esc. **OPEN** — not verified by the automated acceptance agent.
-- [x] Docs: STATUS/PROJECT/plan/research; P3c automated acceptance passed; close the
+- [x] Manual dialog UI gate (human): run `glgame --dialog ...`, read Cyrillic, choose an
+  answer, Esc. Подтверждено пользователем 2026-10-21.
+- [x] Docs: STATUS/PROJECT/plan/research; P3c принят; close the
   save-title `?` limitation; next P4 (NPC) or P1b.
 - [x] Commit.
 

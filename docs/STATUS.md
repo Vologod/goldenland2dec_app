@@ -480,25 +480,22 @@ P0 закрыт 2026-10-19; далее выполнялись задачи P1 (�
 - 2026-10-21: P3c Task 4 — automated acceptance + docs: build exit 0; полный `ctest`
   13/13 (652.23 s), 318 test cases / 2649 assertions; `glscript --sdb` — `2684<TAB>Чего
   уставился?` и др.; dialog PNG 1280×720, 552 sampled / 771 unique colours, SHA-256
-  `2544FFD6...`; P3c automated acceptance passed; **manual dialog UI gate OPEN**.
+  `2544FFD6...`; P3c automated acceptance passed.
   Ограничение P2c с `?` в заголовках save-слотов закрыто TTF.
+- 2026-10-21: P3c manual dialog UI gate пройден пользователем (кириллица, ответы,
+  Up/Down/Enter/мышь, Esc); **P3c принят**.
 
 ## Следующие задачи
 
-1. P3c: диалоги + SDB + кириллический TTF-шрифт — Tasks 1–4 и automated acceptance
-   завершены 2026-10-21; **manual dialog UI gate OPEN** (см. Open Questions).
-   AgeScript-компилятор не требуется: `.scr` — конфиги.
-2. P4: персонажи/NPC (`.prs/.inf`), привязка диалогов к NPC — pending.
-3. P1b: Android/touch — отложенный follow-up P1.
+1. P4: персонажи/NPC (`.prs/.inf`), привязка диалогов к NPC — следующий подпроект.
+2. P1b: Android/touch — отложенный follow-up P1.
+3. P7-follow-up: свободный TTF для Android (P9), прокрутка длинных диалогов, layout-константы.
 
 ## Открытые вопросы
 
 - P1: финальный manual desktop pass — WASD/стрелки, `Home` и визуальный `F1` toggle
   на обычном рабочем столе. В текущей headless-сессии клавиатурный фокус недоступен;
   drag-панорама и wheel-зум проверены инъекцией мыши, overlay — screenshot-тестом.
-- P3c: manual dialog UI gate — человек должен запустить `glgame --dialog
-  scripts/dialogs/demon.d1.age.cs`, прочитать кириллицу, выбрать ответ (Up/Down,
-  Enter/мышь) и выйти по `Esc`. Автоматизированная приёмка это не заменяет.
 - P3c: `DialogSession::start()` intentionally calls `ScriptVm::restart(true)` — variables are
   rebuilt from globals and seeded runtime state is discarded. `start()`/`choose()` map
   `vm.failed()` to `ErrorCode::format`; `status()`/`failed()` remain available for diagnosis.
