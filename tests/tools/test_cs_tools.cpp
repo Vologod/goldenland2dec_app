@@ -3,6 +3,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
@@ -34,7 +35,12 @@ const fs::path g_glpak_exe = GLPAK_EXE;
 const fs::path g_glscript_exe = GLSCRIPT_EXE;
 constexpr std::string_view kDialogScript = "scripts/dialogs/demon.d1.age.cs";
 
-bool game_dir_available() { return std::getenv("GL_GAME_DIR") != nullptr; }
+const char* game_dir_env() {
+    const char* value = std::getenv("GL_GAME_DIR");
+    return value != nullptr && value[0] != '\0' ? value : nullptr;
+}
+
+bool game_dir_available() { return game_dir_env() != nullptr; }
 
 fs::path unique_temp_dir() {
     static std::atomic<unsigned> counter{0};
@@ -148,27 +154,43 @@ std::string read_file(const fs::path& path) {
     return std::string(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
 }
 
+void write_file(const fs::path& path, const std::vector<std::uint8_t>& data) {
+    std::error_code error;
+    fs::create_directories(path.parent_path(), error);
+    REQUIRE_FALSE(error);
+    std::ofstream out(path, std::ios::binary);
+    REQUIRE(out.is_open());
+    out.write(reinterpret_cast<const char*>(data.data()),
+              static_cast<std::streamsize>(data.size()));
+    REQUIRE(out.good());
+}
+
 bool has_status(const std::string& output, std::string_view status) {
     return output.find("status: " + std::string(status)) != std::string::npos;
 }
 
-std::size_t answer_count(const std::string& output) {
-    const std::size_t start = output.rfind("answers: ");
+std::size_t metric_count(const std::string& output, std::string_view name, bool last) {
+    const std::string prefix = std::string(name) + ": ";
+    const std::size_t start = last ? output.rfind(prefix) : output.find(prefix);
     REQUIRE(start != std::string::npos);
-    return static_cast<std::size_t>(std::stoul(output.substr(start + 9)));
+    return static_cast<std::size_t>(std::stoul(output.substr(start + prefix.size())));
+}
+
+std::size_t answer_count(const std::string& output) {
+    return metric_count(output, "answers", true);
 }
 } // namespace
 
 int main(int argc, char** argv) {
     doctest::Context context(argc, argv);
     const int result = context.run();
-    if (std::getenv("GL_GAME_DIR") == nullptr) return 77;
+    if (game_dir_env() == nullptr && result == 0) return 77;
     return result;
 }
 
 TEST_CASE("glpak disasm-cs dumps the demon dialog" *
           doctest::skip(!game_dir_available())) {
-    const char* game_dir = std::getenv("GL_GAME_DIR");
+    const char* game_dir = game_dir_env();
     REQUIRE(game_dir != nullptr);
 
     TempDir temp;
@@ -183,11 +205,20 @@ TEST_CASE("glpak disasm-cs dumps the demon dialog" *
     CHECK_FALSE(text.empty());
     CHECK(text.find("func") != std::string::npos);
     CHECK(text.find("jmp") != std::string::npos);
+
+    std::string stdout_text;
+    const int stdout_code =
+        run_capture(g_glpak_exe, {"disasm-cs", game_dir, "--file", std::string(kDialogScript)},
+                    stdout_text);
+    CAPTURE(stdout_code);
+    CHECK(stdout_code == 0);
+    CHECK_FALSE(stdout_text.empty());
+    CHECK(stdout_text.find("func") != std::string::npos);
 }
 
 TEST_CASE("glscript runs the demon dialog to wait_user" *
           doctest::skip(!game_dir_available())) {
-    const char* game_dir = std::getenv("GL_GAME_DIR");
+    const char* game_dir = game_dir_env();
     REQUIRE(game_dir != nullptr);
 
     std::string output;
@@ -203,7 +234,7 @@ TEST_CASE("glscript runs the demon dialog to wait_user" *
 
 TEST_CASE("glscript accepts the first dialog answer" *
           doctest::skip(!game_dir_available())) {
-    const char* game_dir = std::getenv("GL_GAME_DIR");
+    const char* game_dir = game_dir_env();
     REQUIRE(game_dir != nullptr);
 
     std::string output;
@@ -215,4 +246,103 @@ TEST_CASE("glscript accepts the first dialog answer" *
     CAPTURE(output);
     CHECK(code == 0);
     CHECK((has_status(output, "wait_user") || has_status(output, "end")));
+    CHECK(metric_count(output, "steps", true) > metric_count(output, "steps", false));
+}
+
+TEST_CASE("glscript rejects --answer without --run" *
+          doctest::skip(!game_dir_available())) {
+    const char* game_dir = game_dir_env();
+    REQUIRE(game_dir != nullptr);
+
+    const int code = run_process(g_glscript_exe, {"--game-dir", game_dir, "--file",
+                                                  std::string(kDialogScript), "--answer", "0"});
+    CAPTURE(code);
+    CHECK(code == 1);
+}
+
+TEST_CASE("glscript rejects an out-of-range dialog answer" *
+          doctest::skip(!game_dir_available())) {
+    const char* game_dir = game_dir_env();
+    REQUIRE(game_dir != nullptr);
+
+    const int code = run_process(g_glscript_exe, {"--game-dir", game_dir, "--file",
+                                                  std::string(kDialogScript), "--run",
+                                                  "--answer", "99"});
+    CAPTURE(code);
+    CHECK(code == 1);
+}
+
+TEST_CASE("glscript reports a missing script as an I/O error" *
+          doctest::skip(!game_dir_available())) {
+    const char* game_dir = game_dir_env();
+    REQUIRE(game_dir != nullptr);
+
+    const int code = run_process(g_glscript_exe, {"--game-dir", game_dir, "--file",
+                                                  "scripts/dialogs/does_not_exist.cs",
+                                                  "--run"});
+    CAPTURE(code);
+    CHECK(code == 2);
+}
+
+TEST_CASE("glpak disasm-cs escapes quotes and control characters" *
+          doctest::skip(!game_dir_available())) {
+    TempDir temp;
+
+    std::vector<std::uint8_t> body;
+    const auto put_u32 = [](std::vector<std::uint8_t>& out, std::uint32_t value) {
+        for (int i = 0; i < 4; ++i)
+            out.push_back(static_cast<std::uint8_t>((value >> (8 * i)) & 0xFF));
+    };
+    const auto put_i32 = [&put_u32](std::vector<std::uint8_t>& out, std::int32_t value) {
+        put_u32(out, static_cast<std::uint32_t>(value));
+    };
+
+    put_i32(body, 22);
+    const std::string text = "a\"b\nc";
+    body.insert(body.end(), text.begin(), text.end());
+    body.push_back(0);
+    put_i32(body, 49);
+    put_i32(body, 0);
+    put_i32(body, -1);
+
+    std::vector<std::uint8_t> script;
+    put_u32(script, static_cast<std::uint32_t>(body.size() + 4));
+    script.insert(script.end(), body.begin(), body.end());
+    write_file(temp.path / "scripts" / "escape.cs", script);
+
+    const fs::path dump = temp.path / "escape.txt";
+    const int code = run_process(g_glpak_exe, {"disasm-cs", temp.path.string(), "--file",
+                                               "scripts/escape.cs", "--out", dump.string()});
+    CAPTURE(code);
+    CHECK(code == 0);
+
+    const std::string disassembly = read_file(dump);
+    CHECK(disassembly.find("a\\\"b\\nc") != std::string::npos);
+    std::size_t newlines = 0;
+    for (const char c : disassembly) {
+        if (c == '\n') ++newlines;
+    }
+    CHECK(newlines == 2);
+}
+
+TEST_CASE("glscript reports a VM execution failure" *
+          doctest::skip(!game_dir_available())) {
+    TempDir temp;
+
+    std::vector<std::uint8_t> script;
+    const auto put_u32 = [&script](std::uint32_t value) {
+        for (int i = 0; i < 4; ++i)
+            script.push_back(static_cast<std::uint8_t>((value >> (8 * i)) & 0xFF));
+    };
+    put_u32(24);
+    put_u32(3);
+    for (int i = 0; i < 4; ++i) put_u32(0);
+    write_file(temp.path / "scripts" / "fail.cs", script);
+    write_file(temp.path / "scripts" / "empty.scr", {});
+
+    const int code =
+        run_process(g_glscript_exe, {"--game-dir", temp.path.string(), "--globals",
+                                     "scripts/empty.scr", "--file", "scripts/fail.cs", "--run"});
+    CAPTURE(code);
+    CHECK(code == 3);
 }

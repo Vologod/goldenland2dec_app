@@ -21,18 +21,25 @@ Task 2 (VM + globals), Task 3 (dialog flow + native registry) и Task 4 (инс�
 **P3a — Task 4 (tools `glpak disasm-cs`, `glscript`) завершён 2026-10-21.**
 `glpak disasm-cs <game_dir> --file <path> [--out <txt>]` читает `.cs` через `GameVfs`,
 парсит `parse_cs` и печатает по строке на узел (`index: opcode | поля | value/text |
-funcName(args)`); без `--out` — в stdout, с `--out` — UTF-8 текст. Команда добавлена
-в `--help`, коды выхода 0/1/2/3 как у остальных команд `glpak`.
+funcName(args)`); кавычки и control-символы в `text` экранируются (`\"`, `\\n`, `\\xHH`),
+поэтому дамп остаётся по одной строке на узел. Без `--out` — в stdout, с `--out` —
+UTF-8 текст. Команда добавлена в `--help`, коды выхода 0/1/2/3 как у остальных команд.
 Новый SDL-free `tools/glscript` (`--game-dir <dir> [--globals <path>] --file <path>
 [--run] [--answer N]`) читает CS и globals через VFS (по умолчанию
 `scripts/dialogs_special/zlato_vars.scr`), исполняет до `wait_user`/`end`/`infinity`,
 печатает `status`, `steps`, id из `dialogs_data()` и `answers_count()`. Повторяемый
 `--answer N` подаётся в `user_input`, после чего исполнение продолжается до следующего
-останова с печатью нового состояния. Коды выхода: 0 успех, 1 аргументы, 2 I/O,
-3 формат/загрузка/`infinity`. Тесты: `gl_cs_tools_tests` (skip 77 без `GL_GAME_DIR`) —
-`disasm-cs` на `demon.d1.age.cs` (непустой дамп с `func`/`jmp`), `glscript --run`
-(`wait_user`, answers > 0), `--run --answer 0` (exit 0, `wait_user`/`end`).
-Следующая задача — P3a Task 5 (acceptance + docs).
+останова с печатью нового состояния. `--answer` без `--run` и ответ вне диапазона —
+exit 1; ошибка исполнения VM (`ScriptVm::failed()`, включая ошибки типов/вычислений
+и `infinity`) — exit 3. `ScriptVm::failed()` теперь отделяет такие ошибки от
+нормального `end`/`wait_user`; `user_input()` возвращает `bool`.
+Тесты: `gl_cs_tools_tests` (8 cases / 56 assertions, skip 77 без `GL_GAME_DIR` или при
+пустом значении) — `disasm-cs` в `--out` и stdout (непустой дамп с `func`/`jmp`),
+экранирование кавычек/переводов строк, `glscript --run` (`wait_user`, answers > 0),
+`--run --answer 0` (exit 0, `steps` растут), reject `--answer` без `--run`,
+out-of-range answer → exit 1, missing script → exit 2, synthetic VM failure → exit 3.
+`gl_script_tests` — 33 cases / 247 assertions; полный `ctest` с `GL_GAME_DIR` — **11/11
+passed**, 571.23 s. Следующая задача — P3a Task 5 (acceptance + docs).
 
 **P3a — Task 3 (dialog flow + native registry) завершён 2026-10-21.**
 `ScriptVm` получил `dialogs_data()` (id `D_Say` + id всех `D_Answer`, действительно только
@@ -384,8 +391,8 @@ P0 закрыт 2026-10-19; далее выполнялись задачи P1 (�
 
 ## Следующие задачи
 
-1. P3a: CS VM core — Tasks 1–3 завершены; следующая — Task 4 (tools `glpak disasm-cs` и
-   `glscript`) (`docs/specs/2026-10-20-p3a-cs-vm-design.md`,
+1. P3a: CS VM core — Tasks 1–4 завершены; следующая — Task 5 (acceptance + docs)
+   (`docs/specs/2026-10-20-p3a-cs-vm-design.md`,
    `docs/plans/2026-10-20-p3a-cs-vm.md`).
 2. P3b/P3c: AgeScript-компилятор, диалоги/SDB, полный набор native-функций.
 3. P1b: Android/touch — отложенный follow-up P1.

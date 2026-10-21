@@ -21,12 +21,13 @@ public:
     void restart(bool reset_all);
     VmStatus status() const;
     bool step();
+    bool failed() const;
     std::uint64_t steps() const;
     Value* variable(std::string_view name);
     const std::map<std::string, Value>& variables() const;
     std::size_t answers_count() const;
     std::vector<std::uint32_t> dialogs_data() const;
-    void user_input(std::size_t answer);
+    bool user_input(std::size_t answer);
 
 private:
     struct DialogCall {
@@ -45,6 +46,7 @@ private:
     Value lookup_variable(const std::string& name);
     void rebuild_variables();
     void fail(std::string message);
+    void record_error(std::string_view message);
 
     std::vector<gl::assets::CsNode> nodes_;
     ScriptHost& host_;
@@ -57,5 +59,6 @@ private:
     bool dialog_say_ = false;
     bool end_request_ = false;
     bool failed_ = false;
+    bool error_ = false;
 };
 }

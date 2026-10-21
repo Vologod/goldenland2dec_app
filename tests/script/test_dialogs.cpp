@@ -97,7 +97,7 @@ TEST_CASE("dialogs: user_input sets LastPhrase/LastAnswer and restarts") {
     }
     REQUIRE(h.vm.status() == VmStatus::wait_user);
 
-    h.vm.user_input(0);
+    CHECK(h.vm.user_input(0));
     CHECK(h.vm.status() == VmStatus::restart);
     CHECK(h.vm.dialogs_data().empty());
 
@@ -126,7 +126,7 @@ TEST_CASE("dialogs: user_input(1) selects the second answer") {
     }
     REQUIRE(h.vm.status() == VmStatus::wait_user);
 
-    h.vm.user_input(1);
+    CHECK(h.vm.user_input(1));
     CHECK(h.vm.status() == VmStatus::restart);
 
     const Value* phrase = h.vm.variable("LastPhrase");
@@ -146,7 +146,7 @@ TEST_CASE("dialogs: user_input rejects an out-of-range answer") {
     }
     REQUIRE(h.vm.status() == VmStatus::wait_user);
 
-    h.vm.user_input(99);
+    CHECK_FALSE(h.vm.user_input(99));
     CHECK(h.vm.status() == VmStatus::wait_user);
     CHECK(h.vm.dialogs_data() == std::vector<std::uint32_t>{100, 1, 2});
     CHECK(h.vm.variable("LastPhrase") == nullptr);
@@ -165,7 +165,7 @@ TEST_CASE("dialogs: user_input without recorded answers is a no-op") {
     REQUIRE(h.vm.status() == VmStatus::wait_user);
     CHECK(h.vm.answers_count() == 0);
 
-    h.vm.user_input(0);
+    CHECK_FALSE(h.vm.user_input(0));
     CHECK(h.vm.status() == VmStatus::wait_user);
     CHECK(h.vm.dialogs_data() == std::vector<std::uint32_t>{100});
     CHECK(h.vm.variable("LastPhrase") == nullptr);

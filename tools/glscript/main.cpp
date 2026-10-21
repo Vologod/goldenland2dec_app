@@ -136,6 +136,10 @@ bool parse_options(const std::vector<std::string>& args, Options& options, std::
         error = "missing --file";
         return false;
     }
+    if (!options.run && !options.answers.empty()) {
+        error = "--answer requires --run";
+        return false;
+    }
     return true;
 }
 
@@ -214,14 +218,18 @@ int run(int argc, char** argv) {
     vm.restart(true);
     run_to_stop(vm);
     print_state(vm);
+    if (vm.failed() || vm.status() == gl::script::VmStatus::infinity) return kFormat;
 
     for (const std::size_t answer : options.answers) {
-        vm.user_input(answer);
-        if (vm.status() == gl::script::VmStatus::restart) run_to_stop(vm);
+        if (!vm.user_input(answer)) {
+            print_state(vm);
+            return kArgument;
+        }
+        run_to_stop(vm);
         print_state(vm);
+        if (vm.failed() || vm.status() == gl::script::VmStatus::infinity) return kFormat;
     }
 
-    if (vm.status() == gl::script::VmStatus::infinity) return kFormat;
     return kOk;
 }
 

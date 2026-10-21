@@ -125,6 +125,7 @@ void ScriptVm::restart(bool reset_all) {
     dialog_say_ = false;
     end_request_ = false;
     failed_ = false;
+    error_ = false;
 
     if (reset_all) {
         rebuild_variables();
@@ -135,6 +136,8 @@ void ScriptVm::restart(bool reset_all) {
 }
 
 VmStatus ScriptVm::status() const { return status_; }
+
+bool ScriptVm::failed() const { return error_ || failed_; }
 
 std::uint64_t ScriptVm::steps() const { return counter_; }
 
@@ -172,11 +175,11 @@ std::vector<std::uint32_t> ScriptVm::dialogs_data() const {
     return data;
 }
 
-void ScriptVm::user_input(std::size_t answer) {
+bool ScriptVm::user_input(std::size_t answer) {
     const std::vector<std::uint32_t> data = dialogs_data();
     if (data.size() <= 1 || answer >= data.size() - 1) {
         log_warning("user input index out of range: " + std::to_string(answer));
-        return;
+        return false;
     }
 
     variables_["LastPhrase"] = std::uint32_t{data.front()};
@@ -186,8 +189,10 @@ void ScriptVm::user_input(std::size_t answer) {
     dialog_say_ = false;
     end_request_ = false;
     failed_ = false;
+    error_ = false;
     pc_ = 0;
     status_ = VmStatus::restart;
+    return true;
 }
 
 bool ScriptVm::step() {
@@ -197,6 +202,8 @@ bool ScriptVm::step() {
 
     if (counter_ >= kStepLimit) {
         gl::log(gl::LogLevel::error, "script vm: step limit reached");
+        failed_ = true;
+        error_ = true;
         status_ = VmStatus::infinity;
         return false;
     }
@@ -204,6 +211,8 @@ bool ScriptVm::step() {
     if (!valid_index(pc_)) {
         gl::log(gl::LogLevel::error,
                 "script vm: node index out of range: " + std::to_string(pc_));
+        failed_ = true;
+        error_ = true;
         status_ = VmStatus::end;
         return false;
     }
@@ -408,7 +417,7 @@ Value ScriptVm::call_function(const gl::assets::CsNode& node, int depth) {
 Value ScriptVm::apply_arithmetic(const Value& left, const Value& right, std::int32_t opcode) {
     if (std::holds_alternative<std::string>(left) ||
         std::holds_alternative<std::string>(right)) {
-        log_warning("arithmetic on strings is not supported");
+        record_error("arithmetic on strings is not supported");
         return std::int32_t{0};
     }
 
@@ -421,12 +430,12 @@ Value ScriptVm::apply_arithmetic(const Value& left, const Value& right, std::int
         case 16: return a * b;
         case 17:
             if (b == 0.0) {
-                log_warning("division by zero");
+                record_error("division by zero");
                 return std::int32_t{0};
             }
             return a / b;
         case 18:
-            log_warning("modulo requires integers");
+            record_error("modulo requires integers");
             return std::int32_t{0};
         default:
             return std::int32_t{0};
@@ -443,13 +452,13 @@ Value ScriptVm::apply_arithmetic(const Value& left, const Value& right, std::int
         case 16: return static_cast<std::uint32_t>(a * b);
         case 17:
             if (b == 0) {
-                log_warning("division by zero");
+                record_error("division by zero");
                 return std::int32_t{0};
             }
             return a / b;
         case 18:
             if (b == 0) {
-                log_warning("modulo by zero");
+                record_error("modulo by zero");
                 return std::int32_t{0};
             }
             return a % b;
@@ -466,13 +475,13 @@ Value ScriptVm::apply_arithmetic(const Value& left, const Value& right, std::int
     case 16: return static_cast<std::int32_t>(a * b);
     case 17:
         if (b == 0) {
-            log_warning("division by zero");
+            record_error("division by zero");
             return std::int32_t{0};
         }
         return static_cast<std::int32_t>(a / b);
     case 18:
         if (b == 0) {
-            log_warning("modulo by zero");
+            record_error("modulo by zero");
             return std::int32_t{0};
         }
         return static_cast<std::int32_t>(a % b);
@@ -484,19 +493,19 @@ Value ScriptVm::apply_arithmetic(const Value& left, const Value& right, std::int
 bool ScriptVm::compare_values(const Value& left, const Value& right, std::int32_t opcode) {
     if (std::holds_alternative<std::string>(left)) {
         if (!std::holds_alternative<std::string>(right)) {
-            log_warning("comparison between string and number");
+            record_error("comparison between string and number");
             return opcode == 6;
         }
         const auto& a = std::get<std::string>(left);
         const auto& b = std::get<std::string>(right);
         if (opcode == 6) return a != b;
         if (opcode == 7) return a == b;
-        log_warning("relational comparison on strings is not supported");
+        record_error("relational comparison on strings is not supported");
         return false;
     }
 
     if (std::holds_alternative<std::string>(right)) {
-        log_warning("comparison between number and string");
+        record_error("comparison between number and string");
         return opcode == 6;
     }
 
@@ -538,5 +547,11 @@ void ScriptVm::rebuild_variables() {
 void ScriptVm::fail(std::string message) {
     if (!failed_) gl::log(gl::LogLevel::error, "script vm: " + message);
     failed_ = true;
+    error_ = true;
+}
+
+void ScriptVm::record_error(std::string_view message) {
+    log_warning(message);
+    error_ = true;
 }
 } // namespace gl::script

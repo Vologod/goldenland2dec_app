@@ -299,6 +299,27 @@ std::string format_number(double value) {
     return out.str();
 }
 
+void append_escaped(std::ostringstream& out, std::string_view text) {
+    constexpr char kHex[] = "0123456789ABCDEF";
+    for (const char raw : text) {
+        const auto byte = static_cast<unsigned char>(raw);
+        switch (byte) {
+            case '\\': out << "\\\\"; break;
+            case '"': out << "\\\""; break;
+            case '\n': out << "\\n"; break;
+            case '\r': out << "\\r"; break;
+            case '\t': out << "\\t"; break;
+            default:
+                if (byte < 0x20 || byte == 0x7F) {
+                    out << "\\x" << kHex[byte >> 4] << kHex[byte & 0x0F];
+                } else {
+                    out << raw;
+                }
+                break;
+        }
+    }
+}
+
 void append_node(std::ostringstream& out, std::size_t index, const gl::assets::CsNode& node) {
     out << index << ": " << gl::assets::cs_opcode_name(node.opcode);
     if (has_four_integers(node.opcode)) {
@@ -306,9 +327,12 @@ void append_node(std::ostringstream& out, std::size_t index, const gl::assets::C
     } else if (node.opcode == 21 || node.opcode == 24) {
         out << " | " << format_number(node.value);
     } else if (node.opcode == 22) {
-        out << " | \"" << node.text << '"';
+        out << " | \"";
+        append_escaped(out, node.text);
+        out << '"';
     } else if (node.opcode == 23) {
-        out << " | " << node.text;
+        out << " | ";
+        append_escaped(out, node.text);
     } else if (node.opcode == 48) {
         const bool valid_id = std::isfinite(node.value) && node.value >= 0.0 &&
                               node.value <=

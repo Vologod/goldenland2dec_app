@@ -141,6 +141,7 @@ TEST_CASE("vm: assign evaluates arithmetic with precedence") {
 
     CHECK_FALSE(h.vm.step());
     CHECK(h.vm.status() == VmStatus::end);
+    CHECK_FALSE(h.vm.failed());
     CHECK(h.vm.steps() == 2);
 }
 
@@ -332,6 +333,7 @@ TEST_CASE("vm: D_Say is recorded and jmp d=-1 waits for the user") {
 
     CHECK_FALSE(h.vm.step());
     CHECK(h.vm.status() == VmStatus::wait_user);
+    CHECK_FALSE(h.vm.failed());
     CHECK_FALSE(h.vm.step());
     CHECK(h.vm.status() == VmStatus::wait_user);
 }
@@ -374,6 +376,7 @@ TEST_CASE("vm: comparison does not evaluate the right operand after a left failu
     VmHarness h(std::move(nodes), {});
     CHECK_FALSE(h.vm.step());
     CHECK(h.vm.status() == VmStatus::end);
+    CHECK(h.vm.failed());
     CHECK(h.host.calls.empty());
 }
 
@@ -386,6 +389,7 @@ TEST_CASE("vm: logical does not evaluate the right operand after a left failure"
     VmHarness h(std::move(nodes), {});
     CHECK_FALSE(h.vm.step());
     CHECK(h.vm.status() == VmStatus::end);
+    CHECK(h.vm.failed());
     CHECK(h.host.calls.empty());
 }
 
@@ -410,7 +414,7 @@ TEST_CASE("vm: top-level func ignores d and advances to the next node") {
     CHECK(std::get<std::int32_t>(*x) == 5);
 }
 
-TEST_CASE("vm: division by zero yields zero") {
+TEST_CASE("vm: division by zero yields zero and marks the run failed") {
     std::vector<CsNode> nodes(6);
     nodes[0] = make_assign(1, 2, 3);
     nodes[1] = make_str_var("x");
@@ -427,6 +431,7 @@ TEST_CASE("vm: division by zero yields zero") {
     REQUIRE(x != nullptr);
     REQUIRE(std::holds_alternative<std::int32_t>(*x));
     CHECK(std::get<std::int32_t>(*x) == 0);
+    CHECK(h.vm.failed());
     CHECK_FALSE(h.vm.step());
 }
 
@@ -453,7 +458,7 @@ TEST_CASE("vm: string comparison supports equality") {
     CHECK_FALSE(h.vm.step());
 }
 
-TEST_CASE("vm: arithmetic rejects strings") {
+TEST_CASE("vm: arithmetic rejects strings and marks the run failed") {
     std::vector<CsNode> nodes(6);
     nodes[0] = make_assign(1, 2, 3);
     nodes[1] = make_str_var("x");
@@ -469,6 +474,7 @@ TEST_CASE("vm: arithmetic rejects strings") {
     REQUIRE(x != nullptr);
     REQUIRE(std::holds_alternative<std::int32_t>(*x));
     CHECK(std::get<std::int32_t>(*x) == 0);
+    CHECK(h.vm.failed());
     CHECK_FALSE(h.vm.step());
 }
 
@@ -512,6 +518,7 @@ TEST_CASE("vm: malformed node indices end safely") {
     CHECK(h.vm.step());
     CHECK_FALSE(h.vm.step());
     CHECK(h.vm.status() == VmStatus::end);
+    CHECK(h.vm.failed());
 }
 
 TEST_CASE("vm: unsupported top-level opcode ends safely") {
@@ -521,6 +528,7 @@ TEST_CASE("vm: unsupported top-level opcode ends safely") {
     VmHarness h(std::move(nodes), {});
     CHECK_FALSE(h.vm.step());
     CHECK(h.vm.status() == VmStatus::end);
+    CHECK(h.vm.failed());
 }
 
 TEST_CASE("vm: top-level numeric value node is a no-op") {
@@ -532,6 +540,7 @@ TEST_CASE("vm: top-level numeric value node is a no-op") {
     CHECK(h.vm.step());
     CHECK_FALSE(h.vm.step());
     CHECK(h.vm.status() == VmStatus::end);
+    CHECK_FALSE(h.vm.failed());
 }
 
 TEST_CASE("vm: step limit reports infinity") {
@@ -549,4 +558,5 @@ TEST_CASE("vm: step limit reports infinity") {
     CHECK(executed == 10'000'000);
     CHECK(h.vm.steps() == 10'000'000);
     CHECK(h.vm.status() == VmStatus::infinity);
+    CHECK(h.vm.failed());
 }

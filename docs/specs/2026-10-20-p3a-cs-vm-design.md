@@ -79,11 +79,17 @@ ID функций: `0x1000000` Exit, `0x1000004` D_Say, `0x1000005` D_CloseDialo
   - func (48): вызвать host; `D_Say`/`D_Answer` складывать в dialogFuncs; вернуть значение.
   - арифметика (14..18) — только числа; строки запрещены.
 - Счётчик шагов (10 млн) → `infinity`.
+- `failed()` — true, если исполнение записало ошибку: неизвестный/неподдержанный опкод,
+  недопустимый индекс узла, ошибка вычисления/типов (например, арифметика на строках,
+  деление на ноль, сравнение строки с числом), либо достигнут лимит шагов. Нормальные
+  `end`/`wait_user` оставляют false; `restart(true/false)` и успешный `user_input`
+  сбрасывают флаг.
 - `dialogs_data()` — `[sayValue, answerValue...]`, валидно только при `wait_user`;
   `answers_count()` — число записанных ответов.
-- `user_input(answer)`: `answer` — индекс ответа с нуля; выход за границы — warning и
-  отсутствие изменений. Иначе `LastPhrase = sayValue`, `LastAnswer = answerValue`,
-  очистка записанных вызовов, `pc = 0`, статус `restart`.
+- `user_input(answer)` возвращает `bool`: `answer` — индекс ответа с нуля; выход за
+  границы — warning, `false` и отсутствие изменений. Иначе `LastPhrase = sayValue`,
+  `LastAnswer = answerValue`, очистка записанных вызовов, `pc = 0`, статус `restart`,
+  `true`.
 - `D_CloseDialog` → `end` (по комментарию в `CsExecutor`).
 
 Глобальные переменные: `.scr`-файл вида `int Name 0`, `DWORD Name 0`, `float Name 0.5`,
@@ -105,7 +111,9 @@ P3a-реализация: VM обрабатывает только `D_Say`/`D_An
 - `glscript --game-dir <dir> [--globals <path>] --file <path.cs> [--run] [--answer N]`:
   парсит, опционально исполняет до `wait_user`/`end`, печатает статус, `dialogs_data`,
   число ответов; `--answer N` подаёт ответ и продолжает.
-  Коды выхода: 0 успех, 1 аргументы, 2 I/O, 3 формат/исполнение.
+  Коды выхода: 0 успех, 1 аргументы (включая `--answer` без `--run` и ответ вне
+  диапазона), 2 I/O, 3 формат/исполнение (`failed()` или `infinity`). Текст узлов
+  экранируется, чтобы дамп оставался по одной строке на узел.
 
 ## 6. Тестирование
 
@@ -122,12 +130,17 @@ Unit (`gl_script`):
 - globals: int/DWORD/float/string, комментарии, битые строки;
 - диалог: `D_Say` + 2 `D_Answer` → `wait_user`, `answers_count == 2`;
   `user_input(0)` → `LastPhrase/LastAnswer`, продолжение; `D_CloseDialog` → end;
+- `failed()`: false после нормального `end`/`wait_user`; true после неизвестного
+  top-level опкода, недопустимого индекса, ошибки типа/вычисления и лимита шагов;
 - реальный `demon.d1.age.cs`: до `wait_user`, ответы > 0, ответ 0 не падает.
 
 Integration:
 
-- `glpak disasm-cs` для `demon.d1.age.cs` → непустой дамп;
-- `glscript --run` на нём → `wait_user`; с `--answer 0` → `end`/`wait_user` без падения.
+- `glpak disasm-cs` для `demon.d1.age.cs` → непустой дамп (stdout и `--out`), текст
+  с кавычками/переводами строк экранирован;
+- `glscript --run` на нём → `wait_user`; с `--answer 0` → `steps` растут,
+  `end`/`wait_user` без падения; `--answer` без `--run` и ответ вне диапазона → exit 1;
+  ошибка VM → exit 3.
 
 ## 7. Критерии готовности
 
