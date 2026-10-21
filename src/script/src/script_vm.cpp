@@ -1,6 +1,7 @@
 #include "gl/script/script_vm.hpp"
 #include "gl/assets/log.hpp"
 #include "gl/script/function_ids.hpp"
+#include <charconv>
 #include <cmath>
 #include <limits>
 #include <set>
@@ -11,7 +12,11 @@
 namespace gl::script {
 namespace {
 bool is_comparison(std::int32_t opcode) { return opcode >= 6 && opcode <= 11; }
-bool is_logical(std::int32_t opcode) { return opcode == 0 || opcode == 2; }
+bool is_logical(std::int32_t opcode) { return opcode >= 0 && opcode <= 2; }
+bool is_bitwise(std::int32_t opcode) {
+    return (opcode >= 3 && opcode <= 5) || opcode == 12 || opcode == 13;
+}
+bool is_unary(std::int32_t opcode) { return opcode == 19 || opcode == 20; }
 bool is_value(std::int32_t opcode) { return opcode >= 21 && opcode <= 24; }
 
 void log_warning(std::string_view message) {
@@ -119,6 +124,7 @@ void ScriptVm::set_globals(std::span<const ScriptGlobal> globals) {
 
 void ScriptVm::restart(bool reset_all) {
     counter_ = 0;
+    eval_ops_ = 0;
     pc_ = 0;
     status_ = VmStatus::start;
     dialog_calls_.clear();
@@ -188,8 +194,7 @@ bool ScriptVm::user_input(std::size_t answer) {
     dialog_calls_.clear();
     dialog_say_ = false;
     end_request_ = false;
-    failed_ = false;
-    error_ = false;
+    eval_ops_ = 0;
     pc_ = 0;
     status_ = VmStatus::restart;
     return true;
@@ -199,6 +204,11 @@ bool ScriptVm::step() {
     if (status_ == VmStatus::wait_user || status_ == VmStatus::end ||
         status_ == VmStatus::infinity)
         return false;
+
+    if (failed_) {
+        status_ = VmStatus::end;
+        return false;
+    }
 
     if (counter_ >= kStepLimit) {
         gl::log(gl::LogLevel::error, "script vm: step limit reached");
@@ -218,7 +228,7 @@ bool ScriptVm::step() {
     }
 
     ++counter_;
-    failed_ = false;
+    eval_ops_ = 0;
     end_request_ = false;
 
     const gl::assets::CsNode& node = nodes_[static_cast<std::size_t>(pc_)];
@@ -263,11 +273,13 @@ bool ScriptVm::step() {
             if (source.opcode == 23) {
                 result = lookup_variable(source.text);
             } else if (source.opcode == 21 || source.opcode == 24) {
-                result = std::int32_t{to_int32(Value{source.value})};
+                result = source.value;
             } else {
                 result = eval(node.b, 0);
             }
 
+            if (failed_) break;
+            result = coerce_assignment(result, lookup_variable(destination.text));
             if (failed_) break;
             variables_[destination.text] = std::move(result);
             next = node.d;
@@ -317,8 +329,13 @@ bool ScriptVm::valid_index(std::int32_t index) const {
 }
 
 Value ScriptVm::eval(std::int32_t index, int depth) {
+    if (failed_) return std::int32_t{0};
     if (depth > kMaxEvalDepth) {
         fail("expression nesting is too deep");
+        return std::int32_t{0};
+    }
+    if (++eval_ops_ > kEvalBudget) {
+        fail("expression evaluation budget exceeded");
         return std::int32_t{0};
     }
     if (!valid_index(index)) {
@@ -357,6 +374,18 @@ Value ScriptVm::eval(std::int32_t index, int depth) {
         return apply_arithmetic(left, right, node.opcode);
     }
     default:
+        if (is_bitwise(node.opcode)) {
+            const Value left = eval(node.a, depth + 1);
+            if (failed_) return std::int32_t{0};
+            const Value right = eval(node.b, depth + 1);
+            if (failed_) return std::int32_t{0};
+            return apply_bitwise(left, right, node.opcode);
+        }
+        if (is_unary(node.opcode)) {
+            const Value operand = eval(node.a, depth + 1);
+            if (failed_) return std::int32_t{0};
+            return apply_unary(operand, node.opcode);
+        }
         if (is_comparison(node.opcode)) {
             const Value left = eval(node.a, depth + 1);
             if (failed_) return std::int32_t{0};
@@ -369,10 +398,22 @@ Value ScriptVm::eval(std::int32_t index, int depth) {
             if (failed_) return std::int32_t{0};
             const Value right = eval(node.b, depth + 1);
             if (failed_) return std::int32_t{0};
+            if (node.opcode == 1 &&
+                (std::holds_alternative<std::string>(left) ||
+                 std::holds_alternative<std::string>(right))) {
+                record_error("logical xor on strings is not supported");
+                return std::int32_t{0};
+            }
             const bool left_true = is_true(left);
             const bool right_true = is_true(right);
-            const bool result =
-                node.opcode == 0 ? (left_true || right_true) : (left_true && right_true);
+            bool result = false;
+            if (node.opcode == 0) {
+                result = left_true || right_true;
+            } else if (node.opcode == 1) {
+                result = left_true != right_true;
+            } else {
+                result = left_true && right_true;
+            }
             return std::int32_t{result ? 1 : 0};
         }
         fail("unsupported expression opcode: " + std::to_string(node.opcode));
@@ -490,6 +531,96 @@ Value ScriptVm::apply_arithmetic(const Value& left, const Value& right, std::int
     }
 }
 
+Value ScriptVm::apply_bitwise(const Value& left, const Value& right, std::int32_t opcode) {
+    if (std::holds_alternative<std::string>(left) ||
+        std::holds_alternative<std::string>(right)) {
+        record_error("bitwise operation on strings is not supported");
+        return std::int32_t{0};
+    }
+
+    const std::int32_t left_int = to_int32(left);
+    const std::int32_t right_int = to_int32(right);
+    const auto a = static_cast<std::uint32_t>(left_int);
+    const auto b = static_cast<std::uint32_t>(right_int);
+    const bool unsigned_result =
+        std::holds_alternative<std::uint32_t>(left) ||
+        std::holds_alternative<std::uint32_t>(right);
+
+    std::uint32_t result = 0;
+    switch (opcode) {
+    case 3: result = a | b; break;
+    case 4: result = a ^ b; break;
+    case 5: result = a & b; break;
+    case 12:
+    case 13:
+        if (right_int < 0 || right_int >= 32) {
+            record_error("shift count out of range");
+            return std::int32_t{0};
+        }
+        result = opcode == 12 ? a << static_cast<std::uint32_t>(right_int)
+                              : a >> static_cast<std::uint32_t>(right_int);
+        break;
+    default:
+        record_error("unknown bitwise opcode: " + std::to_string(opcode));
+        return std::int32_t{0};
+    }
+
+    if (unsigned_result) return result;
+    return static_cast<std::int32_t>(result);
+}
+
+Value ScriptVm::apply_unary(const Value& operand, std::int32_t opcode) {
+    if (std::holds_alternative<std::string>(operand)) {
+        record_error("unary operation on strings is not supported");
+        return std::int32_t{0};
+    }
+
+    if (opcode == 19) {
+        const std::uint32_t result = ~static_cast<std::uint32_t>(to_int32(operand));
+        if (std::holds_alternative<std::uint32_t>(operand)) return result;
+        return static_cast<std::int32_t>(result);
+    }
+    return std::int32_t{is_true(operand) ? 0 : 1};
+}
+
+Value ScriptVm::coerce_assignment(const Value& value, const Value& destination) {
+    if (std::holds_alternative<std::int32_t>(destination)) {
+        if (std::holds_alternative<std::string>(value)) {
+            record_error("cannot assign a string to an int variable");
+            return std::int32_t{0};
+        }
+        return std::int32_t{to_int32(value)};
+    }
+    if (std::holds_alternative<std::uint32_t>(destination)) {
+        if (std::holds_alternative<std::string>(value)) {
+            record_error("cannot assign a string to a DWORD variable");
+            return std::int32_t{0};
+        }
+        return std::uint32_t{to_uint32(value)};
+    }
+    if (std::holds_alternative<double>(destination)) {
+        if (std::holds_alternative<std::string>(value)) {
+            record_error("cannot assign a string to a float variable");
+            return std::int32_t{0};
+        }
+        return to_double(value);
+    }
+    if (std::holds_alternative<std::string>(destination)) {
+        if (std::holds_alternative<std::string>(value)) return value;
+        if (std::holds_alternative<std::int32_t>(value))
+            return std::to_string(std::get<std::int32_t>(value));
+        if (std::holds_alternative<std::uint32_t>(value))
+            return std::to_string(std::get<std::uint32_t>(value));
+        char buffer[64];
+        const double number = std::get<double>(value);
+        const auto [end, code] =
+            std::to_chars(buffer, buffer + sizeof(buffer), number, std::chars_format::general);
+        if (code == std::errc{}) return std::string(buffer, end);
+        return std::to_string(number);
+    }
+    return value;
+}
+
 bool ScriptVm::compare_values(const Value& left, const Value& right, std::int32_t opcode) {
     if (std::holds_alternative<std::string>(left)) {
         if (!std::holds_alternative<std::string>(right)) {
@@ -551,7 +682,8 @@ void ScriptVm::fail(std::string message) {
 }
 
 void ScriptVm::record_error(std::string_view message) {
-    log_warning(message);
+    if (!failed_) log_warning(message);
+    failed_ = true;
     error_ = true;
 }
 } // namespace gl::script

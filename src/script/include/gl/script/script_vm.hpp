@@ -37,11 +37,15 @@ private:
 
     static constexpr std::uint64_t kStepLimit = 10'000'000;
     static constexpr int kMaxEvalDepth = 1024;
+    static constexpr std::uint64_t kEvalBudget = 100'000;
 
     bool valid_index(std::int32_t index) const;
     Value eval(std::int32_t index, int depth);
     Value call_function(const gl::assets::CsNode& node, int depth);
     Value apply_arithmetic(const Value& left, const Value& right, std::int32_t opcode);
+    Value apply_bitwise(const Value& left, const Value& right, std::int32_t opcode);
+    Value apply_unary(const Value& operand, std::int32_t opcode);
+    Value coerce_assignment(const Value& value, const Value& destination);
     bool compare_values(const Value& left, const Value& right, std::int32_t opcode);
     Value lookup_variable(const std::string& name);
     void rebuild_variables();
@@ -55,6 +59,7 @@ private:
     std::vector<DialogCall> dialog_calls_;
     std::int32_t pc_ = 0;
     std::uint64_t counter_ = 0;
+    std::uint64_t eval_ops_ = 0;
     VmStatus status_ = VmStatus::start;
     bool dialog_say_ = false;
     bool end_request_ = false;

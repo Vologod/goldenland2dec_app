@@ -107,6 +107,14 @@ ScriptGlobal global_string(std::string name, std::string value) {
     return ScriptGlobal{"string", std::move(name), std::move(value)};
 }
 
+ScriptGlobal global_float(std::string name, double value) {
+    return ScriptGlobal{"float", std::move(name), value};
+}
+
+ScriptGlobal global_dword(std::string name, std::uint32_t value) {
+    return ScriptGlobal{"DWORD", std::move(name), value};
+}
+
 struct VmHarness {
     RecordingHost host;
     ScriptVm vm;
@@ -136,8 +144,8 @@ TEST_CASE("vm: assign evaluates arithmetic with precedence") {
 
     Value* x = h.vm.variable("x");
     REQUIRE(x != nullptr);
-    REQUIRE(std::holds_alternative<double>(*x));
-    CHECK(std::get<double>(*x) == doctest::Approx(7.0));
+    REQUIRE(std::holds_alternative<std::int32_t>(*x));
+    CHECK(std::get<std::int32_t>(*x) == 7);
 
     CHECK_FALSE(h.vm.step());
     CHECK(h.vm.status() == VmStatus::end);
@@ -414,7 +422,7 @@ TEST_CASE("vm: top-level func ignores d and advances to the next node") {
     CHECK(std::get<std::int32_t>(*x) == 5);
 }
 
-TEST_CASE("vm: division by zero yields zero and marks the run failed") {
+TEST_CASE("vm: division by zero marks the run failed and stops") {
     std::vector<CsNode> nodes(6);
     nodes[0] = make_assign(1, 2, 3);
     nodes[1] = make_str_var("x");
@@ -425,12 +433,13 @@ TEST_CASE("vm: division by zero yields zero and marks the run failed") {
 
     VmHarness h(std::move(nodes),
                 {global_int("a", 5), global_int("b", 0), global_int("x", 9)});
-    CHECK(h.vm.step());
+    CHECK_FALSE(h.vm.step());
 
     Value* x = h.vm.variable("x");
     REQUIRE(x != nullptr);
     REQUIRE(std::holds_alternative<std::int32_t>(*x));
-    CHECK(std::get<std::int32_t>(*x) == 0);
+    CHECK(std::get<std::int32_t>(*x) == 9);
+    CHECK(h.vm.status() == VmStatus::end);
     CHECK(h.vm.failed());
     CHECK_FALSE(h.vm.step());
 }
@@ -468,12 +477,13 @@ TEST_CASE("vm: arithmetic rejects strings and marks the run failed") {
     nodes[5] = make_num(1.0);
 
     VmHarness h(std::move(nodes), {global_string("s", "abc"), global_int("x", 9)});
-    CHECK(h.vm.step());
+    CHECK_FALSE(h.vm.step());
 
     Value* x = h.vm.variable("x");
     REQUIRE(x != nullptr);
     REQUIRE(std::holds_alternative<std::int32_t>(*x));
-    CHECK(std::get<std::int32_t>(*x) == 0);
+    CHECK(std::get<std::int32_t>(*x) == 9);
+    CHECK(h.vm.status() == VmStatus::end);
     CHECK(h.vm.failed());
     CHECK_FALSE(h.vm.step());
 }
@@ -559,4 +569,270 @@ TEST_CASE("vm: step limit reports infinity") {
     CHECK(h.vm.steps() == 10'000'000);
     CHECK(h.vm.status() == VmStatus::infinity);
     CHECK(h.vm.failed());
+}
+
+TEST_CASE("vm: assignment coerces a literal to the destination float type") {
+    std::vector<CsNode> nodes(4);
+    nodes[0] = make_assign(1, 2, 3);
+    nodes[1] = make_str_var("x");
+    nodes[2] = make_num(0.5);
+    nodes[3] = make_jmp(-1, -1);
+
+    VmHarness h(std::move(nodes), {global_float("x", 0.0)});
+    CHECK(h.vm.step());
+
+    Value* x = h.vm.variable("x");
+    REQUIRE(x != nullptr);
+    REQUIRE(std::holds_alternative<double>(*x));
+    CHECK(std::get<double>(*x) == doctest::Approx(0.5));
+    CHECK_FALSE(h.vm.step());
+}
+
+TEST_CASE("vm: assignment coerces a literal to the destination DWORD type") {
+    std::vector<CsNode> nodes(4);
+    nodes[0] = make_assign(1, 2, 3);
+    nodes[1] = make_str_var("x");
+    nodes[2] = make_num(4294967295.0);
+    nodes[3] = make_jmp(-1, -1);
+
+    VmHarness h(std::move(nodes), {global_dword("x", 0)});
+    CHECK(h.vm.step());
+
+    Value* x = h.vm.variable("x");
+    REQUIRE(x != nullptr);
+    REQUIRE(std::holds_alternative<std::uint32_t>(*x));
+    CHECK(std::get<std::uint32_t>(*x) == 4294967295u);
+    CHECK_FALSE(h.vm.step());
+}
+
+TEST_CASE("vm: assignment coerces a computed value to the destination float type") {
+    std::vector<CsNode> nodes(6);
+    nodes[0] = make_assign(1, 2, 3);
+    nodes[1] = make_str_var("x");
+    nodes[2] = make_bin(16, 4, 5);
+    nodes[3] = make_jmp(-1, -1);
+    nodes[4] = make_num(1.5);
+    nodes[5] = make_num(2.0);
+
+    VmHarness h(std::move(nodes), {global_float("x", 0.0)});
+    CHECK(h.vm.step());
+
+    Value* x = h.vm.variable("x");
+    REQUIRE(x != nullptr);
+    REQUIRE(std::holds_alternative<double>(*x));
+    CHECK(std::get<double>(*x) == doctest::Approx(3.0));
+    CHECK_FALSE(h.vm.step());
+}
+
+TEST_CASE("vm: assignment coerces a numeric literal to a string destination") {
+    std::vector<CsNode> nodes(4);
+    nodes[0] = make_assign(1, 2, 3);
+    nodes[1] = make_str_var("x");
+    nodes[2] = make_num(5.0);
+    nodes[3] = make_jmp(-1, -1);
+
+    VmHarness h(std::move(nodes), {global_string("x", "")});
+    CHECK(h.vm.step());
+
+    Value* x = h.vm.variable("x");
+    REQUIRE(x != nullptr);
+    REQUIRE(std::holds_alternative<std::string>(*x));
+    CHECK(std::get<std::string>(*x) == "5");
+    CHECK_FALSE(h.vm.step());
+}
+
+TEST_CASE("vm: logical and/or evaluate both operands without short-circuit") {
+    for (const std::int32_t opcode : {0, 2}) {
+        CAPTURE(opcode);
+        std::vector<CsNode> nodes(4);
+        nodes[0] = make_bin(opcode, 1, 2, 3, 3);
+        nodes[1] = make_num(opcode == 2 ? 0.0 : 1.0);
+        nodes[2] = make_func(kPersonParameter, {});
+        nodes[3] = make_jmp(-1, -1);
+
+        VmHarness h(std::move(nodes), {});
+        CHECK(h.vm.step());
+        REQUIRE(h.host.calls.size() == 1);
+        CHECK(h.host.calls[0].id == kPersonParameter);
+        CHECK(h.vm.status() == VmStatus::continue_);
+    }
+}
+
+TEST_CASE("vm: logical xor takes the matching branch") {
+    const auto run_case = [](int left, int right) {
+        std::vector<CsNode> nodes(9);
+        nodes[0] = make_bin(1, 1, 2, 3, 4);
+        nodes[1] = make_num(static_cast<double>(left));
+        nodes[2] = make_num(static_cast<double>(right));
+        nodes[3] = make_assign(5, 6, 7);
+        nodes[4] = make_assign(5, 8, 7);
+        nodes[5] = make_str_var("x");
+        nodes[6] = make_num(10.0);
+        nodes[7] = make_jmp(-1, -1);
+        nodes[8] = make_num(20.0);
+
+        VmHarness h(std::move(nodes), {global_int("x", 0)});
+        CHECK(h.vm.step());
+        CHECK(h.vm.step());
+        const Value* x = h.vm.variable("x");
+        REQUIRE(x != nullptr);
+        REQUIRE(std::holds_alternative<std::int32_t>(*x));
+        return std::get<std::int32_t>(*x);
+    };
+
+    CHECK(run_case(1, 0) == 10);
+    CHECK(run_case(0, 1) == 10);
+    CHECK(run_case(1, 1) == 20);
+    CHECK(run_case(0, 0) == 20);
+}
+
+TEST_CASE("vm: bitwise and shift opcodes operate on integers") {
+    struct Case {
+        std::int32_t opcode;
+        double left;
+        double right;
+        std::int32_t expected;
+    };
+    const Case cases[] = {
+        {3, 6.0, 3.0, 7},
+        {4, 6.0, 3.0, 5},
+        {5, 6.0, 3.0, 2},
+        {12, 1.0, 3.0, 8},
+        {13, 16.0, 2.0, 4},
+    };
+
+    for (const Case& item : cases) {
+        CAPTURE(item.opcode);
+        std::vector<CsNode> nodes(6);
+        nodes[0] = make_assign(1, 2, 3);
+        nodes[1] = make_str_var("x");
+        nodes[2] = make_bin(item.opcode, 4, 5);
+        nodes[3] = make_jmp(-1, -1);
+        nodes[4] = make_num(item.left);
+        nodes[5] = make_num(item.right);
+
+        VmHarness h(std::move(nodes), {global_int("x", 0)});
+        CHECK(h.vm.step());
+        const Value* x = h.vm.variable("x");
+        REQUIRE(x != nullptr);
+        REQUIRE(std::holds_alternative<std::int32_t>(*x));
+        CHECK(std::get<std::int32_t>(*x) == item.expected);
+        CHECK_FALSE(h.vm.step());
+    }
+}
+
+TEST_CASE("vm: unary complement and logical not opcodes") {
+    struct Case {
+        std::int32_t opcode;
+        double operand;
+        std::int32_t expected;
+    };
+    const Case cases[] = {
+        {19, 5.0, -6},
+        {19, 0.0, -1},
+        {20, 5.0, 0},
+        {20, 0.0, 1},
+    };
+
+    for (const Case& item : cases) {
+        CAPTURE(item.opcode);
+        std::vector<CsNode> nodes(5);
+        nodes[0] = make_assign(1, 2, 3);
+        nodes[1] = make_str_var("x");
+        nodes[2] = make_node(item.opcode);
+        nodes[2].a = 4;
+        nodes[3] = make_jmp(-1, -1);
+        nodes[4] = make_num(item.operand);
+
+        VmHarness h(std::move(nodes), {global_int("x", 0)});
+        CHECK(h.vm.step());
+        const Value* x = h.vm.variable("x");
+        REQUIRE(x != nullptr);
+        REQUIRE(std::holds_alternative<std::int32_t>(*x));
+        CHECK(std::get<std::int32_t>(*x) == item.expected);
+        CHECK_FALSE(h.vm.step());
+    }
+}
+
+TEST_CASE("vm: bitwise opcodes reject string operands") {
+    std::vector<CsNode> nodes(6);
+    nodes[0] = make_assign(1, 2, 3);
+    nodes[1] = make_str_var("x");
+    nodes[2] = make_bin(3, 4, 5);
+    nodes[3] = make_jmp(-1, -1);
+    nodes[4] = make_str_var("s");
+    nodes[5] = make_num(1.0);
+
+    VmHarness h(std::move(nodes), {global_string("s", "abc"), global_int("x", 9)});
+    CHECK_FALSE(h.vm.step());
+    CHECK(h.vm.status() == VmStatus::end);
+    CHECK(h.vm.failed());
+}
+
+TEST_CASE("vm: unary opcode rejects a string operand") {
+    std::vector<CsNode> nodes(5);
+    nodes[0] = make_assign(1, 2, 3);
+    nodes[1] = make_str_var("x");
+    nodes[2] = make_node(19);
+    nodes[2].a = 4;
+    nodes[3] = make_jmp(-1, -1);
+    nodes[4] = make_str_var("s");
+
+    VmHarness h(std::move(nodes), {global_string("s", "abc"), global_int("x", 9)});
+    CHECK_FALSE(h.vm.step());
+    CHECK(h.vm.status() == VmStatus::end);
+    CHECK(h.vm.failed());
+}
+
+TEST_CASE("vm: arithmetic failure stops before evaluating the sibling operand") {
+    std::vector<CsNode> nodes(8);
+    nodes[0] = make_assign(1, 2, 7);
+    nodes[1] = make_str_var("x");
+    nodes[2] = make_bin(14, 3, 4);
+    nodes[3] = make_bin(17, 5, 6);
+    nodes[4] = make_func(kPersonParameter, {});
+    nodes[5] = make_str_var("a");
+    nodes[6] = make_str_var("b");
+    nodes[7] = make_jmp(-1, -1);
+
+    VmHarness h(std::move(nodes),
+                {global_int("a", 5), global_int("b", 0), global_int("x", 9)});
+    CHECK_FALSE(h.vm.step());
+    CHECK(h.vm.status() == VmStatus::end);
+    CHECK(h.vm.failed());
+    CHECK(h.host.calls.empty());
+    CHECK(h.vm.steps() == 1);
+}
+
+TEST_CASE("vm: expression evaluation budget bounds a shared graph") {
+    constexpr int kLevels = 20;
+    std::vector<CsNode> nodes(static_cast<std::size_t>(kLevels) + 3);
+    nodes[0] = make_assign(1, 2, kLevels + 2);
+    nodes[1] = make_str_var("x");
+    for (int i = 0; i < kLevels; ++i) {
+        const std::int32_t index = 2 + i;
+        nodes[static_cast<std::size_t>(index)] =
+            make_bin(14, index + 1, index + 1);
+    }
+    nodes[static_cast<std::size_t>(kLevels) + 2] = make_num(1.0);
+
+    VmHarness h(std::move(nodes), {global_int("x", 0)});
+    CHECK_FALSE(h.vm.step());
+    CHECK(h.vm.status() == VmStatus::end);
+    CHECK(h.vm.failed());
+    CHECK(h.vm.steps() == 1);
+}
+
+TEST_CASE("vm: cyclic expression terminates without hanging") {
+    std::vector<CsNode> nodes(4);
+    nodes[0] = make_assign(1, 2, 3);
+    nodes[1] = make_str_var("x");
+    nodes[2] = make_bin(14, 3, 3);
+    nodes[3] = make_bin(14, 2, 2);
+
+    VmHarness h(std::move(nodes), {global_int("x", 0)});
+    CHECK_FALSE(h.vm.step());
+    CHECK(h.vm.status() == VmStatus::end);
+    CHECK(h.vm.failed());
+    CHECK(h.vm.steps() == 1);
 }
