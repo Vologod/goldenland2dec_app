@@ -369,6 +369,10 @@ class Game {
 
         apply_initial_server_config();
         if (config_.get_bool("d_console", false)) set_console_visible(true);
+        if (options_.has_dialog && console_visible_) {
+            set_console_visible(false);
+            gl::log(gl::LogLevel::info, "dialog: console disabled for --dialog");
+        }
 
         if (options_.has_dialog) {
             const gl::Result<void> opened = open_dialog(options_.dialog);
@@ -479,21 +483,22 @@ class Game {
 
   private:
     void load_font() {
-        std::optional<fs::path> path;
-        if (options_.font_set) {
-            path = options_.font;
-        } else {
-            path = gl::render::find_system_font();
+        std::vector<fs::path> candidates;
+        if (options_.font_set) candidates.push_back(options_.font);
+        if (const std::optional<fs::path> system = gl::render::find_system_font()) {
+            if (candidates.empty() || candidates.front() != *system) candidates.push_back(*system);
         }
-        if (path) {
+
+        for (const fs::path& path : candidates) {
             gl::Result<gl::render::Font> loaded =
-                gl::render::Font::load_from_file(window_.renderer(), *path, kFontPixelHeight);
-            if (loaded) {
-                font_.emplace(std::move(loaded.value()));
-                gl::log(gl::LogLevel::info, "font: loaded '" + path->string() + "'");
-            } else {
+                gl::render::Font::load_from_file(window_.renderer(), path, kFontPixelHeight);
+            if (!loaded) {
                 gl::log(gl::LogLevel::warning, loaded.error().message);
+                continue;
             }
+            font_.emplace(std::move(loaded.value()));
+            gl::log(gl::LogLevel::info, "font: loaded '" + path.string() + "'");
+            break;
         }
         if (!font_) {
             gl::log(gl::LogLevel::warning, "font: no TrueType font available, using ASCII fallback");
@@ -615,6 +620,10 @@ class Game {
         return std::max(static_cast<float>(viewport_width_) - 2.0f * kDialogMargin, 40.0f);
     }
 
+    float dialog_content_bottom() const {
+        return static_cast<float>(viewport_height_) - 40.0f;
+    }
+
     std::vector<std::string> dialog_npc_lines() const {
         if (!dialog_waiting()) return {};
         return ui_wrap(dialog_->session->npc_text(), dialog_text_width());
@@ -629,11 +638,17 @@ class Game {
     }
 
     float dialog_answers_top() const {
+        const float line_height = ui_line_height();
+        const float content_bottom = dialog_content_bottom();
         float y = dialog_panel_y() + kDialogMargin;
         if (dialog_waiting()) {
-            y += static_cast<float>(dialog_npc_lines().size()) * (ui_line_height() + 2.0f);
+            const std::vector<std::string> lines = dialog_npc_lines();
+            for (std::size_t index = 0; index < lines.size(); ++index) {
+                if (y + line_height > content_bottom) break;
+                y += line_height + 2.0f;
+            }
         } else {
-            y += ui_line_height() + 2.0f;
+            y += line_height + 2.0f;
         }
         return y + 12.0f;
     }
@@ -1379,11 +1394,13 @@ class Game {
         const gl::render::Color answer_color{210, 214, 222, 255};
         const gl::render::Color selected_color{255, 232, 160, 255};
         const float line_height = ui_line_height();
+        const float content_bottom = dialog_content_bottom();
 
         float y = panel_y + kDialogMargin;
         if (dialog_waiting()) {
             const std::vector<std::string> lines = dialog_npc_lines();
             for (const std::string& line : lines) {
+                if (y + line_height > content_bottom) break;
                 draw_ui_text(line, kDialogMargin, y, text_color);
                 y += line_height + 2.0f;
             }
@@ -1397,12 +1414,16 @@ class Game {
         if (dialog_waiting()) {
             const std::span<const gl::script::DialogLine> answers = dialog_->session->answers();
             if (answers.empty()) {
-                draw_ui_text("No answers. Press Esc.", kDialogMargin, dialog_answers_top(),
-                             selected_color);
+                const float message_y = dialog_answers_top();
+                if (message_y + line_height <= content_bottom) {
+                    draw_ui_text("No answers. Press Esc.", kDialogMargin, message_y,
+                                 selected_color);
+                }
             } else {
                 const int count = static_cast<int>(answers.size());
                 for (int index = 0; index < count; ++index) {
                     const SDL_FRect rect = dialog_answer_rect(index);
+                    if (rect.y >= content_bottom) break;
                     const bool selected = dialog_selected_ == index;
                     if (selected) {
                         SDL_SetRenderDrawColor(renderer, 60, 52, 24, 210);
@@ -1415,6 +1436,7 @@ class Game {
                         ui_wrap(dialog_answer_label(index), rect.w - 16.0f);
                     float text_y = rect.y + 2.0f;
                     for (const std::string& line : lines) {
+                        if (text_y + line_height > content_bottom) break;
                         draw_ui_text(line, rect.x + 8.0f, text_y,
                                      selected ? selected_color : answer_color);
                         text_y += line_height + 1.0f;
@@ -1423,9 +1445,16 @@ class Game {
             }
         }
 
-        const std::string_view hint =
-            "Up/Down or mouse to select, Enter to choose, Esc to close";
         const float hint_y = static_cast<float>(viewport_height_) - 28.0f;
+        if (dialog_waiting() && !dialog_message_.empty()) {
+            draw_ui_text(dialog_message_, kDialogMargin, hint_y - line_height - 6.0f,
+                         gl::render::Color{255, 170, 120, 255});
+        }
+        const bool has_answers =
+            dialog_waiting() && !dialog_->session->answers().empty();
+        const std::string_view hint = has_answers
+                                          ? "Up/Down or mouse to select, Enter to choose, Esc to close"
+                                          : "Esc to close";
         draw_ui_text(hint, kDialogMargin, hint_y, gl::render::Color{110, 112, 122, 255});
     }
 

@@ -13,25 +13,31 @@ P2c — save/load каркас: реализация и автоматизиро
 открыт manual UI gate (Continue → слоты, Esc). P3a — CS VM: Tasks 1–5 завершены
 2026-10-21, автоматизированная приёмка пройдена, P3a принята (manual UI gate для P3a
 нет). P3c — dialogs + SDB + TTF: Tasks 1–2 завершены; Task 3 (`glgame` dialog screen,
-`--dialog`/`--font`, `glscript --sdb`) реализован и проверен 2026-10-21, следующий —
-Task 4 (acceptance + docs). P3b (AgeScript) / P1b (Android/touch) — после P3c;
+`--dialog`/`--font`, `glscript --sdb`) реализован и проверен 2026-10-21, fix round 1
+применён; следующий — Task 4 (acceptance + docs). P3b (AgeScript) / P1b (Android/touch) — после P3c;
 P2 backfill отложен.
 
 ## Текущая задача
 
 **P3c — Task 3 (`glgame` dialog screen + `--dialog`/`--font` + `glscript --sdb`)
-завершён 2026-10-21.** `glgame` получил `--dialog <virtual/path.cs>` (globals, SDB, CS →
-`ScriptVm` + `DialogSession`, экран сразу), `--font <ttf>` и поиск системного шрифта с
-ASCII-fallback. Меню: пункт `Test Dialog` только при наличии
-`scripts/dialogs/demon.d1.age.cs`; экран — тёмная нижняя панель, NPC-текст TTF с
-переносом, нумерованные ответы (Up/Down/мышь, Enter/клик), `Esc` → меню или выход для
-`--dialog`, сообщение при `end`/отсутствии ответов. `--screenshot --dialog` рендерит
-кадр 1280×720. Заголовки save-слотов теперь рисуются загруженным TTF (кириллица вместо
-`?`); без шрифта остаётся ASCII-fallback. `glscript --sdb <path>` печатает
-`<id>\t<text>` для `dialogs_data()` после каждого останова; коды выхода не менялись.
-`gl_assets`/`gl_script` остались SDL-free. Проверка: `cmake --build build` — успех;
-`gl_cs_tools_tests` — 9/9 (67 assertions), `glgame_screenshot_tests` — 9/9 (143);
-полный `ctest` с `GL_GAME_DIR` — **13/13 passed**, 552.41 s, exit 0;
+завершён 2026-10-21; fix round 1 применён.** `glgame` получил
+`--dialog <virtual/path.cs>` (globals, SDB, CS → `ScriptVm` + `DialogSession`, экран
+сразу), `--font <ttf>` и поиск системного шрифта с ASCII-fallback. Меню: пункт
+`Test Dialog` только при наличии `scripts/dialogs/demon.d1.age.cs`; экран — тёмная
+нижняя панель, NPC-текст TTF с переносом, нумерованные ответы (Up/Down/мышь,
+Enter/клик), `Esc` → меню или выход для `--dialog`, сообщение при `end`/отсутствии
+ответов. `--screenshot --dialog` рендерит кадр 1280×720. Заголовки save-слотов теперь
+рисуются загруженным TTF (кириллица вместо `?`); без шрифта остаётся ASCII-fallback.
+`glscript --sdb <path>` печатает `<id>\t<text>` для `dialogs_data()` после каждого
+останова; коды выхода не менялись. Fix round 1: прямой `--dialog` принудительно
+выключает консоль (`d_console` из INI игнорируется, `~` работает); цепочка шрифтов
+`--font` → системный → ASCII; сообщение об ошибке `choose()` видно и при `waiting()`;
+подсказка без ответов — `Esc to close`; текст/ответы ограничены по вертикали (скролл —
+в backlog); тесты проверяют реальную загрузку шрифта, fallback, отличие кадра от меню,
+содержимое нижней панели, `d_console 1` и возвращают 77 без шрифта. `gl_assets`/
+`gl_script` остались SDL-free. Проверка: `cmake --build build` — успех;
+`gl_cs_tools_tests` — 9/9 (67 assertions), `glgame_screenshot_tests` — 11/11
+(182 assertions); полный `ctest` с `GL_GAME_DIR` — **13/13 passed**, 629.23 s, exit 0;
 `glscript --sdb` на `demon.d1.age.cs` — exit 0, `2684\tЧего уставился?` и др.;
 dialog PNG — 1280×720, 511 цветов (выборка каждые 2 px), SHA-256
 `0CA504587996AE0A7345C0754C940DDB6730AC732FD562CD5C56622A8A82A56C`.
@@ -462,9 +468,14 @@ P0 закрыт 2026-10-19; далее выполнялись задачи P1 (�
   `gl_script_tests` 58/443, `gl_script_real_tests` 2/44, full `ctest` 13/13 (536.01 s).
 - 2026-10-21: P3c Task 3 — `glgame`: `--dialog`/`--font`, меню `Test Dialog`, экран
   диалога (панель, TTF-перенос, нумерованные ответы, Up/Down/мышь, Enter/клик, Esc),
-  TTF для save-строк; `glscript --sdb` (`id<TAB>text`); тесты `gl_cs_tools_tests` 9/9
-  (67 assertions) и dialog screenshot `glgame_screenshot_tests` 9/9 (143); полный `ctest`
-  13/13 (552.41 s); research note `docs/research/p3c-dialogs-sdb-font.md`.
+  TTF для save-строк; `glscript --sdb` (`id<TAB>text`); research note
+  `docs/research/p3c-dialogs-sdb-font.md`.
+- 2026-10-21: P3c Task 3 fix round 1 — прямой `--dialog` выключает консоль независимо от
+  `d_console`; шрифты `--font` → системный → ASCII; видимое сообщение `choose()` при
+  `waiting`; подсказка `Esc to close` без ответов; вертикальный clamp длинного текста
+  (скролл — backlog); тесты `--font`/fallback/отличие от меню/нижняя панель/`d_console`/
+  реальная загрузка шрифта, 77 без шрифта; `gl_cs_tools_tests` 9/9 (67 assertions),
+  `glgame_screenshot_tests` 11/11 (182), полный `ctest` 13/13 (629.23 s).
 
 ## Следующие задачи
 
@@ -553,3 +564,5 @@ P0 закрыт 2026-10-19; далее выполнялись задачи P1 (�
 - coerce_assignment для необъявленной переменной создаёт int32 0; string→undeclared теперь фатален — подтвердить на реальных скриптах.
 - AgeScript .scr компилятор/интерпретатор (P3b).
 - Полный набор native-функций, диалоговый UI и SDB-фразы (P3c/P4).
+- P3c: длинные диалоги/узкие окна — сейчас простой вертикальный clamp (лишние строки
+  не рисуются); нужен scroll/пагинация ответов и NPC-текста.

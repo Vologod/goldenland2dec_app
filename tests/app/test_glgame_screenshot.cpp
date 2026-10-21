@@ -13,6 +13,7 @@
 #include <fstream>
 #include <iterator>
 #include <memory>
+#include <optional>
 #include <set>
 #include <string>
 #include <string_view>
@@ -33,7 +34,25 @@ namespace fs = std::filesystem;
 
 const fs::path g_glgame_exe = GLGAME_EXE;
 
-bool font_available() { return gl::render::find_system_font().has_value(); }
+std::optional<fs::path> system_font_path() { return gl::render::find_system_font(); }
+
+bool font_available() {
+    const std::optional<fs::path> path = system_font_path();
+    if (!path) return false;
+    SDL_Surface* surface =
+        SDL_CreateRGBSurfaceWithFormat(0, 16, 16, 32, SDL_PIXELFORMAT_ARGB8888);
+    if (surface == nullptr) return false;
+    SDL_Renderer* renderer = SDL_CreateSoftwareRenderer(surface);
+    bool loaded = false;
+    if (renderer != nullptr) {
+        const gl::Result<gl::render::Font> font =
+            gl::render::Font::load_from_file(renderer, *path, 20.0f);
+        loaded = font.has_value();
+        SDL_DestroyRenderer(renderer);
+    }
+    SDL_FreeSurface(surface);
+    return loaded;
+}
 
 fs::path unique_temp_dir() {
     static std::atomic<unsigned> counter{0};
@@ -139,12 +158,17 @@ int run_glgame_capture(const std::vector<std::string>& arguments, std::string& o
 #endif
 }
 
-fs::path write_test_config(const fs::path& dir, bool with_resolution = false) {
+fs::path write_test_config(const fs::path& dir, bool with_resolution = false,
+                           bool console = false) {
+    std::error_code error;
+    fs::create_directories(dir, error);
+    REQUIRE_FALSE(error);
     const fs::path config = dir / "test.ini";
     std::ofstream out(config, std::ios::binary);
     out << "// deterministic test config\n"
            "cl_username Tester\n"
-           "d_console 0\n"
+           "d_console "
+        << (console ? 1 : 0) << "\n"
            "gv_pause 0\n"
            "r_windowed 1\n"
            "bind DIK_F8, vk_screenshot\n";
@@ -231,12 +255,72 @@ void check_png(const fs::path& png, int expected_width, int expected_height) {
     CAPTURE(colors.size());
     CHECK(colors.size() >= 2);
 }
+
+std::vector<unsigned char> read_png(const fs::path& png, int& width, int& height) {
+    int channels = 0;
+    const StbiImage pixels = load_png(png, width, height, channels);
+    REQUIRE(pixels != nullptr);
+    return std::vector<unsigned char>(pixels.get(),
+                                      pixels.get() + static_cast<std::size_t>(width) *
+                                                         static_cast<std::size_t>(height) * 4);
+}
+
+void check_dialog_content(const fs::path& dialog_png, const fs::path& menu_png) {
+    int dialog_width = 0;
+    int dialog_height = 0;
+    int menu_width = 0;
+    int menu_height = 0;
+    const std::vector<unsigned char> dialog = read_png(dialog_png, dialog_width, dialog_height);
+    const std::vector<unsigned char> menu = read_png(menu_png, menu_width, menu_height);
+    REQUIRE(dialog_width == menu_width);
+    REQUIRE(dialog_height == menu_height);
+
+    std::size_t different = 0;
+    for (std::size_t index = 0; index < dialog.size(); ++index) {
+        if (dialog[index] != menu[index]) ++different;
+    }
+    CAPTURE(different);
+    CHECK(different > 10000);
+
+    const std::size_t bottom_start =
+        static_cast<std::size_t>(dialog_height) * 3 / 5;
+    const std::size_t bottom_area =
+        (static_cast<std::size_t>(dialog_height) - bottom_start) *
+        static_cast<std::size_t>(dialog_width);
+    const unsigned char* background = dialog.data();
+    std::size_t non_background = 0;
+    std::set<std::uint32_t> colors;
+    for (std::size_t y = bottom_start; y < static_cast<std::size_t>(dialog_height); ++y) {
+        for (int x = 0; x < dialog_width; ++x) {
+            const unsigned char* pixel =
+                dialog.data() + (y * static_cast<std::size_t>(dialog_width) +
+                                 static_cast<std::size_t>(x)) *
+                                    4;
+            const int difference = std::abs(static_cast<int>(pixel[0]) - background[0]) +
+                                   std::abs(static_cast<int>(pixel[1]) - background[1]) +
+                                   std::abs(static_cast<int>(pixel[2]) - background[2]) +
+                                   std::abs(static_cast<int>(pixel[3]) - background[3]);
+            if (difference > 12) ++non_background;
+            colors.insert((static_cast<std::uint32_t>(pixel[0]) << 16) |
+                          (static_cast<std::uint32_t>(pixel[1]) << 8) |
+                          static_cast<std::uint32_t>(pixel[2]));
+        }
+    }
+    CAPTURE(non_background);
+    CAPTURE(bottom_area);
+    CAPTURE(colors.size());
+    CHECK(non_background > bottom_area / 10);
+    CHECK(colors.size() >= 8);
+}
 } // namespace
 
 int main(int argc, char** argv) {
     if (std::getenv("GL_GAME_DIR") == nullptr) return 77;
+    const bool has_font = font_available();
     doctest::Context context(argc, argv);
-    return context.run();
+    const int result = context.run();
+    if (!has_font && result == 0) return 77;
+    return result;
 }
 
 TEST_CASE("glgame renders the menu into a 1280x720 PNG") {
@@ -288,16 +372,83 @@ TEST_CASE("glgame renders a dialog into a 1280x720 PNG" *
           doctest::skip(!font_available())) {
     const char* game_dir = std::getenv("GL_GAME_DIR");
     REQUIRE(game_dir != nullptr);
+    const std::optional<fs::path> font = system_font_path();
+    REQUIRE(font.has_value());
 
     TempDir temp;
     const fs::path config = write_test_config(temp.path);
+    const fs::path menu_png = temp.path / "dialog_menu.png";
+    const int menu_code = run_glgame(screenshot_arguments(game_dir, config, menu_png, {"--menu"}));
+    CAPTURE(menu_code);
+    REQUIRE(fs::exists(menu_png));
+    CHECK(menu_code == 0);
+
     const fs::path png = temp.path / "dialog.png";
     const int code = run_glgame(screenshot_arguments(
-        game_dir, config, png, {"--dialog", "scripts/dialogs/demon.d1.age.cs"}));
+        game_dir, config, png,
+        {"--dialog", "scripts/dialogs/demon.d1.age.cs", "--font", font->string()}));
     CAPTURE(code);
     REQUIRE(fs::exists(png));
     CHECK(code == 0);
     check_png(png, 1280, 720);
+    check_dialog_content(png, menu_png);
+}
+
+TEST_CASE("glgame falls back when --font cannot be loaded" *
+          doctest::skip(!font_available())) {
+    const char* game_dir = std::getenv("GL_GAME_DIR");
+    REQUIRE(game_dir != nullptr);
+
+    TempDir temp;
+    const fs::path config = write_test_config(temp.path);
+    const fs::path png = temp.path / "dialog_fallback.png";
+    const fs::path missing_font = temp.path / "missing-font.ttf";
+    const int code = run_glgame(screenshot_arguments(
+        game_dir, config, png,
+        {"--dialog", "scripts/dialogs/demon.d1.age.cs", "--font", missing_font.string()}));
+    CAPTURE(code);
+    REQUIRE(fs::exists(png));
+    CHECK(code == 0);
+    check_png(png, 1280, 720);
+}
+
+TEST_CASE("glgame --dialog forces the console off" *
+          doctest::skip(!font_available())) {
+    const char* game_dir = std::getenv("GL_GAME_DIR");
+    REQUIRE(game_dir != nullptr);
+    const std::optional<fs::path> font = system_font_path();
+    REQUIRE(font.has_value());
+
+    TempDir temp;
+    const fs::path console_off_config = write_test_config(temp.path / "console-off");
+    const fs::path console_on_config = write_test_config(temp.path / "console-on", false, true);
+
+    const fs::path off_png = temp.path / "console_off.png";
+    const fs::path on_png = temp.path / "console_on.png";
+    const std::vector<std::string> extra = {"--dialog", "scripts/dialogs/demon.d1.age.cs",
+                                            "--font", font->string()};
+    const int off_code = run_glgame(screenshot_arguments(game_dir, console_off_config, off_png, extra));
+    const int on_code = run_glgame(screenshot_arguments(game_dir, console_on_config, on_png, extra));
+    CAPTURE(off_code);
+    CAPTURE(on_code);
+    REQUIRE(fs::exists(off_png));
+    REQUIRE(fs::exists(on_png));
+    CHECK(off_code == 0);
+    CHECK(on_code == 0);
+
+    int off_width = 0;
+    int off_height = 0;
+    int on_width = 0;
+    int on_height = 0;
+    const std::vector<unsigned char> off = read_png(off_png, off_width, off_height);
+    const std::vector<unsigned char> on = read_png(on_png, on_width, on_height);
+    REQUIRE(off.size() == on.size());
+    std::size_t different = 0;
+    for (std::size_t index = 0; index < off.size(); ++index) {
+        if (off[index] != on[index]) ++different;
+    }
+    CAPTURE(different);
+    CHECK(different == 0);
 }
 
 TEST_CASE("glgame renders a preloaded level into a 1280x720 PNG") {
