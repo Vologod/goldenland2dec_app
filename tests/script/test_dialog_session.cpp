@@ -10,17 +10,21 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <variant>
 #include <vector>
 
 using gl::assets::CsNode;
 using gl::assets::Sdb;
 using gl::script::DefaultScriptHost;
 using gl::script::DialogSession;
+using gl::script::ScriptGlobal;
 using gl::script::ScriptVm;
+using gl::script::Value;
 using gl::script::VmStatus;
 
 namespace {
 constexpr std::uint32_t kD_Say = 0x1000004;
+constexpr std::uint32_t kD_CloseDialog = 0x1000005;
 constexpr std::uint32_t kD_Answer = 0x1000006;
 
 CsNode make_node(std::int32_t opcode) {
@@ -46,8 +50,7 @@ CsNode make_func(std::uint32_t id, std::initializer_list<std::int32_t> args) {
     node.value = static_cast<double>(id);
     std::size_t i = 0;
     for (std::int32_t arg : args) {
-        if (i < node.args.size())
-            node.args[i++] = arg;
+        if (i < node.args.size()) node.args[i++] = arg;
     }
     return node;
 }
@@ -69,7 +72,7 @@ CsNode make_compare_eq(std::int32_t left, std::int32_t right, std::int32_t on_tr
     return node;
 }
 
-void append_u32(std::vector<std::uint8_t> &out, std::uint32_t value) {
+void append_u32(std::vector<std::uint8_t>& out, std::uint32_t value) {
     out.push_back(static_cast<std::uint8_t>(value & 0xFF));
     out.push_back(static_cast<std::uint8_t>((value >> 8) & 0xFF));
     out.push_back(static_cast<std::uint8_t>((value >> 16) & 0xFF));
@@ -78,11 +81,10 @@ void append_u32(std::vector<std::uint8_t> &out, std::uint32_t value) {
 
 Sdb make_sdb(std::initializer_list<std::pair<std::uint32_t, std::string_view>> entries) {
     std::vector<std::uint8_t> bytes{'S', 'D', 'B', ' '};
-    for (const auto &[id, text] : entries) {
+    for (const auto& [id, text] : entries) {
         append_u32(bytes, id);
         append_u32(bytes, static_cast<std::uint32_t>(text.size()));
-        for (char ch : text)
-            bytes.push_back(static_cast<std::uint8_t>(ch));
+        for (char ch : text) bytes.push_back(static_cast<std::uint8_t>(ch));
     }
     auto parsed = Sdb::parse(bytes);
     REQUIRE(parsed.has_value());
@@ -113,7 +115,10 @@ struct SessionHarness {
     Sdb sdb;
 
     SessionHarness(std::vector<CsNode> nodes, Sdb database)
-        : vm(std::move(nodes), host), sdb(std::move(database)) {}
+        : vm(std::move(nodes), host), sdb(std::move(database)) {
+        vm.set_globals(std::vector<ScriptGlobal>{
+            ScriptGlobal{"int", "LastAnswer", Value{std::int32_t{0}}}});
+    }
 };
 } // namespace
 
@@ -166,11 +171,13 @@ TEST_CASE("dialog session: choose rejects an out-of-range answer") {
     CHECK(session.npc_text() == "Hello");
 }
 
-TEST_CASE("dialog session: a missing SDB phrase falls back to a placeholder") {
-    std::vector<CsNode> nodes(3);
+TEST_CASE("dialog session: missing SDB phrases fall back to placeholders") {
+    std::vector<CsNode> nodes(5);
     nodes[0] = make_func(kD_Say, {1});
     nodes[1] = make_num(999.0);
-    nodes[2] = make_jmp(-1, -1);
+    nodes[2] = make_func(kD_Answer, {3});
+    nodes[3] = make_num(998.0);
+    nodes[4] = make_jmp(-1, -1);
 
     SessionHarness h(std::move(nodes), make_sdb({{100, "Hello"}}));
     DialogSession session(h.vm, h.sdb);
@@ -178,7 +185,86 @@ TEST_CASE("dialog session: a missing SDB phrase falls back to a placeholder") {
     REQUIRE(session.start().has_value());
     REQUIRE(session.waiting());
     CHECK(session.npc_text() == "<phrase 999>");
+    const std::span<const gl::script::DialogLine> answers = session.answers();
+    REQUIRE(answers.size() == 1);
+    CHECK(answers[0].phrase_id == 998);
+    CHECK(answers[0].text == "<phrase 998>");
+}
+
+TEST_CASE("dialog session: a dialog that ends immediately leaves no page") {
+    std::vector<CsNode> nodes(5);
+    nodes[0] = make_func(kD_Say, {1});
+    nodes[1] = make_num(100.0);
+    nodes[2] = make_func(kD_CloseDialog, {3});
+    nodes[3] = make_num(0.0);
+    nodes[4] = make_jmp(-1, -1);
+
+    SessionHarness h(std::move(nodes), make_sdb({{100, "Hello"}}));
+    DialogSession session(h.vm, h.sdb);
+
+    auto started = session.start();
+    REQUIRE(started.has_value());
+    CHECK(session.status() == VmStatus::end);
+    CHECK_FALSE(session.waiting());
+    CHECK(session.npc_text().empty());
     CHECK(session.answers().empty());
+}
+
+TEST_CASE("dialog session: a failure while starting is an error") {
+    std::vector<CsNode> nodes(1);
+    nodes[0] = make_node(3);
+
+    SessionHarness h(std::move(nodes), make_sdb({}));
+    DialogSession session(h.vm, h.sdb);
+
+    auto started = session.start();
+    REQUIRE_FALSE(started.has_value());
+    CHECK(started.error().code == gl::ErrorCode::format);
+    CHECK(h.vm.failed());
+    CHECK(session.status() == VmStatus::end);
+    CHECK_FALSE(session.waiting());
+}
+
+TEST_CASE("dialog session: a failure after choosing is an error") {
+    std::vector<CsNode> nodes(11);
+    nodes[0] = make_compare_eq(1, 2, 3, 6);
+    nodes[1] = make_var("LastAnswer");
+    nodes[2] = make_num(1.0);
+    nodes[3] = make_node(3);
+    nodes[6] = make_func(kD_Say, {7});
+    nodes[7] = make_num(100.0);
+    nodes[8] = make_func(kD_Answer, {9});
+    nodes[9] = make_num(1.0);
+    nodes[10] = make_jmp(-1, -1);
+
+    SessionHarness h(std::move(nodes), make_sdb({{100, "Hello"}, {1, "Yes"}}));
+    DialogSession session(h.vm, h.sdb);
+    REQUIRE(session.start().has_value());
+    REQUIRE(session.waiting());
+
+    auto chosen = session.choose(0);
+    REQUIRE_FALSE(chosen.has_value());
+    CHECK(chosen.error().code == gl::ErrorCode::format);
+    CHECK(h.vm.failed());
+    CHECK(session.status() == VmStatus::end);
+    CHECK_FALSE(session.waiting());
+}
+
+TEST_CASE("dialog session: start resets runtime dialog state") {
+    SessionHarness h(two_page_dialog(),
+                     make_sdb({{100, "Hello"}, {1, "Yes"}, {2, "No"}, {200, "Goodbye"}}));
+    DialogSession session(h.vm, h.sdb);
+    REQUIRE(session.start().has_value());
+    REQUIRE(session.waiting());
+    REQUIRE(session.choose(1).has_value());
+    REQUIRE(session.npc_text() == "Goodbye");
+
+    REQUIRE(session.start().has_value());
+    CHECK(session.npc_text() == "Hello");
+    const Value* last_answer = h.vm.variable("LastAnswer");
+    REQUIRE(last_answer != nullptr);
+    REQUIRE(std::holds_alternative<std::int32_t>(*last_answer));
+    CHECK(std::get<std::int32_t>(*last_answer) == 0);
 }
 
 TEST_CASE("dialog session: choose without a waiting dialog is rejected") {

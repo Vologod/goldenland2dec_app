@@ -435,6 +435,11 @@ P0 закрыт 2026-10-19; далее выполнялись задачи P1 (�
   fallback `<phrase N>`, `waiting`/`npc_text`/`answers`; `choose` возвращает `argument`
   за границей; synthetic 5 cases и real `demon.d1.age.cs` + `dialogsphrases.sdb`
   (`gl_script_real_tests`, skip 77); `gl_script_tests` 54/411; full `ctest` 13/13 (606.15 s).
+- 2026-10-21: P3c Task 2 fix round 1 — `vm.failed()` после `start`/`choose` → `ErrorCode::format`
+  (`status()`/`failed()` остаются доступны); тесты end-path и падающей VM; real-тест проверяет
+  `!vm.failed()` и не-ASCII текст; fallback `<phrase N>` покрыт для ответов; контракт
+  `start()` (`restart(true)`) задокументирован в заголовке и Open Questions;
+  `gl_script_tests` 58/443, `gl_script_real_tests` 2/44, full `ctest` 13/13 (536.01 s).
 
 ## Следующие задачи
 
@@ -453,6 +458,9 @@ P0 закрыт 2026-10-19; далее выполнялись задачи P1 (�
 - P2c: Cyrillic/cp1251 save-slot titles render as `?` in `glgame` because `gl_render` uses
   `stb_easy_font` (ASCII-only). Accepted P2c limitation; a proper font with cp1251 glyphs is
   tracked as P7 backlog.
+- P3c: `DialogSession::start()` intentionally calls `ScriptVm::restart(true)` — variables are
+  rebuilt from globals and seeded runtime state is discarded. `start()`/`choose()` map
+  `vm.failed()` to `ErrorCode::format`; `status()`/`failed()` remain available for diagnosis.
 - Полная десериализация `.sav` и запись сохранений не реализованы (P2c — read-only каркас).
 - SDL2 `release-2.32.10` выдаёт CMake deprecation warning из-за своего
   `cmake_minimum_required`; следить при обновлении CMake/SDL.

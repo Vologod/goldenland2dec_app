@@ -16,24 +16,26 @@ struct DialogLine {
 };
 
 class DialogSession {
-  public:
-    DialogSession(ScriptVm &vm, const gl::assets::Sdb &sdb);
+public:
+    DialogSession(ScriptVm& vm, const gl::assets::Sdb& sdb);
+    // Restarts the VM from node 0 (`restart(true)`): variables are rebuilt from globals and
+    // previously seeded runtime state is discarded.
     gl::Result<void> start();
     bool waiting() const;
     std::string_view npc_text() const;
     std::span<const DialogLine> answers() const;
+    // Maps VM failure after running to `ErrorCode::format`; `status()`/`failed()` stay available.
     gl::Result<void> choose(std::size_t index);
     VmStatus status() const;
 
-  private:
+private:
     std::string phrase_text(std::uint32_t id) const;
     void run_to_pause();
     void refresh();
 
-    ScriptVm &vm_;
-    const gl::assets::Sdb &sdb_;
+    ScriptVm& vm_;
+    const gl::assets::Sdb& sdb_;
     std::string npc_text_;
     std::vector<DialogLine> answers_;
-    bool dialog_available_ = false;
 };
-} // namespace gl::script
+}

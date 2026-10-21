@@ -5,9 +5,11 @@
 #include "gl/script/globals.hpp"
 #include "gl/script/host.hpp"
 #include "gl/script/script_vm.hpp"
+#include <algorithm>
 #include <cstdlib>
 #include <doctest/doctest.h>
 #include <span>
+#include <string_view>
 #include <utility>
 
 using gl::assets::GameVfs;
@@ -21,11 +23,17 @@ using gl::script::VmStatus;
 
 namespace {
 bool game_dir_available() { return std::getenv("GL_GAME_DIR") != nullptr; }
+
+bool has_non_ascii(std::string_view text) {
+    return std::any_of(text.begin(), text.end(), [](char ch) {
+        return static_cast<unsigned char>(ch) >= 0x80;
+    });
+}
 } // namespace
 
 TEST_CASE("real data: dialog session maps demon phrases and advances" *
           doctest::skip(!game_dir_available())) {
-    const char *dir = std::getenv("GL_GAME_DIR");
+    const char* dir = std::getenv("GL_GAME_DIR");
     REQUIRE(dir != nullptr);
 
     auto vfs = GameVfs::mount(dir);
@@ -53,24 +61,26 @@ TEST_CASE("real data: dialog session maps demon phrases and advances" *
     DialogSession session(vm, sdb.value());
     auto started = session.start();
     REQUIRE(started.has_value());
+    CHECK_FALSE(vm.failed());
     REQUIRE(session.status() == VmStatus::wait_user);
     REQUIRE(session.waiting());
 
     const std::string_view npc = session.npc_text();
     CHECK_FALSE(npc.empty());
     CHECK(npc.rfind("<phrase ", 0) != 0);
+    CHECK(has_non_ascii(npc));
 
     const std::span<const gl::script::DialogLine> answers = session.answers();
     REQUIRE(answers.size() >= 1);
-    for (const gl::script::DialogLine &line : answers) {
+    for (const gl::script::DialogLine& line : answers) {
         CHECK(line.phrase_id > 0);
         CHECK_FALSE(line.text.empty());
     }
 
     auto chosen = session.choose(0);
     REQUIRE(chosen.has_value());
+    CHECK_FALSE(vm.failed());
     CHECK((session.status() == VmStatus::wait_user || session.status() == VmStatus::end ||
            session.status() == VmStatus::infinity));
-    if (session.waiting())
-        CHECK_FALSE(session.npc_text().empty());
+    if (session.waiting()) CHECK_FALSE(session.npc_text().empty());
 }
