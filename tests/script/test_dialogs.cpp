@@ -120,6 +120,26 @@ TEST_CASE("dialogs: user_input sets LastPhrase/LastAnswer and restarts") {
     CHECK(h.vm.dialogs_data() == std::vector<std::uint32_t>{100, 1, 2});
 }
 
+TEST_CASE("dialogs: user_input(1) selects the second answer") {
+    DialogHarness h(synthetic_dialog());
+    while (h.vm.step()) {
+    }
+    REQUIRE(h.vm.status() == VmStatus::wait_user);
+
+    h.vm.user_input(1);
+    CHECK(h.vm.status() == VmStatus::restart);
+
+    const Value* phrase = h.vm.variable("LastPhrase");
+    REQUIRE(phrase != nullptr);
+    REQUIRE(std::holds_alternative<std::uint32_t>(*phrase));
+    CHECK(std::get<std::uint32_t>(*phrase) == 100);
+
+    const Value* answer = h.vm.variable("LastAnswer");
+    REQUIRE(answer != nullptr);
+    REQUIRE(std::holds_alternative<std::uint32_t>(*answer));
+    CHECK(std::get<std::uint32_t>(*answer) == 2);
+}
+
 TEST_CASE("dialogs: user_input rejects an out-of-range answer") {
     DialogHarness h(synthetic_dialog());
     while (h.vm.step()) {
@@ -167,21 +187,26 @@ TEST_CASE("dialogs: D_CloseDialog after D_Say ends execution") {
     CHECK(h.vm.dialogs_data().empty());
 }
 
-TEST_CASE("host: default host stubs return zero") {
+TEST_CASE("host: known and unknown function stubs return zero") {
     DefaultScriptHost host;
     const std::span<const Value> no_args;
 
-    const std::uint32_t ids[] = {kPersonParameter,
-                                 kExit,
-                                 kSignal,
-                                 kConsole,
-                                 kCmd,
-                                 kD_PlaySound,
-                                 kShowMessage,
-                                 0xDEADBEEFu};
-    for (std::uint32_t id : ids) {
+    const std::uint32_t known[] = {kPersonParameter,
+                                   kExit,
+                                   kSignal,
+                                   kConsole,
+                                   kCmd,
+                                   kD_PlaySound,
+                                   kShowMessage};
+    for (std::uint32_t id : known) {
+        CHECK(gl::assets::cs_function_is_known(id));
         const Value value = host.call(id, no_args);
         REQUIRE(std::holds_alternative<std::int32_t>(value));
         CHECK(std::get<std::int32_t>(value) == 0);
     }
+
+    CHECK_FALSE(gl::assets::cs_function_is_known(0xDEADBEEFu));
+    const Value unknown = host.call(0xDEADBEEFu, no_args);
+    REQUIRE(std::holds_alternative<std::int32_t>(unknown));
+    CHECK(std::get<std::int32_t>(unknown) == 0);
 }

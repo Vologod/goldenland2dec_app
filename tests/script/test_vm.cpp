@@ -336,6 +336,21 @@ TEST_CASE("vm: D_Say is recorded and jmp d=-1 waits for the user") {
     CHECK(h.vm.status() == VmStatus::wait_user);
 }
 
+TEST_CASE("vm: Exit, Signal, Console and Cmd are delegated to the host") {
+    for (std::uint32_t id : {0x1000000u, 0x1000001u, 0x1000002u, 0x1000003u}) {
+        std::vector<CsNode> nodes(2);
+        nodes[0] = make_func(id, {});
+        nodes[1] = make_jmp(-1, -1);
+
+        VmHarness h(std::move(nodes), {});
+        CHECK(h.vm.step());
+        REQUIRE(h.host.calls.size() == 1);
+        CHECK(h.host.calls[0].id == id);
+        CHECK_FALSE(h.vm.step());
+        CHECK(h.vm.status() == VmStatus::end);
+    }
+}
+
 TEST_CASE("vm: D_CloseDialog ends execution") {
     std::vector<CsNode> nodes(5);
     nodes[0] = make_assign(1, 2, 3);

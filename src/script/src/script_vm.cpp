@@ -1,5 +1,6 @@
 #include "gl/script/script_vm.hpp"
 #include "gl/assets/log.hpp"
+#include "gl/script/function_ids.hpp"
 #include <cmath>
 #include <limits>
 #include <set>
@@ -9,14 +10,6 @@
 
 namespace gl::script {
 namespace {
-constexpr std::uint32_t kFunctionExit = 0x1000000;
-constexpr std::uint32_t kFunctionSignal = 0x1000001;
-constexpr std::uint32_t kFunctionConsole = 0x1000002;
-constexpr std::uint32_t kFunctionCmd = 0x1000003;
-constexpr std::uint32_t kFunctionSay = 0x1000004;
-constexpr std::uint32_t kFunctionCloseDialog = 0x1000005;
-constexpr std::uint32_t kFunctionAnswer = 0x1000006;
-
 bool is_comparison(std::int32_t opcode) { return opcode >= 6 && opcode <= 11; }
 bool is_logical(std::int32_t opcode) { return opcode == 0 || opcode == 2; }
 bool is_value(std::int32_t opcode) { return opcode >= 21 && opcode <= 24; }
@@ -406,13 +399,6 @@ Value ScriptVm::call_function(const gl::assets::CsNode& node, int depth) {
 
     if (id == kFunctionCloseDialog) {
         end_request_ = true;
-        return std::int32_t{0};
-    }
-
-    if (id == kFunctionExit || id == kFunctionSignal || id == kFunctionConsole ||
-        id == kFunctionCmd) {
-        gl::log(gl::LogLevel::info,
-                "script vm: stub function " + std::string(gl::assets::cs_function_name(id)));
         return std::int32_t{0};
     }
 

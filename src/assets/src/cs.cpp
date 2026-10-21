@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <new>
 #include <string>
+#include <string_view>
 #include <utility>
 
 namespace gl::assets {
@@ -160,6 +161,10 @@ const char* cs_opcode_name(std::int32_t opcode) {
 
 bool cs_opcode_valid(std::int32_t opcode) {
     return (opcode >= 0 && opcode <= 24) || opcode == 48 || opcode == 49 || opcode == 50;
+}
+
+bool cs_function_is_known(std::uint32_t id) {
+    return std::string_view(cs_function_name(id)) != "unknown";
 }
 
 const char* cs_function_name(std::uint32_t id) {

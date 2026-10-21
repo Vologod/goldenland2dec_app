@@ -90,11 +90,13 @@ ID функций: `0x1000000` Exit, `0x1000004` D_Say, `0x1000005` D_CloseDialo
 `string Name "text"`, комментарии `//`; строки без значения пропускаются с warning.
 
 Нативные функции: `ScriptHost` интерфейс `Value call(uint32_t id, span<const Value>)`.
-P3a-реализация: `D_Say`/`D_Answer` обрабатываются VM; `D_CloseDialog` → end;
+P3a-реализация: VM обрабатывает только `D_Say`/`D_Answer` и `D_CloseDialog` (→ end);
+все остальные id, включая `Exit`/`Signal`/`Console`/`Cmd`, идут через `ScriptHost`.
 `DefaultScriptHost`: `RS_GetPersonParameterI` → 0; `Exit`/`Signal`/`Console`/`Cmd` —
 заглушки (info-лог); известные, но не реализованные функции (`D_PlaySound`,
-`RS_ShowMessage`, ...) → 0 + debug-лог; неизвестные id → 0 + warning. Реестр
-расширяемый: тесты могут наследовать `DefaultScriptHost`/`ScriptHost`.
+`RS_ShowMessage`, ...) → 0 + debug-лог; неизвестные id → 0 + warning
+(`cs_function_is_known`). Реестр расширяемый: тесты могут наследовать
+`DefaultScriptHost`/`ScriptHost`.
 
 ## 5. Инструменты
 

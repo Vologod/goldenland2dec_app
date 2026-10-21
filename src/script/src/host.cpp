@@ -1,17 +1,11 @@
 #include "gl/script/host.hpp"
 #include "gl/assets/cs.hpp"
 #include "gl/assets/log.hpp"
+#include "gl/script/function_ids.hpp"
 #include <string>
-#include <string_view>
 
 namespace gl::script {
 namespace {
-constexpr std::uint32_t kFunctionExit = 0x1000000;
-constexpr std::uint32_t kFunctionSignal = 0x1000001;
-constexpr std::uint32_t kFunctionConsole = 0x1000002;
-constexpr std::uint32_t kFunctionCmd = 0x1000003;
-constexpr std::uint32_t kFunctionGetPersonParameter = 0x4000000;
-
 Value zero() { return std::int32_t{0}; }
 
 void log_stub(gl::LogLevel level, std::uint32_t id) {
@@ -34,8 +28,7 @@ Value DefaultScriptHost::call(std::uint32_t id, std::span<const Value>) {
         break;
     }
 
-    const std::string_view name = gl::assets::cs_function_name(id);
-    if (name != "unknown") {
+    if (gl::assets::cs_function_is_known(id)) {
         log_stub(gl::LogLevel::debug, id);
         return zero();
     }

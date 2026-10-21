@@ -373,4 +373,9 @@ TEST_CASE("cs: function names cover known ids and unknown ids") {
     CHECK(std::string(cs_function_name(0x7000014)) == "RS_SetDoorState");
     CHECK(std::string(cs_function_name(0x12345678)) == "unknown");
     CHECK(std::string(cs_function_name(0)) == "unknown");
+
+    CHECK(cs_function_is_known(0x1000000));
+    CHECK(cs_function_is_known(0x4000000));
+    CHECK_FALSE(cs_function_is_known(0x12345678));
+    CHECK_FALSE(cs_function_is_known(0));
 }

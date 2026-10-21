@@ -49,7 +49,7 @@ TEST_CASE("real data: demon dialog reaches wait_user and accepts an answer" *
     const std::vector<std::uint32_t> data = vm.dialogs_data();
     REQUIRE(data.size() >= 2);
     for (std::uint32_t id : data) CHECK(id > 0);
-    CHECK(vm.answers_count() == data.size() - 1);
+    CHECK(vm.answers_count() == 2);
 
     vm.user_input(0);
     CHECK(vm.status() == VmStatus::restart);

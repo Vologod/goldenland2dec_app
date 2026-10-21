@@ -27,11 +27,15 @@ P2 backfill отложен.
 неизвестные → 0 + warning; тесты могут наследовать хост. Task 2 minors: правый операнд
 сравнений/логики не вычисляется после ошибки левого; top-level `func` больше не
 использует `d` как переход (реальные данные имеют `c = d = -1`); формулировки
-unknown-opcode (`end` + error log) выровнены в spec/plan. Тесты: `gl_script_tests` —
-31 case / 197 assertions; новый `gl_script_real_tests` (skip 77) — `demon.d1.age.cs` +
-`zlato_vars.scr` → `wait_user`, `answers_count() > 0`, `user_input(0)` продолжает без
-падения (end/wait), ids > 0. Полный `ctest` с `GL_GAME_DIR` — **10/10 passed**, 561.69 s
-(real-data 519.75 s, gl_script_real 1.32 s). Следующая задача — P3a Task 4 (tools).
+unknown-opcode (`end` + error log) выровнены в spec/plan. Fix round 1: `Exit`/`Signal`/
+`Console`/`Cmd` больше не перехватываются VM, а идут через `ScriptHost` (их обрабатывает
+`DefaultScriptHost`); добавлен `gl::assets::cs_function_is_known` и общий
+`gl/script/function_ids.hpp`; тесты на `user_input(1)` и делегирование stub-функций.
+Тесты: `gl_script_tests` — 33 cases / 233 assertions; `gl_script_real_tests` (skip 77) —
+`demon.d1.age.cs` + `zlato_vars.scr` → `wait_user`, `answers_count() == 2`,
+`user_input(0)` продолжает без падения (end/wait), ids > 0. Полный `ctest` с
+`GL_GAME_DIR` — **10/10 passed**, 565.78 s (real-data 516.06 s, gl_script_real 1.30 s).
+Следующая задача — P3a Task 4 (tools).
 
 **P3a — Task 2 (VM core + globals) завершён 2026-10-21.**
 Добавлена SDL-free библиотека `gl_script`: `Value`, `ScriptGlobal`/`parse_globals`

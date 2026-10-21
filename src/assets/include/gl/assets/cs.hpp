@@ -18,5 +18,6 @@ struct CsNode {
 Result<std::vector<CsNode>> parse_cs(std::span<const std::uint8_t> data);
 const char* cs_opcode_name(std::int32_t opcode);
 const char* cs_function_name(std::uint32_t id);
+bool cs_function_is_known(std::uint32_t id);
 bool cs_opcode_valid(std::int32_t opcode);
 }
