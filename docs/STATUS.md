@@ -2,6 +2,34 @@
 
 Обновлено: 2026-10-21
 
+## P4a — NPCs on the level (2026-10-21)
+
+- Tasks 1–5 завершены на ветке `p4a-npcs`: PAD/person `.scr`/SEF `persons`,
+  `gl::game::load_persons`, отрисовка стоячей анимации в `LevelScreen`,
+  автоматизированная приёмка и документы.
+- Полный `ctest` с `GL_GAME_DIR` — **15/15 passed**, 849.95 s, exit 0
+  (`gl_assets_real_tests` 684.72 s, `glgame_screenshot_tests` 80.52 s,
+  `glview_screenshot_tests` 56.69 s, `gl_game_tests` 5.25 s,
+  `gl_cs_tools_tests` 15.24 s; остальные — < 5 s). `cmake --build build` —
+  `ninja: no work to do`.
+- PAD: все **276/276** реальных `.pad` из `persons.pak` разобраны, 2450 анимаций,
+  0 ошибок (targeted real-тест, 0.85 s). `l1_1` — **16** persons, 15 уникальных
+  person-скриптов, все разобраны; `gl_game_tests` — 3/3 cases, 192 assertions.
+- Screenshot `l1_1` 1280x720 через `glview`: `16 persons`, `uploaded 16 person
+  sprites`; PNG 3 120 861 байт, 72 887 цветов (выборка каждые 2 px); отличается от
+  `--no-persons` на **3 828** пикселей; повторный прогон побайтово совпал (SHA-256
+  `8B377011E3607CFE75688203513B5C6B6002381C54927E455EC542D5E074AA7A`).
+- Критерии spec §6 выполнены автоматизированно: 16 NPC загружаются и рисуются,
+  все `.pad` парсятся, screenshot с NPC отличается от кадра без NPC,
+  `gl_assets`/`gl_game` остаются SDL-free.
+- **P4a automated acceptance passed.** **Manual desktop gate OPEN** — пользователь
+  должен запустить `glgame --game-dir "I:\Games\Златогорье-2" --level l1_1`,
+  убедиться, что NPC видны в правильных местах/направлениях, и что `Esc`/меню
+  работают. Агент GUI не запускал и manual pass не подтверждает.
+- Известные ограничения P4a: нет Y-сортировки (P4b); `--no-persons` не пропускает
+  загрузку/декодирование спрайтов (только отрисовку); NPC с общим `res_name`
+  загружают текстуру повторно. Следующая задача — **P4b** (движение/маршруты/AI).
+
 ## P3c final fix wave (2026-10-21)
 
 - Font atlas now covers U+00A0-U+00FF plus U+2116/U+2122; NBSP normalizes to a space;
@@ -24,10 +52,27 @@ P2c — save/load каркас: реализация и автоматизиро
 открыт manual UI gate (Continue → слоты, Esc). P3a — CS VM: Tasks 1–5 завершены
 2026-10-21, автоматизированная приёмка пройдена, P3a принята (manual UI gate для P3a
 нет). P3c — dialogs + SDB + TTF: Tasks 1–4 завершены 2026-10-21; автоматизированная
-приёмка пройдена (13/13 ctest, `glscript --sdb`, dialog PNG), **manual dialog UI gate
-OPEN**. Следующий — P4 (NPC) или P1b (Android/touch); P2 backfill отложен.
+приёмка пройдена (13/13 ctest, `glscript --sdb`, dialog PNG), manual dialog UI gate
+пройден пользователем 2026-10-21. P4a — NPC на уровне: Tasks 1–5 завершены
+2026-10-21, **automated acceptance passed** (15/15 ctest, 16 NPC, 276/276 `.pad`),
+**manual desktop gate OPEN**. Следующий — P4b (движение/маршруты/AI); P1b
+(Android/touch) и P2 backfill отложены.
 
 ## Текущая задача
+
+**P4a — Task 5 (automated acceptance + docs) завершён 2026-10-21; P4a automated
+acceptance passed.** Полный `ctest` с `GL_GAME_DIR` — **15/15 passed**, 849.95 s,
+exit 0; `cmake --build build` — `ninja: no work to do`. PAD targeted real-тест:
+`entries=276 parsed=276 failures=0 animations=2450`, 0.85 s; `l1_1` —
+`persons=16`, 15 уникальных скриптов. `gl_game_tests` — 3/3, 192 assertions
+(real loader: 16 instances, 6 `tb_stay` + 10 `rt_stay`); `person_render_tests` —
+6/6, 41 assertion. Screenshot `glview --level l1_1 --screenshot ... --width 1280
+--height 720` — exit 0, логи `16 persons` / `uploaded 16 person sprites`, PNG
+1280x720, 3 120 861 байт, 72 887 цветов (выборка каждые 2 px), отличие от
+`--no-persons` 3 828 пикселей, повторный прогон совпал (SHA-256
+`8B377011...E074AA7A`). **Manual desktop gate OPEN:** пользователь должен
+запустить `glgame --game-dir "I:\Games\Златогорье-2" --level l1_1`, проверить
+NPC и `Esc`/меню; агент GUI не запускал. Следующая задача — P4b.
 
 **P3c — Task 4 (automated acceptance + docs) завершён 2026-10-21; P3c automated
 acceptance passed.** `cmake --build build` — `ninja: no work to do`, exit 0. Полный
@@ -502,13 +547,25 @@ P0 закрыт 2026-10-19; далее выполнялись задачи P1 (�
   плющатся в `block.key`) + SEF `persons`: `l1_1` = **16** NPC (не 41; 41 — все `name:`
   блоки), 15 уникальных скриптов, все парсятся; sweep 261/261 `.sef`; fix round 1
   (6bd9b22..d67babd), ревью чистое; полный `ctest` 13/13 (1332.96 s).
+- 2026-10-21: P4a Task 3 — `gl::game` (`person.hpp/.cpp`): `PersonInstance`,
+  `load_persons` (SEF → person `.scr` → PAD → `rt_stay`/`tb_stay` CSX + optional
+  shadow), `Level::persons`; missing resources → warning + skip; real `l1_1` —
+  16 instances (10 `rt_stay`, 6 `tb_stay`); `gl_game_tests` 3/3 (192 assertions);
+  commit `1e5005b`.
+- 2026-10-21: P4a Task 4 — `gl::app::person_render` (`person_frame_index`,
+  `place_person`, `place_person_shadow`) и отрисовка NPC в `LevelScreen`
+  (background → statics → animations → persons, shadows behind, `SDL_FLIP_HORIZONTAL`
+  для зеркальных направлений); `--no-persons` в `glview`/`glgame`; screenshot-тесты
+  normal vs `--no-persons`; `person_render_tests` 6/6 (41 assertion); commit `94d8037`.
+- 2026-10-21: P4a Task 5 — automated acceptance + docs: полный `ctest` **15/15**
+  (849.95 s, exit 0); PAD **276/276**, 2450 анимаций, 0 ошибок; `l1_1` 16 persons;
+  screenshot 1280x720 (`16 persons`, diff 3 828 px vs `--no-persons`, SHA-256
+  `8B377011...`); P4a automated acceptance passed; **manual desktop gate OPEN**.
 
 ## Следующие задачи
 
-1. P4a: NPC на уровне — spec/plan готовы
-   (`docs/specs/2026-10-21-p4a-npcs-on-level-design.md`, `docs/plans/2026-10-21-p4a-npcs-on-level.md`);
-   Tasks 1–2 готовы; далее Task 3 (загрузка person/PAD в `gl::game`).
-2. P4b/P4c: движение/поиск пути/AI, клик → диалог.
+1. P4b: NPC движение/маршруты/поиск пути/AI; затем P4c (клик → диалог).
+2. P4a: manual desktop gate — см. Open Questions.
 3. P1b: Android/touch — отложенный follow-up P1.
 4. P7-follow-up: свободный TTF для Android (P9), прокрутка длинных диалогов, layout-константы.
 
@@ -520,6 +577,9 @@ P0 закрыт 2026-10-19; далее выполнялись задачи P1 (�
 - P3c: `DialogSession::start()` intentionally calls `ScriptVm::restart(true)` — variables are
   rebuilt from globals and seeded runtime state is discarded. `start()`/`choose()` map
   `vm.failed()` to `ErrorCode::format`; `status()`/`failed()` remain available for diagnosis.
+- P4a: manual desktop gate — запустить `glgame --game-dir "I:\Games\Златогорье-2"
+  --level l1_1` на обычном рабочем столе, проверить видимых NPC (позиции/направления)
+  и `Esc`/меню. Агент GUI не запускал и manual pass не подтверждает.
 - Полная десериализация `.sav` и запись сохранений не реализованы (P2c — read-only каркас).
 - SDL2 `release-2.32.10` выдаёт CMake deprecation warning из-за своего
   `cmake_minimum_required`; следить при обновлении CMake/SDL.
@@ -546,7 +606,8 @@ P0 закрыт 2026-10-19; далее выполнялись задачи P1 (�
 
 - Manual desktop pass: WASD/стрелки, Home, F1 (см. Open Questions).
 - Screenshot/write_png: поддержка не-ASCII путей (wide/_wfopen или stbi_write_png_to_func + ofstream).
-- SEF: учитывать brace depth/секции; отвергать `pack: ""`; интеграционный прогон всех `levels/single/*/*.sef`.
+- SEF: отвергать `pack: ""` (brace-aware секции и sweep всех `levels/single/*/*.sef`,
+  261/261, закрыты в P4a Task 2).
 - LevelLoader: предупреждение при пустом LAO и непустых ADSC; отличать I/O от format для required-файлов; тесты missing optional.
 - Память: освобождать CPU-копии Image после загрузки текстур (background/static/anim frames).
 - Проверить соответствие `anim_<i>` ↔ `description.number` на уровне с несортированными/непоследовательными ADSC.

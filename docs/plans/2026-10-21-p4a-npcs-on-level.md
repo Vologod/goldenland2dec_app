@@ -63,7 +63,7 @@ bool pad_is_go(PadAnimationType);
 - Tests: synthetic one-animation PAD + corrupt sizes; all real `.pad` in `persons.pak`
   parse with 0 failures (gated `GL_GAME_DIR`), count > 0.
 
-- [ ] TDD, implement, commit.
+- [x] TDD, implement, commit.
 
 ---
 
@@ -97,7 +97,7 @@ std::vector<SefPerson> persons;
 Parse the `persons: { name: "..."; { position x y; direction "..."; ... } }` text.
 Tests: `l1_1` → 16 persons; known first/last fields; synthetic.
 
-- [ ] TDD, implement, commit.
+- [x] TDD, implement, commit.
 
 ---
 
@@ -125,7 +125,7 @@ Result<std::vector<PersonInstance>> load_persons(GameVfs&, const std::string& le
 - Tests: `l1_1` → 16 instances; each has a PAD with `rt_stay`; sprite size matches
   `frame_width*frames_per_row × frame_height*8` (or the sheet dimensions); direction mapping.
 
-- [ ] TDD, implement, commit.
+- [x] TDD, implement, commit.
 
 ---
 
@@ -142,7 +142,7 @@ Result<std::vector<PersonInstance>> load_persons(GameVfs&, const std::string& le
   → images differ, 1280×720; NPC count 16 in logs.
 - Tests: existing screenshots updated; new no-persons comparison.
 
-- [ ] Implement, tests, commit.
+- [x] Implement, tests, commit.
 
 ---
 

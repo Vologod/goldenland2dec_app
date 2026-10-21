@@ -238,12 +238,14 @@ animations[..]  : {
 
 ## Person sprite rendering (P4a Task 4, 2026-10-21)
 
-- Verified on all 16 `l1_1` sheets: CSX dimensions are exactly
+- Verified on the 16 `l1_1` sheets loaded by P4a: CSX dimensions are exactly
   `frameWidth*framesPerRow x frameHeight*rows` for sprites and
-  `shadowWidth*framesPerRow x shadowHeight*shadowRows` for shadows. Therefore a
-  frame is the full `frameWidth x frameHeight` cell at
-  `(column*frameWidth, row*frameHeight)`; PAD crops are not needed for drawing
-  (transparent padding is inside the cell).
+  `shadowWidth*framesPerRow x shadowHeight*shadowRows` for shadows. For those
+  sheets a frame is the full `frameWidth x frameHeight` cell at
+  `(column*frameWidth, row*frameHeight)`, so the P4a renderer ignores PAD
+  `crops` (padding inside the cell is transparent). This is **not** a general
+  PAD invariant: crop rectangles remain part of the parsed data and may matter
+  for other sheets/animations.
 - Draw origin is `(tile_x*12 - anchor_x, tile_y*9 - anchor_y)`. Shadow origin is
   `(tile_x*12 - shadow_anchor_x, tile_y*9 - shadow_anchor_y)`; shadow rows are
   identity and are never mirrored.
@@ -254,5 +256,5 @@ animations[..]  : {
   place.
 - Frame index is `(simulation_time_ms / delay) % framesPerRow`; `delay <= 0` is
   treated as 1. Example initial `l1_1` view shows NPCs at tiles `(38,51)` and
-  `(59,49)`; a normal 1280x720 screenshot differs from `--no-persons` by tens of
-  thousands of pixels.
+  `(59,49)`; the accepted 1280x720 screenshot differs from `--no-persons` by
+  3 828 pixels (P4a Task 5).
