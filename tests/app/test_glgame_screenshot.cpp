@@ -43,9 +43,11 @@ bool can_load_font(const fs::path& path) {
     SDL_Renderer* renderer = SDL_CreateSoftwareRenderer(surface);
     bool loaded = false;
     if (renderer != nullptr) {
-        const gl::Result<gl::render::Font> font =
-            gl::render::Font::load_from_file(renderer, path, 20.0f);
-        loaded = font.has_value();
+        {
+            const gl::Result<gl::render::Font> font =
+                gl::render::Font::load_from_file(renderer, path, 20.0f);
+            loaded = font.has_value();
+        }
         SDL_DestroyRenderer(renderer);
     }
     SDL_FreeSurface(surface);

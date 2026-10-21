@@ -2,6 +2,17 @@
 
 Обновлено: 2026-10-21
 
+## P3c final fix wave (2026-10-21)
+
+- Font atlas now covers U+00A0-U+00FF plus U+2116/U+2122; NBSP normalizes to a space;
+  `Font::has_glyph()` exposes atlas coverage; NaN/Inf pixel heights are rejected.
+- Tests: cp1251 punctuation/symbol coverage and measurement, dialog-before-renderer
+  lifetime, strict UTF-8 Cyrillic checks, line-start phrase IDs, no `infinity` acceptance.
+- `DialogSession::choose()` now fails when `ScriptVm::user_input()` rejects the answer;
+  `DialogSession::failed()` added. `open_dialog` logs VFS/parse errors.
+- Verified: `cmake --build build`; `ctest --test-dir build --output-on-failure` with
+  `GL_GAME_DIR` - 13/13 passed, 655.80 s; targeted font/glgame/cs-tools/real-script tests pass.
+
 ## Текущая фаза
 
 P0 завершена и принята. P1 — Level viewer: реализация и автоматизированная приёмка

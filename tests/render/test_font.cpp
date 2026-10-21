@@ -7,6 +7,7 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <limits>
 #include <optional>
 #include <string>
 #include <vector>
@@ -84,6 +85,18 @@ TEST_CASE("font rejects unsupported pixel heights") {
         gl::render::Font::load_from_file(canvas.renderer(), "no/such/font.ttf", 4.0f);
     REQUIRE_FALSE(too_small.has_value());
     CHECK(too_small.error().code == gl::ErrorCode::argument);
+
+    const float invalid_heights[] = {
+        std::numeric_limits<float>::quiet_NaN(),
+        std::numeric_limits<float>::infinity(),
+        -std::numeric_limits<float>::infinity(),
+    };
+    for (const float height : invalid_heights) {
+        const gl::Result<gl::render::Font> invalid =
+            gl::render::Font::load_from_file(canvas.renderer(), "no/such/font.ttf", height);
+        REQUIRE_FALSE(invalid.has_value());
+        CHECK(invalid.error().code == gl::ErrorCode::argument);
+    }
 }
 
 TEST_CASE("missing font file reports an error") {
@@ -174,6 +187,37 @@ TEST_CASE("control characters are normalized consistently") {
                    "\x02\r\t",
                    4.0f, 4.0f, gl::render::Color{255, 255, 255, 255});
     CHECK(non_black_pixel_count(canvas.read_pixels()) == 0);
+}
+
+TEST_CASE("font atlas covers cp1251 punctuation and symbols") {
+    const std::optional<std::filesystem::path> path = gl::render::find_system_font();
+    if (!path.has_value()) {
+        return;
+    }
+
+    SoftwareCanvas canvas(360, 120);
+    const gl::Result<gl::render::Font> loaded =
+        gl::render::Font::load_from_file(canvas.renderer(), *path, 24.0f);
+    REQUIRE(loaded.has_value());
+    const gl::render::Font& font = loaded.value();
+
+    const std::string phrase = "«Привет» № 5 ° © ® ™";
+    CHECK(font.measure(phrase).x > 0.0f);
+    for (const char32_t codepoint : {U'«', U'»', U'№', U'°', U'©', U'®', U'™'}) {
+        CAPTURE(static_cast<std::uint32_t>(codepoint));
+        CHECK(font.has_glyph(codepoint));
+    }
+    CHECK(font.has_glyph(U'П'));
+
+    CHECK(font.measure("a\xC2\xA0"
+                       "b")
+              .x == doctest::Approx(font.measure("a b").x));
+
+    font.draw_text(canvas.renderer(), phrase, 4.0f, 4.0f,
+                   gl::render::Color{255, 255, 255, 255});
+    const std::size_t painted = non_black_pixel_count(canvas.read_pixels());
+    CAPTURE(painted);
+    CHECK(painted > 100);
 }
 
 TEST_CASE("ttf font draws visible Cyrillic pixels") {

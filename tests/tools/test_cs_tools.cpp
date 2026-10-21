@@ -180,19 +180,52 @@ std::size_t answer_count(const std::string& output) {
     return metric_count(output, "answers", true);
 }
 
-bool has_non_ascii(const std::string& output) {
-    for (const char ch : output) {
-        if (static_cast<unsigned char>(ch) >= 0x80) return true;
+bool has_cyrillic_utf8(std::string_view text) {
+    bool cyrillic = false;
+    std::size_t index = 0;
+    while (index < text.size()) {
+        const unsigned char lead = static_cast<unsigned char>(text[index]);
+        std::size_t length = 0;
+        char32_t codepoint = 0;
+        if (lead < 0x80) {
+            codepoint = lead;
+            length = 1;
+        } else if ((lead & 0xE0) == 0xC0) {
+            codepoint = lead & 0x1F;
+            length = 2;
+        } else if ((lead & 0xF0) == 0xE0) {
+            codepoint = lead & 0x0F;
+            length = 3;
+        } else if ((lead & 0xF8) == 0xF0) {
+            codepoint = lead & 0x07;
+            length = 4;
+        } else {
+            return false;
+        }
+        if (index + length > text.size()) return false;
+        for (std::size_t offset = 1; offset < length; ++offset) {
+            const unsigned char continuation = static_cast<unsigned char>(text[index + offset]);
+            if ((continuation & 0xC0) != 0x80) return false;
+            codepoint = (codepoint << 6) | (continuation & 0x3F);
+        }
+        if (codepoint >= 0x0400 && codepoint <= 0x04FF) cyrillic = true;
+        index += length;
     }
-    return false;
+    return cyrillic;
 }
 
 std::string phrase_line(const std::string& output, std::string_view id) {
     const std::string prefix = std::string(id) + "\t";
-    const std::size_t start = output.find(prefix);
-    if (start == std::string::npos) return {};
-    const std::size_t end = output.find('\n', start);
-    return end == std::string::npos ? output.substr(start) : output.substr(start, end - start);
+    std::size_t search = 0;
+    while ((search = output.find(prefix, search)) != std::string::npos) {
+        if (search == 0 || output[search - 1] == '\n') {
+            const std::size_t end = output.find('\n', search);
+            return end == std::string::npos ? output.substr(search)
+                                            : output.substr(search, end - search);
+        }
+        search += prefix.size();
+    }
+    return {};
 }
 } // namespace
 
@@ -265,7 +298,7 @@ TEST_CASE("glscript --sdb prints dialog phrase texts" *
     const std::string line = phrase_line(output, "2684");
     CAPTURE(line);
     CHECK_FALSE(line.empty());
-    CHECK(has_non_ascii(line));
+    CHECK(has_cyrillic_utf8(line));
     CHECK(line.find("<phrase 2684>") == std::string::npos);
 }
 

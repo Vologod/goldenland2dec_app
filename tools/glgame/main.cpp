@@ -515,20 +515,26 @@ class Game {
     }
 
     gl::Result<void> open_dialog(std::string_view virtual_path) {
+        const auto report = [&](const gl::Error& error) {
+            gl::log(gl::LogLevel::error,
+                    "dialog '" + std::string(virtual_path) + "': " + error.message);
+            return error;
+        };
+
         auto script_data = vfs_.read(virtual_path);
-        if (!script_data) return script_data.error();
+        if (!script_data) return report(script_data.error());
         auto nodes = gl::assets::parse_cs(script_data.value());
-        if (!nodes) return nodes.error();
+        if (!nodes) return report(nodes.error());
 
         auto globals_data = vfs_.read(kDialogGlobals);
-        if (!globals_data) return globals_data.error();
+        if (!globals_data) return report(globals_data.error());
         auto globals = gl::script::parse_globals(globals_data.value());
-        if (!globals) return globals.error();
+        if (!globals) return report(globals.error());
 
         auto sdb_data = vfs_.read(kDialogSdb);
-        if (!sdb_data) return sdb_data.error();
+        if (!sdb_data) return report(sdb_data.error());
         auto sdb = gl::assets::Sdb::parse(sdb_data.value());
-        if (!sdb) return sdb.error();
+        if (!sdb) return report(sdb.error());
 
         auto context = std::make_unique<DialogContext>();
         context->path = std::string(virtual_path);

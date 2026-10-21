@@ -38,6 +38,7 @@ public:
                    Color color) const;
     Vec2 measure(std::string_view utf8) const;
     float line_height() const;
+    bool has_glyph(char32_t codepoint) const;
     // Greedy wrap on spaces: leading/trailing spaces are dropped, space runs
     // collapse, tabs expand to four spaces, \r and other C0/C1 controls are
     // ignored, \n is preserved, and whitespace-only paragraphs become empty

@@ -27,6 +27,7 @@ public:
     // Maps VM failure after running to `ErrorCode::format`; `status()`/`failed()` stay available.
     gl::Result<void> choose(std::size_t index);
     VmStatus status() const;
+    bool failed() const;
 
 private:
     std::string phrase_text(std::uint32_t id) const;

@@ -62,6 +62,10 @@ std::vector<char32_t> normalize_codepoints(std::string_view utf8) {
             (codepoint >= 0x7Fu && codepoint <= 0x9Fu)) {
             continue;
         }
+        if (codepoint == 0x00A0u) {
+            codepoints.push_back(U' ');
+            continue;
+        }
         codepoints.push_back(codepoint);
     }
     return codepoints;
@@ -168,7 +172,7 @@ Result<Font> Font::load_from_file(SDL_Renderer* renderer, const std::filesystem:
     if (renderer == nullptr) {
         return Error{ErrorCode::argument, "font: renderer is null"};
     }
-    if (pixel_height < kMinPixelHeight || pixel_height > kMaxPixelHeight) {
+    if (!(pixel_height >= kMinPixelHeight && pixel_height <= kMaxPixelHeight)) {
         return Error{ErrorCode::argument, "font: pixel height " + std::to_string(pixel_height) +
                                               " outside supported range [8, 256]"};
     }
@@ -197,8 +201,13 @@ Result<Font> Font::load_from_file(SDL_Renderer* renderer, const std::filesystem:
     impl->ascent = static_cast<float>(ascent) * impl->scale;
     impl->line_height = static_cast<float>(ascent - descent + line_gap) * impl->scale;
 
-    static constexpr std::array<std::pair<char32_t, char32_t>, 3> kRanges = {
-        {{0x20u, 0x7Eu}, {0x0400u, 0x04FFu}, {0x2000u, 0x206Fu}}};
+    static constexpr std::array<std::pair<char32_t, char32_t>, 6> kRanges = {
+        {{0x20u, 0x7Eu},
+         {0x00A0u, 0x00FFu},
+         {0x0400u, 0x04FFu},
+         {0x2000u, 0x206Fu},
+         {0x2116u, 0x2116u},
+         {0x2122u, 0x2122u}}};
 
     std::vector<PendingGlyph> pending;
     for (const auto& [first, last] : kRanges) {
@@ -425,6 +434,10 @@ Vec2 Font::measure(std::string_view utf8) const {
 }
 
 float Font::line_height() const { return impl_ != nullptr ? impl_->line_height : 0.0f; }
+
+bool Font::has_glyph(char32_t codepoint) const {
+    return impl_ != nullptr && impl_->glyphs.find(codepoint) != impl_->glyphs.end();
+}
 
 std::vector<std::string> Font::wrap(std::string_view utf8, float max_width) const {
     std::vector<std::string> lines;

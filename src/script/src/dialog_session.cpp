@@ -36,7 +36,8 @@ gl::Result<void> DialogSession::choose(std::size_t index) {
     if (index >= answers_.size())
         return gl::Error{gl::ErrorCode::argument, "answer index out of range"};
 
-    (void)vm_.user_input(index);
+    if (!vm_.user_input(index))
+        return gl::Error{gl::ErrorCode::format, "script vm rejected the dialog answer"};
     run_to_pause();
     refresh();
     if (vm_.failed()) return vm_failure();
@@ -44,6 +45,8 @@ gl::Result<void> DialogSession::choose(std::size_t index) {
 }
 
 VmStatus DialogSession::status() const { return vm_.status(); }
+
+bool DialogSession::failed() const { return vm_.failed(); }
 
 std::string DialogSession::phrase_text(std::uint32_t id) const {
     if (const std::string* text = sdb_.find(id)) return *text;
