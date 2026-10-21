@@ -3,6 +3,7 @@
 #include "gl/script/globals.hpp"
 #include "gl/script/host.hpp"
 #include "gl/script/value.hpp"
+#include <cstddef>
 #include <cstdint>
 #include <map>
 #include <span>
@@ -23,11 +24,14 @@ public:
     std::uint64_t steps() const;
     Value* variable(std::string_view name);
     const std::map<std::string, Value>& variables() const;
+    std::size_t answers_count() const;
+    std::vector<std::uint32_t> dialogs_data() const;
+    void user_input(std::size_t answer);
 
 private:
     struct DialogCall {
         std::uint32_t id;
-        std::vector<Value> args;
+        std::uint32_t value;
     };
 
     static constexpr std::uint64_t kStepLimit = 10'000'000;

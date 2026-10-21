@@ -48,6 +48,26 @@
 - Остальные id — `ScriptHost::call(id, args)`; значения аргументов вычисляются из
   узлов (литералы, переменные, вложенные выражения).
 
+## Диалоговый flow
+
+- В редакторе `dialogsData()` при `wait_user` возвращает фиксированный массив
+  `[sayValue, answerValue...]` до 11 элементов, а вне `wait_user`/без `D_Say` — `{-1}`.
+  В порту `dialogs_data()` возвращает `std::vector<uint32_t>`: первый элемент — id
+  фразы первого `D_Say`, далее id всех `D_Answer` в порядке вызова. Вне `wait_user`
+  вектор пуст; `answers_count()` = `dialogs_data().size() - 1` (0 при пустом векторе).
+- `user_input(answer)` в порту принимает **индекс ответа с нуля** (0 — первый
+  `D_Answer`), проверяет его по записанным ответам и при выходе за границы пишет
+  warning, не меняя состояние. При успехе `LastPhrase = id D_Say`,
+  `LastAnswer = id выбранного D_Answer` (оба `uint32`), записанные вызовы очищаются,
+  `pc = 0`, статус `restart`; счётчик шагов не сбрасывается (как в редакторе).
+  Отличие от редактора: его `userInput(uint8_t)` индексирует `m_dialogFuncs` целиком
+  (0 — это `D_Say`) и проверяет `answer >= m_dialogFuncs.size()`, поэтому ответ 0
+  выбирает `D_Say`; порт использует нумерацию ответов, заданную spec/brief.
+- `D_CloseDialog` в P3a сразу переводит исполнение в `end` (D-023).
+- `DefaultScriptHost` — заглушка для нативных функций: `RS_GetPersonParameterI` → 0;
+  `Exit`/`Signal`/`Console`/`Cmd` → 0 + info; известные имена → 0 + debug; неизвестный
+  id → 0 + warning. Тесты могут наследовать его и переопределять `call`.
+
 ## Переменные и restart
 
 `CsExecutor::readScriptVariables` обходит все узлы `23 str_var` и копирует значения

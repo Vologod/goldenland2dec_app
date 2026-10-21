@@ -10,11 +10,28 @@ P2a — оболочка игры и консоль: реализация, ав�
 gate завершены (2026-10-20); P2a принята. P2b — детерминированный тик: реализация,
 автоматизированная приёмка и manual interactive gate завершены (2026-10-20); P2b принята.
 P2c — save/load каркас: реализация и автоматизированная приёмка завершены (2026-10-20);
-открыт manual UI gate (Continue → слоты, Esc). P3a — CS VM: Task 1 (парсер `.cs`) и
-Task 2 (VM + globals) завершены 2026-10-21. Следующие подпроекты — продолжение P3a или
-P1b (Android/touch); P2 backfill отложен.
+открыт manual UI gate (Continue → слоты, Esc). P3a — CS VM: Task 1 (парсер `.cs`),
+Task 2 (VM + globals) и Task 3 (dialog flow + native registry) завершены 2026-10-21.
+Следующие подпроекты — продолжение P3a (Task 4 — инструменты) или P1b (Android/touch);
+P2 backfill отложен.
 
 ## Текущая задача
+
+**P3a — Task 3 (dialog flow + native registry) завершён 2026-10-21.**
+`ScriptVm` получил `dialogs_data()` (id `D_Say` + id всех `D_Answer`, действительно только
+при `wait_user`), `answers_count()` и `user_input(answer)` с нумерацией ответов с нуля:
+при успехе выставляет `LastPhrase`/`LastAnswer` (`uint32`), очищает записанные вызовы,
+переходит к узлу 0 со статусом `restart`; выход за границы — warning без изменений.
+Добавлен SDL-free `DefaultScriptHost`: `RS_GetPersonParameterI` → 0,
+`Exit`/`Signal`/`Console`/`Cmd` → 0 + info, прочие известные функции → 0 + debug,
+неизвестные → 0 + warning; тесты могут наследовать хост. Task 2 minors: правый операнд
+сравнений/логики не вычисляется после ошибки левого; top-level `func` больше не
+использует `d` как переход (реальные данные имеют `c = d = -1`); формулировки
+unknown-opcode (`end` + error log) выровнены в spec/plan. Тесты: `gl_script_tests` —
+31 case / 197 assertions; новый `gl_script_real_tests` (skip 77) — `demon.d1.age.cs` +
+`zlato_vars.scr` → `wait_user`, `answers_count() > 0`, `user_input(0)` продолжает без
+падения (end/wait), ids > 0. Полный `ctest` с `GL_GAME_DIR` — **10/10 passed**, 561.69 s
+(real-data 519.75 s, gl_script_real 1.32 s). Следующая задача — P3a Task 4 (tools).
 
 **P3a — Task 2 (VM core + globals) завершён 2026-10-21.**
 Добавлена SDL-free библиотека `gl_script`: `Value`, `ScriptGlobal`/`parse_globals`
@@ -25,7 +42,7 @@ P1b (Android/touch); P2 backfill отложен.
 `restart(true/false)`, счётчик 10 000 000 шагов → `infinity`, безопасная обработка битых
 индексов/опкодов. Семантика сверена с `GoldenLandEditor::CsExecutor` и реальными `.cs`
 (`docs/research/p3a-cs-vm.md`, D-023). Тесты: `gl_script_tests` — 22 cases / 139
-assertions; полный `ctest` с `GL_GAME_DIR` — **9/9 passed**, 478.88 s. Smoke-прогон
+assertions; полный `ctest` с `GL_GAME_DIR` — **9/9 passed**, 594.42 s. Smoke-прогон
 `demon.d1.age.cs` + `zlato_vars.scr` → `wait_user` (43 шага). Следующая задача — P3a
 Task 3 (dialogs + native registry).
 
@@ -334,13 +351,21 @@ P0 закрыт 2026-10-19; далее выполнялись задачи P1 (�
 - 2026-10-21: P3a Task 2 — `gl_script` (`parse_globals`, `ScriptHost`, `ScriptVm`):
   логика/сравнения/арифметика/assign/jmp/func, `D_Say`/`D_Answer`/`D_CloseDialog`,
   restart-семантика, лимит 10M шагов; D-023; research note `docs/research/p3a-cs-vm.md`;
-  `gl_script_tests` 22 cases / 139 assertions; полный `ctest` 9/9 (478.88 s).
+  `gl_script_tests` 22 cases / 139 assertions; полный `ctest` 9/9 (594.42 s, по
+  фактическому отчёту Task 2; ранее в STATUS было ошибочно указано 478.88 s).
+- 2026-10-21: P3a Task 3 — `ScriptVm::dialogs_data()`/`answers_count()`/`user_input()`
+  (ответы с нуля, `LastPhrase`/`LastAnswer`, `restart` на узле 0, warning при выходе за
+  границы), `DefaultScriptHost` (0 + info/debug/warning по категориям), тесты синтетических
+  диалогов и real `demon.d1.age.cs` + `zlato_vars.scr` (`gl_script_real_tests`, skip 77);
+  Task 2 minors (правый операнд после ошибки левого, top-level `func` без `d`-перехода,
+  unknown-opcode = `end` в spec/plan); D-024; `gl_script_tests` 31 cases / 197 assertions,
+  `ctest` 10/10 (561.69 s).
 
 ## Следующие задачи
 
-1. P3a: CS VM core — Task 1 (парсер `.cs`) и Task 2 (VM + globals) завершены; следующая —
-   Task 3 (dialogs + native registry)
-   (`docs/specs/2026-10-20-p3a-cs-vm-design.md`, `docs/plans/2026-10-20-p3a-cs-vm.md`).
+1. P3a: CS VM core — Tasks 1–3 завершены; следующая — Task 4 (tools `glpak disasm-cs` и
+   `glscript`) (`docs/specs/2026-10-20-p3a-cs-vm-design.md`,
+   `docs/plans/2026-10-20-p3a-cs-vm.md`).
 2. P3b/P3c: AgeScript-компилятор, диалоги/SDB, полный набор native-функций.
 3. P1b: Android/touch — отложенный follow-up P1.
 4. P2 backfill: интерполяция/сеть/игровые системы — отложены до появления сущностей.

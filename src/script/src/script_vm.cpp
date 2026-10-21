@@ -153,6 +153,50 @@ Value* ScriptVm::variable(std::string_view name) {
 
 const std::map<std::string, Value>& ScriptVm::variables() const { return variables_; }
 
+std::size_t ScriptVm::answers_count() const {
+    const std::vector<std::uint32_t> data = dialogs_data();
+    return data.empty() ? 0 : data.size() - 1;
+}
+
+std::vector<std::uint32_t> ScriptVm::dialogs_data() const {
+    if (status_ != VmStatus::wait_user || dialog_calls_.empty()) return {};
+
+    const DialogCall* say = nullptr;
+    for (const DialogCall& call : dialog_calls_) {
+        if (call.id == kFunctionSay) {
+            say = &call;
+            break;
+        }
+    }
+    if (say == nullptr) return {};
+
+    std::vector<std::uint32_t> data;
+    data.reserve(dialog_calls_.size());
+    data.push_back(say->value);
+    for (const DialogCall& call : dialog_calls_) {
+        if (call.id == kFunctionAnswer) data.push_back(call.value);
+    }
+    return data;
+}
+
+void ScriptVm::user_input(std::size_t answer) {
+    const std::vector<std::uint32_t> data = dialogs_data();
+    if (data.size() <= 1 || answer >= data.size() - 1) {
+        log_warning("user input index out of range: " + std::to_string(answer));
+        return;
+    }
+
+    variables_["LastPhrase"] = std::uint32_t{data.front()};
+    variables_["LastAnswer"] = std::uint32_t{data[answer + 1]};
+
+    dialog_calls_.clear();
+    dialog_say_ = false;
+    end_request_ = false;
+    failed_ = false;
+    pc_ = 0;
+    status_ = VmStatus::restart;
+}
+
 bool ScriptVm::step() {
     if (status_ == VmStatus::wait_user || status_ == VmStatus::end ||
         status_ == VmStatus::infinity)
@@ -231,9 +275,7 @@ bool ScriptVm::step() {
         case 48: {
             (void)call_function(node, 0);
             if (failed_ || end_request_) break;
-            if (node.d >= 0) {
-                next = node.d;
-            } else if (valid_index(pc_ + 1)) {
+            if (valid_index(pc_ + 1)) {
                 next = pc_ + 1;
             } else {
                 status_ = VmStatus::end;
@@ -315,12 +357,14 @@ Value ScriptVm::eval(std::int32_t index, int depth) {
     default:
         if (is_comparison(node.opcode)) {
             const Value left = eval(node.a, depth + 1);
+            if (failed_) return std::int32_t{0};
             const Value right = eval(node.b, depth + 1);
             if (failed_) return std::int32_t{0};
             return std::int32_t{compare_values(left, right, node.opcode) ? 1 : 0};
         }
         if (is_logical(node.opcode)) {
             const Value left = eval(node.a, depth + 1);
+            if (failed_) return std::int32_t{0};
             const Value right = eval(node.b, depth + 1);
             if (failed_) return std::int32_t{0};
             const bool left_true = is_true(left);
@@ -354,7 +398,8 @@ Value ScriptVm::call_function(const gl::assets::CsNode& node, int depth) {
     }
 
     if (id == kFunctionSay || id == kFunctionAnswer) {
-        dialog_calls_.push_back(DialogCall{id, args});
+        const std::uint32_t value = args.empty() ? 0u : to_uint32(args.front());
+        dialog_calls_.push_back(DialogCall{id, value});
         if (id == kFunctionSay) dialog_say_ = true;
         return std::int32_t{0};
     }

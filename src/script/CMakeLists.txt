@@ -1,5 +1,6 @@
 add_library(gl_script STATIC
     src/globals.cpp
+    src/host.cpp
     src/script_vm.cpp
 )
 target_include_directories(gl_script PUBLIC include)

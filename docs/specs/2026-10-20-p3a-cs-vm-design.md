@@ -79,8 +79,11 @@ ID функций: `0x1000000` Exit, `0x1000004` D_Say, `0x1000005` D_CloseDialo
   - func (48): вызвать host; `D_Say`/`D_Answer` складывать в dialogFuncs; вернуть значение.
   - арифметика (14..18) — только числа; строки запрещены.
 - Счётчик шагов (10 млн) → `infinity`.
-- `dialogs_data()` — `[sayValue, answerValue...]`; `answers_count()`.
-- `user_input(answer)`: `LastPhrase = sayValue`, `LastAnswer = answerValue`, restart at 0.
+- `dialogs_data()` — `[sayValue, answerValue...]`, валидно только при `wait_user`;
+  `answers_count()` — число записанных ответов.
+- `user_input(answer)`: `answer` — индекс ответа с нуля; выход за границы — warning и
+  отсутствие изменений. Иначе `LastPhrase = sayValue`, `LastAnswer = answerValue`,
+  очистка записанных вызовов, `pc = 0`, статус `restart`.
 - `D_CloseDialog` → `end` (по комментарию в `CsExecutor`).
 
 Глобальные переменные: `.scr`-файл вида `int Name 0`, `DWORD Name 0`, `float Name 0.5`,
@@ -88,8 +91,10 @@ ID функций: `0x1000000` Exit, `0x1000004` D_Say, `0x1000005` D_CloseDialo
 
 Нативные функции: `ScriptHost` интерфейс `Value call(uint32_t id, span<const Value>)`.
 P3a-реализация: `D_Say`/`D_Answer` обрабатываются VM; `D_CloseDialog` → end;
-`RS_GetPersonParameterI` → 0; `Exit`/`Signal`/`Console`/`Cmd` — заглушки (лог);
-неизвестные → 0 + warning. Реестр расширяемый.
+`DefaultScriptHost`: `RS_GetPersonParameterI` → 0; `Exit`/`Signal`/`Console`/`Cmd` —
+заглушки (info-лог); известные, но не реализованные функции (`D_PlaySound`,
+`RS_ShowMessage`, ...) → 0 + debug-лог; неизвестные id → 0 + warning. Реестр
+расширяемый: тесты могут наследовать `DefaultScriptHost`/`ScriptHost`.
 
 ## 5. Инструменты
 
@@ -133,7 +138,8 @@ Integration:
 ## 8. Риски
 
 - Семантика отдельных опкодов (1 `^^`, 3..5, 12/13, 19/20) не проверена — P3a
-  поддерживает основные (0/2, 6..11, 14..18, 21..24, 48..50); остальные логируются/ошибка.
+  поддерживает основные (0/2, 6..11, 14..18, 21..24, 48..50); остальные дают
+  `end` + error log (D-023).
 - Функции, влияющие на мир, — заглушки; поведение квестов появится в P4+.
 - Кодировка строк — cp1251; на API UTF-8.
 - Защита от бесконечных скриптов — счётчик шагов.

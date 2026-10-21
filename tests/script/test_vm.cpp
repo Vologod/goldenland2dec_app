@@ -350,6 +350,51 @@ TEST_CASE("vm: D_CloseDialog ends execution") {
     CHECK(h.host.calls.empty());
 }
 
+TEST_CASE("vm: comparison does not evaluate the right operand after a left failure") {
+    std::vector<CsNode> nodes(3);
+    nodes[0] = make_bin(7, 99, 1, 2, 2);
+    nodes[1] = make_func(kPersonParameter, {});
+    nodes[2] = make_jmp(-1, -1);
+
+    VmHarness h(std::move(nodes), {});
+    CHECK_FALSE(h.vm.step());
+    CHECK(h.vm.status() == VmStatus::end);
+    CHECK(h.host.calls.empty());
+}
+
+TEST_CASE("vm: logical does not evaluate the right operand after a left failure") {
+    std::vector<CsNode> nodes(3);
+    nodes[0] = make_bin(2, 99, 1, 2, 2);
+    nodes[1] = make_func(kPersonParameter, {});
+    nodes[2] = make_jmp(-1, -1);
+
+    VmHarness h(std::move(nodes), {});
+    CHECK_FALSE(h.vm.step());
+    CHECK(h.vm.status() == VmStatus::end);
+    CHECK(h.host.calls.empty());
+}
+
+TEST_CASE("vm: top-level func ignores d and advances to the next node") {
+    std::vector<CsNode> nodes(7);
+    nodes[0] = make_func(kPersonParameter, {});
+    nodes[0].d = 2;
+    nodes[1] = make_assign(3, 4, 6);
+    nodes[2] = make_assign(3, 5, 6);
+    nodes[3] = make_str_var("x");
+    nodes[4] = make_num(5.0);
+    nodes[5] = make_num(7.0);
+    nodes[6] = make_jmp(-1, -1);
+
+    VmHarness h(std::move(nodes), {global_int("x", 0)});
+    CHECK(h.vm.step());
+    CHECK(h.vm.step());
+
+    Value* x = h.vm.variable("x");
+    REQUIRE(x != nullptr);
+    REQUIRE(std::holds_alternative<std::int32_t>(*x));
+    CHECK(std::get<std::int32_t>(*x) == 5);
+}
+
 TEST_CASE("vm: division by zero yields zero") {
     std::vector<CsNode> nodes(6);
     nodes[0] = make_assign(1, 2, 3);
