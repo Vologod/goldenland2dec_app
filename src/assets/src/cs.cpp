@@ -11,6 +11,7 @@ namespace gl::assets {
 namespace {
 constexpr std::size_t kHeaderSize = 4;
 constexpr std::size_t kMaxFunctionArgs = 9;
+constexpr std::uint8_t kLegacyXorSeed = 0x55;
 
 Error format_error(std::string message) { return Error{ErrorCode::format, std::move(message)}; }
 
@@ -37,9 +38,7 @@ bool read_cstring(ByteReader& reader, std::string& out) {
     reader.skip(length + 1);
     return true;
 }
-} // namespace
 
-namespace {
 Result<std::vector<CsNode>> parse_nodes(std::span<const std::uint8_t> data) {
     ByteReader reader(data);
     if (!reader.skip(kHeaderSize)) return format_error("truncated cs size field");
@@ -103,13 +102,23 @@ Result<std::vector<CsNode>> parse_cs(std::span<const std::uint8_t> data) {
         auto plain = parse_nodes(data);
         if (plain) return plain;
 
+        bool first_opcode_invalid = false;
+        if (data.size() >= kHeaderSize + 4) {
+            std::int32_t first_opcode = 0;
+            ByteReader body(data.subspan(kHeaderSize));
+            first_opcode_invalid =
+                read_i32(body, first_opcode) && !cs_opcode_valid(first_opcode);
+        }
+        if (!first_opcode_invalid) return plain;
+
         std::vector<std::uint8_t> decoded(data.begin(), data.end());
         for (std::size_t i = kHeaderSize; i < decoded.size(); ++i)
-            decoded[i] ^= static_cast<std::uint8_t>(i + 0x55);
+            decoded[i] ^= static_cast<std::uint8_t>(i + kLegacyXorSeed);
         auto legacy = parse_nodes(decoded);
         if (legacy) return legacy;
 
-        return plain;
+        return format_error("cs parse failed: raw: " + plain.error().message +
+                            "; legacy xor: " + legacy.error().message);
     } catch (const std::bad_alloc&) {
         return format_error("cs allocation failed");
     }

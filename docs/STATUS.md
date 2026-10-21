@@ -21,11 +21,13 @@ P2 backfill отложен.
 `cs_opcode_valid`; строки cp1251→UTF-8; строгая проверка размера/опкодов/усечения;
 func-аргументы до 9 с обязательным `-1`. Обнаружены 6 легаси-скриптов в `scripts.pak`
 с XOR-обфускацией тела (`plain[i] = data[i] ^ ((i + 0x55) & 0xFF)`, `i >= 4`);
-`parse_cs` распознаёт их fallback-разбором (подтверждено копиями из
-`scripts.update.3.pak`, см. `docs/research/p3a-cs-format.md`). Тесты:
-`gl_assets_tests` — 116 cases / 729 assertions; real-data — **555/555** `.cs`,
-0 ошибок, 338 977 узлов. `cmake --build build` — успех; `ctest -R gl_assets`
-с `GL_GAME_DIR` — **2/2 passed**, 412.94 s (real 412.83 s). Следующая задача —
+`parse_cs` распознаёт их fallback-разбором (D-022, spec §3; подтверждено копиями из
+`scripts.update.3.pak`, см. `docs/research/p3a-cs-format.md`). Fix round 1: XOR-разбор
+выполняется только при невалидном первом опкоде, ошибка объединяет обе попытки;
+real-тест читает `scripts.pak` в память один раз. Тесты:
+`gl_assets_tests` — 120 cases / 748 assertions; real-data — **555/555** `.cs`,
+0 ошибок, 338 977 узлов (real `.cs` test 1.26 s). `cmake --build build` — успех;
+полный `ctest` с `GL_GAME_DIR` — **8/8 passed**, 453.16 s. Следующая задача —
 P3a Task 2 (VM core + globals).
 
 **P2c — Task 4 (automated acceptance + docs) завершён 2026-10-20.**
@@ -312,6 +314,10 @@ P0 закрыт 2026-10-19; далее выполнялись задачи P1 (�
   функций, cp1251→UTF-8, строгая валидация, fallback для 6 XOR-обфусцированных
   легаси-скриптов; `test_cs.cpp` и `test_real_cs.cpp` (555/555, 0 ошибок,
   338 977 узлов); research note `docs/research/p3a-cs-format.md`.
+- 2026-10-21: P3a Task 1 fix round 1 — D-022 + spec §3 (два кодирования), XOR-fallback
+  только при невалидном первом опкоде с объединённой ошибкой, real-тест читает
+  `scripts.pak` через `PakArchive::open_from_memory` (1.26 s); тесты усечений
+  опкода/func и битого legacy; `ctest` 8/8 (453.16 s).
 
 ## Следующие задачи
 

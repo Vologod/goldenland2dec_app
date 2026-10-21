@@ -1,5 +1,6 @@
 #include "gl/assets/bytes.hpp"
 #include "gl/assets/cs.hpp"
+#include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <doctest/doctest.h>
@@ -201,6 +202,59 @@ TEST_CASE("cs: rejects an invalid opcode") {
         REQUIRE_FALSE(result.has_value());
         CHECK(result.error().code == gl::ErrorCode::format);
     }
+}
+
+TEST_CASE("cs: rejects a truncated opcode field") {
+    for (std::size_t length = 1; length <= 3; ++length) {
+        Bytes body(length, 0);
+        auto result = parse_cs(with_size(body));
+        REQUIRE_FALSE(result.has_value());
+        CHECK(result.error().code == gl::ErrorCode::format);
+    }
+}
+
+TEST_CASE("cs: rejects truncated function headers") {
+    Bytes full;
+    put_i32(full, 48);
+    put_i32(full, 0);
+    put_i32(full, 0);
+    put_f64(full, 0x1000004);
+    put_i32(full, -1);
+    for (std::size_t length : {std::size_t{4}, std::size_t{8}, std::size_t{12}}) {
+        Bytes body(full.begin(), full.begin() + static_cast<std::ptrdiff_t>(length));
+        auto result = parse_cs(with_size(body));
+        REQUIRE_FALSE(result.has_value());
+        CHECK(result.error().code == gl::ErrorCode::format);
+    }
+}
+
+TEST_CASE("cs: rejects a bad legacy script with both attempt diagnostics") {
+    Bytes body;
+    put_i32(body, 7);
+    put_i32(body, 1);
+    put_i32(body, 2);
+    put_i32(body, 3);
+    put_i32(body, 4);
+    put_i32(body, 25);
+    auto result = parse_cs(encrypt_legacy(with_size(body)));
+    REQUIRE_FALSE(result.has_value());
+    CHECK(result.error().code == gl::ErrorCode::format);
+    CHECK(result.error().message.find("raw:") != std::string::npos);
+    CHECK(result.error().message.find("legacy xor:") != std::string::npos);
+}
+
+TEST_CASE("cs: does not retry legacy decoding when the first opcode is valid") {
+    Bytes body;
+    put_i32(body, 7);
+    put_i32(body, 1);
+    put_i32(body, 2);
+    put_i32(body, 3);
+    put_i32(body, 4);
+    put_i32(body, 25);
+    auto result = parse_cs(with_size(body));
+    REQUIRE_FALSE(result.has_value());
+    CHECK(result.error().code == gl::ErrorCode::format);
+    CHECK(result.error().message.find("legacy xor:") == std::string::npos);
 }
 
 TEST_CASE("cs: rejects a truncated integer payload") {

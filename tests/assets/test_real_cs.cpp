@@ -1,12 +1,15 @@
 #include "gl/assets/cs.hpp"
-#include "gl/assets/vfs.hpp"
+#include "gl/assets/pak.hpp"
 #include <cctype>
 #include <cstddef>
 #include <cstdlib>
 #include <doctest/doctest.h>
+#include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <string>
 #include <string_view>
+#include <utility>
 
 using namespace gl::assets;
 
@@ -25,11 +28,23 @@ TEST_CASE("real data: every .cs entry in scripts.pak parses" *
           doctest::skip(!game_dir_available())) {
     const char *dir = std::getenv("GL_GAME_DIR");
     REQUIRE(dir != nullptr);
-    auto vfs = GameVfs::mount(dir);
-    REQUIRE(vfs.has_value());
 
-    const PakArchive* archive = vfs->archive("scripts.pak");
-    REQUIRE(archive != nullptr);
+    const std::filesystem::path pak_path =
+        std::filesystem::path(dir) / "Data" / "scripts.pak";
+    std::error_code ec;
+    const std::uintmax_t file_size = std::filesystem::file_size(pak_path, ec);
+    REQUIRE_FALSE(ec);
+
+    Bytes payload(static_cast<std::size_t>(file_size));
+    std::ifstream in(pak_path, std::ios::binary);
+    REQUIRE(in);
+    const bool read_ok =
+        static_cast<bool>(in.read(reinterpret_cast<char*>(payload.data()),
+                                  static_cast<std::streamsize>(payload.size())));
+    REQUIRE(read_ok);
+
+    auto archive = PakArchive::open_from_memory(std::move(payload));
+    REQUIRE(archive.has_value());
 
     std::size_t parsed = 0;
     std::size_t failures = 0;
