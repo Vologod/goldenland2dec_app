@@ -433,10 +433,11 @@ P0 закрыт 2026-10-19; далее выполнялись задачи P1 (�
 
 ## Следующие задачи
 
-1. P3b/P3c: AgeScript-компилятор (`.scr`), диалоги/SDB, полный набор native-функций
-   (`docs/specs/2026-10-20-p3a-cs-vm-design.md` — вход; P3a принята).
-2. P1b: Android/touch — отложенный follow-up P1.
-3. P2 backfill: интерполяция/сеть/игровые системы — отложены до появления сущностей.
+1. P3c: диалоги + SDB + кириллический TTF-шрифт — spec/plan готовы
+   (`docs/specs/2026-10-20-p3c-dialogs-sdb-font-design.md`, `docs/plans/2026-10-20-p3c-dialogs-sdb-font.md`);
+   начать с Task 1 (UTF-8 + Font). AgeScript-компилятор не требуется: `.scr` — конфиги.
+2. P4: персонажи/NPC (`.prs/.inf`), привязка диалогов к NPC.
+3. P1b: Android/touch — отложенный follow-up P1.
 
 ## Открытые вопросы
 
