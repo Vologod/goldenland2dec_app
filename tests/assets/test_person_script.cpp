@@ -24,9 +24,23 @@ TEST_CASE("person script: parses res_name, level and top-level values") {
                              "{\n"
                              "  res_name: \"ignored\"\n"
                              "  level: 99\n"
+                             "  NPC_TEST_AXE 18 200\n"
                              "}\n"
                              "skills: {\n"
                              "  SKILL_SWORD 3\n"
+                             "}\n"
+                             "magic:\n"
+                             "{\n"
+                             "  FIREBALL 1\n"
+                             "}\n"
+                             "ai:\n"
+                             "{\n"
+                             "  battle_magic_use: 0\n"
+                             "  life_escape 20\n"
+                             "}\n"
+                             "trade_panel: {\n"
+                             "  change: 1\n"
+                             "  repair 1\n"
                              "}\n";
     auto result = parse_person_script(as_bytes(text));
     REQUIRE(result.has_value());
@@ -34,10 +48,22 @@ TEST_CASE("person script: parses res_name, level and top-level values") {
     CHECK(result->level == 20);
     CHECK(result->values.at("strength") == "14");
     CHECK(result->values.at("title") == "Ivan");
+    CHECK(result->values.at("weapon.res_name") == "ignored");
+    CHECK(result->values.at("weapon.level") == "99");
+    CHECK(result->values.at("weapon.NPC_TEST_AXE") == "18 200");
+    CHECK(result->values.at("skills.SKILL_SWORD") == "3");
+    CHECK(result->values.at("magic.FIREBALL") == "1");
+    CHECK(result->values.at("ai.battle_magic_use") == "0");
+    CHECK(result->values.at("ai.life_escape") == "20");
+    CHECK(result->values.at("trade_panel.change") == "1");
+    CHECK(result->values.at("trade_panel.repair") == "1");
     CHECK(result->values.find("res_name") == result->values.end());
     CHECK(result->values.find("level") == result->values.end());
     CHECK(result->values.find("weapon") == result->values.end());
     CHECK(result->values.find("skills") == result->values.end());
+    CHECK(result->values.find("magic") == result->values.end());
+    CHECK(result->values.find("ai") == result->values.end());
+    CHECK(result->values.find("trade_panel") == result->values.end());
 }
 
 TEST_CASE("person script: accepts keys without a colon") {

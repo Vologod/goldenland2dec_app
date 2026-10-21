@@ -27,14 +27,20 @@ std::string ascii_lower(std::string_view text) {
     return out;
 }
 
-bool has_pad_extension(std::string_view name) {
-    if (name.size() < 4)
+bool has_extension(std::string_view name, std::string_view extension) {
+    if (name.size() < extension.size())
         return false;
-    const std::string_view ext = name.substr(name.size() - 4);
-    return ext[0] == '.' && std::tolower(static_cast<unsigned char>(ext[1])) == 'p' &&
-           std::tolower(static_cast<unsigned char>(ext[2])) == 'a' &&
-           std::tolower(static_cast<unsigned char>(ext[3])) == 'd';
+    const std::string_view suffix = name.substr(name.size() - extension.size());
+    for (std::size_t i = 0; i < extension.size(); ++i) {
+        if (std::tolower(static_cast<unsigned char>(suffix[i])) != extension[i])
+            return false;
+    }
+    return true;
 }
+
+bool has_pad_extension(std::string_view name) { return has_extension(name, ".pad"); }
+
+bool has_sef_extension(std::string_view name) { return has_extension(name, ".sef"); }
 } // namespace
 
 TEST_CASE("real data: every .pad entry in persons.pak parses" *
@@ -141,12 +147,57 @@ TEST_CASE("real data: l1_1 SEF persons and their scripts" *
         auto person = parse_person_script(data.value());
         REQUIRE(person.has_value());
         CHECK_FALSE(person->res_name.empty());
-        if (script == "scripts/persons/l1_1.p387_poison_plotnik.scr")
+        if (script == "scripts/persons/l1_1.p387_poison_plotnik.scr") {
             CHECK(person->res_name == "L0.P1131_Inhabitans03");
+            CHECK(person->values.at("weapon.NPC_THROWING_AXE_AC_HPMax_HDRES_PDRES_9") ==
+                  "18 200");
+            CHECK(person->values.at("skills.SKILL_HEALING") == "15");
+            CHECK(person->values.at("ai.life_escape") == "20");
+            CHECK(person->values.at("trade_panel.repair") == "1");
+        }
         if (script == "scripts/persons/l1.p620_svet_3circusworker2.scr")
             CHECK(person->res_name == "L0.P1158_Clowns_Male01");
         ++parsed;
     }
     CHECK(parsed == scripts.size());
     CHECK(parsed == 15);
+}
+
+TEST_CASE("real data: every .sef in levels.pak parses" *
+          doctest::skip(!game_dir_available())) {
+    const char *dir = std::getenv("GL_GAME_DIR");
+    REQUIRE(dir != nullptr);
+    const std::filesystem::path pak_path =
+        std::filesystem::path(dir) / "Data" / "levels.pak";
+    auto archive = PakArchive::open_from_file(pak_path);
+    REQUIRE(archive.has_value());
+
+    std::size_t sef_entries = 0;
+    std::size_t parsed = 0;
+    std::size_t failures = 0;
+    for (const auto &entry : archive->entries()) {
+        if (!has_sef_extension(entry.name))
+            continue;
+        ++sef_entries;
+
+        auto data = archive->read(entry);
+        if (!data) {
+            ++failures;
+            std::cout << "read failure: " << entry.name << ": " << data.error().message << '\n';
+            continue;
+        }
+        auto result = parse_sef(data.value());
+        if (!result) {
+            ++failures;
+            std::cout << "parse failure: " << entry.name << ": " << result.error().message << '\n';
+            continue;
+        }
+        ++parsed;
+    }
+
+    std::cout << "real data .sef: entries=" << sef_entries << " parsed=" << parsed
+              << " failures=" << failures << '\n';
+    CHECK(sef_entries == 261);
+    CHECK(failures == 0);
+    CHECK(parsed == sef_entries);
 }

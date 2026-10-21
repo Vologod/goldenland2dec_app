@@ -152,6 +152,15 @@ TEST_CASE("SEF: defaults optional fields when absent") {
     CHECK(result->weather == -1);
 }
 
+TEST_CASE("SEF: reports line numbers in errors") {
+    const std::string text = "pack: \"l1_1\"\n"
+                             "weather: rainy\n";
+    auto result = parse_sef(as_bytes(text));
+    REQUIRE_FALSE(result.has_value());
+    CHECK(result.error().code == gl::ErrorCode::format);
+    CHECK(result.error().message.find("line 2") != std::string::npos);
+}
+
 TEST_CASE("SEF: rejects a missing pack") {
     const std::string text = "internal_location: 1\n"
                              "weather: 2\n";

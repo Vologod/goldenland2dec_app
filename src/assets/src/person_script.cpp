@@ -9,6 +9,7 @@
 #include <string_view>
 #include <system_error>
 #include <utility>
+#include <vector>
 
 namespace gl::assets {
 namespace {
@@ -52,6 +53,35 @@ void brace_counts(std::string_view line, int &opens, int &closes) {
     }
 }
 
+bool only_braces(std::string_view line) {
+    for (char c : line) {
+        if (c != '{' && c != '}' && c != ';' && !is_space(c))
+            return false;
+    }
+    return true;
+}
+
+std::string_view header_key(std::string_view line) {
+    const std::size_t brace = line.find('{');
+    if (brace != std::string_view::npos)
+        line = trim(line.substr(0, brace));
+    std::size_t end = 0;
+    while (end < line.size() && !is_space(line[end]) && line[end] != ':' && line[end] != '{' &&
+           line[end] != '}')
+        ++end;
+    return line.substr(0, end);
+}
+
+std::string join_key(const std::vector<std::string> &blocks, std::string_view key) {
+    std::string out;
+    for (const std::string &block : blocks) {
+        out += block;
+        out.push_back('.');
+    }
+    out += key;
+    return out;
+}
+
 bool parse_level(std::string_view value, std::int32_t &out) {
     value = trim(value);
     if (value.empty())
@@ -65,7 +95,8 @@ bool parse_level(std::string_view value, std::int32_t &out) {
     return true;
 }
 
-VoidResult parse_line(std::string_view line, PersonDef &person) {
+VoidResult parse_line(std::string_view line, const std::vector<std::string> &blocks,
+                      bool top_level, PersonDef &person, std::string &pending_block) {
     std::size_t key_end = 0;
     while (key_end < line.size() && !is_space(line[key_end]) && line[key_end] != ':' &&
            line[key_end] != '{' && line[key_end] != '}')
@@ -83,8 +114,10 @@ VoidResult parse_line(std::string_view line, PersonDef &person) {
         ++position;
 
     std::string_view value = trim(line.substr(position));
-    if (value.empty())
+    if (value.empty()) {
+        pending_block = std::string(key);
         return VoidResult{std::monostate{}};
+    }
 
     if (value.front() == '"') {
         const std::size_t close = value.find('"', 1);
@@ -95,15 +128,16 @@ VoidResult parse_line(std::string_view line, PersonDef &person) {
         value = value.substr(1, close - 1);
     }
 
-    if (key == "res_name") {
+    pending_block.clear();
+    if (top_level && key == "res_name") {
         if (value.empty())
             return format_error("person script has an empty res_name");
         person.res_name = std::string(value);
-    } else if (key == "level") {
+    } else if (top_level && key == "level") {
         if (!parse_level(value, person.level))
             return format_error("person script has an invalid level");
     } else {
-        person.values[std::string(key)] = std::string(value);
+        person.values[join_key(blocks, key)] = std::string(value);
     }
     return VoidResult{std::monostate{}};
 }
@@ -118,6 +152,8 @@ Result<PersonDef> parse_person_script(std::span<const std::uint8_t> data) {
             view.remove_prefix(3);
 
         int depth = 0;
+        std::vector<std::string> blocks;
+        std::string pending_block;
         std::size_t position = 0;
         while (position <= view.size()) {
             const std::size_t newline = view.find('\n', position);
@@ -138,14 +174,51 @@ Result<PersonDef> parse_person_script(std::span<const std::uint8_t> data) {
             int closes = 0;
             brace_counts(line, opens, closes);
 
-            if (depth > 0 || opens != 0 || closes != 0) {
+            if (only_braces(line)) {
+                for (char c : line) {
+                    if (c == '{') {
+                        blocks.push_back(std::move(pending_block));
+                        pending_block.clear();
+                        ++depth;
+                    } else if (c == '}' && depth > 0) {
+                        --depth;
+                        if (!blocks.empty())
+                            blocks.pop_back();
+                    }
+                }
+                continue;
+            }
+
+            if (opens > 0) {
+                const std::string_view key = header_key(line);
+                if (!key.empty())
+                    blocks.emplace_back(key);
+                else
+                    blocks.emplace_back();
+                pending_block.clear();
                 depth += opens - closes;
+                for (int i = 0; i < closes; ++i) {
+                    if (!blocks.empty())
+                        blocks.pop_back();
+                }
                 if (depth < 0)
                     depth = 0;
                 continue;
             }
 
-            auto status = parse_line(line, person);
+            if (closes > 0) {
+                depth -= closes;
+                if (depth < 0)
+                    depth = 0;
+                for (int i = 0; i < closes; ++i) {
+                    if (!blocks.empty())
+                        blocks.pop_back();
+                }
+                pending_block.clear();
+                continue;
+            }
+
+            auto status = parse_line(line, blocks, depth == 0, person, pending_block);
             if (!status)
                 return status.error();
         }

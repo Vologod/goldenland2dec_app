@@ -128,8 +128,11 @@ weight_x10   : uint32
 - В `scripts.pak` 782 файла `scripts/persons/*.scr`; у всех `res_name` и `level` в
   ожидаемом формате, 15 реальных скриптов `l1_1` разобраны без ошибок. Текст cp1251,
   комментарии `//`, верхнеуровневые `key: value` или
-  `key value`, строки в кавычках; блоки `key { ... }` (`weapon`, `skills`, `magic`, `ai`,
-  `trade_panel`) игнорируются. `res_name` обязателен; `level` — целое, по умолчанию 0.
+  `key value`, строки в кавычках. Вложенные пары из блоков (`weapon`, `skills`, `magic`,
+  `ai`, `trade_panel`) сохраняются в `PersonDef::values` с dot-префиксом
+  (`skills.SKILL_HEALING`, `ai.life_escape`, `weapon.NPC_...`); значение — остаток
+  строки как есть (`weapon.NPC_...` → `"18 200"`). `res_name` обязателен; `level` —
+  целое, по умолчанию 0.
 - `levels/single/l1_1/l1_1.sef`: в `persons:` **16** записей; при этом во всём файле
   **41** блок `name:` — остальные 25 находятся в `points_entrance`, `cell_groups` и
   `triggers`. Поля записи: `name`, `position X Y` (тайлы), `literary_name`, `direction`,
