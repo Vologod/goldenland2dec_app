@@ -235,3 +235,24 @@ animations[..]  : {
   12x49 x 8x29 = 588x232.
 - SEF direction strings map to indices 0..7 as
   `UP, UP_LEFT, LEFT, DOWN_LEFT, DOWN, DOWN_RIGHT, RIGHT, UP_RIGHT`.
+
+## Person sprite rendering (P4a Task 4, 2026-10-21)
+
+- Verified on all 16 `l1_1` sheets: CSX dimensions are exactly
+  `frameWidth*framesPerRow x frameHeight*rows` for sprites and
+  `shadowWidth*framesPerRow x shadowHeight*shadowRows` for shadows. Therefore a
+  frame is the full `frameWidth x frameHeight` cell at
+  `(column*frameWidth, row*frameHeight)`; PAD crops are not needed for drawing
+  (transparent padding is inside the cell).
+- Draw origin is `(tile_x*12 - anchor_x, tile_y*9 - anchor_y)`. Shadow origin is
+  `(tile_x*12 - shadow_anchor_x, tile_y*9 - shadow_anchor_y)`; shadow rows are
+  identity and are never mirrored.
+- Person rows come from `pad_person_row`: 8 directions -> `{0,1,2,3,4,3,2,1}`
+  (indices 5..7 mirror the sprite in place), `_go` -> 16 rows
+  `{0..8,7..1}` (9..15 mirror). `anchor_x` is approximately `frameWidth/2`
+  (examples: 20/41, 17/34, 13/26), so a horizontal UV flip keeps the feet in
+  place.
+- Frame index is `(simulation_time_ms / delay) % framesPerRow`; `delay <= 0` is
+  treated as 1. Example initial `l1_1` view shows NPCs at tiles `(38,51)` and
+  `(59,49)`; a normal 1280x720 screenshot differs from `--no-persons` by tens of
+  thousands of pixels.

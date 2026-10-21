@@ -8,3 +8,10 @@ gl_enable_warnings(glgame_screenshot_tests)
 
 add_test(NAME glgame_screenshot_tests COMMAND glgame_screenshot_tests)
 set_tests_properties(glgame_screenshot_tests PROPERTIES SKIP_RETURN_CODE 77)
+
+add_executable(person_render_tests test_person_render.cpp)
+target_include_directories(person_render_tests PRIVATE ${CMAKE_SOURCE_DIR}/third_party/doctest)
+target_link_libraries(person_render_tests PRIVATE gl_app)
+gl_enable_warnings(person_render_tests)
+
+add_test(NAME person_render_tests COMMAND person_render_tests)

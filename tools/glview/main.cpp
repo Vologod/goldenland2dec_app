@@ -30,6 +30,7 @@ struct Options {
     int frames = 1;
     bool background_only = false;
     bool debug_overlay = false;
+    bool no_persons = false;
 };
 
 enum class ParseStatus { ok, help, error };
@@ -45,6 +46,7 @@ void print_usage() {
               "  --screenshot <png> Render frames, save PNG and exit\n"
               "  --frames <n>       Frames to render before screenshot (default: 1)\n"
               "  --background-only  Draw only the background (skip statics and animations)\n"
+              "  --no-persons       Skip NPC sprites\n"
               "  --debug-overlay    Draw sprite debug rectangles in screenshot mode\n"
               "  -h, --help         Show this help and exit\n"
               "\n"
@@ -141,6 +143,8 @@ ParseStatus parse_args(int argc, char** argv, Options& options) {
             }
         } else if (arg == "--background-only") {
             options.background_only = true;
+        } else if (arg == "--no-persons") {
+            options.no_persons = true;
         } else if (arg == "--debug-overlay") {
             options.debug_overlay = true;
         } else {
@@ -348,8 +352,10 @@ int main(int argc, char** argv) {
         }
         screen.value().set_viewport(width, height);
 
-        const gl::app::LevelScreenOptions screen_options{options.background_only,
-                                                         options.debug_overlay};
+        gl::app::LevelScreenOptions screen_options;
+        screen_options.background_only = options.background_only;
+        screen_options.debug_overlay = options.debug_overlay;
+        screen_options.draw_persons = !options.no_persons;
         if (!options.screenshot.empty()) {
             return save_screenshot(window.renderer(), options.screenshot, options.frames,
                                    screen.value(), screen_options);

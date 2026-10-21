@@ -604,6 +604,42 @@ TEST_CASE("glgame renders a preloaded level into a 1280x720 PNG") {
     check_png(png, 1280, 720);
 }
 
+TEST_CASE("glgame --no-persons hides NPC sprites") {
+    const char* game_dir = std::getenv("GL_GAME_DIR");
+    REQUIRE(game_dir != nullptr);
+
+    TempDir temp;
+    const fs::path config = write_test_config(temp.path);
+    const fs::path normal_png = temp.path / "level_persons.png";
+    const fs::path no_persons_png = temp.path / "level_no_persons.png";
+
+    const int normal_code = run_glgame(
+        screenshot_arguments(game_dir, config, normal_png, {"--level", "l1_1"}));
+    const int no_persons_code = run_glgame(screenshot_arguments(
+        game_dir, config, no_persons_png, {"--level", "l1_1", "--no-persons"}));
+    CAPTURE(normal_code);
+    CAPTURE(no_persons_code);
+    REQUIRE(fs::exists(normal_png));
+    REQUIRE(fs::exists(no_persons_png));
+    CHECK(normal_code == 0);
+    CHECK(no_persons_code == 0);
+    check_png(normal_png, 1280, 720);
+    check_png(no_persons_png, 1280, 720);
+
+    int normal_width = 0;
+    int normal_height = 0;
+    int plain_width = 0;
+    int plain_height = 0;
+    const std::vector<unsigned char> normal = read_png(normal_png, normal_width, normal_height);
+    const std::vector<unsigned char> plain =
+        read_png(no_persons_png, plain_width, plain_height);
+    REQUIRE(normal_width == plain_width);
+    REQUIRE(normal_height == plain_height);
+    const std::size_t different = count_differences(normal, plain);
+    CAPTURE(different);
+    CHECK(different > 1000);
+}
+
 TEST_CASE("glgame tolerates help and unknown commands from --exec") {
     const char* game_dir = std::getenv("GL_GAME_DIR");
     REQUIRE(game_dir != nullptr);

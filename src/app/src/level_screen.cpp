@@ -1,5 +1,7 @@
 #include "gl/app/level_screen.hpp"
 
+#include "gl/app/person_render.hpp"
+
 #include <gl/assets/log.hpp>
 #include <gl/render/animation.hpp>
 
@@ -7,6 +9,7 @@
 
 #include <cmath>
 #include <cstddef>
+#include <cstdint>
 #include <string>
 #include <utility>
 
@@ -20,6 +23,18 @@ constexpr float kPanSpeed = 600.0f;
 bool rect_visible(const SDL_FRect& rect, int width, int height) {
     return rect.x + rect.w > 0.0f && rect.y + rect.h > 0.0f &&
            rect.x < static_cast<float>(width) && rect.y < static_cast<float>(height);
+}
+
+bool source_fits(const SDL_Rect& source, const gl::render::Texture& texture) {
+    return source.w > 0 && source.h > 0 && source.x >= 0 && source.y >= 0 &&
+           source.x + source.w <= texture.width() && source.y + source.h <= texture.height();
+}
+
+void draw_source(SDL_Renderer* renderer, const gl::render::Texture& texture,
+                 const SDL_Rect& source, const SDL_FRect& destination,
+                 SDL_RendererFlip flip = SDL_FLIP_NONE) {
+    if (!source_fits(source, texture)) return;
+    SDL_RenderCopyExF(renderer, texture.get(), &source, &destination, 0.0, nullptr, flip);
 }
 
 }
@@ -42,7 +57,8 @@ Result<LevelScreen> LevelScreen::load(SDL_Renderer* renderer, gl::assets::GameVf
             "level '" + level->name + "' (pack '" + level->pack + "'): " +
                 std::to_string(level->width) + "x" + std::to_string(level->height) + " px, " +
                 std::to_string(level->statics.size()) + " statics, " +
-                std::to_string(level->animations.size()) + " animations");
+                std::to_string(level->animations.size()) + " animations, " +
+                std::to_string(level->persons.size()) + " persons");
 
     auto background = gl::render::Texture::from_image(renderer, level->background);
     if (!background) {
@@ -87,6 +103,90 @@ Result<LevelScreen> LevelScreen::load(SDL_Renderer* renderer, gl::assets::GameVf
             Animation{std::move(frames), object.x, object.y, object.delay_ms});
     }
 
+    screen.persons_.reserve(screen.level_.persons.size());
+    for (std::size_t instance_index = 0; instance_index < screen.level_.persons.size();
+         ++instance_index) {
+        const gl::game::PersonInstance& instance = screen.level_.persons[instance_index];
+        std::size_t animation_index = 0;
+        bool found = false;
+        for (std::size_t i = 0; i < instance.pad.size(); ++i) {
+            if (instance.pad[i].type == instance.stay_type) {
+                animation_index = i;
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            gl::log(gl::LogLevel::warning,
+                    "level '" + screen.level_.name + "': skipping person '" + instance.name +
+                        "': PAD has no animation selected by the loader");
+            continue;
+        }
+
+        const gl::assets::PadAnimation& animation = instance.pad[animation_index];
+        if (animation.frames_per_row <= 0 || animation.frame_width <= 0 ||
+            animation.frame_height <= 0 || animation.crops.empty()) {
+            gl::log(gl::LogLevel::warning,
+                    "level '" + screen.level_.name + "': skipping person '" + instance.name +
+                        "': invalid standing animation geometry");
+            continue;
+        }
+
+        const std::uint64_t expected_width =
+            static_cast<std::uint64_t>(animation.frame_width) *
+            static_cast<std::uint64_t>(animation.frames_per_row);
+        const std::uint64_t expected_height =
+            static_cast<std::uint64_t>(animation.frame_height) *
+            static_cast<std::uint64_t>(animation.crops.size());
+        if (static_cast<std::uint64_t>(instance.sprite.width) < expected_width ||
+            static_cast<std::uint64_t>(instance.sprite.height) < expected_height) {
+            gl::log(gl::LogLevel::warning,
+                    "level '" + screen.level_.name + "': skipping person '" + instance.name +
+                        "': sprite sheet " + std::to_string(instance.sprite.width) + "x" +
+                        std::to_string(instance.sprite.height) + " is smaller than " +
+                        std::to_string(expected_width) + "x" + std::to_string(expected_height));
+            continue;
+        }
+
+        auto texture = gl::render::Texture::from_image(renderer, instance.sprite);
+        if (!texture) {
+            gl::log(gl::LogLevel::warning,
+                    "level '" + screen.level_.name + "': skipping person '" + instance.name +
+                        "': " + texture.error().message);
+            continue;
+        }
+
+        std::optional<gl::render::Texture> shadow;
+        const std::uint64_t shadow_width =
+            static_cast<std::uint64_t>(animation.shadow_width) *
+            static_cast<std::uint64_t>(animation.frames_per_row);
+        const std::uint64_t shadow_height =
+            static_cast<std::uint64_t>(animation.shadow_height) *
+            static_cast<std::uint64_t>(animation.shadow_crops.size());
+        if (animation.shadow_width > 0 && animation.shadow_height > 0 &&
+            static_cast<std::uint64_t>(instance.shadow.width) >= shadow_width &&
+            static_cast<std::uint64_t>(instance.shadow.height) >= shadow_height) {
+            auto created_shadow = gl::render::Texture::from_image(renderer, instance.shadow);
+            if (created_shadow) {
+                shadow.emplace(std::move(created_shadow.value()));
+            } else {
+                gl::log(gl::LogLevel::warning,
+                        "level '" + screen.level_.name + "': person '" + instance.name +
+                            "' has no usable shadow: " + created_shadow.error().message);
+            }
+        }
+
+        screen.persons_.push_back(
+            Person{std::move(texture.value()), std::move(shadow), instance_index,
+                   animation_index});
+    }
+
+    if (!screen.persons_.empty()) {
+        gl::log(gl::LogLevel::info,
+                "level '" + screen.level_.name + "': uploaded " +
+                    std::to_string(screen.persons_.size()) + " person sprites");
+    }
+
     return screen;
 }
 
@@ -112,9 +212,60 @@ void LevelScreen::render(SDL_Renderer* renderer, const LevelScreenOptions& optio
                                  static_cast<float>(animation.y), screen_w_, screen_h_);
     }
 
+    if (options.draw_persons) {
+        for (const Person& person : persons_) draw_person(renderer, person, elapsed_ms);
+    }
+
     if (options.debug_overlay) {
         draw_debug_overlay(renderer, screen_w_, screen_h_, elapsed_ms);
     }
+}
+
+void LevelScreen::draw_person(SDL_Renderer* renderer, const Person& person,
+                              std::uint64_t elapsed_ms) const {
+    const gl::game::PersonInstance& instance = level_.persons[person.instance];
+    const gl::assets::PadAnimation& animation = instance.pad[person.animation];
+    const PersonPlacement placement =
+        place_person(animation, instance.direction, instance.tile_x, instance.tile_y);
+    if (placement.row >= animation.crops.size()) return;
+
+    const std::size_t column =
+        person_frame_index(elapsed_ms, animation.delay, animation.frames_per_row);
+
+    if (person.shadow) {
+        const PersonShadowPlacement shadow =
+            place_person_shadow(animation, instance.direction, instance.tile_x, instance.tile_y);
+        if (shadow.row < animation.shadow_crops.size()) {
+            const SDL_Rect source{
+                static_cast<int>(column) * animation.shadow_width,
+                static_cast<int>(shadow.row) * animation.shadow_height,
+                animation.shadow_width,
+                animation.shadow_height,
+            };
+            const SDL_FRect destination =
+                gl::render::to_screen(camera_, shadow.draw_x, shadow.draw_y,
+                                      static_cast<float>(animation.shadow_width),
+                                      static_cast<float>(animation.shadow_height));
+            if (rect_visible(destination, screen_w_, screen_h_)) {
+                draw_source(renderer, *person.shadow, source, destination);
+            }
+        }
+    }
+
+    const SDL_Rect source{
+        static_cast<int>(column) * animation.frame_width,
+        static_cast<int>(placement.row) * animation.frame_height,
+        animation.frame_width,
+        animation.frame_height,
+    };
+    const SDL_FRect destination =
+        gl::render::to_screen(camera_, placement.draw_x, placement.draw_y,
+                              static_cast<float>(animation.frame_width),
+                              static_cast<float>(animation.frame_height));
+    if (!rect_visible(destination, screen_w_, screen_h_)) return;
+
+    draw_source(renderer, person.texture, source, destination,
+                placement.mirror ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE);
 }
 
 void LevelScreen::draw_debug_overlay(SDL_Renderer* renderer, int screen_w, int screen_h,

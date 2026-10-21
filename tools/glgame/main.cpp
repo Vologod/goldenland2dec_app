@@ -75,6 +75,7 @@ struct Options {
     fs::path font;
     bool font_set = false;
     bool no_font = false;
+    bool no_persons = false;
     std::string dialog;
     bool has_dialog = false;
     std::vector<std::string> exec;
@@ -96,6 +97,7 @@ void print_usage() {
         "  --dialog <path.cs>   Open a dialog script screen directly (virtual path)\n"
         "  --font <ttf>         TrueType font for dialog text (default: system font)\n"
         "  --no-font            Force ASCII bitmap text (dev/debug, overrides --font)\n"
+        "  --no-persons         Skip NPC sprites on the level\n"
         "  --list-saves         Print save slots as tab-separated lines and exit\n"
         "  --screenshot <png>   Render the current state, save PNG and exit\n"
         "  --exec \"<command>\"   Run a console command after boot (repeatable)\n"
@@ -223,6 +225,8 @@ ParseStatus parse_args(int argc, char** argv, Options& options) {
             options.font_set = true;
         } else if (arg == "--no-font") {
             options.no_font = true;
+        } else if (arg == "--no-persons") {
+            options.no_persons = true;
         } else if (arg == "--list-saves") {
             options.list_saves = true;
         } else if (arg == "--screenshot") {
@@ -1383,6 +1387,7 @@ class Game {
         } else if (state_.state() == gl::core::AppState::level && level_) {
             gl::app::LevelScreenOptions options;
             options.debug_overlay = debug_overlay_;
+            options.draw_persons = !options_.no_persons;
             level_->render(window_.renderer(), options, animation_ms);
             if (client_.snapshot().paused) {
                 const std::string_view label = "PAUSED";

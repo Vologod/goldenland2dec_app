@@ -10,6 +10,7 @@
 #include <atomic>
 #include <chrono>
 #include <cstdint>
+#include <cstdio>
 #include <cstdlib>
 #include <filesystem>
 #include <memory>
@@ -104,6 +105,48 @@ int run_glview(const std::vector<std::string>& arguments) {
     return WIFEXITED(status) ? WEXITSTATUS(status) : status;
 #endif
 }
+
+#ifdef _WIN32
+std::string quote_argument(const std::string& arg) {
+    if (arg.find_first_of(" \t\"") == std::string::npos) return arg;
+    std::string quoted = "\"";
+    for (const char c : arg) {
+        if (c == '"') quoted += "\\\"";
+        else quoted += c;
+    }
+    quoted += '"';
+    return quoted;
+}
+#endif
+
+int run_glview_capture(const std::vector<std::string>& arguments, std::string& output) {
+    use_dummy_video();
+
+#ifdef _WIN32
+    std::string command = quote_argument(g_glview_exe.string());
+    for (const auto& arg : arguments) command += " " + quote_argument(arg);
+    command += " 2>&1";
+    FILE* pipe = _popen(command.c_str(), "rb");
+#else
+    std::string command = "\"" + g_glview_exe.string() + "\"";
+    for (const auto& arg : arguments) command += " \"" + arg + "\"";
+    command += " 2>&1";
+    FILE* pipe = popen(command.c_str(), "r");
+#endif
+    if (pipe == nullptr) return -1;
+
+    char buffer[4096];
+    std::size_t count = 0;
+    while ((count = std::fread(buffer, 1, sizeof(buffer), pipe)) > 0) {
+        output.append(buffer, count);
+    }
+#ifdef _WIN32
+    return _pclose(pipe);
+#else
+    const int status = pclose(pipe);
+    return WIFEXITED(status) ? WEXITSTATUS(status) : status;
+#endif
+}
 } // namespace
 
 int main(int argc, char** argv) {
@@ -190,6 +233,64 @@ TEST_CASE("glview draws statics and animations over the background") {
         for (std::size_t i = 0; i < pixel_count; ++i) {
             const unsigned char* a = normal_pixels.get() + i * 4;
             const unsigned char* b = background_pixels.get() + i * 4;
+            if (a[0] != b[0] || a[1] != b[1] || a[2] != b[2] || a[3] != b[3]) {
+                ++differing_pixels;
+            }
+        }
+    }
+
+    CAPTURE(differing_pixels);
+    CHECK(differing_pixels > 1000);
+}
+
+TEST_CASE("glview draws NPCs on l1_1 and --no-persons removes them") {
+    const char* game_dir = std::getenv("GL_GAME_DIR");
+    REQUIRE(game_dir != nullptr);
+
+    TempDir temp;
+    const fs::path normal_png = temp.path / "persons.png";
+    const fs::path no_persons_png = temp.path / "no_persons.png";
+
+    std::string log;
+    const int normal_code =
+        run_glview_capture(glview_arguments(game_dir, normal_png), log);
+    const int no_persons_code = run_glview(
+        glview_arguments(game_dir, no_persons_png, {"--no-persons"}));
+    CAPTURE(normal_code);
+    CAPTURE(no_persons_code);
+    CAPTURE(log);
+    REQUIRE(fs::exists(normal_png));
+    REQUIRE(fs::exists(no_persons_png));
+    CHECK(normal_code == 0);
+    CHECK(no_persons_code == 0);
+    CHECK(log.find("16 persons") != std::string::npos);
+
+    int normal_width = 0;
+    int normal_height = 0;
+    int normal_channels = 0;
+    const StbiImage normal_pixels =
+        load_png(normal_png, normal_width, normal_height, normal_channels);
+    REQUIRE(normal_pixels != nullptr);
+
+    int plain_width = 0;
+    int plain_height = 0;
+    int plain_channels = 0;
+    const StbiImage plain_pixels =
+        load_png(no_persons_png, plain_width, plain_height, plain_channels);
+    REQUIRE(plain_pixels != nullptr);
+
+    CHECK(normal_width == 1280);
+    CHECK(normal_height == 720);
+    CHECK(plain_width == 1280);
+    CHECK(plain_height == 720);
+
+    std::uint64_t differing_pixels = 0;
+    if (normal_width == plain_width && normal_height == plain_height) {
+        const std::size_t pixel_count =
+            static_cast<std::size_t>(normal_width) * static_cast<std::size_t>(normal_height);
+        for (std::size_t i = 0; i < pixel_count; ++i) {
+            const unsigned char* a = normal_pixels.get() + i * 4;
+            const unsigned char* b = plain_pixels.get() + i * 4;
             if (a[0] != b[0] || a[1] != b[1] || a[2] != b[2] || a[3] != b[3]) {
                 ++differing_pixels;
             }

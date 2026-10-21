@@ -9,6 +9,7 @@
 #include <gl/render/texture.hpp>
 
 #include <cstdint>
+#include <optional>
 #include <string_view>
 #include <vector>
 
@@ -17,6 +18,7 @@ namespace gl::app {
 struct LevelScreenOptions {
     bool background_only = false;
     bool debug_overlay = false;
+    bool draw_persons = true;
 };
 
 class LevelScreen {
@@ -50,10 +52,19 @@ private:
         std::uint32_t delay_ms = 0;
     };
 
+    struct Person {
+        gl::render::Texture texture;
+        std::optional<gl::render::Texture> shadow;
+        std::size_t instance = 0;
+        std::size_t animation = 0;
+    };
+
     LevelScreen(gl::game::Level level, gl::render::Texture background);
 
     float world_width() const;
     float world_height() const;
+    void draw_person(SDL_Renderer* renderer, const Person& person,
+                     std::uint64_t elapsed_ms) const;
     void draw_debug_overlay(SDL_Renderer* renderer, int screen_w, int screen_h,
                             std::uint64_t elapsed_ms) const;
 
@@ -61,6 +72,7 @@ private:
     gl::render::Texture background_;
     std::vector<Sprite> statics_;
     std::vector<Animation> animations_;
+    std::vector<Person> persons_;
     gl::render::Camera camera_;
     int screen_w_ = 0;
     int screen_h_ = 0;
