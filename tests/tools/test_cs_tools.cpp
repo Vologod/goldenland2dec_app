@@ -334,9 +334,10 @@ TEST_CASE("glscript reports a VM execution failure" *
         for (int i = 0; i < 4; ++i)
             script.push_back(static_cast<std::uint8_t>((value >> (8 * i)) & 0xFF));
     };
-    put_u32(24);
-    put_u32(3);
-    for (int i = 0; i < 4; ++i) put_u32(0);
+    put_u32(16);
+    put_u32(49);
+    put_u32(9);
+    put_u32(9);
     write_file(temp.path / "scripts" / "fail.cs", script);
     write_file(temp.path / "scripts" / "empty.scr", {});
 
