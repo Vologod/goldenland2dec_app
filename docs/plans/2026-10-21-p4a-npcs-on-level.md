@@ -131,7 +131,8 @@ Result<std::vector<PersonInstance>> load_persons(GameVfs&, const std::string& le
 
 ### Task 4: Render NPCs (`gl_app`)
 
-- `LevelScreen` loads persons (Task 3) and uploads `rt_stay` textures (and shadows if cheap).
+- `LevelScreen` loads persons (Task 3) and uploads standing textures (and shadows if cheap);
+  prefer `rt_stay`, fall back to `tb_stay` via `PersonInstance::stay_type` (real data: 6/16).
 - Draw after background/static/animations (P4a order; Y-sorting in P4b), at
   `(tile_x*12, tile_y*9)` with PAD anchor: screen position = world pos − anchor.
 - Frame: `(simulation_time_ms / delay) % frames_per_row`; row from direction via PAD

@@ -5,6 +5,7 @@
 #include "gl/assets/lvl.hpp"
 #include "gl/assets/sef.hpp"
 #include "gl/game/level.hpp"
+#include "gl/game/person.hpp"
 #include <algorithm>
 #include <cstddef>
 #include <new>
@@ -204,6 +205,11 @@ Result<Level> load_level(GameVfs &vfs, std::string_view level_name) {
                 level.animations.push_back(std::move(animation));
             }
         }
+
+        auto persons = load_persons(vfs, level.name);
+        if (!persons)
+            return contextual(persons.error(), "cannot load level persons", sef_file);
+        level.persons = std::move(persons.value());
 
         return level;
     } catch (const std::bad_alloc &) {

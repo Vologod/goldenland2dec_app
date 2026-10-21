@@ -2,6 +2,7 @@
 #include "gl/assets/image.hpp"
 #include "gl/assets/result.hpp"
 #include "gl/assets/vfs.hpp"
+#include "gl/game/person.hpp"
 #include <cstdint>
 #include <string>
 #include <string_view>
@@ -27,6 +28,7 @@ struct Level {
     gl::assets::Image background;
     std::vector<LevelStatic> statics;
     std::vector<LevelAnimation> animations;
+    std::vector<PersonInstance> persons;
 };
 
 gl::Result<Level> load_level(gl::assets::GameVfs &vfs, std::string_view level_name);

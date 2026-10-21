@@ -209,3 +209,29 @@ animations[..]  : {
 - Любой формат считается подтверждённым только после успешного разбора **всех**
   файлов соответствующего типа из целевых архивов.
 - Расхождения с вторичными источниками фиксируются здесь с примером файла и offset.
+
+## Person sprites in `persons.pak` (P4a Task 3, 2026-10-21)
+
+- Person script: `scripts/persons/<lower(name)>.scr`; PAD and sheets:
+  `persons/<lower(res_name)>/<lower(res_name)>.pad`,
+  `persons/<lower(res_name)>/animation/<stay>.csx`,
+  `persons/<lower(res_name)>/shadows/<stay>.csx`. All names in the archive are
+  ASCII-lowercase; backslashes in SEF/script strings must be normalized to `/`.
+- `l1_1`: 10 of 16 NPCs have `rt_stay`; 6 have no `rt_*` animation at all and
+  expose only `tb_stay`/`tb_fun`/`tb_go` (+ `cast`/`suffer`/`die`/`hits0`).
+  For these the standing sheet is `animation/tb_stay.csx` and the shadow is
+  `shadows/tb_stay.csx`. Loader prefers `rt_stay` and falls back to `tb_stay`;
+  the chosen type is kept in `PersonInstance::stay_type`.
+  Affected NPCs: `L1_2.P404_Sister_Of_Mercy2` (`L0.P1190_Sisters_Of_Mercy_Female03`),
+  `L0.P785_witch3` (`L0.P1198_Witch_DoctorSF01`), `L0.P693_citizen6`
+  (`L0.P1111_Poor_Citizens_Female04`), `L0.P692_citizen5`
+  (`L0.P1110_Poor_Citizens_Female02`), `L0.P640_children2`
+  (`L0.P1049_Children_Male01`), `L0.P733_artist1`
+  (`L0.P1153_Acrobats_Female02`).
+- Sheet size: `width = frameWidth * framesPerRow`,
+  `height = frameHeight * rows` where `rows = cropsTableSize / 8 / framesPerRow`
+  (5 for `rt_stay`, matching the 5 mirrored rows; shadow tables use 8 identity rows).
+  Example `L0.P1131_Inhabitans03`: `rt_stay` 12x41 x 5x89 = 492x445; shadow
+  12x49 x 8x29 = 588x232.
+- SEF direction strings map to indices 0..7 as
+  `UP, UP_LEFT, LEFT, DOWN_LEFT, DOWN, DOWN_RIGHT, RIGHT, UP_RIGHT`.

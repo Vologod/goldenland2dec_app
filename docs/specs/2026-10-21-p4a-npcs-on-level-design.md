@@ -44,6 +44,9 @@ P4a — первый шаг P4; движение и взаимодействие
   - `animation/rt_stay.csx`, `rt_fun`, `tb_stay`, `tb_fun`, `tb_go`, `rt_go`, `cast`,
     `suffer`, `die`, `ss_attack`, `hits0-3`;
   - `shadows/<same>.csx`.
+  - В реальных данных `l1_1` у 10 из 16 NPC есть `rt_stay`; у остальных 6 только
+    `tb_*` (без `rt_*`) — для них стоячая анимация и тень берутся из `tb_stay`
+    (`docs/research/formats.md`).
 - PAD: magic `"PAD "`, `u32 dataSize`, `u32 animationMasks`, затем анимации:
   `u32 type`, `i32 size`, `i32 delay`, `framesPerRow`, `frameWidth`, `frameHeight`,
   `anchorX`, `anchorY`, `float movementX/Y`, `u32 cropsTableSize`, crops (`i16` x/y/w/h),
