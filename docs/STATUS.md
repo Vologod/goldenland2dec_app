@@ -13,14 +13,14 @@ P2c — save/load каркас: реализация и автоматизиро
 открыт manual UI gate (Continue → слоты, Esc). P3a — CS VM: Tasks 1–5 завершены
 2026-10-21, автоматизированная приёмка пройдена, P3a принята (manual UI gate для P3a
 нет). P3c — dialogs + SDB + TTF: Tasks 1–2 завершены; Task 3 (`glgame` dialog screen,
-`--dialog`/`--font`, `glscript --sdb`) реализован и проверен 2026-10-21, fix round 1
-применён; следующий — Task 4 (acceptance + docs). P3b (AgeScript) / P1b (Android/touch) — после P3c;
+`--dialog`/`--font`, `glscript --sdb`) реализован и проверен 2026-10-21, fix rounds 1–2
+применены; следующий — Task 4 (acceptance + docs). P3b (AgeScript) / P1b (Android/touch) — после P3c;
 P2 backfill отложен.
 
 ## Текущая задача
 
 **P3c — Task 3 (`glgame` dialog screen + `--dialog`/`--font` + `glscript --sdb`)
-завершён 2026-10-21; fix round 1 применён.** `glgame` получил
+завершён 2026-10-21; fix rounds 1–2 применены.** `glgame` получил
 `--dialog <virtual/path.cs>` (globals, SDB, CS → `ScriptVm` + `DialogSession`, экран
 сразу), `--font <ttf>` и поиск системного шрифта с ASCII-fallback. Меню: пункт
 `Test Dialog` только при наличии `scripts/dialogs/demon.d1.age.cs`; экран — тёмная
@@ -34,10 +34,15 @@ Enter/клик), `Esc` → меню или выход для `--dialog`, соо�
 `--font` → системный → ASCII; сообщение об ошибке `choose()` видно и при `waiting()`;
 подсказка без ответов — `Esc to close`; текст/ответы ограничены по вертикали (скролл —
 в backlog); тесты проверяют реальную загрузку шрифта, fallback, отличие кадра от меню,
-содержимое нижней панели, `d_console 1` и возвращают 77 без шрифта. `gl_assets`/
-`gl_script` остались SDL-free. Проверка: `cmake --build build` — успех;
-`gl_cs_tools_tests` — 9/9 (67 assertions), `glgame_screenshot_tests` — 11/11
-(182 assertions); полный `ctest` с `GL_GAME_DIR` — **13/13 passed**, 629.23 s, exit 0;
+содержимое нижней панели, `d_console 1` и возвращают 77 без шрифта. Fix round 2:
+`--no-font` (dev/debug) принудительно включает ASCII; цепочка шрифтов закреплена тестами
+(другой системный TTF отличается от дефолтного, `--no-font` отличается от TTF,
+невалидный `--font` побайтово равен дефолтному); прямоугольник подсветки обрезается по
+`content_bottom`; `dialog_message_` вынесен в отдельную нижнюю полосу и не перекрывает
+последний ответ; проба доступности шрифта кэшируется. `gl_assets`/`gl_script` остались
+SDL-free. Проверка: `cmake --build build` — успех; `gl_cs_tools_tests` — 9/9
+(67 assertions), `glgame_screenshot_tests` — 13/13 (236 assertions); полный `ctest`
+с `GL_GAME_DIR` — **13/13 passed**, 607.05 s, exit 0;
 `glscript --sdb` на `demon.d1.age.cs` — exit 0, `2684\tЧего уставился?` и др.;
 dialog PNG — 1280×720, 511 цветов (выборка каждые 2 px), SHA-256
 `0CA504587996AE0A7345C0754C940DDB6730AC732FD562CD5C56622A8A82A56C`.
@@ -476,6 +481,11 @@ P0 закрыт 2026-10-19; далее выполнялись задачи P1 (�
   (скролл — backlog); тесты `--font`/fallback/отличие от меню/нижняя панель/`d_console`/
   реальная загрузка шрифта, 77 без шрифта; `gl_cs_tools_tests` 9/9 (67 assertions),
   `glgame_screenshot_tests` 11/11 (182), полный `ctest` 13/13 (629.23 s).
+- 2026-10-21: P3c Task 3 fix round 2 — `--no-font` (ASCII dev/debug); цепочка шрифтов
+  закреплена тестами A/B/C (другой системный TTF, ASCII, невалидный `--font` = дефолт);
+  подсветка обрезается по `content_bottom`; `dialog_message_` в отдельной полосе ниже
+  ответов; проба шрифта кэширована; `glgame_screenshot_tests` 13/13 (236), полный
+  `ctest` 13/13 (607.05 s).
 
 ## Следующие задачи
 

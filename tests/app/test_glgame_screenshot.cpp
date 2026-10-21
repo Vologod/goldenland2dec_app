@@ -36,9 +36,7 @@ const fs::path g_glgame_exe = GLGAME_EXE;
 
 std::optional<fs::path> system_font_path() { return gl::render::find_system_font(); }
 
-bool font_available() {
-    const std::optional<fs::path> path = system_font_path();
-    if (!path) return false;
+bool can_load_font(const fs::path& path) {
     SDL_Surface* surface =
         SDL_CreateRGBSurfaceWithFormat(0, 16, 16, 32, SDL_PIXELFORMAT_ARGB8888);
     if (surface == nullptr) return false;
@@ -46,12 +44,43 @@ bool font_available() {
     bool loaded = false;
     if (renderer != nullptr) {
         const gl::Result<gl::render::Font> font =
-            gl::render::Font::load_from_file(renderer, *path, 20.0f);
+            gl::render::Font::load_from_file(renderer, path, 20.0f);
         loaded = font.has_value();
         SDL_DestroyRenderer(renderer);
     }
     SDL_FreeSurface(surface);
     return loaded;
+}
+
+bool font_available() {
+    static const bool available = [] {
+        const std::optional<fs::path> path = system_font_path();
+        return path.has_value() && can_load_font(*path);
+    }();
+    return available;
+}
+
+std::optional<fs::path> alternate_system_font() {
+    static const std::optional<fs::path> alternate = []() -> std::optional<fs::path> {
+        const std::optional<fs::path> primary = system_font_path();
+        if (!primary) return std::nullopt;
+        std::vector<fs::path> directories;
+        directories.emplace_back("C:\\Windows\\Fonts");
+        if (const char* windir = std::getenv("WINDIR"); windir != nullptr) {
+            directories.emplace_back(fs::path(windir) / "Fonts");
+        }
+        static const char* const names[] = {"consola.ttf", "arial.ttf", "segoeui.ttf",
+                                            "tahoma.ttf", "verdana.ttf"};
+        for (const fs::path& directory : directories) {
+            for (const char* name : names) {
+                const fs::path candidate = directory / name;
+                if (candidate.filename() == primary->filename()) continue;
+                if (can_load_font(candidate)) return candidate;
+            }
+        }
+        return std::nullopt;
+    }();
+    return alternate;
 }
 
 fs::path unique_temp_dir() {
@@ -265,6 +294,16 @@ std::vector<unsigned char> read_png(const fs::path& png, int& width, int& height
                                                          static_cast<std::size_t>(height) * 4);
 }
 
+std::size_t count_differences(const std::vector<unsigned char>& first,
+                              const std::vector<unsigned char>& second) {
+    REQUIRE(first.size() == second.size());
+    std::size_t different = 0;
+    for (std::size_t index = 0; index < first.size(); ++index) {
+        if (first[index] != second[index]) ++different;
+    }
+    return different;
+}
+
 void check_dialog_content(const fs::path& dialog_png, const fs::path& menu_png) {
     int dialog_width = 0;
     int dialog_height = 0;
@@ -372,8 +411,6 @@ TEST_CASE("glgame renders a dialog into a 1280x720 PNG" *
           doctest::skip(!font_available())) {
     const char* game_dir = std::getenv("GL_GAME_DIR");
     REQUIRE(game_dir != nullptr);
-    const std::optional<fs::path> font = system_font_path();
-    REQUIRE(font.has_value());
 
     TempDir temp;
     const fs::path config = write_test_config(temp.path);
@@ -385,8 +422,7 @@ TEST_CASE("glgame renders a dialog into a 1280x720 PNG" *
 
     const fs::path png = temp.path / "dialog.png";
     const int code = run_glgame(screenshot_arguments(
-        game_dir, config, png,
-        {"--dialog", "scripts/dialogs/demon.d1.age.cs", "--font", font->string()}));
+        game_dir, config, png, {"--dialog", "scripts/dialogs/demon.d1.age.cs"}));
     CAPTURE(code);
     REQUIRE(fs::exists(png));
     CHECK(code == 0);
@@ -394,22 +430,122 @@ TEST_CASE("glgame renders a dialog into a 1280x720 PNG" *
     check_dialog_content(png, menu_png);
 }
 
-TEST_CASE("glgame falls back when --font cannot be loaded" *
+TEST_CASE("glgame --font changes the rendered dialog" *
+          doctest::skip(!font_available() || !alternate_system_font().has_value())) {
+    const char* game_dir = std::getenv("GL_GAME_DIR");
+    REQUIRE(game_dir != nullptr);
+    const std::optional<fs::path> alternate = alternate_system_font();
+    REQUIRE(alternate.has_value());
+
+    TempDir temp;
+    const fs::path config = write_test_config(temp.path);
+    const fs::path default_png = temp.path / "dialog_default.png";
+    const fs::path alternate_png = temp.path / "dialog_alternate.png";
+
+    const int default_code = run_glgame(screenshot_arguments(
+        game_dir, config, default_png, {"--dialog", "scripts/dialogs/demon.d1.age.cs"}));
+    const int alternate_code = run_glgame(screenshot_arguments(
+        game_dir, config, alternate_png,
+        {"--dialog", "scripts/dialogs/demon.d1.age.cs", "--font", alternate->string()}));
+    CAPTURE(default_code);
+    CAPTURE(alternate_code);
+    REQUIRE(fs::exists(default_png));
+    REQUIRE(fs::exists(alternate_png));
+    CHECK(default_code == 0);
+    CHECK(alternate_code == 0);
+    check_png(default_png, 1280, 720);
+    check_png(alternate_png, 1280, 720);
+
+    int default_width = 0;
+    int default_height = 0;
+    int alternate_width = 0;
+    int alternate_height = 0;
+    const std::vector<unsigned char> default_pixels =
+        read_png(default_png, default_width, default_height);
+    const std::vector<unsigned char> alternate_pixels =
+        read_png(alternate_png, alternate_width, alternate_height);
+    REQUIRE(default_width == alternate_width);
+    REQUIRE(default_height == alternate_height);
+    const std::size_t different = count_differences(default_pixels, alternate_pixels);
+    CAPTURE(different);
+    CHECK(different > 1000);
+}
+
+TEST_CASE("glgame --no-font forces ASCII bitmap text" *
           doctest::skip(!font_available())) {
     const char* game_dir = std::getenv("GL_GAME_DIR");
     REQUIRE(game_dir != nullptr);
 
     TempDir temp;
     const fs::path config = write_test_config(temp.path);
-    const fs::path png = temp.path / "dialog_fallback.png";
+    const fs::path ttf_png = temp.path / "dialog_ttf.png";
+    const fs::path ascii_png = temp.path / "dialog_ascii.png";
+
+    const int ttf_code = run_glgame(screenshot_arguments(
+        game_dir, config, ttf_png, {"--dialog", "scripts/dialogs/demon.d1.age.cs"}));
+    const int ascii_code = run_glgame(screenshot_arguments(
+        game_dir, config, ascii_png,
+        {"--dialog", "scripts/dialogs/demon.d1.age.cs", "--no-font"}));
+    CAPTURE(ttf_code);
+    CAPTURE(ascii_code);
+    REQUIRE(fs::exists(ttf_png));
+    REQUIRE(fs::exists(ascii_png));
+    CHECK(ttf_code == 0);
+    CHECK(ascii_code == 0);
+    check_png(ttf_png, 1280, 720);
+    check_png(ascii_png, 1280, 720);
+
+    int ttf_width = 0;
+    int ttf_height = 0;
+    int ascii_width = 0;
+    int ascii_height = 0;
+    const std::vector<unsigned char> ttf_pixels = read_png(ttf_png, ttf_width, ttf_height);
+    const std::vector<unsigned char> ascii_pixels = read_png(ascii_png, ascii_width, ascii_height);
+    REQUIRE(ttf_width == ascii_width);
+    REQUIRE(ttf_height == ascii_height);
+    const std::size_t different = count_differences(ttf_pixels, ascii_pixels);
+    CAPTURE(different);
+    CHECK(different > 1000);
+}
+
+TEST_CASE("glgame invalid --font falls back to the system font" *
+          doctest::skip(!font_available())) {
+    const char* game_dir = std::getenv("GL_GAME_DIR");
+    REQUIRE(game_dir != nullptr);
+
+    TempDir temp;
+    const fs::path config = write_test_config(temp.path);
+    const fs::path default_png = temp.path / "dialog_default.png";
+    const fs::path fallback_png = temp.path / "dialog_fallback.png";
     const fs::path missing_font = temp.path / "missing-font.ttf";
-    const int code = run_glgame(screenshot_arguments(
-        game_dir, config, png,
+
+    const int default_code = run_glgame(screenshot_arguments(
+        game_dir, config, default_png, {"--dialog", "scripts/dialogs/demon.d1.age.cs"}));
+    const int fallback_code = run_glgame(screenshot_arguments(
+        game_dir, config, fallback_png,
         {"--dialog", "scripts/dialogs/demon.d1.age.cs", "--font", missing_font.string()}));
-    CAPTURE(code);
-    REQUIRE(fs::exists(png));
-    CHECK(code == 0);
-    check_png(png, 1280, 720);
+    CAPTURE(default_code);
+    CAPTURE(fallback_code);
+    REQUIRE(fs::exists(default_png));
+    REQUIRE(fs::exists(fallback_png));
+    CHECK(default_code == 0);
+    CHECK(fallback_code == 0);
+    check_png(default_png, 1280, 720);
+    check_png(fallback_png, 1280, 720);
+
+    int default_width = 0;
+    int default_height = 0;
+    int fallback_width = 0;
+    int fallback_height = 0;
+    const std::vector<unsigned char> default_pixels =
+        read_png(default_png, default_width, default_height);
+    const std::vector<unsigned char> fallback_pixels =
+        read_png(fallback_png, fallback_width, fallback_height);
+    REQUIRE(default_width == fallback_width);
+    REQUIRE(default_height == fallback_height);
+    const std::size_t different = count_differences(default_pixels, fallback_pixels);
+    CAPTURE(different);
+    CHECK(different == 0);
 }
 
 TEST_CASE("glgame --dialog forces the console off" *

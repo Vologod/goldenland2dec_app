@@ -74,6 +74,7 @@ struct Options {
     fs::path screenshot;
     fs::path font;
     bool font_set = false;
+    bool no_font = false;
     std::string dialog;
     bool has_dialog = false;
     std::vector<std::string> exec;
@@ -94,6 +95,7 @@ void print_usage() {
         "  --menu               Force starting in the main menu\n"
         "  --dialog <path.cs>   Open a dialog script screen directly (virtual path)\n"
         "  --font <ttf>         TrueType font for dialog text (default: system font)\n"
+        "  --no-font            Force ASCII bitmap text (dev/debug, overrides --font)\n"
         "  --list-saves         Print save slots as tab-separated lines and exit\n"
         "  --screenshot <png>   Render the current state, save PNG and exit\n"
         "  --exec \"<command>\"   Run a console command after boot (repeatable)\n"
@@ -219,6 +221,8 @@ ParseStatus parse_args(int argc, char** argv, Options& options) {
             }
             options.font = path_from_utf8(value);
             options.font_set = true;
+        } else if (arg == "--no-font") {
+            options.no_font = true;
         } else if (arg == "--list-saves") {
             options.list_saves = true;
         } else if (arg == "--screenshot") {
@@ -483,6 +487,11 @@ class Game {
 
   private:
     void load_font() {
+        if (options_.no_font) {
+            gl::log(gl::LogLevel::info, "font: --no-font forced ASCII bitmap text");
+            return;
+        }
+
         std::vector<fs::path> candidates;
         if (options_.font_set) candidates.push_back(options_.font);
         if (const std::optional<fs::path> system = gl::render::find_system_font()) {
@@ -620,8 +629,17 @@ class Game {
         return std::max(static_cast<float>(viewport_width_) - 2.0f * kDialogMargin, 40.0f);
     }
 
+    bool dialog_has_bottom_message() const {
+        return dialog_waiting() && !dialog_message_.empty();
+    }
+
     float dialog_content_bottom() const {
-        return static_cast<float>(viewport_height_) - 40.0f;
+        return static_cast<float>(viewport_height_) -
+               (dialog_has_bottom_message() ? 68.0f : 40.0f);
+    }
+
+    float dialog_message_y() const {
+        return static_cast<float>(viewport_height_) - 56.0f;
     }
 
     std::vector<std::string> dialog_npc_lines() const {
@@ -667,8 +685,11 @@ class Game {
     }
 
     SDL_FRect dialog_answer_rect(int index) const {
-        return SDL_FRect{kDialogMargin, dialog_answer_top(index), dialog_text_width(),
-                         std::max(dialog_answer_height(index) - 2.0f, 1.0f)};
+        const float top = dialog_answer_top(index);
+        const float bottom =
+            std::min(top + dialog_answer_height(index) - 2.0f, dialog_content_bottom());
+        return SDL_FRect{kDialogMargin, top, dialog_text_width(),
+                         std::max(bottom - top, 0.0f)};
     }
 
     void dialog_move(int delta) {
@@ -1446,8 +1467,8 @@ class Game {
         }
 
         const float hint_y = static_cast<float>(viewport_height_) - 28.0f;
-        if (dialog_waiting() && !dialog_message_.empty()) {
-            draw_ui_text(dialog_message_, kDialogMargin, hint_y - line_height - 6.0f,
+        if (dialog_has_bottom_message()) {
+            draw_ui_text(dialog_message_, kDialogMargin, dialog_message_y(),
                          gl::render::Color{255, 170, 120, 255});
         }
         const bool has_answers =
