@@ -10,13 +10,28 @@ P2a — оболочка игры и консоль: реализация, ав�
 gate завершены (2026-10-20); P2a принята. P2b — детерминированный тик: реализация,
 автоматизированная приёмка и manual interactive gate завершены (2026-10-20); P2b принята.
 P2c — save/load каркас: реализация и автоматизированная приёмка завершены (2026-10-20);
-открыт manual UI gate (Continue → слоты, Esc). P3a — CS VM: Task 1 (парсер `.cs`),
-Task 2 (VM + globals), Task 3 (dialog flow + native registry) и Task 4 (инструменты
-`glpak disasm-cs` / `glscript`) завершены 2026-10-21.
-Следующие подпроекты — продолжение P3a (Task 5 — acceptance + docs) или P1b
+открыт manual UI gate (Continue → слоты, Esc). P3a — CS VM: Tasks 1–5 завершены
+2026-10-21, автоматизированная приёмка пройдена, P3a принята (manual UI gate для P3a
+нет). Следующие подпроекты — P3b (AgeScript) / P3c (dialogs + SDB) или P1b
 (Android/touch); P2 backfill отложен.
 
 ## Текущая задача
+
+**P3a — Task 5 (acceptance + docs) завершён 2026-10-21. P3a принята.**
+`cmake --build build` — `ninja: no work to do`, exit 0. Полный
+`ctest --test-dir build --output-on-failure` с `GL_GAME_DIR` — **11/11 passed**,
+573.09 s, exit 0 (real-data 518.81 s, `gl_cs_tools` 8.30 s, glview 26.26 s,
+glgame 17.39 s); в логе real-data: `parsed=555 failures=0 nodes=338977`.
+`glpak disasm-cs ... --file scripts/dialogs/demon.d1.age.cs --out %TEMP%\demon_disasm.txt`
+— exit 0, **5353 байта / 240 строк**, дамп начинается с `0: jmp | 1 1`,
+`1: == | 2 3 193 4`, `2: str_var | LastPhrase`, `3: num | 0`.
+`glscript ... --file scripts/dialogs/demon.d1.age.cs --run` — exit 0,
+`status: wait_user`, `steps: 43`, `dialogs: 2684 2686 2696`, `answers: 2`
+(два ожидаемых warning `globals: line 918/1262: missing value`).
+Тот же запуск с `--answer 0` — exit 0, второй останов:
+`status: wait_user`, `steps: 84`, `dialogs: 2719 1529 2721`, `answers: 2`.
+Дефектов приёмка не выявила. P3a automated acceptance passed; следующий подпроект —
+P3b (AgeScript) / P3c (dialogs + SDB), затем P1b.
 
 **P3a — Task 4 (tools `glpak disasm-cs`, `glscript`) завершён 2026-10-21.**
 `glpak disasm-cs <game_dir> --file <path> [--out <txt>]` читает `.cs` через `GameVfs`,
@@ -39,7 +54,7 @@ exit 1; ошибка исполнения VM (`ScriptVm::failed()`, включа
 `--run --answer 0` (exit 0, `steps` растут), reject `--answer` без `--run`,
 out-of-range answer → exit 1, missing script → exit 2, synthetic VM failure → exit 3.
 `gl_script_tests` — 33 cases / 247 assertions; полный `ctest` с `GL_GAME_DIR` — **11/11
-passed**, 571.23 s. Следующая задача — P3a Task 5 (acceptance + docs).
+passed**, 571.23 s. Task 5 повторно прогнал полный набор: 11/11, 573.09 s, exit 0.
 
 **P3a — Task 3 (dialog flow + native registry) завершён 2026-10-21.**
 `ScriptVm` получил `dialogs_data()` (id `D_Say` + id всех `D_Answer`, действительно только
@@ -388,15 +403,21 @@ P0 закрыт 2026-10-19; далее выполнялись задачи P1 (�
   Task 2 minors (правый операнд после ошибки левого, top-level `func` без `d`-перехода,
   unknown-opcode = `end` в spec/plan); D-024; `gl_script_tests` 31 cases / 197 assertions,
   `ctest` 10/10 (561.69 s).
+- 2026-10-21: P3a Task 4 — `glpak disasm-cs` (stdout/`--out`, one line per node) и
+  `glscript` (`--run`, repeatable zero-based `--answer`, status/steps/dialogs/answers,
+  exit 0/1/2/3); `gl_cs_tools_tests` 8 cases / 56 assertions; `ctest` 11/11 (571.23 s).
+- 2026-10-21: P3a Task 5 — automated acceptance + docs: build exit 0; `ctest` **11/11**
+  (573.09 s, exit 0); real-data `parsed=555 failures=0 nodes=338977`; disasm
+  `demon.d1.age.cs` 5353 B / 240 lines; `glscript --run` → `wait_user`, 43 steps,
+  dialogs `2684 2686 2696`, 2 answers; `--answer 0` → second `wait_user`, 84 steps,
+  dialogs `2719 1529 2721`, 2 answers. P3a принята.
 
 ## Следующие задачи
 
-1. P3a: CS VM core — Tasks 1–4 завершены; следующая — Task 5 (acceptance + docs)
-   (`docs/specs/2026-10-20-p3a-cs-vm-design.md`,
-   `docs/plans/2026-10-20-p3a-cs-vm.md`).
-2. P3b/P3c: AgeScript-компилятор, диалоги/SDB, полный набор native-функций.
-3. P1b: Android/touch — отложенный follow-up P1.
-4. P2 backfill: интерполяция/сеть/игровые системы — отложены до появления сущностей.
+1. P3b/P3c: AgeScript-компилятор (`.scr`), диалоги/SDB, полный набор native-функций
+   (`docs/specs/2026-10-20-p3a-cs-vm-design.md` — вход; P3a принята).
+2. P1b: Android/touch — отложенный follow-up P1.
+3. P2 backfill: интерполяция/сеть/игровые системы — отложены до появления сущностей.
 
 ## Открытые вопросы
 

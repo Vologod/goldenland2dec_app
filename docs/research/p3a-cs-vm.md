@@ -107,6 +107,24 @@
   (240 узлов, 784 глобальные переменные) → `wait_user` за 43 шага; `LastPhrase`
   имеет тип `uint32`.
 
+## Инструменты (Tasks 4–5)
+
+- `glpak disasm-cs <game_dir> --file <path.cs> [--out <txt>]` читает файл через
+  `GameVfs`, парсит `parse_cs` и печатает один узел на строку:
+  `index: opcode | поля | value/text | funcName(args)`. Без `--out` — stdout, с `--out` —
+  UTF-8 файл; строки экранируются (`\"`, `\\n`, `\\xHH`). Коды выхода: 0/1/2/3.
+- `glscript --game-dir <dir> [--globals <path>] --file <path> [--run] [--answer N]`
+  читает CS и globals через VFS (по умолчанию `scripts/dialogs_special/zlato_vars.scr`),
+  исполняет до `wait_user`/`end`/`infinity` и печатает `status`, `steps`, id из
+  `dialogs_data()` и `answers_count()`. `--answer N` повторяемый, нумерация ответов
+  с нуля; после успешного ответа исполнение продолжается до следующего останова.
+  `--answer` без `--run` или ответ вне диапазона — exit 1; ошибка VM (`failed()`) —
+  exit 3.
+- Приёмка 2026-10-21: `ctest` с `GL_GAME_DIR` — 11/11 passed, 573.09 s; real-data
+  `parsed=555 failures=0 nodes=338977`. `demon.d1.age.cs` → disasm 5353 B / 240 lines;
+  `glscript --run` → `wait_user`, 43 steps, dialogs `2684 2686 2696`, 2 answers;
+  `--answer 0` → следующий `wait_user`, 84 steps, dialogs `2719 1529 2721`, 2 answers.
+
 ## Ограничения P3a
 
 - `^^` (1), битовые (3..5, 12/13, 19/20) не реализованы — error/`end` + `failed()`.
