@@ -104,6 +104,11 @@ gl::Result<std::vector<ScriptGlobal>> parse_globals(std::span<const std::uint8_t
         const std::string_view text(raw == nullptr ? "" : raw, data.size());
 
         std::size_t position = 0;
+        if (text.size() >= 3 && static_cast<std::uint8_t>(text[0]) == 0xEF &&
+            static_cast<std::uint8_t>(text[1]) == 0xBB &&
+            static_cast<std::uint8_t>(text[2]) == 0xBF) {
+            position = 3;
+        }
         std::size_t line_number = 0;
         while (position <= text.size()) {
             ++line_number;
@@ -153,6 +158,10 @@ gl::Result<std::vector<ScriptGlobal>> parse_globals(std::span<const std::uint8_t
                                 warn_line(line_number, "invalid float value");
                             }
                         } else if (type == "string") {
+                            if (!rest.empty() && rest.front() == '"' &&
+                                rest.find('"', 1) == std::string_view::npos) {
+                                warn_line(line_number, "unterminated quoted string");
+                            }
                             global.value = decode(unquote(rest));
                             globals.push_back(std::move(global));
                         } else {

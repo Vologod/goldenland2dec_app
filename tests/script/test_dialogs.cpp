@@ -91,6 +91,27 @@ TEST_CASE("dialogs: D_Say and D_Answer reach wait_user and expose ids") {
     CHECK(h.vm.dialogs_data() == std::vector<std::uint32_t>{100, 1, 2});
 }
 
+TEST_CASE("dialogs: only the first D_Say is exposed on a page") {
+    std::vector<CsNode> nodes(9);
+    nodes[0] = make_func(kD_Say, {1});
+    nodes[1] = make_num(100.0);
+    nodes[2] = make_func(kD_Say, {3});
+    nodes[3] = make_num(200.0);
+    nodes[4] = make_func(kD_Answer, {5});
+    nodes[5] = make_num(1.0);
+    nodes[6] = make_func(kD_Answer, {7});
+    nodes[7] = make_num(2.0);
+    nodes[8] = make_jmp(-1, -1);
+
+    DialogHarness h(std::move(nodes));
+    while (h.vm.step()) {
+    }
+
+    REQUIRE(h.vm.status() == VmStatus::wait_user);
+    CHECK(h.vm.answers_count() == 2);
+    CHECK(h.vm.dialogs_data() == std::vector<std::uint32_t>{100, 1, 2});
+}
+
 TEST_CASE("dialogs: user_input sets LastPhrase/LastAnswer and restarts") {
     DialogHarness h(synthetic_dialog());
     while (h.vm.step()) {
