@@ -45,10 +45,14 @@ P4a — первый шаг P4; движение и взаимодействие
   - `shadows/<same>.csx`.
 - PAD: magic `"PAD "`, `u32 dataSize`, `u32 animationMasks`, затем анимации:
   `u32 type`, `i32 size`, `i32 delay`, `framesPerRow`, `frameWidth`, `frameHeight`,
-  `anchorX`, `anchorY`, `float movementX/Y`, `u32 cropsTableSize`, crops (u16 x/y/w/h),
-  shadowFrame (4×i32), shadowCrops. Размер строки: `framesPerRow`; число строк =
-  `tableSize / 8 / framesPerRow`. Для `_go` — 16 направлений, иначе 8; зеркалирование
-  направлений — как в `PersonAnimation` (см. `PAD_Data`).
+  `anchorX`, `anchorY`, `float movementX/Y`, `u32 cropsTableSize`, crops (`i16` x/y/w/h),
+  shadowFrame (`i32` width/height/anchorX/anchorY), `u32 shadowTableSize`, shadowCrops.
+  `dataSize` — абсолютный offset конца области анимаций (не длина payload): сразу после
+  него может идти trailer-таблица `u32 count` + `count*(i32,i32)`. Размер строки:
+  `framesPerRow`; число строк = `tableSize / 8 / framesPerRow` (таблица обязана делиться
+  без остатка). Для `_go` — 16 направлений, иначе 8; зеркалирование направлений — как в
+  `PersonAnimation` (см. `PAD_Data`), тени не зеркалируются. `delay` сохраняется как есть;
+  при `delay <= 0` P4a Task 4 использует 1/skip.
 - Позиция на экране: `x * 12`, `y * 9` (тайлы 12×9), плюс anchor из PAD.
 - Направление SEF (`DOWN_RIGHT` и т.п.) → индекс 0..7 (`up, up_left, left, down_left,
   down, down_right, right, up_right`).

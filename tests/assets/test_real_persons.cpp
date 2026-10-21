@@ -61,7 +61,7 @@ TEST_CASE("real data: every .pad entry in persons.pak parses" *
 
     std::cout << "real data .pad: entries=" << pad_entries << " parsed=" << parsed
               << " failures=" << failures << " animations=" << animations << '\n';
-    CHECK(pad_entries > 0);
+    CHECK(pad_entries == 276);
     CHECK(failures == 0);
     CHECK(parsed == pad_entries);
     CHECK(animations > 0);

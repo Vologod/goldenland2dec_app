@@ -123,9 +123,62 @@ weight_x10   : uint32
   в нижний регистр (`L1_1` → `l1_1`), т.к. VFS регистронезависим. Комментарии `//`
   до конца строки, CRLF и табы допускаются; блок-комментариев в файле нет.
 
+## PAD (анимационные листы персонажей)
+
+Подтверждено на всех 276 `.pad` из `persons.pak` (`I:\Games\Златогорье-2`, 2026-10-21):
+2450 анимаций, 0 ошибок. Формат (LE), вторичный источник — `DarkContact/GoldenLandEditor`
+`src/parsers/PAD_Parser.cpp`:
+
+```
+magic           : 4 байта = "PAD "
+dataSize        : uint32  (абсолютный offset конца области анимаций)
+animationMasks  : uint32  (битовая маска ожидаемых типов)
+animations[..]  : {
+  type              : uint32 (один бит из animationMasks)
+  size              : int32  (включает само поле size; конец = offset(size) + size)
+  delay             : int32
+  framesPerRow      : int32
+  frameWidth        : int32
+  frameHeight       : int32
+  anchorX           : int32
+  anchorY           : int32
+  movementX         : float
+  movementY         : float
+  cropsTableSize    : uint32 (байты; % (8*framesPerRow) == 0)
+  crops             : rows × framesPerRow × (int16 x,y,w,h)
+  shadowFrame       : int32 width, height, anchorX, anchorY
+  shadowTableSize   : uint32 (аналогично cropsTableSize)
+  shadowCrops       : shadowRows × framesPerRow × (int16 x,y,w,h)
+}
+```
+
+- `rows = cropsTableSize / 8 / framesPerRow`, `shadowRows` — аналогично.
+  У person-таблиц реально 5 уникальных строк (8 направлений, 5..7 — mirror) или
+  9 строк (16 направлений `_go`, 9..15 — mirror); у shadow-таблиц 8/16 строк
+  (identity). Индекс строки всегда проверяется на границу `crops.size()`.
+- `type` — ровно один бит: `0x1 rt_stay`, `0x2 rt_fun`, `0x4 tb_stay`, `0x8 tb_fun`,
+  `0x10 tb_go`, `0x20 rt_go`, `0x40 cast`, `0x80 suffer`, `0x100 die`,
+  `0x400 ss_attack`, `0x10000..0x80000 hits0..hits3`. Все 14 битов вместе дают
+  `0xF05FF`; иные биты в `animationMasks` — ошибка формата.
+- `dataSize` не является длиной payload от offset 12: для файлов из `persons.pak`
+  он указывает абсолютный конец области анимаций. После него в файле наблюдаются
+  trailer-таблицы длиной 12/76/116 байт: `u32 count` + `count` пар `(i32,i32)`.
+  Байты после `dataSize` парсер не читает.
+- Один файл, `persons/l0.p1081_interwizards07/l0.p1081_interwizards07.pad`, содержит
+  внутри `dataSize` после всех masked-анимаций хвост: trailer-таблицу (`count=9`) и два
+  полных повторных animation record (`ss_attack`, `hits1`, побайтно совпадают с первыми).
+  Контракт парсера: после исчерпания всех битов `animationMasks` допускается только
+  `u32 tailCount` + `tailCount` пар `(i32,i32)` (tailCount ≤ 4096) и затем полные
+  повторные animation records; любой другой хвост — `format`-ошибка. Возвращаются
+  только анимации из маски.
+- `delay` не валидируется и сохраняется как есть (включая 0/отрицательные);
+  потребитель обязан защитить деление при вычислении кадра.
+- Направления: person 8 — `{0,1,2,3,4,3,2,1}` (5..7 mirror), person 16 для `_go` —
+  `{0..8,7..1}` (9..15 mirror); shadow-таблицы — identity, тени не зеркалируются.
+
 ## Прочие форматы (следующие подпроекты)
 
-- `LVL`, `PAD`, `MDF`, `SEF`, `LAO` — уровни/маски/метаданные (`DarkContact/GoldenLandEditor`).
+- `LVL`, `MDF`, `SEF`, `LAO` — уровни/маски/метаданные (`DarkContact/GoldenLandEditor`).
 - `ANI` — анимации персонажей.
 - `PRS`, `SSH`, `INF`, `INV`, `DSC` — персонажи/скрипты/инвентарь.
 - `SCR`, `CS`, `AGE.CS` — скрипты; `CS` — компилированный байткод,
