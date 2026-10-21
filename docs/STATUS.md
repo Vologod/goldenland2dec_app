@@ -17,6 +17,20 @@ P2c — save/load каркас: реализация и автоматизиро
 
 ## Текущая задача
 
+**P3a — финальная волна правок (whole-branch review) завершена 2026-10-21.**
+Исправлены: бюджет вычисления выражения (`kEvalBudget = 100'000` вызовов `eval` на
+`step()`) против циклических/разделяемых графов; assign приводит RHS к текущему типу
+приёмника (`int32`/`uint32`/`double`/`string`), включая float `0.5` и DWORD
+`0xFFFFFFFF`; реализованы `1 ^^`, `3..5`, `12/13`, `19/20` (строки → `failed()`);
+ошибки исполнения стали «липкими» и останавливают `step()` без лавины логов, а
+`user_input` больше не сбрасывает `failed()`; `glscript`-тест VM-ошибки теперь
+падает именно в VM (валидный `jmp` за границу), а не в `parse_cs`; `parse_globals`
+игнорирует UTF-8 BOM и предупреждает о незакрытой кавычке. Несколько `D_Say` на
+странице — по-прежнему только первый (как в `CsExecutor`, задокументировано).
+Проверка: `cmake --build build` — успех; `gl_script_tests` — 49 cases / 374 assertions;
+`gl_script_real_tests` — 1/20; `gl_cs_tools_tests` — 8/56; полный `ctest` с
+`GL_GAME_DIR` — **11/11 passed**, 560.62 s, exit 0.
+
 **P3a — Task 5 (acceptance + docs) завершён 2026-10-21. P3a принята.**
 `cmake --build build` — `ninja: no work to do`, exit 0. Полный
 `ctest --test-dir build --output-on-failure` с `GL_GAME_DIR` — **11/11 passed**,
@@ -411,6 +425,11 @@ P0 закрыт 2026-10-19; далее выполнялись задачи P1 (�
   `demon.d1.age.cs` 5353 B / 240 lines; `glscript --run` → `wait_user`, 43 steps,
   dialogs `2684 2686 2696`, 2 answers; `--answer 0` → second `wait_user`, 84 steps,
   dialogs `2719 1529 2721`, 2 answers. P3a принята.
+- 2026-10-21: P3a final fix wave — eval budget, assign type coercion, opcodes
+  `1/3..5/12/13/19/20`, sticky error semantics (stop + no log flood), VM-failure CLI
+  test, globals BOM/unterminated-quote warning, multiple `D_Say` documented;
+  `gl_script_tests` 49/374, `gl_script_real_tests` 1/20, `gl_cs_tools_tests` 8/56,
+  полный `ctest` 11/11 (560.62 s).
 
 ## Следующие задачи
 
