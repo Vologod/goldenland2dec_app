@@ -1,5 +1,7 @@
+#define SDL_MAIN_HANDLED
 #define DOCTEST_CONFIG_IMPLEMENT
 #include <doctest.h>
+#include <gl/render/font.hpp>
 #include <stb_image.h>
 
 #include <atomic>
@@ -30,6 +32,8 @@ namespace {
 namespace fs = std::filesystem;
 
 const fs::path g_glgame_exe = GLGAME_EXE;
+
+bool font_available() { return gl::render::find_system_font().has_value(); }
 
 fs::path unique_temp_dir() {
     static std::atomic<unsigned> counter{0};
@@ -278,6 +282,22 @@ TEST_CASE("glgame --list-saves prints the real save slots and exits") {
     CHECK(has_slot0);
     CHECK(slot0_has_date);
     CHECK(slot0_has_title);
+}
+
+TEST_CASE("glgame renders a dialog into a 1280x720 PNG" *
+          doctest::skip(!font_available())) {
+    const char* game_dir = std::getenv("GL_GAME_DIR");
+    REQUIRE(game_dir != nullptr);
+
+    TempDir temp;
+    const fs::path config = write_test_config(temp.path);
+    const fs::path png = temp.path / "dialog.png";
+    const int code = run_glgame(screenshot_arguments(
+        game_dir, config, png, {"--dialog", "scripts/dialogs/demon.d1.age.cs"}));
+    CAPTURE(code);
+    REQUIRE(fs::exists(png));
+    CHECK(code == 0);
+    check_png(png, 1280, 720);
 }
 
 TEST_CASE("glgame renders a preloaded level into a 1280x720 PNG") {

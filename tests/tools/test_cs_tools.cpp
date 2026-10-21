@@ -179,6 +179,21 @@ std::size_t metric_count(const std::string& output, std::string_view name, bool 
 std::size_t answer_count(const std::string& output) {
     return metric_count(output, "answers", true);
 }
+
+bool has_non_ascii(const std::string& output) {
+    for (const char ch : output) {
+        if (static_cast<unsigned char>(ch) >= 0x80) return true;
+    }
+    return false;
+}
+
+std::string phrase_line(const std::string& output, std::string_view id) {
+    const std::string prefix = std::string(id) + "\t";
+    const std::size_t start = output.find(prefix);
+    if (start == std::string::npos) return {};
+    const std::size_t end = output.find('\n', start);
+    return end == std::string::npos ? output.substr(start) : output.substr(start, end - start);
+}
 } // namespace
 
 int main(int argc, char** argv) {
@@ -230,6 +245,28 @@ TEST_CASE("glscript runs the demon dialog to wait_user" *
     CHECK(code == 0);
     CHECK(has_status(output, "wait_user"));
     CHECK(answer_count(output) > 0);
+}
+
+TEST_CASE("glscript --sdb prints dialog phrase texts" *
+          doctest::skip(!game_dir_available())) {
+    const char* game_dir = game_dir_env();
+    REQUIRE(game_dir != nullptr);
+
+    std::string output;
+    const int code = run_capture(g_glscript_exe,
+                                 {"--game-dir", game_dir, "--file", std::string(kDialogScript),
+                                  "--run", "--sdb", "sdb/dialogs/dialogsphrases.sdb"},
+                                 output);
+    CAPTURE(code);
+    CAPTURE(output);
+    CHECK(code == 0);
+    CHECK(has_status(output, "wait_user"));
+
+    const std::string line = phrase_line(output, "2684");
+    CAPTURE(line);
+    CHECK_FALSE(line.empty());
+    CHECK(has_non_ascii(line));
+    CHECK(line.find("<phrase 2684>") == std::string::npos);
 }
 
 TEST_CASE("glscript accepts the first dialog answer" *

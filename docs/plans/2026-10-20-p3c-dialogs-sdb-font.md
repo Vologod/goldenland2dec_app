@@ -102,7 +102,7 @@ class DialogSession {
 - Tests: `glscript --sdb` on `demon...` contains a Russian phrase; glgame dialog screenshot
   1280×720 (skip if no font); existing tests pass.
 
-- [ ] Implement, tests, commit.
+- [x] Implement, tests, commit.
 
 ---
 

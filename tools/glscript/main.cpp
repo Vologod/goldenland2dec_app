@@ -1,5 +1,6 @@
 #include "gl/assets/cs.hpp"
 #include "gl/assets/result.hpp"
+#include "gl/assets/sdb.hpp"
 #include "gl/assets/vfs.hpp"
 #include "gl/script/globals.hpp"
 #include "gl/script/host.hpp"
@@ -46,7 +47,7 @@ int fail(const gl::Error& error) {
 void print_usage() {
     std::cerr << "usage:\n"
                  "  glscript --game-dir <dir> [--globals <path>] --file <path> [--run]"
-                 " [--answer N]\n";
+                 " [--answer N] [--sdb <path>]\n";
 }
 
 bool option_value(const std::vector<std::string>& args, std::size_t& index,
@@ -93,6 +94,7 @@ struct Options {
     std::optional<std::string> game_dir;
     std::optional<std::string> globals;
     std::optional<std::string> file;
+    std::optional<std::string> sdb;
     bool run = false;
     std::vector<std::size_t> answers;
 };
@@ -108,7 +110,7 @@ bool parse_options(const std::vector<std::string>& args, Options& options, std::
             options.run = true;
             continue;
         }
-        if (arg == "--game-dir" || arg == "--globals" || arg == "--file" ||
+        if (arg == "--game-dir" || arg == "--globals" || arg == "--file" || arg == "--sdb" ||
             arg == "--answer") {
             std::string value;
             if (!option_value(args, i, arg, value, error)) return false;
@@ -118,6 +120,8 @@ bool parse_options(const std::vector<std::string>& args, Options& options, std::
                 if (!set_once(options.globals, arg, std::move(value), error)) return false;
             } else if (arg == "--file") {
                 if (!set_once(options.file, arg, std::move(value), error)) return false;
+            } else if (arg == "--sdb") {
+                if (!set_once(options.sdb, arg, std::move(value), error)) return false;
             } else {
                 std::size_t answer = 0;
                 if (!parse_answer(value, answer, error)) return false;
@@ -165,6 +169,19 @@ void print_state(const gl::script::ScriptVm& vm) {
     std::cout << "answers: " << vm.answers_count() << '\n';
 }
 
+void print_phrases(const gl::script::ScriptVm& vm, const gl::assets::Sdb* sdb) {
+    if (sdb == nullptr) return;
+    for (const std::uint32_t id : vm.dialogs_data()) {
+        std::cout << id << '\t';
+        if (const std::string* text = sdb->find(id)) {
+            std::cout << *text;
+        } else {
+            std::cout << "<phrase " << id << '>';
+        }
+        std::cout << '\n';
+    }
+}
+
 void run_to_stop(gl::script::ScriptVm& vm) {
     while (vm.step()) {
     }
@@ -196,6 +213,15 @@ int run(int argc, char** argv) {
     const std::string globals_path =
         options.globals ? *options.globals : std::string(kDefaultGlobals);
 
+    std::optional<gl::assets::Sdb> sdb;
+    if (options.sdb) {
+        auto sdb_data = mounted.value().read(*options.sdb);
+        if (!sdb_data) return fail(sdb_data.error());
+        auto parsed = gl::assets::Sdb::parse(sdb_data.value());
+        if (!parsed) return fail(parsed.error());
+        sdb.emplace(std::move(parsed.value()));
+    }
+
     auto script_data = mounted.value().read(*options.file);
     if (!script_data) return fail(script_data.error());
     auto nodes = gl::assets::parse_cs(script_data.value());
@@ -210,23 +236,29 @@ int run(int argc, char** argv) {
     gl::script::ScriptVm vm(std::move(nodes.value()), host);
     vm.set_globals(globals.value());
 
+    const gl::assets::Sdb* sdb_ptr = sdb ? &*sdb : nullptr;
+
     if (!options.run) {
         print_state(vm);
+        print_phrases(vm, sdb_ptr);
         return kOk;
     }
 
     vm.restart(true);
     run_to_stop(vm);
     print_state(vm);
+    print_phrases(vm, sdb_ptr);
     if (vm.failed() || vm.status() == gl::script::VmStatus::infinity) return kFormat;
 
     for (const std::size_t answer : options.answers) {
         if (!vm.user_input(answer)) {
             print_state(vm);
+            print_phrases(vm, sdb_ptr);
             return kArgument;
         }
         run_to_stop(vm);
         print_state(vm);
+        print_phrases(vm, sdb_ptr);
         if (vm.failed() || vm.status() == gl::script::VmStatus::infinity) return kFormat;
     }
 

@@ -1,5 +1,7 @@
 #include <gl/app/level_screen.hpp>
+#include <gl/assets/cs.hpp>
 #include <gl/assets/log.hpp>
+#include <gl/assets/sdb.hpp>
 #include <gl/assets/vfs.hpp>
 #include <gl/core/command.hpp>
 #include <gl/core/config.hpp>
@@ -8,7 +10,12 @@
 #include <gl/core/server.hpp>
 #include <gl/core/state.hpp>
 #include <gl/platform/sdl_context.hpp>
+#include <gl/render/font.hpp>
 #include <gl/render/text.hpp>
+#include <gl/script/dialog_session.hpp>
+#include <gl/script/globals.hpp>
+#include <gl/script/host.hpp>
+#include <gl/script/script_vm.hpp>
 
 #include <SDL.h>
 #include <stb_image_write.h>
@@ -22,7 +29,9 @@
 #include <cstdlib>
 #include <exception>
 #include <filesystem>
+#include <memory>
 #include <optional>
+#include <span>
 #include <sstream>
 #include <string>
 #include <string_view>
@@ -38,12 +47,18 @@ constexpr int kDefaultWidth = 1280;
 constexpr int kDefaultHeight = 720;
 constexpr int kMaxDimension = 16384;
 constexpr std::string_view kNewGameLevel = "l1_1";
+constexpr std::string_view kTestDialogScript = "scripts/dialogs/demon.d1.age.cs";
+constexpr std::string_view kDialogGlobals = "scripts/dialogs_special/zlato_vars.scr";
+constexpr std::string_view kDialogSdb = "sdb/dialogs/dialogsphrases.sdb";
 constexpr float kZoomStep = 1.1f;
 constexpr float kScale = 2.0f;
 constexpr float kTitleScale = 3.0f;
+constexpr float kFontPixelHeight = 20.0f;
 constexpr std::size_t kConsoleOutputLines = 10;
-constexpr float kSaveRowScale = 1.0f;
 constexpr float kSaveRowHeight = 17.0f;
+constexpr float kDialogMargin = 32.0f;
+constexpr float kDialogAnswerGap = 8.0f;
+constexpr int kBaseMenuItems = 3;
 
 struct Options {
     fs::path game_dir;
@@ -57,6 +72,10 @@ struct Options {
     bool width_set = false;
     bool height_set = false;
     fs::path screenshot;
+    fs::path font;
+    bool font_set = false;
+    std::string dialog;
+    bool has_dialog = false;
     std::vector<std::string> exec;
 };
 
@@ -73,6 +92,8 @@ void print_usage() {
         "  --width <px>         Window width (default: 1280)\n"
         "  --height <px>        Window height (default: 720)\n"
         "  --menu               Force starting in the main menu\n"
+        "  --dialog <path.cs>   Open a dialog script screen directly (virtual path)\n"
+        "  --font <ttf>         TrueType font for dialog text (default: system font)\n"
         "  --list-saves         Print save slots as tab-separated lines and exit\n"
         "  --screenshot <png>   Render the current state, save PNG and exit\n"
         "  --exec \"<command>\"   Run a console command after boot (repeatable)\n"
@@ -182,6 +203,22 @@ ParseStatus parse_args(int argc, char** argv, Options& options) {
             options.height_set = true;
         } else if (arg == "--menu") {
             options.menu = true;
+        } else if (arg == "--dialog") {
+            if (!next_value(arg, value)) return ParseStatus::error;
+            if (value.empty()) {
+                std::fputs("glgame: --dialog must not be empty\n", stderr);
+                return ParseStatus::error;
+            }
+            options.dialog = std::string(value);
+            options.has_dialog = true;
+        } else if (arg == "--font") {
+            if (!next_value(arg, value)) return ParseStatus::error;
+            if (value.empty()) {
+                std::fputs("glgame: --font must not be empty\n", stderr);
+                return ParseStatus::error;
+            }
+            options.font = path_from_utf8(value);
+            options.font_set = true;
         } else if (arg == "--list-saves") {
             options.list_saves = true;
         } else if (arg == "--screenshot") {
@@ -286,6 +323,14 @@ void erase_last_utf8(std::string& text) {
     text.erase(index);
 }
 
+struct DialogContext {
+    gl::assets::Sdb sdb;
+    gl::script::DefaultScriptHost host;
+    std::unique_ptr<gl::script::ScriptVm> vm;
+    std::unique_ptr<gl::script::DialogSession> session;
+    std::string path;
+};
+
 class Game {
   public:
     Game(Options options, gl::core::Config config, fs::path config_path,
@@ -317,12 +362,19 @@ class Game {
                 "glgame: save slots=" + std::to_string(saves_.slots().size()) + ", valid=" +
                     std::to_string(display_saves_.size()));
 
+        test_dialog_available_ = vfs_.exists(kTestDialogScript);
+        load_font();
+
         if (!state_.transition(gl::core::AppState::menu)) return 3;
 
         apply_initial_server_config();
         if (config_.get_bool("d_console", false)) set_console_visible(true);
 
-        if (options_.has_level && !options_.menu) {
+        if (options_.has_dialog) {
+            const gl::Result<void> opened = open_dialog(options_.dialog);
+            if (!opened) return exit_code_for(opened.error());
+            dialog_launched_from_cli_ = true;
+        } else if (options_.has_level && !options_.menu) {
             if (!load_level(level_name_)) return 3;
             if (!state_.transition(gl::core::AppState::level)) return 3;
         }
@@ -426,6 +478,257 @@ class Game {
     }
 
   private:
+    void load_font() {
+        std::optional<fs::path> path;
+        if (options_.font_set) {
+            path = options_.font;
+        } else {
+            path = gl::render::find_system_font();
+        }
+        if (path) {
+            gl::Result<gl::render::Font> loaded =
+                gl::render::Font::load_from_file(window_.renderer(), *path, kFontPixelHeight);
+            if (loaded) {
+                font_.emplace(std::move(loaded.value()));
+                gl::log(gl::LogLevel::info, "font: loaded '" + path->string() + "'");
+            } else {
+                gl::log(gl::LogLevel::warning, loaded.error().message);
+            }
+        }
+        if (!font_) {
+            gl::log(gl::LogLevel::warning, "font: no TrueType font available, using ASCII fallback");
+        }
+    }
+
+    gl::Result<void> open_dialog(std::string_view virtual_path) {
+        auto script_data = vfs_.read(virtual_path);
+        if (!script_data) return script_data.error();
+        auto nodes = gl::assets::parse_cs(script_data.value());
+        if (!nodes) return nodes.error();
+
+        auto globals_data = vfs_.read(kDialogGlobals);
+        if (!globals_data) return globals_data.error();
+        auto globals = gl::script::parse_globals(globals_data.value());
+        if (!globals) return globals.error();
+
+        auto sdb_data = vfs_.read(kDialogSdb);
+        if (!sdb_data) return sdb_data.error();
+        auto sdb = gl::assets::Sdb::parse(sdb_data.value());
+        if (!sdb) return sdb.error();
+
+        auto context = std::make_unique<DialogContext>();
+        context->path = std::string(virtual_path);
+        context->sdb = std::move(sdb.value());
+        context->vm =
+            std::make_unique<gl::script::ScriptVm>(std::move(nodes.value()), context->host);
+        context->vm->set_globals(globals.value());
+        context->session = std::make_unique<gl::script::DialogSession>(*context->vm, context->sdb);
+
+        const gl::Result<void> started = context->session->start();
+        if (!started) {
+            gl::log(gl::LogLevel::error,
+                    "dialog '" + context->path + "': " + started.error().message);
+            return started.error();
+        }
+
+        dialog_ = std::move(context);
+        dialog_selected_ = 0;
+        dialog_message_.clear();
+        gl::log(gl::LogLevel::info,
+                "dialog: '" + dialog_->path + "' answers=" +
+                    std::to_string(dialog_->session->answers().size()));
+        return {};
+    }
+
+    void close_dialog() {
+        dialog_.reset();
+        dialog_message_.clear();
+        dialog_selected_ = 0;
+    }
+
+    bool dialog_waiting() const {
+        return dialog_ && dialog_->session && dialog_->session->waiting();
+    }
+
+    float ui_line_height() const {
+        if (font_) return font_->line_height();
+        return std::max(gl::render::text_height(kScale), 1.0f);
+    }
+
+    float ui_text_width(std::string_view text) const {
+        if (font_) return font_->measure(text).x;
+        return gl::render::text_width(text, kScale);
+    }
+
+    void draw_ui_text(std::string_view text, float x, float y, gl::render::Color color) const {
+        if (font_) {
+            font_->draw_text(window_.renderer(), text, x, y, color);
+        } else {
+            gl::render::draw_text(window_.renderer(), text, x, y, kScale, color);
+        }
+    }
+
+    std::vector<std::string> ui_wrap(std::string_view text, float max_width) const {
+        if (font_) return font_->wrap(text, max_width);
+
+        std::vector<std::string> lines;
+        std::size_t start = 0;
+        while (start <= text.size()) {
+            const std::size_t end = text.find('\n', start);
+            const std::string_view paragraph =
+                end == std::string_view::npos ? text.substr(start) : text.substr(start, end - start);
+            std::string line;
+            std::size_t index = 0;
+            while (index < paragraph.size()) {
+                while (index < paragraph.size() && paragraph[index] == ' ') ++index;
+                const std::size_t word_start = index;
+                while (index < paragraph.size() && paragraph[index] != ' ') ++index;
+                if (word_start == index) continue;
+                std::string candidate = line;
+                if (!candidate.empty()) candidate.push_back(' ');
+                candidate.append(paragraph.substr(word_start, index - word_start));
+                if (!line.empty() && ui_text_width(candidate) > max_width) {
+                    lines.push_back(line);
+                    line.assign(paragraph.substr(word_start, index - word_start));
+                } else {
+                    line = std::move(candidate);
+                }
+            }
+            lines.push_back(line);
+            if (end == std::string_view::npos) break;
+            start = end + 1;
+        }
+        return lines;
+    }
+
+    float dialog_panel_height() const {
+        const float requested = static_cast<float>(viewport_height_) * 0.55f;
+        return std::min(std::max(requested, 220.0f),
+                        std::max(static_cast<float>(viewport_height_) - 40.0f, 220.0f));
+    }
+
+    float dialog_panel_y() const {
+        return static_cast<float>(viewport_height_) - dialog_panel_height();
+    }
+
+    float dialog_text_width() const {
+        return std::max(static_cast<float>(viewport_width_) - 2.0f * kDialogMargin, 40.0f);
+    }
+
+    std::vector<std::string> dialog_npc_lines() const {
+        if (!dialog_waiting()) return {};
+        return ui_wrap(dialog_->session->npc_text(), dialog_text_width());
+    }
+
+    std::string dialog_answer_label(int index) const {
+        if (!dialog_waiting()) return {};
+        const std::span<const gl::script::DialogLine> answers = dialog_->session->answers();
+        if (index < 0 || static_cast<std::size_t>(index) >= answers.size()) return {};
+        return std::to_string(index + 1) + ". " +
+               answers[static_cast<std::size_t>(index)].text;
+    }
+
+    float dialog_answers_top() const {
+        float y = dialog_panel_y() + kDialogMargin;
+        if (dialog_waiting()) {
+            y += static_cast<float>(dialog_npc_lines().size()) * (ui_line_height() + 2.0f);
+        } else {
+            y += ui_line_height() + 2.0f;
+        }
+        return y + 12.0f;
+    }
+
+    float dialog_answer_height(int index) const {
+        const std::vector<std::string> lines =
+            ui_wrap(dialog_answer_label(index), dialog_text_width() - 16.0f);
+        const std::size_t count = std::max<std::size_t>(lines.size(), 1);
+        return static_cast<float>(count) * ui_line_height() + kDialogAnswerGap;
+    }
+
+    float dialog_answer_top(int index) const {
+        float y = dialog_answers_top();
+        for (int i = 0; i < index; ++i) y += dialog_answer_height(i);
+        return y;
+    }
+
+    SDL_FRect dialog_answer_rect(int index) const {
+        return SDL_FRect{kDialogMargin, dialog_answer_top(index), dialog_text_width(),
+                         std::max(dialog_answer_height(index) - 2.0f, 1.0f)};
+    }
+
+    void dialog_move(int delta) {
+        if (!dialog_waiting()) return;
+        const int count = static_cast<int>(dialog_->session->answers().size());
+        if (count <= 0) return;
+        dialog_selected_ = (dialog_selected_ + delta + count) % count;
+    }
+
+    void dialog_activate() {
+        if (!dialog_waiting()) return;
+        const std::span<const gl::script::DialogLine> answers = dialog_->session->answers();
+        if (answers.empty() || dialog_selected_ < 0 ||
+            static_cast<std::size_t>(dialog_selected_) >= answers.size()) {
+            return;
+        }
+        const gl::Result<void> chosen =
+            dialog_->session->choose(static_cast<std::size_t>(dialog_selected_));
+        if (!chosen) {
+            gl::log(gl::LogLevel::error, "dialog: " + chosen.error().message);
+            dialog_message_ = "dialog error: " + chosen.error().message;
+            return;
+        }
+        dialog_selected_ = 0;
+        if (dialog_->session->waiting()) {
+            dialog_message_.clear();
+        } else {
+            dialog_message_ = "Dialog ended. Press Esc.";
+        }
+    }
+
+    void dialog_hover(int x, int y) {
+        if (!dialog_waiting()) return;
+        const int count = static_cast<int>(dialog_->session->answers().size());
+        for (int index = 0; index < count; ++index) {
+            const SDL_FRect rect = dialog_answer_rect(index);
+            if (static_cast<float>(x) >= rect.x && static_cast<float>(x) < rect.x + rect.w &&
+                static_cast<float>(y) >= rect.y && static_cast<float>(y) < rect.y + rect.h) {
+                dialog_selected_ = index;
+                return;
+            }
+        }
+    }
+
+    void dialog_click(int x, int y) {
+        if (!dialog_waiting()) return;
+        const int count = static_cast<int>(dialog_->session->answers().size());
+        for (int index = 0; index < count; ++index) {
+            const SDL_FRect rect = dialog_answer_rect(index);
+            if (static_cast<float>(x) >= rect.x && static_cast<float>(x) < rect.x + rect.w &&
+                static_cast<float>(y) >= rect.y && static_cast<float>(y) < rect.y + rect.h) {
+                dialog_selected_ = index;
+                dialog_activate();
+                return;
+            }
+        }
+    }
+
+    void handle_dialog_key(const SDL_KeyboardEvent& key) {
+        const SDL_Keycode symbol = key.keysym.sym;
+        if (symbol == SDLK_ESCAPE) {
+            if (dialog_launched_from_cli_) {
+                request_exit();
+            } else {
+                close_dialog();
+            }
+        } else if (symbol == SDLK_UP) {
+            dialog_move(-1);
+        } else if (symbol == SDLK_DOWN) {
+            dialog_move(1);
+        } else if (symbol == SDLK_RETURN || symbol == SDLK_KP_ENTER) {
+            dialog_activate();
+        }
+    }
+
     void register_commands() {
         registry_.add("help", "list commands or show details: help [command]",
                       [this](gl::core::Args args) -> gl::Result<std::string> {
@@ -698,7 +1001,9 @@ class Game {
                 return;
             case SDL_MOUSEMOTION:
                 if (console_visible_) return;
-                if (save_slots_) {
+                if (dialog_) {
+                    dialog_hover(event.motion.x, event.motion.y);
+                } else if (save_slots_) {
                     save_hover(event.motion.x, event.motion.y);
                 } else if (state_.state() == gl::core::AppState::menu) {
                     menu_hover(event.motion.x, event.motion.y);
@@ -711,7 +1016,9 @@ class Game {
                 return;
             case SDL_MOUSEBUTTONDOWN:
                 if (console_visible_ || event.button.button != SDL_BUTTON_LEFT) return;
-                if (save_slots_) {
+                if (dialog_) {
+                    dialog_click(event.button.x, event.button.y);
+                } else if (save_slots_) {
                     save_click(event.button.x, event.button.y);
                 } else if (state_.state() == gl::core::AppState::menu) {
                     menu_click(event.button.x, event.button.y);
@@ -760,6 +1067,11 @@ class Game {
             return;
         }
         if (key.repeat != 0 && symbol != SDLK_HOME) return;
+
+        if (dialog_) {
+            handle_dialog_key(key);
+            return;
+        }
 
         if (save_slots_) {
             if (symbol == SDLK_UP) {
@@ -822,6 +1134,17 @@ class Game {
         }
     }
 
+    int menu_item_count() const {
+        return test_dialog_available_ ? kBaseMenuItems + 1 : kBaseMenuItems;
+    }
+
+    const char* menu_label(int index) const {
+        if (index == 0) return "New Game";
+        if (index == 1) return "Continue";
+        if (test_dialog_available_ && index == 2) return "Test Dialog";
+        return "Exit";
+    }
+
     bool menu_item_enabled(int index) const {
         return index != 1 || saves_.has_valid_slots();
     }
@@ -841,9 +1164,10 @@ class Game {
     }
 
     void menu_move(int delta) {
+        const int count = menu_item_count();
         int index = menu_selected_;
-        for (int step = 0; step < 3; ++step) {
-            index = (index + delta + 3) % 3;
+        for (int step = 0; step < count; ++step) {
+            index = (index + delta + count) % count;
             if (menu_item_enabled(index)) {
                 menu_selected_ = index;
                 return;
@@ -852,7 +1176,8 @@ class Game {
     }
 
     void menu_hover(int x, int y) {
-        for (int index = 0; index < 3; ++index) {
+        const int count = menu_item_count();
+        for (int index = 0; index < count; ++index) {
             if (!menu_item_enabled(index)) continue;
             const SDL_FRect rect = menu_item_rect(index);
             if (static_cast<float>(x) >= rect.x && static_cast<float>(x) < rect.x + rect.w &&
@@ -864,7 +1189,8 @@ class Game {
     }
 
     void menu_click(int x, int y) {
-        for (int index = 0; index < 3; ++index) {
+        const int count = menu_item_count();
+        for (int index = 0; index < count; ++index) {
             if (!menu_item_enabled(index)) continue;
             const SDL_FRect rect = menu_item_rect(index);
             if (static_cast<float>(x) >= rect.x && static_cast<float>(x) < rect.x + rect.w &&
@@ -889,7 +1215,13 @@ class Game {
             save_selected_ = 0;
             save_scroll_ = 0;
             save_message_.clear();
-        } else if (index == 2) {
+        } else if (test_dialog_available_ && index == 2) {
+            const gl::Result<void> opened = open_dialog(kTestDialogScript);
+            if (!opened) {
+                gl::log(gl::LogLevel::error, opened.error().message);
+                console_print("cannot open dialog: " + opened.error().message);
+            }
+        } else {
             request_exit();
         }
     }
@@ -923,10 +1255,16 @@ class Game {
         return static_cast<float>(viewport_height_) - 80.0f;
     }
 
+    float save_row_height() const {
+        if (font_) return std::max(font_->line_height() + 3.0f, kSaveRowHeight);
+        return kSaveRowHeight;
+    }
+
     int save_visible_row_count() const {
+        const float row_height = save_row_height();
         const float available = save_rows_bottom() - save_rows_top();
-        if (available < kSaveRowHeight) return 1;
-        return std::max(1, static_cast<int>(available / kSaveRowHeight));
+        if (available < row_height) return 1;
+        return std::max(1, static_cast<int>(available / row_height));
     }
 
     void save_ensure_visible() {
@@ -948,13 +1286,13 @@ class Game {
 
     float save_row_y(int index) const {
         const int row = index - save_scroll_;
-        return save_rows_top() + static_cast<float>(row) * kSaveRowHeight;
+        return save_rows_top() + static_cast<float>(row) * save_row_height();
     }
 
     SDL_FRect save_row_rect(int index) const {
         const float width = static_cast<float>(viewport_width_) * 0.7f;
         const float x = (static_cast<float>(viewport_width_) - width) * 0.5f;
-        return SDL_FRect{x, save_row_y(index), width, kSaveRowHeight - 2.0f};
+        return SDL_FRect{x, save_row_y(index), width, save_row_height() - 2.0f};
     }
 
     void save_move(int delta) {
@@ -998,7 +1336,9 @@ class Game {
 
     void render(std::uint64_t now_ms, std::uint64_t animation_ms) {
         update_viewport();
-        if (state_.state() == gl::core::AppState::level && level_) {
+        if (dialog_ && dialog_->session) {
+            render_dialog();
+        } else if (state_.state() == gl::core::AppState::level && level_) {
             gl::app::LevelScreenOptions options;
             options.debug_overlay = debug_overlay_;
             level_->render(window_.renderer(), options, animation_ms);
@@ -1017,6 +1357,76 @@ class Game {
         }
 
         if (console_visible_) render_console(now_ms);
+    }
+
+    void render_dialog() {
+        SDL_Renderer* renderer = window_.renderer();
+        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
+        SDL_SetRenderDrawColor(renderer, 12, 14, 20, 255);
+        SDL_RenderClear(renderer);
+
+        const float panel_y = dialog_panel_y();
+        const float panel_height = dialog_panel_height();
+        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+        SDL_SetRenderDrawColor(renderer, 5, 7, 11, 235);
+        const SDL_FRect panel{0.0f, panel_y, static_cast<float>(viewport_width_), panel_height};
+        SDL_RenderFillRectF(renderer, &panel);
+        SDL_SetRenderDrawColor(renderer, 232, 201, 112, 255);
+        SDL_RenderDrawLine(renderer, 0, static_cast<int>(panel_y), viewport_width_,
+                           static_cast<int>(panel_y));
+
+        const gl::render::Color text_color{232, 232, 238, 255};
+        const gl::render::Color answer_color{210, 214, 222, 255};
+        const gl::render::Color selected_color{255, 232, 160, 255};
+        const float line_height = ui_line_height();
+
+        float y = panel_y + kDialogMargin;
+        if (dialog_waiting()) {
+            const std::vector<std::string> lines = dialog_npc_lines();
+            for (const std::string& line : lines) {
+                draw_ui_text(line, kDialogMargin, y, text_color);
+                y += line_height + 2.0f;
+            }
+        } else {
+            const std::string message =
+                dialog_message_.empty() ? "Dialog ended. Press Esc." : dialog_message_;
+            draw_ui_text(message, kDialogMargin, y, selected_color);
+            y += line_height + 2.0f;
+        }
+
+        if (dialog_waiting()) {
+            const std::span<const gl::script::DialogLine> answers = dialog_->session->answers();
+            if (answers.empty()) {
+                draw_ui_text("No answers. Press Esc.", kDialogMargin, dialog_answers_top(),
+                             selected_color);
+            } else {
+                const int count = static_cast<int>(answers.size());
+                for (int index = 0; index < count; ++index) {
+                    const SDL_FRect rect = dialog_answer_rect(index);
+                    const bool selected = dialog_selected_ == index;
+                    if (selected) {
+                        SDL_SetRenderDrawColor(renderer, 60, 52, 24, 210);
+                        SDL_RenderFillRectF(renderer, &rect);
+                        SDL_SetRenderDrawColor(renderer, 232, 201, 112, 255);
+                        SDL_RenderDrawRectF(renderer, &rect);
+                    }
+
+                    const std::vector<std::string> lines =
+                        ui_wrap(dialog_answer_label(index), rect.w - 16.0f);
+                    float text_y = rect.y + 2.0f;
+                    for (const std::string& line : lines) {
+                        draw_ui_text(line, rect.x + 8.0f, text_y,
+                                     selected ? selected_color : answer_color);
+                        text_y += line_height + 1.0f;
+                    }
+                }
+            }
+        }
+
+        const std::string_view hint =
+            "Up/Down or mouse to select, Enter to choose, Esc to close";
+        const float hint_y = static_cast<float>(viewport_height_) - 28.0f;
+        draw_ui_text(hint, kDialogMargin, hint_y, gl::render::Color{110, 112, 122, 255});
     }
 
     void render_save_slots() {
@@ -1054,10 +1464,8 @@ class Game {
             const gl::render::Color color =
                 selected ? gl::render::Color{255, 232, 160, 255}
                          : gl::render::Color{220, 220, 220, 255};
-            gl::render::draw_text(
-                renderer, format_save_row(*slots[static_cast<std::size_t>(index)]), rect.x + 12.0f,
-                rect.y + (rect.h - gl::render::text_height(kSaveRowScale)) * 0.5f, kSaveRowScale,
-                color);
+            draw_ui_text(format_save_row(*slots[static_cast<std::size_t>(index)]), rect.x + 12.0f,
+                         rect.y + std::max((rect.h - ui_line_height()) * 0.5f, 0.0f), color);
         }
         SDL_RenderSetClipRect(renderer, nullptr);
 
@@ -1106,9 +1514,9 @@ class Game {
                               static_cast<float>(viewport_height_) * 0.3f + 44.0f, 1.0f,
                               gl::render::Color{130, 130, 140, 255});
 
-        const char* labels[3] = {"New Game", "Continue", "Exit"};
+        const int count = menu_item_count();
         SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-        for (int index = 0; index < 3; ++index) {
+        for (int index = 0; index < count; ++index) {
             const SDL_FRect rect = menu_item_rect(index);
             const bool enabled = menu_item_enabled(index);
             const bool selected = menu_selected_ == index && enabled;
@@ -1123,11 +1531,12 @@ class Game {
             const gl::render::Color color = !enabled ? gl::render::Color{104, 104, 108, 255}
                                           : selected ? gl::render::Color{255, 232, 160, 255}
                                                      : gl::render::Color{220, 220, 220, 255};
-            const float width = gl::render::text_width(labels[index], kScale);
+            const char* label = menu_label(index);
+            const float width = gl::render::text_width(label, kScale);
             const float text_x =
                 rect.x + (rect.w - width) * 0.5f;
             const float text_y = rect.y + (rect.h - gl::render::text_height(kScale)) * 0.5f;
-            gl::render::draw_text(renderer, labels[index], text_x, text_y, kScale, color);
+            gl::render::draw_text(renderer, label, text_x, text_y, kScale, color);
         }
 
         SDL_SetRenderDrawColor(renderer, 70, 70, 80, 255);
@@ -1215,6 +1624,12 @@ class Game {
     int save_scroll_ = 0;
     bool save_slots_ = false;
     std::string save_message_;
+    std::optional<gl::render::Font> font_;
+    std::unique_ptr<DialogContext> dialog_;
+    bool test_dialog_available_ = false;
+    bool dialog_launched_from_cli_ = false;
+    int dialog_selected_ = 0;
+    std::string dialog_message_;
 };
 
 } // namespace
