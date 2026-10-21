@@ -7,6 +7,15 @@ add_test(NAME camera_tests COMMAND camera_tests)
 set_tests_properties(camera_tests PROPERTIES ENVIRONMENT
                      "SDL_VIDEODRIVER=dummy;SDL_RENDER_DRIVER=software")
 
+add_executable(font_tests test_utf8.cpp test_font.cpp)
+target_include_directories(font_tests PRIVATE ${CMAKE_SOURCE_DIR}/third_party/doctest)
+target_link_libraries(font_tests PRIVATE gl_render SDL2::SDL2)
+gl_enable_warnings(font_tests)
+
+add_test(NAME font_tests COMMAND font_tests)
+set_tests_properties(font_tests PROPERTIES ENVIRONMENT
+                     "SDL_VIDEODRIVER=dummy;SDL_RENDER_DRIVER=software" SKIP_RETURN_CODE 77)
+
 add_executable(glview_screenshot_tests test_glview_screenshot.cpp)
 target_include_directories(glview_screenshot_tests PRIVATE ${CMAKE_SOURCE_DIR}/third_party/doctest
                                                            ${CMAKE_SOURCE_DIR}/third_party/stb)
