@@ -1,4 +1,5 @@
 add_library(gl_script STATIC
+    src/dialog_session.cpp
     src/globals.cpp
     src/host.cpp
     src/script_vm.cpp

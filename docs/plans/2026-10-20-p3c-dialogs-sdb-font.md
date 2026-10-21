@@ -83,7 +83,7 @@ class DialogSession {
 - Real: `demon.d1.age.cs` + globals + `sdb/dialogs/dialogsphrases.sdb` → non-empty phrase,
   ≥1 answer; `choose(0)` → next non-empty/end. Gated by `GL_GAME_DIR`, skip 77.
 
-- [ ] TDD, implement, commit.
+- [x] TDD, implement, commit.
 
 ---
 

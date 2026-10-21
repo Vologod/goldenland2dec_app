@@ -430,12 +430,18 @@ P0 закрыт 2026-10-19; далее выполнялись задачи P1 (�
   test, globals BOM/unterminated-quote warning, multiple `D_Say` documented;
   `gl_script_tests` 49/374, `gl_script_real_tests` 1/20, `gl_cs_tools_tests` 8/56,
   полный `ctest` 11/11 (560.62 s).
+- 2026-10-21: P3c Task 2 — `gl::script::DialogSession` (`dialog_session.hpp/.cpp`):
+  `start`/`choose` гонят VM до `wait_user`/`end`/`infinity`, id→текст через `Sdb::find`,
+  fallback `<phrase N>`, `waiting`/`npc_text`/`answers`; `choose` возвращает `argument`
+  за границей; synthetic 5 cases и real `demon.d1.age.cs` + `dialogsphrases.sdb`
+  (`gl_script_real_tests`, skip 77); `gl_script_tests` 54/411; full `ctest` 13/13 (606.15 s).
 
 ## Следующие задачи
 
 1. P3c: диалоги + SDB + кириллический TTF-шрифт — spec/plan готовы
    (`docs/specs/2026-10-20-p3c-dialogs-sdb-font-design.md`, `docs/plans/2026-10-20-p3c-dialogs-sdb-font.md`);
-   начать с Task 1 (UTF-8 + Font). AgeScript-компилятор не требуется: `.scr` — конфиги.
+   Tasks 1–2 (UTF-8/Font, `DialogSession`) завершены, дальше Task 3 (`glgame` screen + tools).
+   AgeScript-компилятор не требуется: `.scr` — конфиги.
 2. P4: персонажи/NPC (`.prs/.inf`), привязка диалогов к NPC.
 3. P1b: Android/touch — отложенный follow-up P1.
 
