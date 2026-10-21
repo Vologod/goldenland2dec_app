@@ -1,131 +1,378 @@
 #include "gl/assets/sef.hpp"
+#include "gl/assets/cp1251.hpp"
+
 #include <charconv>
 #include <cstddef>
+#include <cstdint>
 #include <new>
 #include <string>
 #include <string_view>
 #include <system_error>
+#include <utility>
+#include <vector>
 
 namespace gl::assets {
 namespace {
 Error format_error(std::string message) { return Error{ErrorCode::format, std::move(message)}; }
 
 bool is_space(char c) {
-    return c == ' ' || c == '\t' || c == '\r' || c == '\n' || c == '\v' || c == '\f';
-}
-
-std::string_view trim(std::string_view text) {
-    while (!text.empty() && is_space(text.front())) text.remove_prefix(1);
-    while (!text.empty() && is_space(text.back())) text.remove_suffix(1);
-    return text;
-}
-
-std::string_view strip_comment(std::string_view line) {
-    bool quoted = false;
-    for (std::size_t i = 0; i < line.size(); ++i) {
-        if (line[i] == '"') {
-            quoted = !quoted;
-        } else if (!quoted && line[i] == '/' && i + 1 < line.size() && line[i + 1] == '/') {
-            return line.substr(0, i);
-        }
-    }
-    return line;
+    return c == ' ' || c == '\t' || c == '\r' || c == '\n' || c == '\v' || c == '\f' ||
+           c == '\0';
 }
 
 std::string ascii_lower(std::string_view text) {
     std::string out(text);
     for (char& c : out) {
-        if (c >= 'A' && c <= 'Z') c = static_cast<char>(c - 'A' + 'a');
+        if (c >= 'A' && c <= 'Z')
+            c = static_cast<char>(c - 'A' + 'a');
     }
     return out;
 }
 
+std::string to_utf8(std::string_view text) {
+    return cp1251_to_utf8({reinterpret_cast<const std::uint8_t*>(text.data()), text.size()});
+}
+
 bool parse_int(std::string_view value, int& out) {
-    value = trim(value);
-    if (value.empty()) return false;
+    if (value.empty())
+        return false;
     int parsed = 0;
     const auto [end, error] =
         std::from_chars(value.data(), value.data() + value.size(), parsed);
-    if (error != std::errc{} || end != value.data() + value.size()) return false;
+    if (error != std::errc{} || end != value.data() + value.size())
+        return false;
     out = parsed;
     return true;
 }
 
-Result<int> read_quoted(std::string_view value) {
-    if (value.size() < 2 || value.front() != '"')
-        return format_error("SEF pack value is not a quoted string");
-    const std::size_t close = value.find('"', 1);
-    if (close == std::string_view::npos)
-        return format_error("SEF pack value has no closing quote");
-    if (close + 1 != value.size())
-        return format_error("SEF pack value has trailing characters");
-    return static_cast<int>(close);
+enum class TokenKind { word, string, lbrace, rbrace, colon, semicolon, end };
+
+struct Token {
+    TokenKind kind = TokenKind::end;
+    std::string text;
+};
+
+class Lexer {
+public:
+    explicit Lexer(std::string_view text) : text_(text) {
+        if (text_.starts_with("\xEF\xBB\xBF"))
+            text_.remove_prefix(3);
+    }
+
+    Token next() {
+        skip_ignored();
+        if (position_ >= text_.size())
+            return {};
+
+        const char c = text_[position_];
+        switch (c) {
+        case '{':
+            ++position_;
+            return {TokenKind::lbrace, {}};
+        case '}':
+            ++position_;
+            return {TokenKind::rbrace, {}};
+        case ':':
+            ++position_;
+            return {TokenKind::colon, {}};
+        case ';':
+            ++position_;
+            return {TokenKind::semicolon, {}};
+        case '"':
+            return read_string();
+        default:
+            return read_word();
+        }
+    }
+
+    bool failed() const { return failed_; }
+
+    void skip_balanced() {
+        int depth = 1;
+        while (depth > 0) {
+            const Token token = next();
+            if (failed_)
+                return;
+            if (token.kind == TokenKind::end) {
+                failed_ = true;
+                return;
+            }
+            if (token.kind == TokenKind::lbrace)
+                ++depth;
+            else if (token.kind == TokenKind::rbrace)
+                --depth;
+        }
+    }
+
+private:
+    void skip_ignored() {
+        while (position_ < text_.size()) {
+            if (is_space(text_[position_])) {
+                ++position_;
+                continue;
+            }
+            if (text_[position_] == '/' && position_ + 1 < text_.size() &&
+                text_[position_ + 1] == '/') {
+                position_ += 2;
+                while (position_ < text_.size() && text_[position_] != '\n')
+                    ++position_;
+                continue;
+            }
+            break;
+        }
+    }
+
+    Token read_string() {
+        ++position_;
+        const std::size_t begin = position_;
+        while (position_ < text_.size() && text_[position_] != '"')
+            ++position_;
+        if (position_ >= text_.size()) {
+            failed_ = true;
+            return {TokenKind::string, std::string(text_.substr(begin))};
+        }
+        Token token{TokenKind::string, std::string(text_.substr(begin, position_ - begin))};
+        ++position_;
+        return token;
+    }
+
+    Token read_word() {
+        const std::size_t begin = position_;
+        while (position_ < text_.size()) {
+            const char c = text_[position_];
+            if (is_space(c) || c == '{' || c == '}' || c == ':' || c == ';' || c == '"')
+                break;
+            if (c == '/' && position_ + 1 < text_.size() && text_[position_ + 1] == '/')
+                break;
+            ++position_;
+        }
+        return {TokenKind::word, std::string(text_.substr(begin, position_ - begin))};
+    }
+
+    std::string_view text_;
+    std::size_t position_ = 0;
+    bool failed_ = false;
+};
+
+Token next_non_semicolon(Lexer& lexer) {
+    Token token = lexer.next();
+    while (!lexer.failed() && token.kind == TokenKind::semicolon)
+        token = lexer.next();
+    return token;
 }
+
+bool token_text(const Token& token, std::string& out) {
+    if (token.kind != TokenKind::word && token.kind != TokenKind::string)
+        return false;
+    out = to_utf8(token.text);
+    return true;
 }
+
+bool token_int(const Token& token, std::int32_t& out) {
+    if (token.kind != TokenKind::word)
+        return false;
+    int parsed = 0;
+    if (!parse_int(token.text, parsed))
+        return false;
+    out = parsed;
+    return true;
+}
+
+VoidResult parse_person_fields(Lexer& lexer, SefPerson& person) {
+    while (true) {
+        const Token key = next_non_semicolon(lexer);
+        if (lexer.failed())
+            return format_error("unterminated SEF persons section");
+        if (key.kind == TokenKind::end)
+            return format_error("truncated SEF person block");
+        if (key.kind == TokenKind::rbrace)
+            return VoidResult{std::monostate{}};
+        if (key.kind != TokenKind::word)
+            return format_error("unexpected token in SEF person block");
+
+        Token value = lexer.next();
+        if (lexer.failed())
+            return format_error("unterminated SEF persons section");
+        if (value.kind == TokenKind::colon) {
+            value = lexer.next();
+            if (lexer.failed())
+                return format_error("unterminated SEF persons section");
+        }
+        if (value.kind == TokenKind::end)
+            return format_error("truncated SEF person field");
+
+        if (key.text == "position") {
+            if (!token_int(value, person.x))
+                return format_error("bad SEF person position");
+            const Token y = lexer.next();
+            if (lexer.failed())
+                return format_error("unterminated SEF persons section");
+            if (!token_int(y, person.y))
+                return format_error("bad SEF person position");
+        } else if (key.text == "direction") {
+            if (!token_text(value, person.direction))
+                return format_error("bad SEF person direction");
+        } else if (key.text == "route_type") {
+            if (!token_text(value, person.route_type))
+                return format_error("bad SEF person route_type");
+        } else if (key.text == "route") {
+            if (!token_text(value, person.route))
+                return format_error("bad SEF person route");
+        } else if (key.text == "radius") {
+            if (!token_int(value, person.radius))
+                return format_error("bad SEF person radius");
+        } else if (key.text == "delay_min") {
+            if (!token_int(value, person.delay_min))
+                return format_error("bad SEF person delay_min");
+        } else if (key.text == "delay_max") {
+            if (!token_int(value, person.delay_max))
+                return format_error("bad SEF person delay_max");
+        } else if (key.text == "tribe") {
+            if (!token_text(value, person.tribe))
+                return format_error("bad SEF person tribe");
+        } else if (key.text == "scr_dialog") {
+            if (!token_text(value, person.dialog))
+                return format_error("bad SEF person scr_dialog");
+        } else if (key.text == "scr_inv") {
+            if (!token_text(value, person.inventory))
+                return format_error("bad SEF person scr_inv");
+        } else if (value.kind == TokenKind::lbrace) {
+            lexer.skip_balanced();
+            if (lexer.failed())
+                return format_error("unterminated SEF person block");
+        }
+    }
+}
+
+Result<std::vector<SefPerson>> parse_persons(Lexer& lexer) {
+    const Token open = next_non_semicolon(lexer);
+    if (lexer.failed())
+        return format_error("unterminated SEF persons section");
+    if (open.kind != TokenKind::lbrace)
+        return format_error("SEF persons section has no opening brace");
+
+    std::vector<SefPerson> persons;
+    while (true) {
+        const Token key = next_non_semicolon(lexer);
+        if (lexer.failed())
+            return format_error("unterminated SEF persons section");
+        if (key.kind == TokenKind::end)
+            return format_error("truncated SEF persons section");
+        if (key.kind == TokenKind::rbrace)
+            return persons;
+        if (key.kind != TokenKind::word || key.text != "name")
+            return format_error("SEF person has no name");
+
+        Token name = lexer.next();
+        if (lexer.failed())
+            return format_error("unterminated SEF persons section");
+        if (name.kind == TokenKind::colon) {
+            name = lexer.next();
+            if (lexer.failed())
+                return format_error("unterminated SEF persons section");
+        }
+
+        SefPerson person;
+        if (!token_text(name, person.name))
+            return format_error("SEF person name is not a string");
+
+        const Token block = next_non_semicolon(lexer);
+        if (lexer.failed())
+            return format_error("unterminated SEF persons section");
+        if (block.kind != TokenKind::lbrace)
+            return format_error("SEF person has no block");
+
+        auto status = parse_person_fields(lexer, person);
+        if (!status)
+            return status.error();
+        persons.push_back(std::move(person));
+    }
+}
+} // namespace
 
 Result<SefData> parse_sef(std::span<const std::uint8_t> data) {
     try {
         SefData sef;
+        const std::string text(reinterpret_cast<const char*>(data.data()), data.size());
+        Lexer lexer(text);
         bool found_pack = false;
-        std::string_view text(reinterpret_cast<const char*>(data.data()), data.size());
-        if (text.starts_with("\xEF\xBB\xBF")) text.remove_prefix(3);
 
-        std::size_t position = 0;
-        std::size_t line_number = 0;
-        while (position <= text.size()) {
-            ++line_number;
-            const std::size_t newline = text.find('\n', position);
-            std::string_view line =
-                text.substr(position, newline == std::string_view::npos ? std::string_view::npos
-                                                                       : newline - position);
-            if (newline != std::string_view::npos) {
-                position = newline + 1;
-            } else {
-                position = text.size() + 1;
+        while (true) {
+            const Token key = lexer.next();
+            if (lexer.failed())
+                return format_error("unterminated string in SEF");
+            if (key.kind == TokenKind::end)
+                break;
+            if (key.kind == TokenKind::semicolon)
+                continue;
+            if (key.kind == TokenKind::lbrace) {
+                lexer.skip_balanced();
+                if (lexer.failed())
+                    return format_error("unterminated SEF block");
+                continue;
+            }
+            if (key.kind != TokenKind::word)
+                continue;
+
+            const Token separator = lexer.next();
+            if (lexer.failed())
+                return format_error("unterminated string in SEF");
+            if (separator.kind != TokenKind::colon) {
+                if (separator.kind == TokenKind::lbrace) {
+                    lexer.skip_balanced();
+                    if (lexer.failed())
+                        return format_error("unterminated SEF block");
+                }
+                continue;
             }
 
-            line = trim(strip_comment(line));
-            if (line.empty()) continue;
+            if (key.text == "persons") {
+                auto persons = parse_persons(lexer);
+                if (!persons)
+                    return persons.error();
+                sef.persons = std::move(persons.value());
+                continue;
+            }
 
-            std::size_t key_end = 0;
-            while (key_end < line.size() && line[key_end] != ':' && !is_space(line[key_end]))
-                ++key_end;
-            std::string_view key = line.substr(0, key_end);
-            std::size_t colon = key_end;
-            while (colon < line.size() && is_space(line[colon])) ++colon;
-            if (colon >= line.size() || line[colon] != ':') continue;
-            const std::string_view value = trim(line.substr(colon + 1));
+            const Token value = lexer.next();
+            if (lexer.failed())
+                return format_error("unterminated string in SEF");
+            if (value.kind == TokenKind::lbrace) {
+                lexer.skip_balanced();
+                if (lexer.failed())
+                    return format_error("unterminated SEF block");
+                continue;
+            }
+            if (value.kind == TokenKind::end)
+                break;
 
-            if (key == "pack") {
-                auto close = read_quoted(value);
-                if (!close.has_value())
-                    return format_error(close.error().message + " on line " +
-                                        std::to_string(line_number));
-                sef.pack = ascii_lower(value.substr(1, static_cast<std::size_t>(close.value() - 1)));
+            if (key.text == "pack") {
+                if (value.kind != TokenKind::string)
+                    return format_error("SEF pack value is not a quoted string");
+                sef.pack = ascii_lower(value.text);
                 found_pack = true;
-            } else if (key == "internal_location" || key == "exit_to_global_map" ||
-                       key == "exit_to_globalmap") {
+            } else if (key.text == "internal_location" || key.text == "exit_to_global_map" ||
+                       key.text == "exit_to_globalmap") {
                 int number = 0;
-                if (!parse_int(value, number))
-                    return format_error("bad SEF " + std::string(key) + " on line " +
-                                        std::to_string(line_number));
-                if (key == "internal_location")
+                if (!parse_int(value.text, number))
+                    return format_error("bad SEF " + std::string(key.text));
+                if (key.text == "internal_location")
                     sef.internal_location = number != 0;
                 else
                     sef.exit_to_global_map = number != 0;
-            } else if (key == "weather") {
+            } else if (key.text == "weather") {
                 int number = 0;
-                if (!parse_int(value, number))
-                    return format_error("bad SEF weather on line " +
-                                        std::to_string(line_number));
+                if (!parse_int(value.text, number))
+                    return format_error("bad SEF weather");
                 sef.weather = number;
             }
         }
 
-        if (!found_pack) return format_error("SEF is missing the pack field");
+        if (!found_pack)
+            return format_error("SEF is missing the pack field");
         return sef;
     } catch (const std::bad_alloc&) {
         return format_error("SEF allocation failed");
     }
 }
-}
+} // namespace gl::assets

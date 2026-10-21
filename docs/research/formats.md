@@ -123,6 +123,23 @@ weight_x10   : uint32
   в нижний регистр (`L1_1` → `l1_1`), т.к. VFS регистронезависим. Комментарии `//`
   до конца строки, CRLF и табы допускаются; блок-комментариев в файле нет.
 
+### Person-скрипты и SEF `persons:` (P4a, 2026-10-21)
+
+- В `scripts.pak` 782 файла `scripts/persons/*.scr`; у всех `res_name` и `level` в
+  ожидаемом формате, 15 реальных скриптов `l1_1` разобраны без ошибок. Текст cp1251,
+  комментарии `//`, верхнеуровневые `key: value` или
+  `key value`, строки в кавычках; блоки `key { ... }` (`weapon`, `skills`, `magic`, `ai`,
+  `trade_panel`) игнорируются. `res_name` обязателен; `level` — целое, по умолчанию 0.
+- `levels/single/l1_1/l1_1.sef`: в `persons:` **16** записей; при этом во всём файле
+  **41** блок `name:` — остальные 25 находятся в `points_entrance`, `cell_groups` и
+  `triggers`. Поля записи: `name`, `position X Y` (тайлы), `literary_name`, `direction`,
+  `route_type`, `route`, `radius`, `delay_min/max`, `tribe`, `scr_dialog`, `scr_inv`;
+  `route` присутствует только у движущихся NPC.
+- 15 уникальных имён `l1_1` (одно повторяется) соответствуют 15 файлам
+  `scripts/persons/<lower(name)>.scr`; все найдены и разобраны. Первый:
+  `L1_1.P387_Poison_Plotnik` → `L0.P1131_Inhabitans03`; последний:
+  `L1.P620_Svet_3CircusWorker2` → `L0.P1158_Clowns_Male01`.
+
 ## PAD (анимационные листы персонажей)
 
 Подтверждено на всех 276 `.pad` из `persons.pak` (`I:\Games\Златогорье-2`, 2026-10-21):

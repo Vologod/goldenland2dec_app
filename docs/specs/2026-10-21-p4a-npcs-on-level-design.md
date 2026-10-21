@@ -31,9 +31,10 @@ P4a — первый шаг P4; движение и взаимодействие
 
 ## 3. Данные (подтверждено)
 
-- `levels/single/l1_1/l1_1.sef` → секция `persons:` — **41** запись; поля:
-  `name`, `position X Y` (тайлы), `literary_name`, `direction`, `route_type`, `route`,
-  `radius`, `delay_min/max`, `tribe`, `scr_dialog`, `scr_inv`.
+- `levels/single/l1_1/l1_1.sef` → секция `persons:` — **16** записей (всего в файле
+  41 блок `name:`, но остальные 25 принадлежат `points_entrance`, `cell_groups` и
+  `triggers`); поля: `name`, `position X Y` (тайлы), `literary_name`, `direction`,
+  `route_type`, `route`, `radius`, `delay_min/max`, `tribe`, `scr_dialog`, `scr_inv`.
 - Person-скрипт: `scripts/persons/<lower(name)>.scr` (например,
   `l1_1.p387_poison_plotnik.scr`).
 - `.scr`: `res_name: "L0.P1131_Inhabitans03"`, статы, `skills: {}`, `magic: {}`,
@@ -81,20 +82,21 @@ Unit:
 
 - PAD: синтетика (одна анимация, crops, shadow), битые размеры; реальные `.pad` из
   `persons.pak` — все парсятся (0 ошибок), счётчик > 0.
-- Person `.scr`: res_name, статы, блоки; битые строки; реальные 41 person-скриптов `l1_1`.
-- SEF persons: синтетика + `l1_1` = 41, поля корректны; битые секции.
+- Person `.scr`: res_name, статы, блоки; битые строки; реальные 15 уникальных
+  person-скриптов `l1_1` (16 записей, один `name` повторяется).
+- SEF persons: синтетика + `l1_1` = 16, поля корректны; битые секции.
 
 Integration:
 
-- Для каждого из 41 NPC `l1_1`: `.scr` найден, `res_name` не пуст, `.pad` и
+- Для каждого из 16 NPC `l1_1`: `.scr` найден, `res_name` не пуст, `.pad` и
   `animation/rt_stay.csx` найдены, PAD содержит `rt_stay`.
 - Screenshot `l1_1`: 1280×720, NPC-пиксели присутствуют (диалог с фоном без NPC),
-  число загруженных NPC = 41.
+  число загруженных NPC = 16.
 - Отсутствующий спрайт/скрипт → warning, NPC пропускается.
 
 ## 6. Критерии готовности
 
-1. 41 NPC `l1_1` загружаются и рисуются в правильных позициях/направлениях.
+1. 16 NPC `l1_1` загружаются и рисуются в правильных позициях/направлениях.
 2. Все реальные `.pad` в `persons.pak` парсятся; ошибок 0.
 3. Screenshot с NPC отличается от кадра без NPC.
 4. `gl_assets`/`gl_game` SDL-free; документы обновлены.

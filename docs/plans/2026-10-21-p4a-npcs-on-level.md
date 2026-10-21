@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: superpowers:subagent-driven-development or executing-plans. Steps: `- [ ]`.
 
-**Goal:** Load the 41 NPCs of `l1_1` from SEF/person scripts and draw their standing (`rt_stay`) animation with direction.
+**Goal:** Load the 16 NPCs of `l1_1` from SEF/person scripts and draw their standing (`rt_stay`) animation with direction.
 
 **Architecture:** `gl_assets` parses PAD and person `.scr`, and extends SEF with `persons`. `gl_game` resolves `res_name` → sprite dir and loads PAD + `rt_stay` textures. `gl_app::LevelScreen` renders them.
 
@@ -80,7 +80,7 @@ struct PersonDef {
 Result<PersonDef> parse_person_script(std::span<const std::uint8_t> data);
 ```
 (At least `res_name` + `level`; keep raw values for P4b/P5.)
-Tests: synthetic; all 41 `l1_1` person scripts parse; missing `res_name` → format.
+Tests: synthetic; all 15 distinct `l1_1` person scripts parse; missing `res_name` → format.
 
 **SEF persons:** extend `SefData`:
 ```cpp
@@ -95,7 +95,7 @@ struct SefPerson {
 std::vector<SefPerson> persons;
 ```
 Parse the `persons: { name: "..."; { position x y; direction "..."; ... } }` text.
-Tests: `l1_1` → 41 persons; known first/last fields; synthetic.
+Tests: `l1_1` → 16 persons; known first/last fields; synthetic.
 
 - [ ] TDD, implement, commit.
 
@@ -122,7 +122,7 @@ Result<std::vector<PersonInstance>> load_persons(GameVfs&, const std::string& le
   `scripts/persons/<lower(name)>.scr`; parse; `res_name` → `persons/<lower(res_name)>/`
   (`<res>.pad`, `animation/rt_stay.csx`, `shadows/rt_stay.csx`); decode CSX; keep PAD.
 - Missing script/sprite/PAD → warning + skip.
-- Tests: `l1_1` → 41 instances; each has a PAD with `rt_stay`; sprite size matches
+- Tests: `l1_1` → 16 instances; each has a PAD with `rt_stay`; sprite size matches
   `frame_width*frames_per_row × frame_height*8` (or the sheet dimensions); direction mapping.
 
 - [ ] TDD, implement, commit.
@@ -138,7 +138,7 @@ Result<std::vector<PersonInstance>> load_persons(GameVfs&, const std::string& le
   tables; mirror when the direction maps to a mirrored row (swap U).
 - Optional shadow from `shadows/rt_stay.csx` with `shadowFrame` anchors; behind sprite.
 - Screenshot test: `l1_1` with NPCs vs a debug flag `--no-persons` (add to glview/glgame)
-  → images differ, 1280×720; NPC count 41 in logs.
+  → images differ, 1280×720; NPC count 16 in logs.
 - Tests: existing screenshots updated; new no-persons comparison.
 
 - [ ] Implement, tests, commit.
@@ -147,7 +147,7 @@ Result<std::vector<PersonInstance>> load_persons(GameVfs&, const std::string& le
 
 ### Task 5: Acceptance + docs
 
-- Full `ctest` with `GL_GAME_DIR`; NPC screenshot; count 41; all `.pad` parse.
+- Full `ctest` with `GL_GAME_DIR`; NPC screenshot; count 16; all `.pad` parse.
 - Manual: `glgame --game-dir ... --level l1_1` shows NPCs; Esc/menu.
 - Docs: STATUS/PROJECT/plan/research; P4a accepted; next P4b.
 - Commit.
