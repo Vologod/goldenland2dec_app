@@ -122,7 +122,7 @@ Result<std::vector<PersonInstance>> load_persons(GameVfs&, const std::string& le
   `scripts/persons/<lower(name)>.scr`; parse; `res_name` → `persons/<lower(res_name)>/`
   (`<res>.pad`, `animation/rt_stay.csx`, `shadows/rt_stay.csx`); decode CSX; keep PAD.
 - Missing script/sprite/PAD → warning + skip.
-- Tests: `l1_1` → 16 instances; each has a PAD with `rt_stay`; sprite size matches
+- Tests: `l1_1` → 16 instances; each has a PAD with `rt_stay` (10) or `tb_stay` (6); sprite size matches
   `frame_width*frames_per_row × frame_height*8` (or the sheet dimensions); direction mapping.
 
 - [x] TDD, implement, commit.

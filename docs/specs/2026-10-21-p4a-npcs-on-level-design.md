@@ -92,7 +92,7 @@ Unit:
 Integration:
 
 - Для каждого из 16 NPC `l1_1`: `.scr` найден, `res_name` не пуст, `.pad` и
-  `animation/rt_stay.csx` найдены, PAD содержит `rt_stay`.
+  `animation/rt_stay.csx` найдены; PAD содержит `rt_stay` (10/16) или `tb_stay` (6/16).
 - Screenshot `l1_1`: 1280×720, NPC-пиксели присутствуют (диалог с фоном без NPC),
   число загруженных NPC = 16.
 - Отсутствующий спрайт/скрипт → warning, NPC пропускается.
