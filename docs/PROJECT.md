@@ -45,8 +45,8 @@
 | P0 | Ассеты и форматы | библиотека `gl_assets` + CLI `glpak`: VFS/PAK/zlib, CSX, SDB, ITM, BMP; unit + real-data тесты; 4 обязательных архива распакованы и сверены, остальные — по FAT | — | `[x]` |
 | P1 | Рендер изометрии и уровень | SDL2-рендер реальной локации, камера, анимации | P0 | `[~]` Tasks 1–8: platform, LVL, LAO/SEF, CSX frames, LevelLoader, background, statics/animations, camera/input, debug overlay, screenshot. P1 automated acceptance passed; manual desktop pass pending. Android/touch — P1b |
 | P2 | Ядро движка | цикл, `.ini`, консоль/команды, save/load, состояния | P0 | `[~]` P2a/P2b/P2c приняты; полная десериализация/запись save — позже |
-| P3 | Скрипт-машина | CS-байткод VM, AgeScript, диалоги, SDB | P2 | `[~]` P3a принята: `.cs` parser, VM + globals, dialog flow + native registry, tools `glpak disasm-cs` / `glscript`, automated acceptance (11/11, 555/555 `.cs`); final hardening: eval budget, assign type coercion, opcodes `1/3..5/12/13/19/20`, sticky errors. P3c: Tasks 1–3 (UTF-8/TTF font, `DialogSession`, `glgame` dialog screen + `--dialog`/`--font`, `glscript --sdb`) реализованы; дальше Task 4 (acceptance + docs) |
-| P4 | Персонажи/AI/триггеры | `.prs/.ssh/.inf`, поиск пути, встречи | P3 | `[ ]` |
+| P3 | Скрипт-машина | CS-байткод VM, AgeScript, диалоги, SDB | P2 | `[~]` P3a принята: `.cs` parser, VM + globals, dialog flow + native registry, tools `glpak disasm-cs` / `glscript`, automated acceptance (11/11, 555/555 `.cs`); final hardening: eval budget, assign type coercion, opcodes `1/3..5/12/13/19/20`, sticky errors. P3c: Tasks 1–4 (UTF-8/TTF font, `DialogSession`, `glgame` dialog screen + `--dialog`/`--font`, `glscript --sdb`, automated acceptance 13/13) завершены; **manual dialog UI gate pending**, после него P3c `[x]` |
+| P4 | Персонажи/AI/триггеры | `.prs/.ssh/.inf`, поиск пути, встречи | P3 | `[ ]` Pending — следующий кандидат после P3c/P1b |
 | P5 | Игровые системы | параметры/скиллы, инвентарь, магия, бой | P4 | `[ ]` |
 | P6 | Мир | глобальная карта, локации, квесты, дневник, торговля | P5 | `[ ]` |
 | P7 | UI | все экраны и тач-раскладка | P5 | `[ ]` |

@@ -12,41 +12,32 @@ gate завершены (2026-10-20); P2a принята. P2b — детерми
 P2c — save/load каркас: реализация и автоматизированная приёмка завершены (2026-10-20);
 открыт manual UI gate (Continue → слоты, Esc). P3a — CS VM: Tasks 1–5 завершены
 2026-10-21, автоматизированная приёмка пройдена, P3a принята (manual UI gate для P3a
-нет). P3c — dialogs + SDB + TTF: Tasks 1–2 завершены; Task 3 (`glgame` dialog screen,
-`--dialog`/`--font`, `glscript --sdb`) реализован и проверен 2026-10-21, fix rounds 1–2
-применены; следующий — Task 4 (acceptance + docs). P3b (AgeScript) / P1b (Android/touch) — после P3c;
-P2 backfill отложен.
+нет). P3c — dialogs + SDB + TTF: Tasks 1–4 завершены 2026-10-21; автоматизированная
+приёмка пройдена (13/13 ctest, `glscript --sdb`, dialog PNG), **manual dialog UI gate
+OPEN**. Следующий — P4 (NPC) или P1b (Android/touch); P2 backfill отложен.
 
 ## Текущая задача
 
-**P3c — Task 3 (`glgame` dialog screen + `--dialog`/`--font` + `glscript --sdb`)
-завершён 2026-10-21; fix rounds 1–2 применены.** `glgame` получил
-`--dialog <virtual/path.cs>` (globals, SDB, CS → `ScriptVm` + `DialogSession`, экран
-сразу), `--font <ttf>` и поиск системного шрифта с ASCII-fallback. Меню: пункт
-`Test Dialog` только при наличии `scripts/dialogs/demon.d1.age.cs`; экран — тёмная
-нижняя панель, NPC-текст TTF с переносом, нумерованные ответы (Up/Down/мышь,
-Enter/клик), `Esc` → меню или выход для `--dialog`, сообщение при `end`/отсутствии
-ответов. `--screenshot --dialog` рендерит кадр 1280×720. Заголовки save-слотов теперь
-рисуются загруженным TTF (кириллица вместо `?`); без шрифта остаётся ASCII-fallback.
-`glscript --sdb <path>` печатает `<id>\t<text>` для `dialogs_data()` после каждого
-останова; коды выхода не менялись. Fix round 1: прямой `--dialog` принудительно
-выключает консоль (`d_console` из INI игнорируется, `~` работает); цепочка шрифтов
-`--font` → системный → ASCII; сообщение об ошибке `choose()` видно и при `waiting()`;
-подсказка без ответов — `Esc to close`; текст/ответы ограничены по вертикали (скролл —
-в backlog); тесты проверяют реальную загрузку шрифта, fallback, отличие кадра от меню,
-содержимое нижней панели, `d_console 1` и возвращают 77 без шрифта. Fix round 2:
-`--no-font` (dev/debug) принудительно включает ASCII; цепочка шрифтов закреплена тестами
-(другой системный TTF отличается от дефолтного, `--no-font` отличается от TTF,
-невалидный `--font` побайтово равен дефолтному); прямоугольник подсветки обрезается по
-`content_bottom`; `dialog_message_` вынесен в отдельную нижнюю полосу и не перекрывает
-последний ответ; проба доступности шрифта кэшируется. `gl_assets`/`gl_script` остались
-SDL-free. Проверка: `cmake --build build` — успех; `gl_cs_tools_tests` — 9/9
-(67 assertions), `glgame_screenshot_tests` — 13/13 (236 assertions); полный `ctest`
-с `GL_GAME_DIR` — **13/13 passed**, 607.05 s, exit 0;
-`glscript --sdb` на `demon.d1.age.cs` — exit 0, `2684\tЧего уставился?` и др.;
-dialog PNG — 1280×720, 511 цветов (выборка каждые 2 px), SHA-256
-`0CA504587996AE0A7345C0754C940DDB6730AC732FD562CD5C56622A8A82A56C`.
-Следующая задача — P3c Task 4 (automated acceptance + docs).
+**P3c — Task 4 (automated acceptance + docs) завершён 2026-10-21; P3c automated
+acceptance passed.** `cmake --build build` — `ninja: no work to do`, exit 0. Полный
+`ctest --test-dir build --output-on-failure` с `GL_GAME_DIR` — **13/13 passed**,
+652.23 s, exit 0 (real-data 562.27 s, glview 32.26 s, glgame 42.46 s); суммарно
+318 test cases / 2649 assertions, 0 failed. `glscript --game-dir
+"I:\Games\Златогорье-2" --file scripts/dialogs/demon.d1.age.cs --run --sdb
+sdb/dialogs/dialogsphrases.sdb` — exit 0, `status: wait_user`, `steps: 43`,
+`dialogs: 2684 2686 2696`, `answers: 2`, затем `2684<TAB>Чего уставился?`,
+`2686<TAB>Я не думал, что демоны разумны...`, `2696<TAB>Ничего. Я пошел...`;
+два ожидаемых warning `globals: line 918/1262: missing value`.
+`glgame --game-dir ... --dialog scripts/dialogs/demon.d1.age.cs --screenshot
+%TEMP%\p3c_dialog.png` — exit 0; PNG 1280×720, 54 332 байта, 552 цвета (выборка
+каждые 2 px; 771 уникальный цвет), SHA-256
+`2544FFD6F2A4B5729EF43413C26D20862B669E62F6C8CC71875EB45E65F2BFE1`; два прогона
+побайтово совпали, загружен `C:\Windows\Fonts\segoeui.ttf`, console=0. Дефектов
+автоматизированная приёмка не выявила. Ограничение P2c с `?` в заголовках save-слотов
+закрыто TTF (ASCII-fallback остаётся только без шрифта). **Manual dialog UI gate OPEN:**
+человек должен запустить `glgame --dialog ...` и проверить читаемость кириллицы, выбор
+ответа (Up/Down, Enter/мышь) и `Esc`; агент это не проверял. Следующая задача —
+P4 (NPC) или P1b (Android/touch).
 
 **P3a — финальная волна правок (whole-branch review) завершена 2026-10-21.**
 Исправлены: бюджет вычисления выражения (`kEvalBudget = 100'000` вызовов `eval` на
@@ -486,15 +477,18 @@ P0 закрыт 2026-10-19; далее выполнялись задачи P1 (�
   подсветка обрезается по `content_bottom`; `dialog_message_` в отдельной полосе ниже
   ответов; проба шрифта кэширована; `glgame_screenshot_tests` 13/13 (236), полный
   `ctest` 13/13 (607.05 s).
+- 2026-10-21: P3c Task 4 — automated acceptance + docs: build exit 0; полный `ctest`
+  13/13 (652.23 s), 318 test cases / 2649 assertions; `glscript --sdb` — `2684<TAB>Чего
+  уставился?` и др.; dialog PNG 1280×720, 552 sampled / 771 unique colours, SHA-256
+  `2544FFD6...`; P3c automated acceptance passed; **manual dialog UI gate OPEN**.
+  Ограничение P2c с `?` в заголовках save-слотов закрыто TTF.
 
 ## Следующие задачи
 
-1. P3c: диалоги + SDB + кириллический TTF-шрифт — spec/plan готовы
-   (`docs/specs/2026-10-20-p3c-dialogs-sdb-font-design.md`, `docs/plans/2026-10-20-p3c-dialogs-sdb-font.md`);
-   Tasks 1–3 (UTF-8/Font, `DialogSession`, `glgame` screen + tools) завершены, дальше
-   Task 4 (automated acceptance + docs).
+1. P3c: диалоги + SDB + кириллический TTF-шрифт — Tasks 1–4 и automated acceptance
+   завершены 2026-10-21; **manual dialog UI gate OPEN** (см. Open Questions).
    AgeScript-компилятор не требуется: `.scr` — конфиги.
-2. P4: персонажи/NPC (`.prs/.inf`), привязка диалогов к NPC.
+2. P4: персонажи/NPC (`.prs/.inf`), привязка диалогов к NPC — pending.
 3. P1b: Android/touch — отложенный follow-up P1.
 
 ## Открытые вопросы
@@ -502,9 +496,9 @@ P0 закрыт 2026-10-19; далее выполнялись задачи P1 (�
 - P1: финальный manual desktop pass — WASD/стрелки, `Home` и визуальный `F1` toggle
   на обычном рабочем столе. В текущей headless-сессии клавиатурный фокус недоступен;
   drag-панорама и wheel-зум проверены инъекцией мыши, overlay — screenshot-тестом.
-- P2c: Cyrillic/cp1251 save-slot titles rendered as `?` with `stb_easy_font`. P3c Task 3
-  закрыл это для `glgame`: при загруженном TTF строки слотов рисуются им. Без системного
-  шрифта и без `--font` остаётся ASCII-fallback (`?`); Android/P9 должен приложить TTF.
+- P3c: manual dialog UI gate — человек должен запустить `glgame --dialog
+  scripts/dialogs/demon.d1.age.cs`, прочитать кириллицу, выбрать ответ (Up/Down,
+  Enter/мышь) и выйти по `Esc`. Автоматизированная приёмка это не заменяет.
 - P3c: `DialogSession::start()` intentionally calls `ScriptVm::restart(true)` — variables are
   rebuilt from globals and seeded runtime state is discarded. `start()`/`choose()` map
   `vm.failed()` to `ErrorCode::format`; `status()`/`failed()` remain available for diagnosis.

@@ -64,9 +64,15 @@
   ответов, не перепечатывая последний ответ. Полноценный скролл не реализован —
   вынесен в backlog.
 - `--screenshot --dialog ...` рендерит детерминированный кадр 1280×720. Проверка
-  на целевой установке: PNG 1280×720, 49 484 байта, 511 цветов (выборка каждые 2 px),
-  SHA-256 `0CA504587996AE0A7345C0754C940DDB6730AC732FD562CD5C56622A8A82A56C`
-  (чистый конфиг `d_console 0`).
+  Task 3 на целевом конфиге (`--config <tmp.ini>`, `d_console 0`, `--width 1280
+  --height 720`): PNG 49 484 байта, 511 цветов (выборка каждые 2 px), SHA-256
+  `0CA504587996AE0A7345C0754C940DDB6730AC732FD562CD5C56622A8A82A56C`.
+- В приёмочном прогоне Task 4 без `--config` используется реальный `GoldenLand.ini`;
+  кадр отличается от чистого конфига (54 332 байта, 552 цвета при выборке каждые 2 px,
+  771 уникальный цвет, SHA-256
+  `2544FFD6F2A4B5729EF43413C26D20862B669E62F6C8CC71875EB45E65F2BFE1`), но два
+  последовательных прогона побайтово совпали. Это различие конфигурации, не
+  недетерминированность рендера.
 
 ## `glscript --sdb`
 
@@ -77,6 +83,26 @@
   sdb/dialogs/dialogsphrases.sdb` → `status: wait_user`, `steps: 43`,
   `dialogs: 2684 2686 2696`, `answers: 2`, затем три строки `id<TAB>текст`.
 - Коды выхода не изменились: 0 успех, 1 аргументы, 2 I/O, 3 формат/VM.
+
+## Automated acceptance (Task 4, 2026-10-21)
+
+- `cmake --build build` — `ninja: no work to do`, exit 0.
+- `ctest --test-dir build --output-on-failure` с `GL_GAME_DIR=I:\Games\Златогорье-2`
+  — **13/13 passed**, 652.23 s, exit 0; суммарно 318 test cases / 2649 assertions,
+  0 failed. `gl_assets_real_tests` — 562.27 s, `glgame_screenshot_tests` — 42.46 s.
+- `glscript --game-dir "I:\Games\Златогорье-2" --file
+  scripts/dialogs/demon.d1.age.cs --run --sdb sdb/dialogs/dialogsphrases.sdb` — exit 0:
+  `status: wait_user`, `steps: 43`, `dialogs: 2684 2686 2696`, `answers: 2`, затем
+  `2684<TAB>Чего уставился?`, `2686<TAB>Я не думал, что демоны разумны...`,
+  `2696<TAB>Ничего. Я пошел...`; два ожидаемых warning
+  `globals: line 918/1262: missing value`.
+- `glgame --game-dir "I:\Games\Златогорье-2" --dialog
+  scripts/dialogs/demon.d1.age.cs --screenshot %TEMP%\p3c_dialog.png` — exit 0,
+  шрифт `C:\Windows\Fonts\segoeui.ttf`, console=0; PNG 1280×720, 54 332 байта,
+  552 цвета (выборка каждые 2 px), SHA-256 `2544FFD6F2A4B5729EF43413C26D20862B669E62F6C8CC71875EB45E65F2BFE1`.
+- **Manual dialog UI gate OPEN:** читаемость кириллицы, выбор ответа (Up/Down,
+  Enter/мышь) и `Esc` в реальном окне должен проверить человек; automated acceptance
+  этого не заменяет.
 
 ## Тесты
 
