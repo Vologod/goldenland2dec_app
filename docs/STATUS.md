@@ -10,11 +10,24 @@ P2a — оболочка игры и консоль: реализация, ав�
 gate завершены (2026-10-20); P2a принята. P2b — детерминированный тик: реализация,
 автоматизированная приёмка и manual interactive gate завершены (2026-10-20); P2b принята.
 P2c — save/load каркас: реализация и автоматизированная приёмка завершены (2026-10-20);
-открыт manual UI gate (Continue → слоты, Esc). P3a — CS VM: Task 1 (парсер `.cs`)
-завершён 2026-10-21. Следующие подпроекты — продолжение P3a или P1b (Android/touch);
-P2 backfill отложен.
+открыт manual UI gate (Continue → слоты, Esc). P3a — CS VM: Task 1 (парсер `.cs`) и
+Task 2 (VM + globals) завершены 2026-10-21. Следующие подпроекты — продолжение P3a или
+P1b (Android/touch); P2 backfill отложен.
 
 ## Текущая задача
+
+**P3a — Task 2 (VM core + globals) завершён 2026-10-21.**
+Добавлена SDL-free библиотека `gl_script`: `Value`, `ScriptGlobal`/`parse_globals`
+(`int`/`DWORD`/`float`/`string`, `//`-комментарии, cp1251→UTF-8, строки без значения/битые
+строки пропускаются с warning), `ScriptHost`, `ScriptVm` (opcodes 0/2, 6..11, 14..18,
+21..24, 48..50; логика/сравнения/арифметика/assign/jmp; `D_Say`/`D_Answer` записываются,
+`D_CloseDialog` → `end`, `Exit`/`Signal`/`Console`/`Cmd` — заглушки, остальные — host),
+`restart(true/false)`, счётчик 10 000 000 шагов → `infinity`, безопасная обработка битых
+индексов/опкодов. Семантика сверена с `GoldenLandEditor::CsExecutor` и реальными `.cs`
+(`docs/research/p3a-cs-vm.md`, D-023). Тесты: `gl_script_tests` — 22 cases / 139
+assertions; полный `ctest` с `GL_GAME_DIR` — **9/9 passed**, 478.88 s. Smoke-прогон
+`demon.d1.age.cs` + `zlato_vars.scr` → `wait_user` (43 шага). Следующая задача — P3a
+Task 3 (dialogs + native registry).
 
 **P3a — Task 1 (`.cs` parser + name tables) завершён 2026-10-21.**
 `gl_assets` получил `CsNode`, `parse_cs`, `cs_opcode_name`, `cs_function_name`,
@@ -318,10 +331,15 @@ P0 закрыт 2026-10-19; далее выполнялись задачи P1 (�
   только при невалидном первом опкоде с объединённой ошибкой, real-тест читает
   `scripts.pak` через `PakArchive::open_from_memory` (1.26 s); тесты усечений
   опкода/func и битого legacy; `ctest` 8/8 (453.16 s).
+- 2026-10-21: P3a Task 2 — `gl_script` (`parse_globals`, `ScriptHost`, `ScriptVm`):
+  логика/сравнения/арифметика/assign/jmp/func, `D_Say`/`D_Answer`/`D_CloseDialog`,
+  restart-семантика, лимит 10M шагов; D-023; research note `docs/research/p3a-cs-vm.md`;
+  `gl_script_tests` 22 cases / 139 assertions; полный `ctest` 9/9 (478.88 s).
 
 ## Следующие задачи
 
-1. P3a: CS VM core — Task 1 (парсер `.cs`) завершён; следующая — Task 2 (VM + globals)
+1. P3a: CS VM core — Task 1 (парсер `.cs`) и Task 2 (VM + globals) завершены; следующая —
+   Task 3 (dialogs + native registry)
    (`docs/specs/2026-10-20-p3a-cs-vm-design.md`, `docs/plans/2026-10-20-p3a-cs-vm.md`).
 2. P3b/P3c: AgeScript-компилятор, диалоги/SDB, полный набор native-функций.
 3. P1b: Android/touch — отложенный follow-up P1.
