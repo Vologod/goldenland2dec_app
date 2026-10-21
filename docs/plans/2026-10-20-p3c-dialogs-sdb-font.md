@@ -50,10 +50,17 @@ std::vector<std::string> wrap(std::string_view utf8, float max_width) const;
 ```
 Glyph atlas: ASCII + U+0400–U+04FF + U+2000–U+206F; RGBA texture; `stbtt_GetCodepointBitmap`.
 - Fallback: if font load fails, use the existing ASCII `draw_text`.
-- Font discovery helper: `--font` path else `segoeui.ttf`/`arial.ttf`/`consola.ttf` in `C:\Windows\Fonts`.
-- Tests: UTF-8 decode; glyph count/measure >0 with a real system font (skip 77 if none); wrap on spaces/newlines; fallback path for a missing font.
+- Font discovery helper: `find_system_font()` checks `segoeui.ttf`/`arial.ttf`/`consola.ttf` in
+  `C:\Windows\Fonts`; `--font <path>` is owned by `glgame` (Task 3).
+- `pixel_height` is limited to `[8, 256]`; out-of-range values return `ErrorCode::argument`
+  (prevents atlas overflow). Atlas rows widen to the widest glyph.
+- Control characters: `\r` and other C0/C1 controls are ignored, `\t` expands to four spaces;
+  `measure`, `wrap` and `draw_text` share the same normalization.
+- Tests: UTF-8 decode always runs (`utf8_tests`); font-dependent cases are `font_tests`
+  (skip 77 if no system font) and cover measure/wrap, control characters, render pixels,
+  the missing-font error, and rejected pixel heights.
 
-- [ ] TDD, implement, commit.
+- [x] TDD, implement, commit.
 
 ---
 
@@ -83,6 +90,10 @@ class DialogSession {
 ### Task 3: `glgame` dialog screen + tools
 
 - `--dialog <virtual/path.cs>`: load globals/SDB/CS, open the dialog screen directly.
+- `--font <path>`: explicit TTF override; otherwise `find_system_font()`, then ASCII fallback
+  if no font loads. No font file is bundled or committed. `glscript` stays SDL-free and only
+  prints UTF-8 text, so it does not take `--font`.
+- Android/P9 must bundle a free TTF and pass it via `--font` (no `C:\Windows\Fonts`).
 - Menu: `Test Dialog` (if `scripts/dialogs/demon.d1.age.cs` exists).
 - Screen: dark panel, NPC text (TTF/wrap), numbered answers, Up/Down/mouse, Enter/click,
   `Esc`; `waiting()` false → message + Esc.

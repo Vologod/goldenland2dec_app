@@ -7,7 +7,14 @@ add_test(NAME camera_tests COMMAND camera_tests)
 set_tests_properties(camera_tests PROPERTIES ENVIRONMENT
                      "SDL_VIDEODRIVER=dummy;SDL_RENDER_DRIVER=software")
 
-add_executable(font_tests test_utf8.cpp test_font.cpp)
+add_executable(utf8_tests test_utf8.cpp)
+target_include_directories(utf8_tests PRIVATE ${CMAKE_SOURCE_DIR}/third_party/doctest)
+target_link_libraries(utf8_tests PRIVATE gl_render)
+gl_enable_warnings(utf8_tests)
+
+add_test(NAME utf8_tests COMMAND utf8_tests)
+
+add_executable(font_tests test_font.cpp)
 target_include_directories(font_tests PRIVATE ${CMAKE_SOURCE_DIR}/third_party/doctest)
 target_link_libraries(font_tests PRIVATE gl_render SDL2::SDL2)
 gl_enable_warnings(font_tests)

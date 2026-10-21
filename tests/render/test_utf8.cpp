@@ -1,11 +1,8 @@
-#define SDL_MAIN_HANDLED
-#define DOCTEST_CONFIG_IMPLEMENT
-#include "gl/render/font.hpp"
+#define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "gl/render/utf8.hpp"
 
 #include <doctest.h>
 
-#include <cstdint>
 #include <string_view>
 #include <vector>
 
@@ -21,16 +18,6 @@ bool all_replacement(const std::vector<char32_t>& codepoints) {
 }
 
 } // namespace
-
-int main(int argc, char** argv) {
-    const bool has_font = gl::render::find_system_font().has_value();
-    doctest::Context context(argc, argv);
-    const int result = context.run();
-    if (!has_font && result == 0) {
-        return 77;
-    }
-    return result;
-}
 
 TEST_CASE("utf8_decode decodes ASCII") {
     const std::vector<char32_t> codepoints = gl::render::utf8_decode("Hello");

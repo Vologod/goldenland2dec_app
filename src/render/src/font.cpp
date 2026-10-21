@@ -7,9 +7,7 @@
 #include <algorithm>
 #include <array>
 #include <cstddef>
-#include <cstdint>
 #include <cstdlib>
-#include <cstring>
 #include <fstream>
 #include <iterator>
 #include <span>
@@ -25,6 +23,9 @@ namespace {
 constexpr char32_t kFallbackCodepoint = U'?';
 constexpr int kAtlasWidth = 512;
 constexpr int kPadding = 2;
+constexpr float kMinPixelHeight = 8.0f;
+constexpr float kMaxPixelHeight = 256.0f;
+constexpr int kTabSpaces = 4;
 
 struct Glyph {
     float advance = 0.0f;
@@ -49,6 +50,22 @@ struct PendingGlyph {
     int y = 0;
     std::vector<unsigned char> bitmap;
 };
+
+std::vector<char32_t> normalize_codepoints(std::string_view utf8) {
+    std::vector<char32_t> codepoints;
+    for (const char32_t codepoint : utf8_decode(utf8)) {
+        if (codepoint == U'\t') {
+            codepoints.insert(codepoints.end(), kTabSpaces, U' ');
+            continue;
+        }
+        if (codepoint == U'\r' || (codepoint < 0x20u && codepoint != U'\n') ||
+            (codepoint >= 0x7Fu && codepoint <= 0x9Fu)) {
+            continue;
+        }
+        codepoints.push_back(codepoint);
+    }
+    return codepoints;
+}
 
 std::string encode_utf8(std::span<const char32_t> codepoints) {
     std::string out;
@@ -151,8 +168,9 @@ Result<Font> Font::load_from_file(SDL_Renderer* renderer, const std::filesystem:
     if (renderer == nullptr) {
         return Error{ErrorCode::argument, "font: renderer is null"};
     }
-    if (pixel_height <= 0.0f) {
-        return Error{ErrorCode::argument, "font: pixel height must be positive"};
+    if (pixel_height < kMinPixelHeight || pixel_height > kMaxPixelHeight) {
+        return Error{ErrorCode::argument, "font: pixel height " + std::to_string(pixel_height) +
+                                              " outside supported range [8, 256]"};
     }
 
     std::ifstream file(path, std::ios::binary);
@@ -228,12 +246,20 @@ Result<Font> Font::load_from_file(SDL_Renderer* renderer, const std::filesystem:
         }
     }
 
+    int atlas_width = kAtlasWidth;
+    for (const PendingGlyph& glyph : pending) {
+        atlas_width = std::max(atlas_width, glyph.width + 2 * kPadding);
+    }
+
     int pen_x = kPadding;
     int pen_y = kPadding;
     int row_height = 0;
     int atlas_height = kPadding;
     for (PendingGlyph& glyph : pending) {
-        if (pen_x + glyph.width + kPadding > kAtlasWidth) {
+        if (glyph.width + 2 * kPadding > atlas_width) {
+            return Error{ErrorCode::format, "font: glyph exceeds atlas row width"};
+        }
+        if (pen_x + glyph.width + kPadding > atlas_width) {
             pen_x = kPadding;
             pen_y += row_height + kPadding;
             row_height = 0;
@@ -250,7 +276,7 @@ Result<Font> Font::load_from_file(SDL_Renderer* renderer, const std::filesystem:
     }
 
     const std::size_t pixel_count =
-        static_cast<std::size_t>(kAtlasWidth) * static_cast<std::size_t>(atlas_height);
+        static_cast<std::size_t>(atlas_width) * static_cast<std::size_t>(atlas_height);
     std::vector<unsigned char> pixels(pixel_count * 4, 0);
     for (std::size_t index = 0; index < pixel_count; ++index) {
         pixels[index * 4 + 0] = 255;
@@ -261,7 +287,7 @@ Result<Font> Font::load_from_file(SDL_Renderer* renderer, const std::filesystem:
     for (const PendingGlyph& glyph : pending) {
         for (int row = 0; row < glyph.height; ++row) {
             const std::size_t destination =
-                (static_cast<std::size_t>(glyph.y + row) * static_cast<std::size_t>(kAtlasWidth) +
+                (static_cast<std::size_t>(glyph.y + row) * static_cast<std::size_t>(atlas_width) +
                  static_cast<std::size_t>(glyph.x)) *
                 4;
             for (int column = 0; column < glyph.width; ++column) {
@@ -277,19 +303,21 @@ Result<Font> Font::load_from_file(SDL_Renderer* renderer, const std::filesystem:
             continue;
         }
         Glyph& target = found->second;
-        target.u0 = static_cast<float>(glyph.x) / static_cast<float>(kAtlasWidth);
-        target.v0 = static_cast<float>(glyph.y) / static_cast<float>(atlas_height);
-        target.u1 = static_cast<float>(glyph.x + glyph.width) / static_cast<float>(kAtlasWidth);
-        target.v1 = static_cast<float>(glyph.y + glyph.height) / static_cast<float>(atlas_height);
+        const float atlas_width_f = static_cast<float>(atlas_width);
+        const float atlas_height_f = static_cast<float>(atlas_height);
+        target.u0 = (static_cast<float>(glyph.x) + 0.5f) / atlas_width_f;
+        target.v0 = (static_cast<float>(glyph.y) + 0.5f) / atlas_height_f;
+        target.u1 = (static_cast<float>(glyph.x + glyph.width) - 0.5f) / atlas_width_f;
+        target.v1 = (static_cast<float>(glyph.y + glyph.height) - 0.5f) / atlas_height_f;
     }
 
     impl->texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_STATIC,
-                                      kAtlasWidth, atlas_height);
+                                      atlas_width, atlas_height);
     if (impl->texture == nullptr) {
         return Error{ErrorCode::io,
                      std::string("font: texture creation failed: ") + SDL_GetError()};
     }
-    if (SDL_UpdateTexture(impl->texture, nullptr, pixels.data(), kAtlasWidth * 4) != 0) {
+    if (SDL_UpdateTexture(impl->texture, nullptr, pixels.data(), atlas_width * 4) != 0) {
         return Error{ErrorCode::io, std::string("font: texture upload failed: ") + SDL_GetError()};
     }
     SDL_SetTextureBlendMode(impl->texture, SDL_BLENDMODE_BLEND);
@@ -306,7 +334,7 @@ void Font::draw_text(SDL_Renderer* renderer, std::string_view utf8, float x, flo
         return;
     }
 
-    const std::vector<char32_t> codepoints = utf8_decode(utf8);
+    const std::vector<char32_t> codepoints = normalize_codepoints(utf8);
     std::vector<SDL_Vertex> vertices;
     std::vector<int> indices;
     vertices.reserve(codepoints.size() * 4);
@@ -366,7 +394,11 @@ Vec2 Font::measure(std::string_view utf8) const {
         return Vec2{};
     }
 
-    const std::vector<char32_t> codepoints = utf8_decode(utf8);
+    const std::vector<char32_t> codepoints = normalize_codepoints(utf8);
+    if (codepoints.empty()) {
+        return Vec2{};
+    }
+
     float width = 0.0f;
     float widest = 0.0f;
     float height = impl_->line_height;
@@ -400,9 +432,13 @@ std::vector<std::string> Font::wrap(std::string_view utf8, float max_width) cons
         return lines;
     }
 
-    const std::vector<char32_t> codepoints = utf8_decode(utf8);
+    const std::vector<char32_t> codepoints = normalize_codepoints(utf8);
+    if (codepoints.empty()) {
+        return lines;
+    }
 
     auto wrap_paragraph = [&](std::span<const char32_t> paragraph) {
+        const std::size_t first_line = lines.size();
         if (max_width <= 0.0f) {
             emit_line(lines, paragraph);
             return;
@@ -464,6 +500,9 @@ std::vector<std::string> Font::wrap(std::string_view utf8, float max_width) cons
 
         if (!line.empty()) {
             emit_line(lines, line);
+        }
+        if (lines.size() == first_line) {
+            lines.emplace_back();
         }
     };
 

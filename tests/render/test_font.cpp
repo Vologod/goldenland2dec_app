@@ -1,3 +1,5 @@
+#define SDL_MAIN_HANDLED
+#define DOCTEST_CONFIG_IMPLEMENT
 #include "gl/render/font.hpp"
 
 #include <SDL.h>
@@ -5,6 +7,7 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -60,6 +63,29 @@ std::size_t non_black_pixel_count(const std::vector<std::uint32_t>& pixels) {
 
 } // namespace
 
+int main(int argc, char** argv) {
+    const bool has_font = gl::render::find_system_font().has_value();
+    doctest::Context context(argc, argv);
+    const int result = context.run();
+    if (!has_font && result == 0) {
+        return 77;
+    }
+    return result;
+}
+
+TEST_CASE("font rejects unsupported pixel heights") {
+    SoftwareCanvas canvas(64, 64);
+    const gl::Result<gl::render::Font> too_large =
+        gl::render::Font::load_from_file(canvas.renderer(), "no/such/font.ttf", 100000.0f);
+    REQUIRE_FALSE(too_large.has_value());
+    CHECK(too_large.error().code == gl::ErrorCode::argument);
+
+    const gl::Result<gl::render::Font> too_small =
+        gl::render::Font::load_from_file(canvas.renderer(), "no/such/font.ttf", 4.0f);
+    REQUIRE_FALSE(too_small.has_value());
+    CHECK(too_small.error().code == gl::ErrorCode::argument);
+}
+
 TEST_CASE("missing font file reports an error") {
     SoftwareCanvas canvas(64, 64);
     const gl::Result<gl::render::Font> font =
@@ -111,6 +137,43 @@ TEST_CASE("wrap splits long Cyrillic text on spaces") {
     REQUIRE(paragraphs.size() == 2);
     CHECK(paragraphs[0] == "Первая строка");
     CHECK(paragraphs[1] == "Вторая строка");
+}
+
+TEST_CASE("control characters are normalized consistently") {
+    const std::optional<std::filesystem::path> path = gl::render::find_system_font();
+    if (!path.has_value()) {
+        return;
+    }
+
+    SoftwareCanvas canvas(120, 80);
+    const gl::Result<gl::render::Font> loaded =
+        gl::render::Font::load_from_file(canvas.renderer(), *path, 20.0f);
+    REQUIRE(loaded.has_value());
+    const gl::render::Font& font = loaded.value();
+
+    CHECK(font.measure("a\tb").x == doctest::Approx(font.measure("a    b").x));
+    CHECK(font.measure("a\rb").x == doctest::Approx(font.measure("ab").x));
+    CHECK(font.measure("a\x01"
+                       "\x02"
+                       "b")
+              .x == doctest::Approx(font.measure("ab").x));
+    CHECK(font.measure("a\r\nb").y == doctest::Approx(font.measure("a\nb").y));
+    const std::string ignored_controls = std::string("\x01") + "\r";
+    CHECK(font.measure(ignored_controls).x == 0.0f);
+    CHECK(font.measure(ignored_controls).y == 0.0f);
+    CHECK(font.wrap(ignored_controls, 100.0f).empty());
+
+    const std::vector<std::string> lines = font.wrap("a\n   \nb", 1000.0f);
+    REQUIRE(lines.size() == 3);
+    CHECK(lines[0] == "a");
+    CHECK(lines[1].empty());
+    CHECK(lines[2] == "b");
+
+    font.draw_text(canvas.renderer(),
+                   "\x01"
+                   "\x02\r\t",
+                   4.0f, 4.0f, gl::render::Color{255, 255, 255, 255});
+    CHECK(non_black_pixel_count(canvas.read_pixels()) == 0);
 }
 
 TEST_CASE("ttf font draws visible Cyrillic pixels") {
