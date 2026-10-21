@@ -9,6 +9,22 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 option(GL_BUILD_TESTS "Build tests" ON)
 option(GL_BUILD_TOOLS "Build CLI tools" ON)
 
+if (WIN32 AND MINGW)
+    get_filename_component(GL_TOOLCHAIN_BIN "${CMAKE_CXX_COMPILER}" DIRECTORY)
+    set(GL_RUNTIME_COPY_COMMANDS
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
+    foreach(GL_RUNTIME_DLL libc++.dll libunwind.dll libwinpthread-1.dll)
+        if (EXISTS "${GL_TOOLCHAIN_BIN}/${GL_RUNTIME_DLL}")
+            list(APPEND GL_RUNTIME_COPY_COMMANDS
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    "${GL_TOOLCHAIN_BIN}/${GL_RUNTIME_DLL}"
+                    "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
+        endif()
+    endforeach()
+    add_custom_target(gl_runtime_dlls ALL ${GL_RUNTIME_COPY_COMMANDS}
+        COMMENT "Copying MinGW runtime DLLs to ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
+endif()
+
 add_subdirectory(third_party/miniz)
 
 add_library(gl_assets STATIC
