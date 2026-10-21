@@ -495,12 +495,19 @@ P0 закрыт 2026-10-19; далее выполнялись задачи P1 (�
   Ограничение P2c с `?` в заголовках save-слотов закрыто TTF.
 - 2026-10-21: P3c manual dialog UI gate пройден пользователем (кириллица, ответы,
   Up/Down/Enter/мышь, Esc); **P3c принят**.
+- 2026-10-21: P4a Task 1 — `parse_pad` (PAD): 276/276 реальных `.pad`, 2450 анимаций;
+  контракт хвоста, direction helpers (`pad_person_row`/`pad_shadow_row`), `delay <= 0` —
+  ответственность вызывающего; fix round 1 (c8ba5ae..c9dc9a2), ревью чистое.
+- 2026-10-21: P4a Task 2 — person `.scr` (`parse_person_script`, вложенные блоки
+  плющатся в `block.key`) + SEF `persons`: `l1_1` = **16** NPC (не 41; 41 — все `name:`
+  блоки), 15 уникальных скриптов, все парсятся; sweep 261/261 `.sef`; fix round 1
+  (6bd9b22..d67babd), ревью чистое; полный `ctest` 13/13 (1332.96 s).
 
 ## Следующие задачи
 
 1. P4a: NPC на уровне — spec/plan готовы
    (`docs/specs/2026-10-21-p4a-npcs-on-level-design.md`, `docs/plans/2026-10-21-p4a-npcs-on-level.md`);
-   начать с Task 1 (PAD parser).
+   Tasks 1–2 готовы; далее Task 3 (загрузка person/PAD в `gl::game`).
 2. P4b/P4c: движение/поиск пути/AI, клик → диалог.
 3. P1b: Android/touch — отложенный follow-up P1.
 4. P7-follow-up: свободный TTF для Android (P9), прокрутка длинных диалогов, layout-константы.
