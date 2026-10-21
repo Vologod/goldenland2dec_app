@@ -498,9 +498,12 @@ P0 закрыт 2026-10-19; далее выполнялись задачи P1 (�
 
 ## Следующие задачи
 
-1. P4: персонажи/NPC (`.prs/.inf`), привязка диалогов к NPC — следующий подпроект.
-2. P1b: Android/touch — отложенный follow-up P1.
-3. P7-follow-up: свободный TTF для Android (P9), прокрутка длинных диалогов, layout-константы.
+1. P4a: NPC на уровне — spec/plan готовы
+   (`docs/specs/2026-10-21-p4a-npcs-on-level-design.md`, `docs/plans/2026-10-21-p4a-npcs-on-level.md`);
+   начать с Task 1 (PAD parser).
+2. P4b/P4c: движение/поиск пути/AI, клик → диалог.
+3. P1b: Android/touch — отложенный follow-up P1.
+4. P7-follow-up: свободный TTF для Android (P9), прокрутка длинных диалогов, layout-константы.
 
 ## Открытые вопросы
 
