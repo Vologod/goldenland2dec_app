@@ -1,4 +1,5 @@
 #include "gl/assets/cp1251.hpp"
+#include "gl/assets/cs.hpp"
 #include "gl/assets/csx.hpp"
 #include "gl/assets/image.hpp"
 #include "gl/assets/itm.hpp"
@@ -7,13 +8,18 @@
 #include "gl/assets/vfs.hpp"
 
 #include <array>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <exception>
 #include <filesystem>
 #include <fstream>
+#include <iomanip>
 #include <iostream>
+#include <limits>
+#include <locale>
 #include <optional>
+#include <sstream>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -57,7 +63,8 @@ void print_usage() {
                  "  glpak extract <game_dir> --prefix <prefix> --out <dir>\n"
                  "  glpak decode-csx <game_dir> --file <path> --out <png>\n"
                  "  glpak decode-sdb <game_dir> --file <path> --out <txt>\n"
-                 "  glpak decode-itm <game_dir> --file <path>\n";
+                 "  glpak decode-itm <game_dir> --file <path>\n"
+                 "  glpak disasm-cs <game_dir> --file <path> [--out <txt>]\n";
 }
 
 bool ensure_parent(const fs::path& path, std::string& error) {
@@ -250,6 +257,112 @@ bool parse_decode_options(const std::vector<std::string>& args, bool require_out
         return false;
     }
     return true;
+}
+
+struct DisasmOptions {
+    std::optional<std::string> file;
+    std::optional<std::string> out;
+};
+
+bool parse_disasm_options(const std::vector<std::string>& args, DisasmOptions& options,
+                          std::string& error) {
+    for (std::size_t i = 3; i < args.size(); ++i) {
+        const std::string& arg = args[i];
+        if (arg == "--file") {
+            std::string value;
+            if (!option_value(args, i, arg, value, error)) return false;
+            if (!set_once(options.file, arg, std::move(value), error)) return false;
+        } else if (arg == "--out") {
+            std::string value;
+            if (!option_value(args, i, arg, value, error)) return false;
+            if (!set_once(options.out, arg, std::move(value), error)) return false;
+        } else {
+            error = "unknown option: " + arg;
+            return false;
+        }
+    }
+    if (!options.file) {
+        error = "missing --file";
+        return false;
+    }
+    return true;
+}
+
+bool has_four_integers(std::int32_t opcode) {
+    return (opcode >= 0 && opcode <= 20) || opcode == 50;
+}
+
+std::string format_number(double value) {
+    std::ostringstream out;
+    out.imbue(std::locale::classic());
+    out << std::setprecision(17) << value;
+    return out.str();
+}
+
+void append_node(std::ostringstream& out, std::size_t index, const gl::assets::CsNode& node) {
+    out << index << ": " << gl::assets::cs_opcode_name(node.opcode);
+    if (has_four_integers(node.opcode)) {
+        out << " | " << node.a << ' ' << node.b << ' ' << node.c << ' ' << node.d;
+    } else if (node.opcode == 21 || node.opcode == 24) {
+        out << " | " << format_number(node.value);
+    } else if (node.opcode == 22) {
+        out << " | \"" << node.text << '"';
+    } else if (node.opcode == 23) {
+        out << " | " << node.text;
+    } else if (node.opcode == 48) {
+        const bool valid_id = std::isfinite(node.value) && node.value >= 0.0 &&
+                              node.value <=
+                                  static_cast<double>(std::numeric_limits<std::uint32_t>::max());
+        const auto id =
+            valid_id ? static_cast<std::uint32_t>(node.value) : std::uint32_t{0};
+        out << " | " << node.c << ' ' << node.d << " | ";
+        if (valid_id) {
+            out << id << ' ' << gl::assets::cs_function_name(id);
+        } else {
+            out << "invalid";
+        }
+        out << '(';
+        bool first = true;
+        for (const std::int32_t argument : node.args) {
+            if (argument == -1) break;
+            if (!first) out << ", ";
+            out << argument;
+            first = false;
+        }
+        out << ')';
+    } else if (node.opcode == 49) {
+        out << " | " << node.c << ' ' << node.d;
+    }
+    out << '\n';
+}
+
+std::string disassemble_cs(const std::vector<gl::assets::CsNode>& nodes) {
+    std::ostringstream out;
+    out.imbue(std::locale::classic());
+    for (std::size_t i = 0; i < nodes.size(); ++i) append_node(out, i, nodes[i]);
+    return out.str();
+}
+
+int cmd_disasm_cs(const std::vector<std::string>& args) {
+    if (args.size() < 3) {
+        return fail("usage: glpak disasm-cs <game_dir> --file <path> [--out <txt>]",
+                    kArgument);
+    }
+    DisasmOptions options;
+    std::string error;
+    if (!parse_disasm_options(args, options, error)) return fail(error, kArgument);
+    auto mounted = GameVfs::mount(fs::path(args[2]));
+    if (!mounted) return fail(mounted.error());
+    auto data = mounted.value().read(*options.file);
+    if (!data) return fail(data.error());
+    auto nodes = gl::assets::parse_cs(data.value());
+    if (!nodes) return fail(nodes.error());
+
+    const std::string text = disassemble_cs(nodes.value());
+    if (options.out) return write_text(fs::path(*options.out), text);
+    std::cout << text;
+    if (!std::cout) return fail("cannot write disassembly to stdout", kIo);
+    return kOk;
 }
 
 int cmd_info(const std::vector<std::string>& args) {
@@ -477,6 +590,7 @@ int run(int argc, char** argv) {
     if (command == "decode-csx") return cmd_decode_csx(args);
     if (command == "decode-sdb") return cmd_decode_sdb(args);
     if (command == "decode-itm") return cmd_decode_itm(args);
+    if (command == "disasm-cs") return cmd_disasm_cs(args);
     print_usage();
     return fail("unknown command: " + command, kArgument);
 }

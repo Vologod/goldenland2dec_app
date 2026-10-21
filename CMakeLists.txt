@@ -46,6 +46,7 @@ add_subdirectory(src/app)
 
 if (GL_BUILD_TOOLS)
     add_subdirectory(tools/glpak)
+    add_subdirectory(tools/glscript)
     add_subdirectory(tools/glview)
     add_subdirectory(tools/glgame)
 endif()

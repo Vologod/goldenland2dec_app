@@ -11,11 +11,28 @@ gate завершены (2026-10-20); P2a принята. P2b — детерми
 автоматизированная приёмка и manual interactive gate завершены (2026-10-20); P2b принята.
 P2c — save/load каркас: реализация и автоматизированная приёмка завершены (2026-10-20);
 открыт manual UI gate (Continue → слоты, Esc). P3a — CS VM: Task 1 (парсер `.cs`),
-Task 2 (VM + globals) и Task 3 (dialog flow + native registry) завершены 2026-10-21.
-Следующие подпроекты — продолжение P3a (Task 4 — инструменты) или P1b (Android/touch);
-P2 backfill отложен.
+Task 2 (VM + globals), Task 3 (dialog flow + native registry) и Task 4 (инструменты
+`glpak disasm-cs` / `glscript`) завершены 2026-10-21.
+Следующие подпроекты — продолжение P3a (Task 5 — acceptance + docs) или P1b
+(Android/touch); P2 backfill отложен.
 
 ## Текущая задача
+
+**P3a — Task 4 (tools `glpak disasm-cs`, `glscript`) завершён 2026-10-21.**
+`glpak disasm-cs <game_dir> --file <path> [--out <txt>]` читает `.cs` через `GameVfs`,
+парсит `parse_cs` и печатает по строке на узел (`index: opcode | поля | value/text |
+funcName(args)`); без `--out` — в stdout, с `--out` — UTF-8 текст. Команда добавлена
+в `--help`, коды выхода 0/1/2/3 как у остальных команд `glpak`.
+Новый SDL-free `tools/glscript` (`--game-dir <dir> [--globals <path>] --file <path>
+[--run] [--answer N]`) читает CS и globals через VFS (по умолчанию
+`scripts/dialogs_special/zlato_vars.scr`), исполняет до `wait_user`/`end`/`infinity`,
+печатает `status`, `steps`, id из `dialogs_data()` и `answers_count()`. Повторяемый
+`--answer N` подаётся в `user_input`, после чего исполнение продолжается до следующего
+останова с печатью нового состояния. Коды выхода: 0 успех, 1 аргументы, 2 I/O,
+3 формат/загрузка/`infinity`. Тесты: `gl_cs_tools_tests` (skip 77 без `GL_GAME_DIR`) —
+`disasm-cs` на `demon.d1.age.cs` (непустой дамп с `func`/`jmp`), `glscript --run`
+(`wait_user`, answers > 0), `--run --answer 0` (exit 0, `wait_user`/`end`).
+Следующая задача — P3a Task 5 (acceptance + docs).
 
 **P3a — Task 3 (dialog flow + native registry) завершён 2026-10-21.**
 `ScriptVm` получил `dialogs_data()` (id `D_Say` + id всех `D_Answer`, действительно только
