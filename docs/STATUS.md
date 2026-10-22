@@ -569,8 +569,14 @@ P0 закрыт 2026-10-19; далее выполнялись задачи P1 (�
 
 ## Следующие задачи
 
-1. P4b: NPC движение/маршруты/поиск пути/AI; затем P4c (клик → диалог).
-2. P1b: Android/touch — отложенный follow-up P1.
+1. P4b: движение NPC по маршрутам — spec/plan готовы
+   (`docs/specs/2026-10-22-p4b-person-movement-design.md`,
+   `docs/plans/2026-10-22-p4b-person-movement.md`), 6 задач; критерии — spec §6.
+   Проверка: `cmake --build build`; `ctest --test-dir build --output-on-failure` с
+   `$env:GL_GAME_DIR = "I:\Games\Златогорье-2"`; ручной гейт
+   `build\bin\glgame.exe --game-dir "I:\Games\Златогорье-2" --level l1_1`.
+2. P4c: клик → диалог (после P4b).
+3. P1b: Android/touch — отложенный follow-up P1.
 4. P7-follow-up: свободный TTF для Android (P9), прокрутка длинных диалогов, layout-константы.
 
 ## Открытые вопросы
