@@ -685,10 +685,12 @@ P0 закрыт 2026-10-19; далее выполнялись задачи P1 (�
 
 ## Следующие задачи
 
-1. P4b2: коллизии/pathfinding NPC — spec/plan готовы
-   (`docs/specs/2026-10-22-p4b2-collisions-pathfinding-design.md`,
-   `docs/plans/2026-10-22-p4b2-collisions-pathfinding.md`), 5 задач; проходимость —
-   бит `0x100` маски LVL, A* + occupancy (D-028).
+1. **P4b2 — BLOCKED:** источник коллизий не подтверждён. Spec/plan и ветка
+   `p4b2-collisions` (Tasks 1–5, тайловый бит `0x100`) построены на неверной модели:
+   overlay не совпадает с домами (подтверждено пользователем), а реверс показал, что
+   флаги движения не хранятся в LVL и выставляются в рантайме сеттерами мира
+   (см. `docs/research/p4b2-walkability-pathfinding.md`). Нужен oracle
+   (`r_noway_show`) или дальнейший межмодульный реверс вызывающего.
 2. P4c: клик → диалог (после P4b2).
 3. P1b: Android/touch — отложенный follow-up P1.
 4. P7-follow-up: свободный TTF для Android (P9), прокрутка длинных диалогов, layout-константы.
