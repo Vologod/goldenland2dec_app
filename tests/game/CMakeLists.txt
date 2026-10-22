@@ -1,6 +1,7 @@
 add_executable(gl_game_tests
     test_main.cpp
     test_person_loader.cpp
+    test_person_movement.cpp
     test_real_person_loader.cpp
 )
 target_include_directories(gl_game_tests PRIVATE ${CMAKE_SOURCE_DIR}/third_party)
