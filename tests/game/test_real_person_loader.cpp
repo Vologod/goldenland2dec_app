@@ -93,3 +93,33 @@ TEST_CASE("real data: l1_1 person loader builds 16 instances" *
     REQUIRE(level->persons.size() == 16);
     CHECK(level->persons.front().name == "L1_1.P387_Poison_Plotnik");
 }
+
+TEST_CASE("real data: l1_1 routes and go animations" * doctest::skip(!game_dir_available())) {
+    auto vfs = gl::assets::GameVfs::mount(std::getenv("GL_GAME_DIR"));
+    REQUIRE(vfs.has_value());
+    auto persons = gl::game::load_persons(vfs.value(), "l1_1");
+    REQUIRE(persons.has_value());
+
+    int movers = 0;
+    for (const auto &person : persons.value()) {
+        if (person.route_type == "STAY") {
+            CHECK(person.route_cells.empty());
+            continue;
+        }
+        ++movers;
+        if (person.route_type == "RANDOM_RADIUS" || person.route_type == "RANDOM") {
+            CHECK(person.route_cells.empty());
+        } else {
+            CHECK(!person.route_cells.empty());
+        }
+        REQUIRE(person.go_type.has_value());
+        CHECK(person.go_delay_ms > 0);
+        CHECK(person.go_move_x > 0.0f);
+        CHECK(person.go_move_y > 0.0f);
+    }
+    CHECK(movers == 6);
+    CHECK(persons->at(1).route_cells.size() == 7);
+    CHECK(persons->at(9).route_cells.size() == 9);
+    CHECK(persons->at(11).route_cells.size() == 8);
+    CHECK(persons->at(12).route_cells.size() == 22);
+}

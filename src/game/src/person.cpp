@@ -6,6 +6,7 @@
 
 #include <array>
 #include <cstddef>
+#include <map>
 #include <new>
 #include <string>
 #include <string_view>
@@ -117,6 +118,10 @@ Result<std::vector<PersonInstance>> load_persons(GameVfs &vfs, std::string_view 
             return Error{ErrorCode::format,
                          "cannot parse level SEF '" + sef_file + "': " + sef.error().message};
 
+        std::map<std::string, const SefCellGroup *> groups;
+        for (const SefCellGroup &group : sef->cell_groups)
+            groups.emplace(lower_path(group.name), &group);
+
         std::vector<PersonInstance> persons;
         persons.reserve(sef->persons.size());
 
@@ -206,6 +211,43 @@ Result<std::vector<PersonInstance>> load_persons(GameVfs &vfs, std::string_view 
             person.res_name = def->res_name;
             person.def = std::move(def.value());
             person.pad = std::move(pad.value());
+
+            const auto route_it = groups.find(lower_path(source.route));
+            if (route_it != groups.end()) {
+                for (const auto &cell : route_it->second->cells)
+                    person.route_cells.emplace_back(cell.first, cell.second);
+            }
+
+            const PadAnimation *go = nullptr;
+            for (const PadAnimation &animation : person.pad) {
+                if (animation.type == PadAnimationType::rt_go) {
+                    go = &animation;
+                    break;
+                }
+            }
+            if (go == nullptr) {
+                for (const PadAnimation &animation : person.pad) {
+                    if (animation.type == PadAnimationType::tb_go) {
+                        go = &animation;
+                        break;
+                    }
+                }
+            }
+            if (go != nullptr) {
+                person.go_type = go->type;
+                person.go_move_x = go->movement_x;
+                person.go_move_y = go->movement_y;
+                person.go_delay_ms = go->delay;
+            }
+
+            const bool stays = person.route_type == "STAY" || person.route_type == "STAY_ROTATE";
+            const bool wanders =
+                person.route_type == "RANDOM_RADIUS" || person.route_type == "RANDOM";
+            if (!stays && ((!wanders && person.route_cells.empty()) || !person.go_type)) {
+                warn("level '" + std::string(level_name) + "': person '" + source.name +
+                     "' has no usable route or go animation, will stand still");
+            }
+
             persons.push_back(std::move(person));
         }
 

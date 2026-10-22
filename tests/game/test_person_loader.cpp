@@ -207,6 +207,13 @@ void write_sef(const fs::path &root, std::string_view level, std::string_view pe
                "pack: \"" + std::string(level) + "\"\npersons:\n{\n" + std::string(persons) +
                    "}\n");
 }
+
+void write_sef_with_cells(const fs::path &root, std::string_view level, std::string_view persons,
+                          std::string_view cell_groups) {
+    write_text(root / "levels" / "single" / std::string(level) / (std::string(level) + ".sef"),
+               "pack: \"" + std::string(level) + "\"\npersons:\n{\n" + std::string(persons) +
+                   "\n}\ncell_groups:\n{\n" + std::string(cell_groups) + "\n}\n");
+}
 } // namespace
 
 TEST_CASE("person loader: loads PAD, sprite, shadow and SEF placement") {
@@ -316,4 +323,26 @@ TEST_CASE("person loader: missing NPC resources are skipped with a warning") {
     CHECK(persons->at(1).name == "No.Shadow");
     CHECK(persons->at(1).shadow.width == 0);
     CHECK(persons->at(1).shadow.height == 0);
+}
+
+TEST_CASE("person loader: resolves route cells from cell_groups") {
+    TempDir dir;
+    write_sef_with_cells(dir.path, "test_level",
+                         "name: \"Walk.One\"\n{\n  position 10 10\n  direction \"DOWN\"\n"
+                         "  route_type \"MOVED\"\n  route \"track1\"\n  radius 15\n"
+                         "  delay_min 0\n  delay_max 9000\n}\n",
+                         "name: \"track1\"\n{\n  cell_00 10 10\n  cell_01 13 10\n}\n");
+    write_script(dir.path, "Walk.One", "L0.Walk_One");
+    write_person_assets(dir.path, "L0.Walk_One");
+    write_shadow(dir.path, "L0.Walk_One");
+
+    auto vfs = gl::assets::GameVfs::mount(dir.path.string());
+    REQUIRE(vfs.has_value());
+    auto persons = gl::game::load_persons(vfs.value(), "test_level");
+    REQUIRE(persons.has_value());
+    REQUIRE(persons->size() == 1);
+    REQUIRE(persons->front().route_cells.size() == 2);
+    CHECK(persons->front().route_cells[0] == std::pair<std::int32_t, std::int32_t>{10, 10});
+    CHECK(persons->front().route_cells[1] == std::pair<std::int32_t, std::int32_t>{13, 10});
+    CHECK_FALSE(persons->front().go_type.has_value());
 }
