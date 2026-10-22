@@ -365,6 +365,7 @@ void LevelScreen::render(SDL_Renderer* renderer, const LevelScreenOptions& optio
 void LevelScreen::draw_person(SDL_Renderer* renderer, const Person& person,
                               std::uint64_t elapsed_ms) const {
     const gl::game::PersonInstance& instance = level_.persons[person.instance];
+    if (person.instance >= simulation_.persons().size()) return;
     const gl::game::PersonMovement& movement = simulation_.persons()[person.instance];
     const bool moving = movement.moving && person.go_texture.has_value() &&
                         person.go_animation < instance.pad.size();

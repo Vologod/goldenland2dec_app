@@ -307,24 +307,68 @@ TEST_CASE("glview NPCs move between t=0 and t=10s") {
     TempDir dir;
     const fs::path first_png = dir.path / "move_first.png";
     const fs::path later_png = dir.path / "move_later.png";
-    REQUIRE(run_glview(glview_arguments(game_dir, first_png, {"--sim-ms", "0"})) == 0);
-    REQUIRE(run_glview(glview_arguments(game_dir, later_png, {"--sim-ms", "10000"})) == 0);
+    const fs::path first_plain_png = dir.path / "move_first_plain.png";
+    const fs::path later_plain_png = dir.path / "move_later_plain.png";
+
+    std::string log;
+    const int first_code =
+        run_glview_capture(glview_arguments(game_dir, first_png, {"--sim-ms", "0"}), log);
+    const int later_code =
+        run_glview(glview_arguments(game_dir, later_png, {"--sim-ms", "10000"}));
+    const int first_plain_code = run_glview(glview_arguments(
+        game_dir, first_plain_png, {"--sim-ms", "0", "--no-persons"}));
+    const int later_plain_code = run_glview(glview_arguments(
+        game_dir, later_plain_png, {"--sim-ms", "10000", "--no-persons"}));
+    CAPTURE(first_code);
+    CAPTURE(later_code);
+    CAPTURE(first_plain_code);
+    CAPTURE(later_plain_code);
+    CAPTURE(log);
+    REQUIRE(fs::exists(first_png));
+    REQUIRE(fs::exists(later_png));
+    REQUIRE(fs::exists(first_plain_png));
+    REQUIRE(fs::exists(later_plain_png));
+    CHECK(first_code == 0);
+    CHECK(later_code == 0);
+    CHECK(first_plain_code == 0);
+    CHECK(later_plain_code == 0);
+    CHECK(log.find("16 persons") != std::string::npos);
+    CHECK(log.find("go sheet") == std::string::npos);
+    CHECK(log.find("go animation") == std::string::npos);
+    CHECK(log.find("go texture") == std::string::npos);
 
     int aw = 0, ah = 0, ac = 0, bw = 0, bh = 0, bc = 0;
+    int cw = 0, ch = 0, cc = 0, dw = 0, dh = 0, dc = 0;
     const StbiImage first = load_png(first_png, aw, ah, ac);
     const StbiImage later = load_png(later_png, bw, bh, bc);
+    const StbiImage first_plain = load_png(first_plain_png, cw, ch, cc);
+    const StbiImage later_plain = load_png(later_plain_png, dw, dh, dc);
     REQUIRE(first != nullptr);
     REQUIRE(later != nullptr);
-    REQUIRE(aw == bw);
-    REQUIRE(ah == bh);
+    REQUIRE(first_plain != nullptr);
+    REQUIRE(later_plain != nullptr);
+    CHECK(aw == 1280);
+    CHECK(ah == 720);
+    CHECK(bw == 1280);
+    CHECK(bh == 720);
+    CHECK(cw == 1280);
+    CHECK(ch == 720);
+    CHECK(dw == 1280);
+    CHECK(dh == 720);
+
     std::uint64_t differing = 0;
-    for (int y = 0; y < ah; ++y) {
-        for (int x = 0; x < aw; ++x) {
-            const std::size_t i = (static_cast<std::size_t>(y) * aw + x) * 4;
-            if (first.get()[i] != later.get()[i] ||
-                first.get()[i + 1] != later.get()[i + 1] ||
-                first.get()[i + 2] != later.get()[i + 2])
-                ++differing;
+    if (aw == bw && ah == bh && aw == cw && ah == ch && aw == dw && ah == dh) {
+        for (int y = 0; y < ah; ++y) {
+            for (int x = 0; x < aw; ++x) {
+                const std::size_t i = (static_cast<std::size_t>(y) * aw + x) * 4;
+                const bool first_npc = first.get()[i] != first_plain.get()[i] ||
+                                       first.get()[i + 1] != first_plain.get()[i + 1] ||
+                                       first.get()[i + 2] != first_plain.get()[i + 2];
+                const bool later_npc = later.get()[i] != later_plain.get()[i] ||
+                                       later.get()[i + 1] != later_plain.get()[i + 1] ||
+                                       later.get()[i + 2] != later_plain.get()[i + 2];
+                if (first_npc != later_npc) ++differing;
+            }
         }
     }
     CAPTURE(differing);

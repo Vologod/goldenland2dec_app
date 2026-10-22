@@ -246,8 +246,12 @@ animations[..]  : {
   `crops` (padding inside the cell is transparent). This is **not** a general
   PAD invariant: crop rectangles remain part of the parsed data and may matter
   for other sheets/animations.
-- Draw origin is `(tile_x*12 - anchor_x, tile_y*9 - anchor_y)`. Shadow origin is
-  `(tile_x*12 - shadow_anchor_x, tile_y*9 - shadow_anchor_y)`; shadow rows are
+- The P4a static viewer used `(tile_x*12 - anchor_x, tile_y*9 - anchor_y)`. In P4b
+  all persons are placed from the simulation position, which is the cell center
+  `(x = tile_x*12 + 6, y = tile_y*9 + 4)` (research `p4b-person-movement.md`,
+  `FUN_140222d0`); draw origin is `(x - anchor_x, y - anchor_y)`. The `+6/+4`
+  offset is the original spawn/position mapping, not a rendering tweak. Shadow
+  origin is `(x - shadow_anchor_x, y - shadow_anchor_y)`; shadow rows are
   identity and are never mirrored.
 - Person rows come from `pad_person_row`: 8 directions -> `{0,1,2,3,4,3,2,1}`
   (indices 5..7 mirror the sprite in place), `_go` -> 16 rows

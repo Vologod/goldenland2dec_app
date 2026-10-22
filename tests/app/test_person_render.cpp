@@ -36,6 +36,27 @@ TEST_CASE("px placement uses float position") {
     CHECK(placement.mirror);
 }
 
+TEST_CASE("standing person placement uses the cell-center simulation position") {
+    const gl::assets::PadAnimation animation =
+        make_animation(gl::assets::PadAnimationType::rt_stay);
+    const gl::app::PersonPlacement placement =
+        gl::app::place_person_px(animation, 0, 38.0f * 12.0f + 6.0f, 51.0f * 9.0f + 4.0f);
+    CHECK(placement.draw_x == doctest::Approx(38.0f * 12.0f + 6.0f - 20.0f));
+    CHECK(placement.draw_y == doctest::Approx(51.0f * 9.0f + 4.0f - 77.0f));
+    CHECK(placement.row == 0);
+    CHECK_FALSE(placement.mirror);
+}
+
+TEST_CASE("shadow px placement uses float position and identity rows") {
+    const gl::assets::PadAnimation animation =
+        make_animation(gl::assets::PadAnimationType::rt_go);
+    const gl::app::PersonShadowPlacement placement =
+        gl::app::place_person_shadow_px(animation, 12, 1610.0f, 1147.0f);
+    CHECK(placement.draw_x == doctest::Approx(1610.0f - 31.0f));
+    CHECK(placement.draw_y == doctest::Approx(1147.0f - 16.0f));
+    CHECK(placement.row == 12);
+}
+
 TEST_CASE("person frame index wraps by frames per row") {
     CHECK(gl::app::person_frame_index(0, 89, 12) == 0);
     CHECK(gl::app::person_frame_index(88, 89, 12) == 0);

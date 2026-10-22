@@ -98,8 +98,11 @@ public:
 - Движущийся NPC: позиция из `PersonMovement`; кадр
   `(anim_ms / go.delay) % frames_per_row`; row/mirror по `direction16`; тень — по
   `kPadShadowRows16`, не зеркалится.
-- Стоящий: прежняя логика P4a (`stay_type`, 8 направлений).
+- Стоящий: та же позиция симуляции (центр клетки `tile*12+6`, `tile*9+4`),
+  stay-лист (`stay_type`) и 8 направлений (`direction8`); draw origin —
+  `(x - anchor_x, y - anchor_y)` от центра клетки.
 - `--no-persons`: не грузить `_go`-листы, не симулировать, не рисовать.
+  `--sim-ms` влияет только на screenshot-режим, в интерактивном цикле игнорируется.
 
 ## 5. Тесты
 

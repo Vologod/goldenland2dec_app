@@ -99,7 +99,7 @@ void print_usage() {
         "  --font <ttf>         TrueType font for dialog text (default: system font)\n"
         "  --no-font            Force ASCII bitmap text (dev/debug, overrides --font)\n"
         "  --no-persons         Skip NPC sprites on the level\n"
-        "  --sim-ms <ms>        Simulation time for screenshots\n"
+        "  --sim-ms <ms>        Simulation time for screenshots (ignored interactively)\n"
         "  --list-saves         Print save slots as tab-separated lines and exit\n"
         "  --screenshot <png>   Render the current state, save PNG and exit\n"
         "  --exec \"<command>\"   Run a console command after boot (repeatable)\n"

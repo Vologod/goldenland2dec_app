@@ -49,7 +49,7 @@ void print_usage() {
               "  --frames <n>       Frames to render before screenshot (default: 1)\n"
               "  --background-only  Draw only the background (skip statics and animations)\n"
               "  --no-persons       Skip NPC sprites\n"
-              "  --sim-ms <ms>      Simulation time for screenshots (default: frame time)\n"
+              "  --sim-ms <ms>      Simulation time for screenshots (ignored interactively)\n"
               "  --debug-overlay    Draw sprite debug rectangles in screenshot mode\n"
               "  -h, --help         Show this help and exit\n"
               "\n"
