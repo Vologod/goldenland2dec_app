@@ -8,6 +8,10 @@
   первой записи чанка, `relief` биты 8..11, column-major порядок),
   `line_of_sight` + A*, occupancy/обход в `LevelSimulation`, `--walkable-overlay`,
   automated acceptance + docs. P4b-поведение сохранено.
+- Правило проходимости сверено с live-сеткой оригинала в памяти (`world+0x330`,
+  getter `FUN_00426234`): реконструкция из LVL совпала точно — **0/51520**
+  расхождений после загрузки; ~331 клетка меняется в рантайме дверями/скриптами
+  (вне P4b2).
 - Build: `cmake --build build` — успех (`Copying MinGW runtime DLLs`).
 - Полный `ctest` с `GL_GAME_DIR` — **15/15 passed**, 748.38 s, exit 0
   (`gl_assets_real_tests` 563.48 s, `glview_screenshot_tests` 75.17 s,
@@ -18,11 +22,12 @@
   в заблокированный тайл, ни одна пара не делила тайл, два прогона совпали;
   4 из 5 таких movers строят непустой path (`L0.P744_oficer1` — см. ограничения).
   Targeted real-прогон (4 cases) — 450 108 assertions, 16.2 s, exit 0.
-- `--walkable-overlay`: `glview l1_1` 1280×720, PNG 3 101 327 B, SHA-256
-  `9FE3AEC493F5DDAF74D831F98E77DC5243C91F0BD9044A2A174AB38185E8FC83`;
-  отличается от обычного кадра (52 866 точек при выборке каждые 2 px; 141 655
-  «красных» точек). `glgame l1_1 --sim-ms 10000` — exit 0, 1280×720. В логах
-  glview/glgame — **0 warning/error**, ошибок pathfinding нет.
+- `--walkable-overlay` (исправленная модель, `--frames 5`): `glview l1_1`
+  1280×720, PNG 2 969 157 B, SHA-256
+  `8CBC2A57CF4DEF2D3C354651117213585AA153FBC4949387090B9E160A34D1F9`;
+  от обычного кадра отличаются **570 960 красных px** (полное разрешение;
+  142 866 при выборке каждые 2 px). `glgame l1_1 --sim-ms 10000` — exit 0,
+  1280×720. В логах glview/glgame — **0 warning/error**, ошибок pathfinding нет.
 - **P4b2 automated acceptance passed.** **Manual desktop gate OPEN:** пользователь
   должен запустить glgame/glview и проверить обход домов/заборов/NPC и совпадение
   overlay с фоном; агент GUI не запускал и manual pass не подтверждает.
@@ -64,7 +69,7 @@
   (warning отложен); `RANDOM*` не клампят кандидата, а отбрасывают его и после 64
   попыток возвращаются к базовой клетке; `RANDOM_RADIUS` в t=60 с может быть в wait;
   **нет проверки проходимости и обхода статики**.
-- Следующая задача — **P4b2** (коллизии/pathfinding по маскам уровня), затем **P4c**
+- Следующая задача — **P4b2** (коллизии/pathfinding по флагам чанков LVL), затем **P4c**
   (клик → диалог). Решение о переносе коллизий — D-027.
 
 ## P4a — NPCs on the level (2026-10-21)
@@ -121,21 +126,23 @@ P2c — save/load каркас: реализация и автоматизиро
 2026-10-21, automated acceptance passed, manual gate пройден — **P4a принята**.
 P4b — движение NPC: Tasks 1–6 завершены 2026-10-22, automated acceptance passed,
 manual desktop gate пройден — **P4b принят**. P4b2 — коллизии/pathfinding: Tasks 1–5
-завершены 2026-10-22, **automated acceptance passed** (15/15 ctest, 411 cases /
-462 413 assertions), **manual desktop gate OPEN**. Следующий — P4c (клик → диалог);
+завершены 2026-10-22, **automated acceptance passed** (15/15 ctest, 413 cases /
+466 027 assertions; правило сверено с live-сеткой: 0/51520), **manual desktop gate
+OPEN — не принят**. Следующий — P4c (клик → диалог);
 P1b (Android/touch) и P2 backfill отложены.
 
 ## Текущая задача
 
 **P4b2 — Task 5 (automated acceptance + docs) завершён 2026-10-22; P4b2 automated
-acceptance passed.** Полный `ctest` с `GL_GAME_DIR` — **15/15 passed**, 676.64 s,
-exit 0; `cmake --build build` — успех (`Copying MinGW runtime DLLs`). Суммарно
-**411 test case / 462 413 assertions**, 0 failed; `gl_game_tests` — 39 cases /
-459 152 assertions (real `l1_1` 60 с: walkable spawn movers, occupancy, determinism),
-targeted real-прогон — 450 108 assertions / 16.2 s. Overlay `glview l1_1`
-1280×720: PNG 3 101 327 B, SHA-256 `9FE3AEC4...E8FC83`, отличие от обычного кадра
-52 866 точек (выборка каждые 2 px); `glgame --sim-ms 10000` — exit 0; в логах
-0 warning/error. **Manual desktop gate OPEN:** пользователь должен запустить
+acceptance passed.** Полный `ctest` с `GL_GAME_DIR` — **15/15 passed**, 748.38 s,
+exit 0; `cmake --build build` — успех (`Copying MinGW runtime DLLs`). Суммарно по
+15 исполняемым файлам — **413 test case / 466 027 assertions**, 0 failed;
+`gl_game_tests` — 41 case / 462 766 assertions (real `l1_1` 60 с: walkable spawn
+movers, occupancy, determinism), targeted real-прогон — 450 108 assertions /
+16.2 s. Overlay `glview l1_1` 1280×720 (`--frames 5`): PNG 2 969 157 B, SHA-256
+`8CBC2A57...34D1F9`, отличие от обычного кадра **570 960 красных px** (полное
+разрешение; 142 866 при выборке каждые 2 px); `glgame --sim-ms 10000` — exit 0;
+в логах 0 warning/error. **Manual desktop gate OPEN:** пользователь должен запустить
 `glgame --game-dir "I:\Games\Златогорье-2" --level l1_1` и
 `glview --game-dir "I:\Games\Златогорье-2" --level l1_1 --walkable-overlay`,
 проверить обход препятствий/NPC и совпадение overlay с фоном; агент GUI не

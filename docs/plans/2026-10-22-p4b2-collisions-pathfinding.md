@@ -12,7 +12,9 @@
 
 - C++20, `-Wall -Wextra -Werror`, без лишних комментариев.
 - `gl_assets`/`gl_game` SDL-free; слои только вниз.
-- Проходимость: `(tile.mask & 0x100) != 0` (D-028); пустая сетка = препятствий нет.
+- Проходимость (D-028): `word = chunk[0].relief | (chunk[0].sound<<16)`,
+  `sub = (x&1) + 2*(y&1)`, `blocked = (word & (0x100u<<sub)) != 0`; чанки читаются
+  column-major (`cx*chunk_height+cy`); пустая сетка = препятствий нет.
 - A* 8 направлений, диагональ √2, без срезания углов (диагональ только если обе
   ортогональные клетки свободны); занятые NPC клетки — препятствие.
 - Детерминизм и шаг 1/60 сохраняются; P4b-тесты остаются зелёными.
@@ -64,15 +66,14 @@ TEST_CASE("walk grid maps chunk tiles to world tiles") {
     lvl.chunk_width = 2;
     lvl.chunk_height = 1;
     lvl.chunks.resize(2);
-    // chunk 0 tiles: (0,0) free, (1,0) blocked, (0,1) free, (1,1) blocked
-    lvl.chunks[0][0].mask = 0xFFFF;
-    lvl.chunks[0][1].mask = 0x0000;
-    lvl.chunks[0][2].mask = 0xFFFF;
-    lvl.chunks[0][3].mask = 0x0000;
-    lvl.chunks[1][0].mask = 0xFFFF;
-    lvl.chunks[1][1].mask = 0xFFFF;
-    lvl.chunks[1][2].mask = 0xFFFF;
-    lvl.chunks[1][3].mask = 0xFFFF;
+    // Chunk 0: first tile relief bits 9 and 11 -> sub-tiles 1 and 3 blocked.
+    lvl.chunks[0][0].relief = 0x0A00;
+    // The remaining tiles of the chunk are ignored.
+    lvl.chunks[0][1].relief = 0xFFFF;
+    lvl.chunks[0][2].relief = 0xFFFF;
+    lvl.chunks[0][3].relief = 0xFFFF;
+    // Chunk 1: first tile relief bits 8..11 -> all four sub-tiles blocked.
+    lvl.chunks[1][0].relief = 0x0F00;
 
     const WalkGrid grid = build_walk_grid(lvl);
     CHECK(grid.width == 4);
@@ -81,9 +82,33 @@ TEST_CASE("walk grid maps chunk tiles to world tiles") {
     CHECK_FALSE(grid.is_walkable(1, 0));
     CHECK(grid.is_walkable(0, 1));
     CHECK_FALSE(grid.is_walkable(1, 1));
-    CHECK(grid.is_walkable(3, 1));
+    CHECK_FALSE(grid.is_walkable(2, 0));
+    CHECK_FALSE(grid.is_walkable(3, 0));
+    CHECK_FALSE(grid.is_walkable(2, 1));
+    CHECK_FALSE(grid.is_walkable(3, 1));
     CHECK_FALSE(grid.is_walkable(-1, 0));
     CHECK_FALSE(grid.is_walkable(0, 2));
+}
+
+TEST_CASE("walk grid stores chunks column-major") {
+    gl::assets::LvlData lvl;
+    lvl.chunk_width = 2;
+    lvl.chunk_height = 2;
+    lvl.chunks.resize(4);
+    // File order is column-major: index = cx * chunk_height + cy.
+    lvl.chunks[0][0].relief = 0x0000; // (cx=0, cy=0)
+    lvl.chunks[1][0].relief = 0x0100; // (cx=0, cy=1) -> world (0, 2)
+    lvl.chunks[2][0].relief = 0x0000; // (cx=1, cy=0)
+    lvl.chunks[3][0].relief = 0x0000; // (cx=1, cy=1)
+
+    const WalkGrid grid = build_walk_grid(lvl);
+    CHECK(grid.width == 4);
+    CHECK(grid.height == 4);
+    CHECK_FALSE(grid.is_walkable(0, 2));
+    CHECK(grid.is_walkable(2, 0));
+    CHECK(grid.is_walkable(1, 2));
+    CHECK(grid.is_walkable(0, 3));
+    CHECK(grid.is_walkable(3, 3));
 }
 
 TEST_CASE("empty lvl produces empty grid") {
@@ -105,7 +130,7 @@ TEST_CASE("real data: l1_1 walk grid" * doctest::skip(!game_dir_available())) {
     std::size_t blocked = 0;
     for (std::uint8_t value : level->walkable.walkable)
         if (value == 0) ++blocked;
-    CHECK(blocked == 10521);
+    CHECK(blocked == 18028);
 }
 ```
 
@@ -150,14 +175,19 @@ WalkGrid build_walk_grid(const gl::assets::LvlData& level) {
     grid.width = static_cast<std::int32_t>(level.chunk_width) * 2;
     grid.height = static_cast<std::int32_t>(level.chunk_height) * 2;
     grid.walkable.assign(static_cast<std::size_t>(grid.width) * grid.height, 0);
-    for (std::uint32_t cy = 0; cy < level.chunk_height; ++cy) {
-        for (std::uint32_t cx = 0; cx < level.chunk_width; ++cx) {
-            const auto& chunk = level.chunks[static_cast<std::size_t>(cy) * level.chunk_width + cx];
+    for (std::uint32_t cx = 0; cx < level.chunk_width; ++cx) {
+        for (std::uint32_t cy = 0; cy < level.chunk_height; ++cy) {
+            const auto& chunk =
+                level.chunks[static_cast<std::size_t>(cx) * level.chunk_height + cy];
+            const std::uint32_t word = static_cast<std::uint32_t>(chunk[0].relief) |
+                                       (static_cast<std::uint32_t>(chunk[0].sound) << 16);
             for (std::uint32_t t = 0; t < 4; ++t) {
                 const std::uint32_t tx = cx * 2 + (t & 1u);
                 const std::uint32_t ty = cy * 2 + (t >> 1u);
+                const std::uint32_t sub = (tx & 1u) + 2u * (ty & 1u);
+                const bool blocked = (word & (0x100u << sub)) != 0;
                 grid.walkable[static_cast<std::size_t>(ty) * grid.width + tx] =
-                    (chunk[t].mask & 0x100u) != 0 ? 1 : 0;
+                    blocked ? 0 : 1;
             }
         }
     }
@@ -181,7 +211,7 @@ $env:GL_GAME_DIR="I:\Games\Златогорье-2"; build\bin\gl_game_tests.exe 
 
 ```powershell
 git add src/game tests/game
-git commit -m "feat(game): build walk grid from LVL masks"
+git commit -m "feat(game): build walk grid from LVL chunk flags"
 ```
 
 ---
