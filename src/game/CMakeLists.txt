@@ -1,5 +1,6 @@
 add_library(gl_game STATIC
     src/level_loader.cpp
+    src/level_simulation.cpp
     src/person.cpp
     src/person_movement.cpp
 )
