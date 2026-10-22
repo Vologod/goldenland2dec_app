@@ -193,7 +193,7 @@ void LevelSimulation::advance(double dt_seconds) {
                     }
                     const Tile current = tile_of(m);
                     const Tile next = tile_at(next_x, next_y);
-                    if (next != current && tile_blocked_for(index, next)) {
+                    if (next != current && tile_occupied(index, next)) {
                         m.moving = false;
                     } else if (arrives) {
                         m.x = m.target_x;
@@ -379,11 +379,7 @@ std::vector<std::uint8_t> LevelSimulation::blocked_for(std::size_t index) const 
     return blocked;
 }
 
-bool LevelSimulation::tile_blocked_for(std::size_t index, Tile tile) const {
-    if (grid_.empty())
-        return false;
-    if (!grid_.is_walkable(tile.x, tile.y))
-        return true;
+bool LevelSimulation::tile_occupied(std::size_t index, Tile tile) const {
     if (occupancy_.empty())
         return false;
     const State &state = states_[index];
@@ -408,3 +404,4 @@ std::int32_t LevelSimulation::random_range(State &state, std::int32_t low, std::
     return low + static_cast<std::int32_t>(next_random(state) % span);
 }
 } // namespace gl::game
+
