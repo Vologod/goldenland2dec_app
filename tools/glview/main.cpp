@@ -21,6 +21,8 @@
 
 namespace {
 
+constexpr std::uint64_t kMaxSimMs = 86'400'000;
+
 struct Options {
     std::filesystem::path game_dir;
     std::string level = "l1_1";
@@ -86,7 +88,7 @@ bool parse_milliseconds(std::string_view text, std::uint64_t& value) {
     std::uint64_t parsed = 0;
     const char* const end = text.data() + text.size();
     const auto [ptr, error] = std::from_chars(text.data(), end, parsed);
-    if (error != std::errc{} || ptr != end) return false;
+    if (error != std::errc{} || ptr != end || parsed > kMaxSimMs) return false;
     value = parsed;
     return true;
 }

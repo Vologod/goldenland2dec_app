@@ -61,9 +61,11 @@ LevelSimulation LevelSimulation::create(const Level &level, std::uint64_t seed) 
                     hash_name(person.name) ^ (static_cast<std::uint32_t>(i) * 0x9E3779B9u);
         if (state.rng == 0)
             state.rng = 0x12345678u;
-        state.can_move = person.go_type.has_value() && state.go_delay_ms > 0 &&
-                         (!state.route.empty() || state.route_type == RouteType::random_radius ||
-                          state.route_type == RouteType::random);
+        state.can_move =
+            person.go_type.has_value() && state.go_delay_ms > 0 &&
+            (state.move_x > 0.0f || state.move_y > 0.0f) &&
+            (!state.route.empty() || state.route_type == RouteType::random_radius ||
+             state.route_type == RouteType::random);
         if ((state.route_type == RouteType::moved || state.route_type == RouteType::moved_flip) &&
             state.route.empty()) {
             state.can_move = false;
@@ -86,6 +88,14 @@ LevelSimulation LevelSimulation::create(const Level &level, std::uint64_t seed) 
         if (is_route_requiring(state.route_type) && !person.go_type.has_value()) {
             gl::log(gl::LogLevel::warning, "level '" + level.name + "': person '" + person.name +
                                                "' has no _go animation; will stand still");
+        }
+        if (is_route_requiring(state.route_type) && person.go_type.has_value() &&
+            (state.go_delay_ms <= 0 || (state.move_x <= 0.0f && state.move_y <= 0.0f))) {
+            gl::log(gl::LogLevel::warning,
+                    "level '" + level.name + "': person '" + person.name +
+                        "' has corrupt _go data (delay " + std::to_string(state.go_delay_ms) +
+                        " ms, movement " + std::to_string(state.move_x) + "x" +
+                        std::to_string(state.move_y) + "); will stand still");
         }
         if (state.can_move) {
             sim.choose_target(state);

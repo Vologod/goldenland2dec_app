@@ -50,7 +50,49 @@ void set_i32(std::vector<std::uint8_t> &out, std::size_t offset, std::int32_t va
     set_u32(out, offset, std::bit_cast<std::uint32_t>(value));
 }
 
-std::vector<std::uint8_t> make_pad() {
+void put_animation(std::vector<std::uint8_t> &out, gl::assets::PadAnimationType type,
+                   std::int32_t delay, std::int32_t frames_per_row, std::int32_t frame_width,
+                   std::int32_t frame_height, std::int32_t rows, std::int32_t shadow_width,
+                   std::int32_t shadow_height, std::int32_t shadow_rows, float move_x,
+                   float move_y, std::int32_t anchor_x, std::int32_t anchor_y,
+                   std::int32_t shadow_anchor_x, std::int32_t shadow_anchor_y) {
+    put_u32(out, static_cast<std::uint32_t>(type));
+    const std::size_t size_offset = out.size();
+    put_i32(out, 0);
+    put_i32(out, delay);
+    put_i32(out, frames_per_row);
+    put_i32(out, frame_width);
+    put_i32(out, frame_height);
+    put_i32(out, anchor_x);
+    put_i32(out, anchor_y);
+    put_f32(out, move_x);
+    put_f32(out, move_y);
+    put_u32(out, static_cast<std::uint32_t>(rows * frames_per_row * 8));
+    for (std::int32_t row = 0; row < rows; ++row) {
+        for (std::int32_t frame = 0; frame < frames_per_row; ++frame) {
+            put_i16(out, static_cast<std::int16_t>(row));
+            put_i16(out, static_cast<std::int16_t>(frame));
+            put_i16(out, static_cast<std::int16_t>(frame_width));
+            put_i16(out, static_cast<std::int16_t>(frame_height));
+        }
+    }
+    put_i32(out, shadow_width);
+    put_i32(out, shadow_height);
+    put_i32(out, shadow_anchor_x);
+    put_i32(out, shadow_anchor_y);
+    put_u32(out, static_cast<std::uint32_t>(shadow_rows * frames_per_row * 8));
+    for (std::int32_t row = 0; row < shadow_rows; ++row) {
+        for (std::int32_t frame = 0; frame < frames_per_row; ++frame) {
+            put_i16(out, static_cast<std::int16_t>(row));
+            put_i16(out, static_cast<std::int16_t>(frame));
+            put_i16(out, static_cast<std::int16_t>(shadow_width));
+            put_i16(out, static_cast<std::int16_t>(shadow_height));
+        }
+    }
+    set_i32(out, size_offset, static_cast<std::int32_t>(out.size() - size_offset));
+}
+
+std::vector<std::uint8_t> make_pad(bool with_tb_go = false) {
     constexpr std::int32_t kDelay = 50;
     constexpr std::int32_t kFramesPerRow = 2;
     constexpr std::int32_t kFrameWidth = 10;
@@ -60,47 +102,21 @@ std::vector<std::uint8_t> make_pad() {
     constexpr std::int32_t kShadowHeight = 7;
     constexpr std::int32_t kShadowRows = 8;
 
-    const std::uint32_t crops_size = static_cast<std::uint32_t>(kRows) * kFramesPerRow * 8;
-    const std::uint32_t shadow_size = static_cast<std::uint32_t>(kShadowRows) * kFramesPerRow * 8;
+    std::uint32_t masks = static_cast<std::uint32_t>(gl::assets::PadAnimationType::rt_stay);
+    if (with_tb_go)
+        masks |= static_cast<std::uint32_t>(gl::assets::PadAnimationType::tb_go);
 
     std::vector<std::uint8_t> out;
     out.insert(out.end(), {'P', 'A', 'D', ' '});
     put_u32(out, 0);
-    put_u32(out, static_cast<std::uint32_t>(gl::assets::PadAnimationType::rt_stay));
-    put_u32(out, static_cast<std::uint32_t>(gl::assets::PadAnimationType::rt_stay));
-    const std::size_t size_offset = out.size();
-    put_i32(out, 0);
-    put_i32(out, kDelay);
-    put_i32(out, kFramesPerRow);
-    put_i32(out, kFrameWidth);
-    put_i32(out, kFrameHeight);
-    put_i32(out, 5);
-    put_i32(out, 10);
-    put_f32(out, 1.5F);
-    put_f32(out, -2.0F);
-    put_u32(out, crops_size);
-    for (std::int32_t row = 0; row < kRows; ++row) {
-        for (std::int32_t frame = 0; frame < kFramesPerRow; ++frame) {
-            put_i16(out, static_cast<std::int16_t>(row));
-            put_i16(out, static_cast<std::int16_t>(frame));
-            put_i16(out, static_cast<std::int16_t>(kFrameWidth));
-            put_i16(out, static_cast<std::int16_t>(kFrameHeight));
-        }
-    }
-    put_i32(out, kShadowWidth);
-    put_i32(out, kShadowHeight);
-    put_i32(out, 1);
-    put_i32(out, 2);
-    put_u32(out, shadow_size);
-    for (std::int32_t row = 0; row < kShadowRows; ++row) {
-        for (std::int32_t frame = 0; frame < kFramesPerRow; ++frame) {
-            put_i16(out, static_cast<std::int16_t>(row));
-            put_i16(out, static_cast<std::int16_t>(frame));
-            put_i16(out, static_cast<std::int16_t>(kShadowWidth));
-            put_i16(out, static_cast<std::int16_t>(kShadowHeight));
-        }
-    }
-    set_i32(out, size_offset, static_cast<std::int32_t>(out.size() - size_offset));
+    put_u32(out, masks);
+    put_animation(out, gl::assets::PadAnimationType::rt_stay, kDelay, kFramesPerRow, kFrameWidth,
+                  kFrameHeight, kRows, kShadowWidth, kShadowHeight, kShadowRows, 1.5F, -2.0F, 5,
+                  10, 1, 2);
+    if (with_tb_go)
+        put_animation(out, gl::assets::PadAnimationType::tb_go, 40, kFramesPerRow, kFrameWidth,
+                      kFrameHeight, kRows, kShadowWidth, kShadowHeight, kShadowRows, 4.0F, 3.0F, 5,
+                      10, 1, 2);
     set_u32(out, 4, static_cast<std::uint32_t>(out.size()));
     return out;
 }
@@ -168,7 +184,8 @@ void write_text(const fs::path &path, std::string_view text) {
     REQUIRE(out.good());
 }
 
-void write_person_assets(const fs::path &root, std::string_view res_name) {
+void write_person_assets(const fs::path &root, std::string_view res_name,
+                         bool with_tb_go = false) {
     std::string lower(res_name);
     for (char &c : lower) {
         if (c >= 'A' && c <= 'Z')
@@ -177,7 +194,7 @@ void write_person_assets(const fs::path &root, std::string_view res_name) {
             c = '/';
     }
     const fs::path directory = root / "persons" / lower;
-    write_bytes(directory / (lower + ".pad"), make_pad());
+    write_bytes(directory / (lower + ".pad"), make_pad(with_tb_go));
     write_bytes(directory / "animation" / "rt_stay.csx", make_transparent_csx(20, 100));
 }
 
@@ -345,4 +362,27 @@ TEST_CASE("person loader: resolves route cells from cell_groups") {
     CHECK(persons->front().route_cells[0] == std::pair<std::int32_t, std::int32_t>{10, 10});
     CHECK(persons->front().route_cells[1] == std::pair<std::int32_t, std::int32_t>{13, 10});
     CHECK_FALSE(persons->front().go_type.has_value());
+}
+
+TEST_CASE("person loader: tb_go animation is used for movement") {
+    TempDir dir;
+    write_sef_with_cells(dir.path, "test_level",
+                         "name: \"Walk.Tb\"\n{\n  position 10 10\n  direction \"DOWN\"\n"
+                         "  route_type \"MOVED\"\n  route \"track1\"\n  radius 15\n"
+                         "  delay_min 0\n  delay_max 9000\n}\n",
+                         "name: \"track1\"\n{\n  cell_00 10 10\n  cell_01 13 10\n}\n");
+    write_script(dir.path, "Walk.Tb", "L0.Tb_Sheet");
+    write_person_assets(dir.path, "L0.Tb_Sheet", true);
+
+    auto vfs = gl::assets::GameVfs::mount(dir.path);
+    REQUIRE(vfs.has_value());
+    auto persons = gl::game::load_persons(vfs.value(), "test_level");
+    REQUIRE(persons.has_value());
+    REQUIRE(persons->size() == 1);
+    const gl::game::PersonInstance &person = persons->front();
+    REQUIRE(person.go_type.has_value());
+    CHECK(person.go_type == gl::assets::PadAnimationType::tb_go);
+    CHECK(person.go_delay_ms == 40);
+    CHECK(person.go_move_x == doctest::Approx(4.0F));
+    CHECK(person.go_move_y == doctest::Approx(3.0F));
 }

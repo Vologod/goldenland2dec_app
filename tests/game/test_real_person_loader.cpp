@@ -4,12 +4,17 @@
 #include "gl/game/level_simulation.hpp"
 #include "gl/game/person.hpp"
 
+#include <cmath>
+#include <cstdint>
 #include <cstdlib>
 #include <doctest/doctest.h>
 #include <string>
 #include <utility>
 
 namespace {
+constexpr std::uint32_t kL11Width = 2760;
+constexpr std::uint32_t kL11Height = 2016;
+
 bool game_dir_available() { return std::getenv("GL_GAME_DIR") != nullptr; }
 
 const gl::assets::PadAnimation *find_stay(const gl::game::PersonInstance &person) {
@@ -136,8 +141,8 @@ TEST_CASE("real data: l1_1 60 s simulation is bounded and deterministic" *
 
     gl::game::Level level;
     level.name = "l1_1";
-    level.width = 2760;
-    level.height = 2016;
+    level.width = kL11Width;
+    level.height = kL11Height;
     level.persons = std::move(persons.value());
 
     auto first = gl::game::LevelSimulation::create(level, 0x5EED);
@@ -192,4 +197,25 @@ TEST_CASE("real data: l1_1 60 s simulation is bounded and deterministic" *
     }
     CHECK(bounded);
     CHECK(identical);
+
+    int moving = 0;
+    int waiting = 0;
+    int displaced = 0;
+    for (std::size_t i = 0; i < first.persons().size(); ++i) {
+        if (!first.can_move(i))
+            continue;
+        const gl::game::PersonMovement &movement = first.persons()[i];
+        if (movement.moving)
+            ++moving;
+        if (movement.waiting)
+            ++waiting;
+        const gl::game::PersonInstance &source = level.persons[i];
+        const float spawn_x = source.tile_x * 12.0f + 6.0f;
+        const float spawn_y = source.tile_y * 9.0f + 4.0f;
+        if (std::hypot(movement.x - spawn_x, movement.y - spawn_y) > 1.0f)
+            ++displaced;
+    }
+    CHECK(moving == 3);
+    CHECK(waiting == 3);
+    CHECK(displaced >= 1);
 }

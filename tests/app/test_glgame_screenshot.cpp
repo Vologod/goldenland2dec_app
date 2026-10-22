@@ -173,6 +173,7 @@ int run_glgame_capture(const std::vector<std::string>& arguments, std::string& o
 #else
     std::string command = "\"" + g_glgame_exe.string() + "\"";
     for (const auto& arg : arguments) command += " \"" + arg + "\"";
+    command += " 2>&1";
     FILE* pipe = popen(command.c_str(), "r");
 #endif
     if (pipe == nullptr) return -1;

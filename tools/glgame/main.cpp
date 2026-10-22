@@ -46,6 +46,7 @@ namespace fs = std::filesystem;
 constexpr int kDefaultWidth = 1280;
 constexpr int kDefaultHeight = 720;
 constexpr int kMaxDimension = 16384;
+constexpr std::uint64_t kMaxSimMs = 86'400'000;
 constexpr std::string_view kNewGameLevel = "l1_1";
 constexpr std::string_view kTestDialogScript = "scripts/dialogs/demon.d1.age.cs";
 constexpr std::string_view kDialogGlobals = "scripts/dialogs_special/zlato_vars.scr";
@@ -135,7 +136,7 @@ bool parse_milliseconds(std::string_view text, std::uint64_t& value) {
     std::uint64_t parsed = 0;
     const char* const end = text.data() + text.size();
     const auto [ptr, error] = std::from_chars(text.data(), end, parsed);
-    if (error != std::errc{} || ptr != end) return false;
+    if (error != std::errc{} || ptr != end || parsed > kMaxSimMs) return false;
     value = parsed;
     return true;
 }

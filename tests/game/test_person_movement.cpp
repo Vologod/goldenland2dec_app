@@ -14,6 +14,7 @@ TEST_CASE("route type names") {
 }
 
 TEST_CASE("16-way direction from velocity") {
+    CHECK(direction16_from_velocity(0.0f, 0.0f) == 0);
     CHECK(direction16_from_velocity(0.0f, -1.0f) == 0);
     CHECK(direction16_from_velocity(-0.40f, -0.90f) == 1);
     CHECK(direction16_from_velocity(-0.70f, -0.60f) == 2);
@@ -42,6 +43,7 @@ TEST_CASE("16/8 direction mapping") {
 }
 
 TEST_CASE("isometric speed blend") {
+    CHECK(iso_speed(0.0f, 0.0f, 6.0f, 5.0f) == doctest::Approx(5.0f));
     CHECK(iso_speed(1.0f, 0.0f, 6.0f, 5.0f) == doctest::Approx(6.0f));
     CHECK(iso_speed(0.0f, 1.0f, 6.0f, 5.0f) == doctest::Approx(5.0f));
     CHECK(iso_speed(1.0f, 1.0f, 6.0f, 5.0f) == doctest::Approx(5.5f));
