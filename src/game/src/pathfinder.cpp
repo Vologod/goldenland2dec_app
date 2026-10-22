@@ -15,20 +15,15 @@ bool blocked_at(const WalkGrid& grid, const std::vector<std::uint8_t>& blocked, 
 
 bool step_allowed(const WalkGrid& grid, const std::vector<std::uint8_t>& blocked,
                   Tile from, std::int32_t dx, std::int32_t dy) {
-    const Tile next{from.x + dx, from.y + dy};
-    if (blocked_at(grid, blocked, next)) return false;
-    if (dx != 0 && dy != 0) {
-        if (blocked_at(grid, blocked, Tile{from.x + dx, from.y})) return false;
-        if (blocked_at(grid, blocked, Tile{from.x, from.y + dy})) return false;
-    }
-    return true;
+    return !blocked_at(grid, blocked, Tile{from.x + dx, from.y + dy});
 }
 
 float heuristic(Tile a, Tile b) {
     const std::int32_t dx = std::abs(a.x - b.x);
     const std::int32_t dy = std::abs(a.y - b.y);
     const std::int32_t min = std::min(dx, dy);
-    return static_cast<float>(dx + dy) + (1.41421356f - 2.0f) * static_cast<float>(min);
+    const std::int32_t max = std::max(dx, dy);
+    return (static_cast<float>(max) + 0.375f * static_cast<float>(min)) * 1.2f;
 }
 
 } // namespace
@@ -63,12 +58,20 @@ std::vector<Tile> find_path(const WalkGrid& grid, Tile from, Tile to,
     const auto index = [width](Tile t) { return static_cast<std::size_t>(t.y) * width + t.x; };
     std::vector<float> cost(width * height, -1.0f);
     std::vector<Tile> parent(width * height);
-    struct Node { float f; Tile tile; };
-    const auto worse = [](const Node& a, const Node& b) { return a.f > b.f; };
+    struct Node {
+        float f;
+        std::uint64_t order;
+        Tile tile;
+    };
+    const auto worse = [](const Node& a, const Node& b) {
+        if (a.f != b.f) return a.f > b.f;
+        return a.order > b.order;
+    };
     std::priority_queue<Node, std::vector<Node>, decltype(worse)> open(worse);
+    std::uint64_t order = 0;
     cost[index(from)] = 0.0f;
     parent[index(from)] = from;
-    open.push({heuristic(from, to), from});
+    open.push({heuristic(from, to), order++, from});
     constexpr std::int32_t kSteps[8][2] = {{1,0},{-1,0},{0,1},{0,-1},{1,1},{1,-1},{-1,1},{-1,-1}};
     while (!open.empty()) {
         const Node node = open.top();
@@ -78,12 +81,12 @@ std::vector<Tile> find_path(const WalkGrid& grid, Tile from, Tile to,
         for (const auto& step : kSteps) {
             if (!step_allowed(grid, blocked, node.tile, step[0], step[1])) continue;
             const Tile next{node.tile.x + step[0], node.tile.y + step[1]};
-            const float step_cost = (step[0] != 0 && step[1] != 0) ? 1.41421356f : 1.0f;
-            const float next_cost = cost[index(node.tile)] + step_cost;
+            constexpr float kStepCost = 1.0f;
+            const float next_cost = cost[index(node.tile)] + kStepCost;
             if (cost[index(next)] < 0.0f || next_cost < cost[index(next)]) {
                 cost[index(next)] = next_cost;
                 parent[index(next)] = node.tile;
-                open.push({next_cost + heuristic(next, to), next});
+                open.push({next_cost + heuristic(next, to), order++, next});
             }
         }
     }

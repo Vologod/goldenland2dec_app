@@ -34,6 +34,21 @@ TEST_CASE("find_path goes around a wall") {
     CHECK(path.size() > 7);
 }
 
+TEST_CASE("diagonal move only requires the destination cell to be free") {
+    WalkGrid grid;
+    grid.width = 2;
+    grid.height = 2;
+    grid.walkable.assign(4, 1);
+    grid.walkable[static_cast<std::size_t>(0) * grid.width + 1] = 0;
+    grid.walkable[static_cast<std::size_t>(1) * grid.width + 0] = 0;
+    REQUIRE(grid.is_walkable(1, 1));
+    const auto path = find_path(grid, {0, 0}, {1, 1}, kFree);
+    REQUIRE_FALSE(path.empty());
+    REQUIRE(path.size() == 2);
+    CHECK(path.front() == Tile{0, 0});
+    CHECK(path.back() == Tile{1, 1});
+}
+
 TEST_CASE("find_path returns empty for unreachable target") {
     WalkGrid grid;
     grid.width = 7;

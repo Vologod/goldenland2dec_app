@@ -218,6 +218,53 @@ TEST_CASE("walker goes around a wall and never enters blocked tiles") {
     CHECK(sim.persons()[0].x > 11 * 12);
 }
 
+TEST_CASE("clear line of sight walks straight without cell-center stops") {
+    Level level;
+    level.name = "open";
+    level.width = 50 * 12;
+    level.height = 50 * 9;
+    level.walkable.width = 50;
+    level.walkable.height = 50;
+    level.walkable.walkable.assign(50 * 50, 1);
+    PersonInstance person;
+    person.name = "straight";
+    person.tile_x = 5;
+    person.tile_y = 5;
+    person.route_type = "MOVED";
+    person.route_cells = {{35, 28}};
+    person.go_type = gl::assets::PadAnimationType::rt_go;
+    person.go_move_x = 6.0f;
+    person.go_move_y = 5.0f;
+    person.go_delay_ms = 100;
+    level.persons.push_back(person);
+
+    auto sim = LevelSimulation::create(level, 1);
+    const auto &start = sim.persons()[0];
+    const float sx = start.x;
+    const float sy = start.y;
+    const float tx = 35.0f * 12.0f + 6.0f;
+    const float ty = 28.0f * 9.0f + 4.0f;
+    const float line_dx = tx - sx;
+    const float line_dy = ty - sy;
+    const float line_length = std::sqrt(line_dx * line_dx + line_dy * line_dy);
+    REQUIRE(line_length > 0.0f);
+    int moving_ticks = 0;
+    for (int i = 0; i < 60 * 60; ++i) {
+        sim.advance(1.0 / 60.0);
+        const auto &p = sim.persons()[0];
+        if (!p.moving)
+            continue;
+        ++moving_ticks;
+        REQUIRE(p.path.size() == 2);
+        CHECK(p.path.back() == Tile{35, 28});
+        const float cross = (p.x - sx) * line_dy - (p.y - sy) * line_dx;
+        CHECK(std::fabs(cross) / line_length < 0.01f);
+    }
+    CHECK(moving_ticks > 0);
+    CHECK(sim.persons()[0].x == doctest::Approx(tx).epsilon(0.001));
+    CHECK(sim.persons()[0].y == doctest::Approx(ty).epsilon(0.001));
+}
+
 TEST_CASE("two walkers never occupy the same tile") {
     Level level = make_walled_level();
     PersonInstance second = level.persons[0];

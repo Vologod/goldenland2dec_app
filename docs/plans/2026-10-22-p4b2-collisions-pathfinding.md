@@ -15,8 +15,9 @@
 - Проходимость (D-028): `word = chunk[0].relief | (chunk[0].sound<<16)`,
   `sub = (x&1) + 2*(y&1)`, `blocked = (word & (0x100u<<sub)) != 0`; чанки читаются
   column-major (`cx*chunk_height+cy`); пустая сетка = препятствий нет.
-- A* 8 направлений, диагональ √2, без срезания углов (диагональ только если обе
-  ортогональные клетки свободны); занятые NPC клетки — препятствие.
+- A* 8 направлений, шаг 1 во всех направлениях; `h = max + 0.375*min`, вес 1.2;
+  диагональ проверяет только клетку назначения; ничьи — FIFO по вставке; занятые
+  NPC клетки — препятствие.
 - Детерминизм и шаг 1/60 сохраняются; P4b-тесты остаются зелёными.
 - Данные игры не коммитить; `third_party` не менять.
 - Полные прогоны: `$env:GL_GAME_DIR = "I:\Games\Златогорье-2"`.
@@ -340,20 +341,15 @@ bool blocked_at(const WalkGrid& grid, const std::vector<std::uint8_t>& blocked, 
 
 bool step_allowed(const WalkGrid& grid, const std::vector<std::uint8_t>& blocked,
                   Tile from, std::int32_t dx, std::int32_t dy) {
-    const Tile next{from.x + dx, from.y + dy};
-    if (blocked_at(grid, blocked, next)) return false;
-    if (dx != 0 && dy != 0) {
-        if (blocked_at(grid, blocked, Tile{from.x + dx, from.y})) return false;
-        if (blocked_at(grid, blocked, Tile{from.x, from.y + dy})) return false;
-    }
-    return true;
+    return !blocked_at(grid, blocked, Tile{from.x + dx, from.y + dy});
 }
 
 float heuristic(Tile a, Tile b) {
     const std::int32_t dx = std::abs(a.x - b.x);
     const std::int32_t dy = std::abs(a.y - b.y);
     const std::int32_t min = std::min(dx, dy);
-    return static_cast<float>(dx + dy) + (1.41421356f - 2.0f) * static_cast<float>(min);
+    const std::int32_t max = std::max(dx, dy);
+    return (static_cast<float>(max) + 0.375f * static_cast<float>(min)) * 1.2f;
 }
 
 } // namespace
@@ -386,12 +382,16 @@ std::vector<Tile> find_path(const WalkGrid& grid, Tile from, Tile to,
     const auto index = [width](Tile t) { return static_cast<std::size_t>(t.y) * width + t.x; };
     std::vector<float> cost(width * height, -1.0f);
     std::vector<Tile> parent(width * height);
-    struct Node { float f; Tile tile; };
-    const auto worse = [](const Node& a, const Node& b) { return a.f > b.f; };
+    struct Node { float f; std::uint64_t order; Tile tile; };
+    const auto worse = [](const Node& a, const Node& b) {
+        if (a.f != b.f) return a.f > b.f;
+        return a.order > b.order;
+    };
     std::priority_queue<Node, std::vector<Node>, decltype(worse)> open(worse);
+    std::uint64_t order = 0;
     cost[index(from)] = 0.0f;
     parent[index(from)] = from;
-    open.push({heuristic(from, to), from});
+    open.push({heuristic(from, to), order++, from});
     constexpr std::int32_t kSteps[8][2] = {{1,0},{-1,0},{0,1},{0,-1},{1,1},{1,-1},{-1,1},{-1,-1}};
     while (!open.empty()) {
         const Node node = open.top();
@@ -401,12 +401,12 @@ std::vector<Tile> find_path(const WalkGrid& grid, Tile from, Tile to,
         for (const auto& step : kSteps) {
             if (!step_allowed(grid, blocked, node.tile, step[0], step[1])) continue;
             const Tile next{node.tile.x + step[0], node.tile.y + step[1]};
-            const float step_cost = (step[0] != 0 && step[1] != 0) ? 1.41421356f : 1.0f;
-            const float next_cost = cost[index(node.tile)] + step_cost;
+            constexpr float kStepCost = 1.0f;
+            const float next_cost = cost[index(node.tile)] + kStepCost;
             if (cost[index(next)] < 0.0f || next_cost < cost[index(next)]) {
                 cost[index(next)] = next_cost;
                 parent[index(next)] = node.tile;
-                open.push({next_cost + heuristic(next, to), next});
+                open.push({next_cost + heuristic(next, to), order++, next});
             }
         }
     }
@@ -556,10 +556,24 @@ void LevelSimulation::rebuild_occupancy() {
 std::vector<std::uint8_t> LevelSimulation::blocked_for(std::size_t index) const {
     std::vector<std::uint8_t> blocked = occupancy_;
     if (blocked.empty()) return blocked;
-    const Tile self = tile_of(states_[index].movement);
-    if (self.x >= 0 && self.y >= 0 && self.x < grid_.width && self.y < grid_.height)
-        blocked[static_cast<std::size_t>(self.y) * grid_.width + self.x] = 0;
+    const State& state = states_[index];
+    const auto clear = [&](Tile tile) {
+        if (tile.x < 0 || tile.y < 0 || tile.x >= grid_.width || tile.y >= grid_.height) return;
+        blocked[static_cast<std::size_t>(tile.y) * grid_.width + tile.x] = 0;
+    };
+    clear(tile_of(state.movement));
+    if (state.has_goal) clear(state.goal); // собственный резерв цели
     return blocked;
+}
+
+bool LevelSimulation::tile_blocked_for(std::size_t index, Tile tile) const {
+    if (grid_.empty()) return false;
+    if (!grid_.is_walkable(tile.x, tile.y)) return true;
+    if (occupancy_.empty()) return false;
+    const State& state = states_[index];
+    if (tile == tile_of(state.movement)) return false;
+    if (state.has_goal && tile == state.goal) return false;
+    return occupancy_[static_cast<std::size_t>(tile.y) * grid_.width + tile.x] != 0;
 }
 ```
 
@@ -598,28 +612,38 @@ bool LevelSimulation::plan_target(std::size_t index) {
 }
 ```
 
-Прибытие на waypoint в `advance`:
+Движение и прибытие на waypoint в `advance` (проверка клетки, в которую
+персонаж собирается войти):
 
 ```cpp
 if (m.moving) {
     const Tile waypoint = m.path[m.path_index];
     m.target_x = waypoint.x * 12.0f + 6.0f;
     m.target_y = waypoint.y * 9.0f + 4.0f;
-    const bool occupied_now = !grid_.empty() && m.path_index + 1 < m.path.size() &&
-        occupancy_[static_cast<std::size_t>(m.path[m.path_index + 1].y) * grid_.width +
-                   m.path[m.path_index + 1].x] != 0;
-    if (occupied_now && !line_of_sight(grid_, tile_of(m), m.path.back(), blocked_for(index))) {
-        m.moving = false;                       // replan в следующий тик
-    } else if (/* достигли waypoint (|dx|<4 && |dy|<4) */) {
+    // dx/dy/dist/step и arrives — как в P4b
+    const Tile current = tile_of(m);
+    const Tile next = tile_at(next_x, next_y); // позиция после шага
+    if (next != current && tile_blocked_for(index, next)) {
+        m.moving = false;                       // replan к той же цели
+    } else if (arrives) {
+        m.x = m.target_x;
+        m.y = m.target_y;
         if (m.path_index + 1 < m.path.size()) {
             ++m.path_index;
         } else {
             m.moving = false;
             /* прежняя логика паузы delay_min..max (P4b) */
         }
+    } else {
+        m.x = next_x;
+        m.y = next_y;
     }
 }
 ```
+
+Для свободной линии `path == {from, goal}`: персонаж идёт по прямой к цели без
+остановок в центрах промежуточных клеток. Проверка `next` каждый тик ловит
+блокировку/занятость до входа в клетку; при срабатывании — replan к той же цели.
 
 Если `plan_target` вернул false — пауза `delay_min..max`, как при прибытии
 (`waiting = true`, `wait_until_ms = time_ms_ + delay`), повтор в следующий раз.

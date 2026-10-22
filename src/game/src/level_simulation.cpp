@@ -15,36 +15,12 @@ constexpr float kTileH = 9.0f;
 constexpr float kArrive = 4.0f;
 constexpr double kFixedStep = 1.0 / 60.0;
 
-Tile tile_of(const PersonMovement &movement) {
-    return Tile{static_cast<std::int32_t>(std::lround((movement.x - 6.0f) / kTileW)),
-                static_cast<std::int32_t>(std::lround((movement.y - 4.0f) / kTileH))};
+Tile tile_at(float x, float y) {
+    return Tile{static_cast<std::int32_t>(std::lround((x - 6.0f) / kTileW)),
+                static_cast<std::int32_t>(std::lround((y - 4.0f) / kTileH))};
 }
 
-std::vector<Tile> line_cells(Tile from, Tile to) {
-    std::vector<Tile> cells{from};
-    if (from == to)
-        return cells;
-    std::int32_t x = from.x;
-    std::int32_t y = from.y;
-    const std::int32_t dx = std::abs(to.x - from.x);
-    const std::int32_t dy = std::abs(to.y - from.y);
-    const std::int32_t sx = from.x < to.x ? 1 : -1;
-    const std::int32_t sy = from.y < to.y ? 1 : -1;
-    std::int32_t error = dx - dy;
-    while (x != to.x || y != to.y) {
-        const std::int32_t e2 = error * 2;
-        if (e2 > -dy) {
-            error -= dy;
-            x += sx;
-        }
-        if (e2 < dx) {
-            error += dx;
-            y += sy;
-        }
-        cells.push_back(Tile{x, y});
-    }
-    return cells;
-}
+Tile tile_of(const PersonMovement &movement) { return tile_at(movement.x, movement.y); }
 
 constexpr std::int32_t kMinBackoffMs = 500;
 constexpr std::int32_t kRandomGoalRetries = 3;
@@ -198,41 +174,45 @@ void LevelSimulation::advance(double dt_seconds) {
                     const Tile waypoint = m.path[m.path_index];
                     m.target_x = waypoint.x * kTileW + 6.0f;
                     m.target_y = waypoint.y * kTileH + 4.0f;
-                    bool occupied_now = false;
-                    if (!grid_.empty() && waypoint != tile_of(m) && waypoint.x >= 0 &&
-                        waypoint.y >= 0 && waypoint.x < grid_.width && waypoint.y < grid_.height)
-                        occupied_now =
-                            occupancy_[static_cast<std::size_t>(waypoint.y) * grid_.width +
-                                       waypoint.x] != 0;
-                    if (occupied_now) {
-                        m.moving = false;
-                    } else {
-                        const float dx = m.target_x - m.x;
-                        const float dy = m.target_y - m.y;
-                        const float distance = std::sqrt(dx * dx + dy * dy);
-                        const float speed = iso_speed(dx, dy, state.move_x, state.move_y) *
-                                            1000.0f / static_cast<float>(state.go_delay_ms);
-                        const float step = speed * static_cast<float>(kFixedStep);
-                        if (distance <= step ||
-                            (std::fabs(dx) < kArrive && std::fabs(dy) < kArrive)) {
-                            m.x = m.target_x;
-                            m.y = m.target_y;
-                            if (m.path_index + 1 < m.path.size()) {
-                                ++m.path_index;
-                            } else {
-                                m.moving = false;
-                                finish_target(state, index);
-                            }
-                        } else {
-                            m.x += dx / distance * step;
-                            m.y += dy / distance * step;
-                            m.direction16 = direction16_from_velocity(dx, dy);
-                            m.direction8 = direction16_to8(m.direction16);
-                        }
-                        if (m.moving && m.path_index < m.path.size())
-                            mark_occupied(m.path[m.path_index]);
-                        mark_occupied(tile_of(m));
+                    const float dx = m.target_x - m.x;
+                    const float dy = m.target_y - m.y;
+                    const float distance = std::sqrt(dx * dx + dy * dy);
+                    const float speed = iso_speed(dx, dy, state.move_x, state.move_y) *
+                                        1000.0f / static_cast<float>(state.go_delay_ms);
+                    const float step = speed * static_cast<float>(kFixedStep);
+                    const bool arrives = distance <= step ||
+                                         (std::fabs(dx) < kArrive && std::fabs(dy) < kArrive);
+                    float next_x = m.x;
+                    float next_y = m.y;
+                    if (arrives) {
+                        next_x = m.target_x;
+                        next_y = m.target_y;
+                    } else if (distance > 0.0f) {
+                        next_x = m.x + dx / distance * step;
+                        next_y = m.y + dy / distance * step;
                     }
+                    const Tile current = tile_of(m);
+                    const Tile next = tile_at(next_x, next_y);
+                    if (next != current && tile_blocked_for(index, next)) {
+                        m.moving = false;
+                    } else if (arrives) {
+                        m.x = m.target_x;
+                        m.y = m.target_y;
+                        if (m.path_index + 1 < m.path.size()) {
+                            ++m.path_index;
+                        } else {
+                            m.moving = false;
+                            finish_target(state, index);
+                        }
+                    } else {
+                        m.x = next_x;
+                        m.y = next_y;
+                        m.direction16 = direction16_from_velocity(dx, dy);
+                        m.direction8 = direction16_to8(m.direction16);
+                    }
+                    if (m.moving && m.path_index < m.path.size())
+                        mark_occupied(m.path[m.path_index]);
+                    mark_occupied(tile_of(m));
                 }
             } else if (m.waiting) {
                 if (time_ms_ >= m.wait_until_ms) {
@@ -335,10 +315,8 @@ bool LevelSimulation::plan_target(std::size_t index) {
     const Tile from = tile_of(m);
     const std::vector<std::uint8_t> blocked = blocked_for(index);
     std::vector<Tile> path;
-    if (grid_.empty() || from == goal) {
+    if (grid_.empty() || from == goal || line_of_sight(grid_, from, goal, blocked)) {
         path = {from, goal};
-    } else if (line_of_sight(grid_, from, goal, blocked)) {
-        path = line_cells(from, goal);
     } else {
         path = find_path(grid_, from, goal, blocked);
     }
@@ -389,10 +367,31 @@ std::vector<std::uint8_t> LevelSimulation::blocked_for(std::size_t index) const 
     std::vector<std::uint8_t> blocked = occupancy_;
     if (blocked.empty())
         return blocked;
-    const Tile self = tile_of(states_[index].movement);
-    if (self.x >= 0 && self.y >= 0 && self.x < grid_.width && self.y < grid_.height)
-        blocked[static_cast<std::size_t>(self.y) * grid_.width + self.x] = 0;
+    const State &state = states_[index];
+    const auto clear = [&](Tile tile) {
+        if (tile.x < 0 || tile.y < 0 || tile.x >= grid_.width || tile.y >= grid_.height)
+            return;
+        blocked[static_cast<std::size_t>(tile.y) * grid_.width + tile.x] = 0;
+    };
+    clear(tile_of(state.movement));
+    if (state.has_goal)
+        clear(state.goal);
     return blocked;
+}
+
+bool LevelSimulation::tile_blocked_for(std::size_t index, Tile tile) const {
+    if (grid_.empty())
+        return false;
+    if (!grid_.is_walkable(tile.x, tile.y))
+        return true;
+    if (occupancy_.empty())
+        return false;
+    const State &state = states_[index];
+    if (tile == tile_of(state.movement))
+        return false;
+    if (state.has_goal && tile == state.goal)
+        return false;
+    return occupancy_[static_cast<std::size_t>(tile.y) * grid_.width + tile.x] != 0;
 }
 
 std::uint32_t LevelSimulation::next_random(State &state) {

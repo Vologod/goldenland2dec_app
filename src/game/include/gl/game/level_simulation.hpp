@@ -57,6 +57,7 @@ class LevelSimulation {
     bool plan_target(std::size_t index);
     void rebuild_occupancy();
     void mark_occupied(Tile tile);
+    bool tile_blocked_for(std::size_t index, Tile tile) const;
     std::vector<std::uint8_t> blocked_for(std::size_t index) const;
     std::uint32_t next_random(State &state);
     std::int32_t random_range(State &state, std::int32_t low, std::int32_t high);
