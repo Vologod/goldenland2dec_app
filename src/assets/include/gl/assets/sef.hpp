@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <span>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace gl::assets {
@@ -21,12 +22,18 @@ struct SefPerson {
     std::string inventory;
 };
 
+struct SefCellGroup {
+    std::string name;
+    std::vector<std::pair<std::uint16_t, std::uint16_t>> cells;
+};
+
 struct SefData {
     std::string pack;
     bool internal_location = false;
     bool exit_to_global_map = false;
     int weather = -1;
     std::vector<SefPerson> persons;
+    std::vector<SefCellGroup> cell_groups;
 };
 
 Result<SefData> parse_sef(std::span<const std::uint8_t> data);

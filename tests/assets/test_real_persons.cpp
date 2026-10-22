@@ -163,6 +163,35 @@ TEST_CASE("real data: l1_1 SEF persons and their scripts" *
     CHECK(parsed == 15);
 }
 
+TEST_CASE("real data: l1_1 SEF cell_groups" * doctest::skip(!game_dir_available())) {
+    const char *dir = std::getenv("GL_GAME_DIR");
+    REQUIRE(dir != nullptr);
+    const std::filesystem::path data_dir = std::filesystem::path(dir) / "Data";
+
+    auto levels = PakArchive::open_from_file(data_dir / "levels.pak");
+    REQUIRE(levels.has_value());
+    const PakEntry *sef_entry = levels->find("levels/single/l1_1/l1_1.sef");
+    REQUIRE(sef_entry != nullptr);
+    auto sef_bytes = levels->read(*sef_entry);
+    REQUIRE(sef_bytes.has_value());
+    auto sef = parse_sef(sef_bytes.value());
+    REQUIRE(sef.has_value());
+
+    CHECK(sef->cell_groups.size() == 9);
+    auto find = [&](std::string_view name) -> const SefCellGroup* {
+        for (const auto& group : sef->cell_groups)
+            if (group.name == name)
+                return &group;
+        return nullptr;
+    };
+    REQUIRE(find("track1") != nullptr);
+    CHECK(find("track1")->cells.size() == 9);
+    REQUIRE(find("track4") != nullptr);
+    CHECK(find("track4")->cells.size() == 7);
+    REQUIRE(find("track2") != nullptr);
+    CHECK(find("track2")->cells.size() == 22);
+}
+
 TEST_CASE("real data: every .sef in levels.pak parses" *
           doctest::skip(!game_dir_available())) {
     const char *dir = std::getenv("GL_GAME_DIR");

@@ -168,3 +168,24 @@ TEST_CASE("SEF: rejects a missing pack") {
     REQUIRE_FALSE(result.has_value());
     CHECK(result.error().code == gl::ErrorCode::format);
 }
+
+TEST_CASE("SEF parses cell_groups") {
+    const std::string text =
+        "pack: \"L1_1\"\n"
+        "cell_groups:\n{\n"
+        "  name: \"track1\"\n  {\n"
+        "    cell_00 161 127\n"
+        "    cell_01 144 134\n"
+        "  }\n"
+        "  name: \"empty\"\n  {\n  }\n"
+        "}\n";
+    auto sef = gl::assets::parse_sef(as_bytes(text));
+    REQUIRE(sef.has_value());
+    REQUIRE(sef->cell_groups.size() == 2);
+    CHECK(sef->cell_groups[0].name == "track1");
+    REQUIRE(sef->cell_groups[0].cells.size() == 2);
+    CHECK(sef->cell_groups[0].cells[0].first == 161);
+    CHECK(sef->cell_groups[0].cells[0].second == 127);
+    CHECK(sef->cell_groups[1].name == "empty");
+    CHECK(sef->cell_groups[1].cells.empty());
+}

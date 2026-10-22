@@ -302,6 +302,85 @@ Result<std::vector<SefPerson>> parse_persons(Lexer& lexer) {
         persons.push_back(std::move(person));
     }
 }
+
+VoidResult parse_cell_group_fields(Lexer& lexer, SefCellGroup& group) {
+    while (true) {
+        const Token key = next_non_semicolon(lexer);
+        if (lexer.failed())
+            return format_error_at("unterminated SEF cell group", key.line);
+        if (key.kind == TokenKind::end)
+            return format_error_at("unterminated SEF cell group", key.line);
+        if (key.kind == TokenKind::rbrace)
+            return VoidResult{std::monostate{}};
+        if (key.kind != TokenKind::word)
+            return format_error_at("unexpected token in SEF cell group", key.line);
+
+        Token value = lexer.next();
+        if (lexer.failed())
+            return format_error_at("unterminated SEF cell group", key.line);
+        if (value.kind == TokenKind::colon)
+            value = lexer.next();
+        if (key.text == "name") {
+            if (value.kind != TokenKind::string)
+                return format_error_at("SEF cell group name is not a string", value.line);
+            group.name = to_utf8(value.text);
+            continue;
+        }
+        if (key.text.rfind("cell_", 0) == 0) {
+            if (value.kind != TokenKind::word)
+                return format_error_at("bad SEF cell coordinate", value.line);
+            const Token second = lexer.next();
+            int x = 0;
+            int y = 0;
+            if (!parse_int(value.text, x) || second.kind != TokenKind::word ||
+                !parse_int(second.text, y))
+                return format_error_at("bad SEF cell coordinate", value.line);
+            if (x < 0 || y < 0 || x > 0xFFFF || y > 0xFFFF)
+                return format_error_at("SEF cell coordinate out of range", value.line);
+            group.cells.emplace_back(static_cast<std::uint16_t>(x),
+                                     static_cast<std::uint16_t>(y));
+            continue;
+        }
+        if (value.kind == TokenKind::lbrace) {
+            lexer.skip_balanced();
+            if (lexer.failed())
+                return format_error_at("unterminated SEF cell group", value.line);
+        }
+    }
+}
+
+Result<std::vector<SefCellGroup>> parse_cell_groups(Lexer& lexer) {
+    const Token open = next_non_semicolon(lexer);
+    if (open.kind != TokenKind::lbrace)
+        return format_error_at("SEF cell_groups is not a block", open.line);
+    std::vector<SefCellGroup> groups;
+    while (true) {
+        const Token key = next_non_semicolon(lexer);
+        if (lexer.failed())
+            return format_error_at("unterminated SEF cell_groups", key.line);
+        if (key.kind == TokenKind::end)
+            return format_error_at("unterminated SEF cell_groups", key.line);
+        if (key.kind == TokenKind::rbrace)
+            return groups;
+        if (key.kind != TokenKind::word || key.text != "name")
+            return format_error_at("expected name in SEF cell_groups", key.line);
+        Token colon = lexer.next();
+        if (colon.kind != TokenKind::colon)
+            return format_error_at("expected ':' after SEF cell group name", colon.line);
+        const Token name = lexer.next();
+        if (name.kind != TokenKind::string)
+            return format_error_at("SEF cell group name is not a string", name.line);
+        const Token brace = lexer.next();
+        if (brace.kind != TokenKind::lbrace)
+            return format_error_at("SEF cell group is not a block", brace.line);
+        SefCellGroup group;
+        group.name = to_utf8(name.text);
+        auto status = parse_cell_group_fields(lexer, group);
+        if (!status)
+            return status.error();
+        groups.push_back(std::move(group));
+    }
+}
 } // namespace
 
 Result<SefData> parse_sef(std::span<const std::uint8_t> data) {
@@ -337,6 +416,14 @@ Result<SefData> parse_sef(std::span<const std::uint8_t> data) {
                     if (lexer.failed())
                         return format_error_at("unterminated SEF block", separator.line);
                 }
+                continue;
+            }
+
+            if (key.text == "cell_groups") {
+                auto groups = parse_cell_groups(lexer);
+                if (!groups)
+                    return groups.error();
+                sef.cell_groups = std::move(groups.value());
                 continue;
             }
 
