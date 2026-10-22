@@ -7,7 +7,8 @@ namespace gl::game {
 namespace {
 
 bool blocked_at(const WalkGrid& grid, const std::vector<std::uint8_t>& blocked, Tile tile) {
-    if (!grid.empty() && !grid.is_walkable(tile.x, tile.y)) return true;
+    if (grid.empty()) return false;
+    if (!grid.is_walkable(tile.x, tile.y)) return true;
     const std::size_t index = static_cast<std::size_t>(tile.y) * grid.width + tile.x;
     return index < blocked.size() && blocked[index] != 0;
 }
@@ -53,6 +54,8 @@ bool line_of_sight(const WalkGrid& grid, Tile from, Tile to,
 
 std::vector<Tile> find_path(const WalkGrid& grid, Tile from, Tile to,
                             const std::vector<std::uint8_t>& blocked) {
+    if (grid.empty()) return {};
+    if (from.x < 0 || from.y < 0 || from.x >= grid.width || from.y >= grid.height) return {};
     if (from == to) return {from};
     if (blocked_at(grid, blocked, to)) return {};
     const std::size_t width = static_cast<std::size_t>(grid.width);
