@@ -52,6 +52,7 @@ class LevelSimulation {
     std::vector<State> states_;
     std::vector<PersonMovement> persons_;
     std::uint64_t time_ms_ = 0;
+    double time_ms_exact_ = 0.0;
     double accumulator_ = 0.0;
     float width_ = 0.0f;
     float height_ = 0.0f;
