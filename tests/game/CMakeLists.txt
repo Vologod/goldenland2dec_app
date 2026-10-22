@@ -1,6 +1,7 @@
 add_executable(gl_game_tests
     test_main.cpp
     test_level_simulation.cpp
+    test_pathfinder.cpp
     test_person_loader.cpp
     test_person_movement.cpp
     test_real_person_loader.cpp
