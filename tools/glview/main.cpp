@@ -31,6 +31,8 @@ struct Options {
     bool background_only = false;
     bool debug_overlay = false;
     bool no_persons = false;
+    std::uint64_t sim_ms = 0;
+    bool sim_ms_set = false;
 };
 
 enum class ParseStatus { ok, help, error };
@@ -47,6 +49,7 @@ void print_usage() {
               "  --frames <n>       Frames to render before screenshot (default: 1)\n"
               "  --background-only  Draw only the background (skip statics and animations)\n"
               "  --no-persons       Skip NPC sprites\n"
+              "  --sim-ms <ms>      Simulation time for screenshots (default: frame time)\n"
               "  --debug-overlay    Draw sprite debug rectangles in screenshot mode\n"
               "  -h, --help         Show this help and exit\n"
               "\n"
@@ -76,6 +79,16 @@ bool parse_dimension(std::string_view text, int& value) {
 
 bool parse_frames(std::string_view text, int& value) {
     return parse_int(text, value) && value > 0 && value <= 1000000;
+}
+
+bool parse_milliseconds(std::string_view text, std::uint64_t& value) {
+    if (text.empty()) return false;
+    std::uint64_t parsed = 0;
+    const char* const end = text.data() + text.size();
+    const auto [ptr, error] = std::from_chars(text.data(), end, parsed);
+    if (error != std::errc{} || ptr != end) return false;
+    value = parsed;
+    return true;
 }
 
 ParseStatus parse_args(int argc, char** argv, Options& options) {
@@ -145,6 +158,14 @@ ParseStatus parse_args(int argc, char** argv, Options& options) {
             options.background_only = true;
         } else if (arg == "--no-persons") {
             options.no_persons = true;
+        } else if (arg == "--sim-ms") {
+            if (!next_value(arg, value)) return ParseStatus::error;
+            if (!parse_milliseconds(value, options.sim_ms)) {
+                std::fprintf(stderr, "glview: invalid --sim-ms: %.*s\n",
+                             static_cast<int>(value.size()), value.data());
+                return ParseStatus::error;
+            }
+            options.sim_ms_set = true;
         } else if (arg == "--debug-overlay") {
             options.debug_overlay = true;
         } else {
@@ -183,7 +204,7 @@ void report_error(std::string_view context, const gl::Error& error) {
 constexpr float kZoomStep = 1.1f;
 
 int save_screenshot(SDL_Renderer* renderer, const std::filesystem::path& path, int frames,
-                    gl::app::LevelScreen& screen,
+                    std::uint64_t sim_ms, bool sim_ms_set, gl::app::LevelScreen& screen,
                     const gl::app::LevelScreenOptions& screen_options) {
     int width = 0;
     int height = 0;
@@ -202,7 +223,8 @@ int save_screenshot(SDL_Renderer* renderer, const std::filesystem::path& path, i
     std::vector<std::uint8_t> pixels(static_cast<std::size_t>(pixel_count) * 4);
 
     for (int frame = 0; frame < frames; ++frame) {
-        const std::uint64_t elapsed_ms = static_cast<std::uint64_t>(frame + 1) * 16;
+        const std::uint64_t elapsed_ms =
+            sim_ms_set ? sim_ms : static_cast<std::uint64_t>(frame + 1) * 16;
         screen.render(renderer, screen_options, elapsed_ms);
         if (frame + 1 == frames) {
             if (SDL_RenderReadPixels(renderer, nullptr, SDL_PIXELFORMAT_RGBA32, pixels.data(),
@@ -336,7 +358,8 @@ int main(int argc, char** argv) {
         gl::platform::SdlContext context;
         gl::platform::Window window("Goldenland 2 - Level Viewer", options.width, options.height);
 
-        auto screen = gl::app::LevelScreen::load(window.renderer(), vfs.value(), options.level);
+        auto screen = gl::app::LevelScreen::load(window.renderer(), vfs.value(), options.level,
+                                                 !options.no_persons);
         if (!screen) {
             std::fprintf(stderr, "glview: %s\n", screen.error().message.c_str());
             return exit_code_for(screen.error());
@@ -358,7 +381,8 @@ int main(int argc, char** argv) {
         screen_options.draw_persons = !options.no_persons;
         if (!options.screenshot.empty()) {
             return save_screenshot(window.renderer(), options.screenshot, options.frames,
-                                   screen.value(), screen_options);
+                                   options.sim_ms, options.sim_ms_set, screen.value(),
+                                   screen_options);
         }
         return run_interactive(window.renderer(), screen.value(), screen_options, width, height);
     } catch (const std::exception& e) {

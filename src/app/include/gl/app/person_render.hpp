@@ -31,4 +31,10 @@ PersonShadowPlacement place_person_shadow(const gl::assets::PadAnimation& animat
                                           std::uint8_t direction, std::int32_t tile_x,
                                           std::int32_t tile_y);
 
+PersonPlacement place_person_px(const gl::assets::PadAnimation& animation,
+                                std::uint8_t direction, float x, float y);
+
+PersonShadowPlacement place_person_shadow_px(const gl::assets::PadAnimation& animation,
+                                             std::uint8_t direction, float x, float y);
+
 }

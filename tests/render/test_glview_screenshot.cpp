@@ -301,6 +301,36 @@ TEST_CASE("glview draws NPCs on l1_1 and --no-persons removes them") {
     CHECK(differing_pixels > 1000);
 }
 
+TEST_CASE("glview NPCs move between t=0 and t=10s") {
+    const char* game_dir = std::getenv("GL_GAME_DIR");
+    REQUIRE(game_dir != nullptr);
+    TempDir dir;
+    const fs::path first_png = dir.path / "move_first.png";
+    const fs::path later_png = dir.path / "move_later.png";
+    REQUIRE(run_glview(glview_arguments(game_dir, first_png, {"--sim-ms", "0"})) == 0);
+    REQUIRE(run_glview(glview_arguments(game_dir, later_png, {"--sim-ms", "10000"})) == 0);
+
+    int aw = 0, ah = 0, ac = 0, bw = 0, bh = 0, bc = 0;
+    const StbiImage first = load_png(first_png, aw, ah, ac);
+    const StbiImage later = load_png(later_png, bw, bh, bc);
+    REQUIRE(first != nullptr);
+    REQUIRE(later != nullptr);
+    REQUIRE(aw == bw);
+    REQUIRE(ah == bh);
+    std::uint64_t differing = 0;
+    for (int y = 0; y < ah; ++y) {
+        for (int x = 0; x < aw; ++x) {
+            const std::size_t i = (static_cast<std::size_t>(y) * aw + x) * 4;
+            if (first.get()[i] != later.get()[i] ||
+                first.get()[i + 1] != later.get()[i + 1] ||
+                first.get()[i + 2] != later.get()[i + 2])
+                ++differing;
+        }
+    }
+    CAPTURE(differing);
+    CHECK(differing > 1000);
+}
+
 TEST_CASE("glview animation frame changes after crossing the delay boundary") {
     const char* game_dir = std::getenv("GL_GAME_DIR");
     REQUIRE(game_dir != nullptr);

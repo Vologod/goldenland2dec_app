@@ -640,6 +640,39 @@ TEST_CASE("glgame --no-persons hides NPC sprites") {
     CHECK(different > 1000);
 }
 
+TEST_CASE("glgame NPCs move between t=0 and t=10s") {
+    const char* game_dir = std::getenv("GL_GAME_DIR");
+    REQUIRE(game_dir != nullptr);
+    TempDir temp;
+    const fs::path config = write_test_config(temp.path);
+    const fs::path first_png = temp.path / "move_first.png";
+    const fs::path later_png = temp.path / "move_later.png";
+    REQUIRE(run_glgame(screenshot_arguments(
+        game_dir, config, first_png, {"--level", "l1_1", "--sim-ms", "0"})) == 0);
+    REQUIRE(run_glgame(screenshot_arguments(
+        game_dir, config, later_png, {"--level", "l1_1", "--sim-ms", "10000"})) == 0);
+
+    int aw = 0, ah = 0, ac = 0, bw = 0, bh = 0, bc = 0;
+    const StbiImage first = load_png(first_png, aw, ah, ac);
+    const StbiImage later = load_png(later_png, bw, bh, bc);
+    REQUIRE(first != nullptr);
+    REQUIRE(later != nullptr);
+    REQUIRE(aw == bw);
+    REQUIRE(ah == bh);
+    std::uint64_t differing = 0;
+    for (int y = 0; y < ah; ++y) {
+        for (int x = 0; x < aw; ++x) {
+            const std::size_t i = (static_cast<std::size_t>(y) * aw + x) * 4;
+            if (first.get()[i] != later.get()[i] ||
+                first.get()[i + 1] != later.get()[i + 1] ||
+                first.get()[i + 2] != later.get()[i + 2])
+                ++differing;
+        }
+    }
+    CAPTURE(differing);
+    CHECK(differing > 1000);
+}
+
 TEST_CASE("glgame tolerates help and unknown commands from --exec") {
     const char* game_dir = std::getenv("GL_GAME_DIR");
     REQUIRE(game_dir != nullptr);

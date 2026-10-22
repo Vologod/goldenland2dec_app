@@ -42,4 +42,27 @@ PersonShadowPlacement place_person_shadow(const gl::assets::PadAnimation& animat
     };
 }
 
+PersonPlacement place_person_px(const gl::assets::PadAnimation& animation,
+                                std::uint8_t direction, float x, float y) {
+    const gl::assets::PadDirectionRow row =
+        gl::assets::pad_person_row(animation.type, direction);
+    return PersonPlacement{
+        x - static_cast<float>(animation.anchor_x),
+        y - static_cast<float>(animation.anchor_y),
+        row.row,
+        row.mirror,
+    };
+}
+
+PersonShadowPlacement place_person_shadow_px(const gl::assets::PadAnimation& animation,
+                                             std::uint8_t direction, float x, float y) {
+    const gl::assets::PadDirectionRow row =
+        gl::assets::pad_shadow_row(animation.type, direction);
+    return PersonShadowPlacement{
+        x - static_cast<float>(animation.shadow_anchor_x),
+        y - static_cast<float>(animation.shadow_anchor_y),
+        row.row,
+    };
+}
+
 }

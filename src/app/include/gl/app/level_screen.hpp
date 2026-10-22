@@ -5,6 +5,7 @@
 #include <gl/assets/result.hpp>
 #include <gl/assets/vfs.hpp>
 #include <gl/game/level.hpp>
+#include <gl/game/level_simulation.hpp>
 #include <gl/render/camera.hpp>
 #include <gl/render/texture.hpp>
 
@@ -24,7 +25,7 @@ struct LevelScreenOptions {
 class LevelScreen {
 public:
     static Result<LevelScreen> load(SDL_Renderer* renderer, gl::assets::GameVfs& vfs,
-                                    std::string_view level_name);
+                                    std::string_view level_name, bool load_persons = true);
 
     void render(SDL_Renderer* renderer, const LevelScreenOptions& options,
                 std::uint64_t elapsed_ms);
@@ -55,8 +56,11 @@ private:
     struct Person {
         gl::render::Texture texture;
         std::optional<gl::render::Texture> shadow;
+        std::optional<gl::render::Texture> go_texture;
+        std::optional<gl::render::Texture> go_shadow;
         std::size_t instance = 0;
         std::size_t animation = 0;
+        std::size_t go_animation = 0;
     };
 
     LevelScreen(gl::game::Level level, gl::render::Texture background);
@@ -73,6 +77,9 @@ private:
     std::vector<Sprite> statics_;
     std::vector<Animation> animations_;
     std::vector<Person> persons_;
+    gl::game::LevelSimulation simulation_;
+    std::uint64_t simulated_ms_ = 0;
+    std::uint64_t last_simulation_ms_ = 0;
     gl::render::Camera camera_;
     int screen_w_ = 0;
     int screen_h_ = 0;

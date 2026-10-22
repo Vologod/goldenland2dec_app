@@ -76,6 +76,7 @@ struct Options {
     bool font_set = false;
     bool no_font = false;
     bool no_persons = false;
+    std::uint64_t sim_ms = 0;
     std::string dialog;
     bool has_dialog = false;
     std::vector<std::string> exec;
@@ -98,6 +99,7 @@ void print_usage() {
         "  --font <ttf>         TrueType font for dialog text (default: system font)\n"
         "  --no-font            Force ASCII bitmap text (dev/debug, overrides --font)\n"
         "  --no-persons         Skip NPC sprites on the level\n"
+        "  --sim-ms <ms>        Simulation time for screenshots\n"
         "  --list-saves         Print save slots as tab-separated lines and exit\n"
         "  --screenshot <png>   Render the current state, save PNG and exit\n"
         "  --exec \"<command>\"   Run a console command after boot (repeatable)\n"
@@ -126,6 +128,16 @@ bool parse_int(std::string_view text, int& value) {
 
 bool parse_dimension(std::string_view text, int& value) {
     return parse_int(text, value) && value > 0 && value <= kMaxDimension;
+}
+
+bool parse_milliseconds(std::string_view text, std::uint64_t& value) {
+    if (text.empty()) return false;
+    std::uint64_t parsed = 0;
+    const char* const end = text.data() + text.size();
+    const auto [ptr, error] = std::from_chars(text.data(), end, parsed);
+    if (error != std::errc{} || ptr != end) return false;
+    value = parsed;
+    return true;
 }
 
 struct Resolution {
@@ -227,6 +239,13 @@ ParseStatus parse_args(int argc, char** argv, Options& options) {
             options.no_font = true;
         } else if (arg == "--no-persons") {
             options.no_persons = true;
+        } else if (arg == "--sim-ms") {
+            if (!next_value(arg, value)) return ParseStatus::error;
+            if (!parse_milliseconds(value, options.sim_ms)) {
+                std::fprintf(stderr, "glgame: invalid --sim-ms: %.*s\n",
+                             static_cast<int>(value.size()), value.data());
+                return ParseStatus::error;
+            }
         } else if (arg == "--list-saves") {
             options.list_saves = true;
         } else if (arg == "--screenshot") {
@@ -425,7 +444,7 @@ class Game {
 
         const int pitch = width * 4;
         std::vector<std::uint8_t> pixels(static_cast<std::size_t>(pixel_count) * 4);
-        render(0, 0);
+        render(0, options_.sim_ms);
         if (SDL_RenderReadPixels(renderer, nullptr, SDL_PIXELFORMAT_RGBA32, pixels.data(),
                                  pitch) != 0) {
             std::fprintf(stderr, "glgame: SDL_RenderReadPixels failed: %s\n", SDL_GetError());
@@ -975,7 +994,8 @@ class Game {
     }
 
     bool load_level(std::string_view name) {
-        auto screen = gl::app::LevelScreen::load(window_.renderer(), vfs_, name);
+        auto screen = gl::app::LevelScreen::load(window_.renderer(), vfs_, name,
+                                                 !options_.no_persons);
         if (!screen) {
             gl::log(gl::LogLevel::error, screen.error().message);
             console_print("cannot load level: " + screen.error().message);
