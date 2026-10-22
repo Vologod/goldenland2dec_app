@@ -1,11 +1,13 @@
 #include "gl/assets/pad.hpp"
 #include "gl/assets/vfs.hpp"
 #include "gl/game/level.hpp"
+#include "gl/game/level_simulation.hpp"
 #include "gl/game/person.hpp"
 
 #include <cstdlib>
 #include <doctest/doctest.h>
 #include <string>
+#include <utility>
 
 namespace {
 bool game_dir_available() { return std::getenv("GL_GAME_DIR") != nullptr; }
@@ -122,4 +124,72 @@ TEST_CASE("real data: l1_1 routes and go animations" * doctest::skip(!game_dir_a
     CHECK(persons->at(9).route_cells.size() == 9);
     CHECK(persons->at(11).route_cells.size() == 8);
     CHECK(persons->at(12).route_cells.size() == 22);
+}
+
+TEST_CASE("real data: l1_1 60 s simulation is bounded and deterministic" *
+          doctest::skip(!game_dir_available())) {
+    auto vfs = gl::assets::GameVfs::mount(std::getenv("GL_GAME_DIR"));
+    REQUIRE(vfs.has_value());
+    auto persons = gl::game::load_persons(vfs.value(), "l1_1");
+    REQUIRE(persons.has_value());
+    REQUIRE(persons->size() == 16);
+
+    gl::game::Level level;
+    level.name = "l1_1";
+    level.width = 2760;
+    level.height = 2016;
+    level.persons = std::move(persons.value());
+
+    auto first = gl::game::LevelSimulation::create(level, 0x5EED);
+    auto second = gl::game::LevelSimulation::create(level, 0x5EED);
+
+    int movable = 0;
+    int stationary = 0;
+    int moved = 0;
+    int moved_flip = 0;
+    int random_radius = 0;
+    for (std::size_t i = 0; i < level.persons.size(); ++i) {
+        const gl::game::PersonInstance &person = level.persons[i];
+        if (first.can_move(i))
+            ++movable;
+        else
+            ++stationary;
+        if (person.route_type == "MOVED") {
+            ++moved;
+            CHECK_FALSE(person.route_cells.empty());
+        } else if (person.route_type == "MOVED_FLIP") {
+            ++moved_flip;
+            CHECK_FALSE(person.route_cells.empty());
+        } else if (person.route_type == "RANDOM_RADIUS") {
+            ++random_radius;
+            CHECK(person.route_cells.empty());
+        }
+    }
+    CHECK(stationary == 10);
+    CHECK(movable == 6);
+    CHECK(moved == 1);
+    CHECK(moved_flip == 3);
+    CHECK(random_radius == 2);
+
+    bool bounded = true;
+    bool identical = true;
+    for (int step = 0; step < 60 * 60; ++step) {
+        first.advance(1.0 / 60.0);
+        second.advance(1.0 / 60.0);
+        const auto &a = first.persons();
+        const auto &b = second.persons();
+        if (a.size() != b.size()) {
+            identical = false;
+            break;
+        }
+        for (std::size_t i = 0; i < a.size(); ++i) {
+            if (a[i].x < 0.0f || a[i].x > static_cast<float>(level.width) || a[i].y < 0.0f ||
+                a[i].y > static_cast<float>(level.height))
+                bounded = false;
+            if (a[i].x != b[i].x || a[i].y != b[i].y)
+                identical = false;
+        }
+    }
+    CHECK(bounded);
+    CHECK(identical);
 }

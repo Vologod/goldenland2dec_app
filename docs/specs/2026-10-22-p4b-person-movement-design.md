@@ -98,8 +98,8 @@ public:
   фиксированными шагами 1/60 до `simulation_time_ms` (накопленный остаток
   сохраняется); пауза `glgame` замораживает время.
 - Движущийся NPC: позиция из `PersonMovement`; кадр
-  `(anim_ms / go.delay) % frames_per_row`; row/mirror по `direction16`; тень — по
-  `kPadShadowRows16`, не зеркалится.
+  `((sim_time_ms - state_started_ms) / go.delay) % frames_per_row`; row/mirror по
+  `direction16`; тень — по `kPadShadowRows16`, не зеркалится.
 - Стоящий: та же позиция симуляции (центр клетки `tile*12+6`, `tile*9+4`),
   stay-лист (`stay_type`) и 8 направлений (`direction8`); draw origin —
   `(x - anchor_x, y - anchor_y)` от центра клетки.
@@ -132,8 +132,8 @@ Screenshots:
 
 ## 6. Критерии готовности
 
-1. На `l1_1` 4 NPC ходят по маршрутам (`MOVED`/`MOVED_FLIP`), 2 — `RANDOM_RADIUS`,
-   10 стоят; направления и анимации соответствуют данным.
+1. На `l1_1` 6 подвижных (4 route-followers: `MOVED`/`MOVED_FLIP` + 2
+   `RANDOM_RADIUS`), 10 `STAY`; направления и анимации соответствуют данным.
 2. Детерминизм: два прогона с одинаковым временем дают одинаковые позиции.
 3. Скорость/паузы соответствуют формулам §3 (тесты).
 4. `gl_game`/`gl_assets` SDL-free; полный `ctest` зелёный.

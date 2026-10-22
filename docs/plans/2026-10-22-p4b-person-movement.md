@@ -1211,7 +1211,8 @@ ctest --test-dir build --output-on-failure
 
 - `glview --level l1_1 --screenshot out0.png --sim-ms 0` и `--sim-ms 10000`:
   diff > 1000 px, 1280×720.
-- Лог: `16 persons`, у 4 движущихся загружены `go`-листы.
+- Лог: `16 persons`, у 6 подвижных (4 route-followers + 2 `RANDOM_RADIUS`)
+  загружены `go`-листы.
 - Реальный тест: `l1_1` 60 с — 6 подвижных по типу (4 route-followers +
   2 `RANDOM_RADIUS`), 10 `STAY`; при seed `0x5EED` в t=60 с 3 moving + 3 waiting;
   повторный прогон совпадает.
@@ -1240,5 +1241,6 @@ git commit -m "docs(p4b): record automated acceptance"
 build\bin\glgame.exe --game-dir "I:\Games\Златогорье-2" --level l1_1
 ```
 
-Проверить: 4 NPC ходят, 10 стоят, направления/анимации корректны, `Esc`/меню.
+Проверить: 6 подвижных (4 route-followers + 2 `RANDOM_RADIUS`), 10 `STAY`,
+направления/анимации корректны, `Esc`/меню.
 Только после подтверждения пользователя — фиксировать приёмку и мержить.
