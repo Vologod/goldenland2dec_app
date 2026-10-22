@@ -1,5 +1,6 @@
 #pragma once
 #include "gl/game/level.hpp"
+#include "gl/game/pathfinder.hpp"
 #include "gl/game/person_movement.hpp"
 #include <cstdint>
 #include <utility>
@@ -17,6 +18,8 @@ struct PersonMovement {
     bool waiting = false;
     std::uint64_t wait_until_ms = 0;
     std::uint64_t state_started_ms = 0;
+    std::vector<Tile> path;
+    std::size_t path_index = 0;
 };
 
 class LevelSimulation {
@@ -46,11 +49,15 @@ class LevelSimulation {
         std::uint32_t rng = 1;
         bool can_move = false;
     };
-    void choose_target(State &state);
+    bool plan_target(std::size_t index);
+    void rebuild_occupancy();
+    std::vector<std::uint8_t> blocked_for(std::size_t index) const;
     std::uint32_t next_random(State &state);
     std::int32_t random_range(State &state, std::int32_t low, std::int32_t high);
     std::vector<State> states_;
     std::vector<PersonMovement> persons_;
+    WalkGrid grid_;
+    std::vector<std::uint8_t> occupancy_;
     std::uint64_t time_ms_ = 0;
     double time_ms_exact_ = 0.0;
     double accumulator_ = 0.0;

@@ -30,6 +30,30 @@ Level make_level(std::string route_type, std::vector<std::pair<std::int32_t, std
     level.persons.push_back(std::move(person));
     return level;
 }
+
+Level make_walled_level() {
+    Level level;
+    level.name = "wall";
+    level.width = 14 * 12;
+    level.height = 10 * 9;
+    level.walkable.width = 14;
+    level.walkable.height = 10;
+    level.walkable.walkable.assign(14 * 10, 1);
+    for (int y = 0; y < 8; ++y)
+        level.walkable.walkable[static_cast<std::size_t>(y) * 14 + 7] = 0;
+    PersonInstance person;
+    person.name = "walker";
+    person.tile_x = 2;
+    person.tile_y = 2;
+    person.route_type = "MOVED";
+    person.route_cells = {{12, 2}};
+    person.go_type = gl::assets::PadAnimationType::rt_go;
+    person.go_move_x = 6.0f;
+    person.go_move_y = 5.0f;
+    person.go_delay_ms = 100;
+    level.persons.push_back(person);
+    return level;
+}
 } // namespace
 
 TEST_CASE("MOVED follows route cells in order") {
@@ -176,4 +200,37 @@ TEST_CASE("person without go cannot move") {
     CHECK_FALSE(sim.can_move(0));
     sim.advance(5.0);
     CHECK(sim.persons()[0].x == doctest::Approx(10.0f * 12 + 6));
+}
+
+TEST_CASE("walker goes around a wall and never enters blocked tiles") {
+    auto sim = LevelSimulation::create(make_walled_level(), 1);
+    for (int i = 0; i < 60 * 60; ++i) {
+        sim.advance(1.0 / 60.0);
+        const auto &p = sim.persons()[0];
+        const int tile_x = static_cast<int>((p.x - 6.0f) / 12.0f + 0.5f);
+        const int tile_y = static_cast<int>((p.y - 4.0f) / 9.0f + 0.5f);
+        CHECK(make_walled_level().walkable.is_walkable(tile_x, tile_y));
+    }
+    CHECK(sim.persons()[0].x > 11 * 12);
+}
+
+TEST_CASE("two walkers never occupy the same tile") {
+    Level level = make_walled_level();
+    PersonInstance second = level.persons[0];
+    second.name = "walker2";
+    second.tile_x = 12;
+    second.tile_y = 2;
+    second.route_cells = {{2, 2}};
+    level.persons.push_back(second);
+    auto sim = LevelSimulation::create(level, 5);
+    for (int i = 0; i < 60 * 30; ++i) {
+        sim.advance(1.0 / 60.0);
+        const auto &a = sim.persons()[0];
+        const auto &b = sim.persons()[1];
+        const int ax = static_cast<int>((a.x - 6.0f) / 12.0f + 0.5f);
+        const int ay = static_cast<int>((a.y - 4.0f) / 9.0f + 0.5f);
+        const int bx = static_cast<int>((b.x - 6.0f) / 12.0f + 0.5f);
+        const int by = static_cast<int>((b.y - 4.0f) / 9.0f + 0.5f);
+        CHECK_FALSE((ax == bx && ay == by));
+    }
 }

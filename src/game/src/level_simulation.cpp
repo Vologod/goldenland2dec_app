@@ -15,6 +15,11 @@ constexpr float kTileH = 9.0f;
 constexpr float kArrive = 4.0f;
 constexpr double kFixedStep = 1.0 / 60.0;
 
+Tile tile_of(const PersonMovement &movement) {
+    return Tile{static_cast<std::int32_t>(std::lround((movement.x - 6.0f) / kTileW)),
+                static_cast<std::int32_t>(std::lround((movement.y - 4.0f) / kTileH))};
+}
+
 std::uint32_t hash_name(std::string_view text) {
     std::uint32_t hash = 2166136261u;
     for (unsigned char c : text)
@@ -61,11 +66,10 @@ LevelSimulation LevelSimulation::create(const Level &level, std::uint64_t seed) 
                     hash_name(person.name) ^ (static_cast<std::uint32_t>(i) * 0x9E3779B9u);
         if (state.rng == 0)
             state.rng = 0x12345678u;
-        state.can_move =
-            person.go_type.has_value() && state.go_delay_ms > 0 &&
-            (state.move_x > 0.0f || state.move_y > 0.0f) &&
-            (!state.route.empty() || state.route_type == RouteType::random_radius ||
-             state.route_type == RouteType::random);
+        state.can_move = person.go_type.has_value() && state.go_delay_ms > 0 &&
+                         (state.move_x > 0.0f || state.move_y > 0.0f) &&
+                         (!state.route.empty() || state.route_type == RouteType::random_radius ||
+                          state.route_type == RouteType::random);
         if ((state.route_type == RouteType::moved || state.route_type == RouteType::moved_flip) &&
             state.route.empty()) {
             state.can_move = false;
@@ -97,23 +101,31 @@ LevelSimulation LevelSimulation::create(const Level &level, std::uint64_t seed) 
                         " ms, movement " + std::to_string(state.move_x) + "x" +
                         std::to_string(state.move_y) + "); will stand still");
         }
-        if (state.can_move) {
-            sim.choose_target(state);
-            PersonMovement &m = state.movement;
-            if (std::fabs(m.target_x - m.x) < 1e-3f && std::fabs(m.target_y - m.y) < 1e-3f) {
-                m.moving = false;
-                const std::int32_t delay =
-                    sim.random_range(state, state.delay_min, state.delay_max);
-                m.state_started_ms = 0;
-                if (delay < 500) {
-                    sim.choose_target(state);
-                } else {
-                    m.waiting = true;
-                    m.wait_until_ms = static_cast<std::uint64_t>(delay);
-                }
-            }
-        }
         sim.states_.push_back(std::move(state));
+    }
+    sim.grid_ = level.walkable;
+    for (std::size_t index = 0; index < sim.states_.size(); ++index) {
+        State &state = sim.states_[index];
+        if (!state.can_move)
+            continue;
+        PersonMovement &m = state.movement;
+        const bool planned = sim.plan_target(index);
+        if (!planned) {
+            m.moving = false;
+            m.waiting = true;
+            m.wait_until_ms = static_cast<std::uint64_t>(
+                std::max(0, sim.random_range(state, state.delay_min, state.delay_max)));
+            continue;
+        }
+        if (std::fabs(m.target_x - m.x) >= 1e-3f || std::fabs(m.target_y - m.y) >= 1e-3f)
+            continue;
+        m.moving = false;
+        const std::int32_t delay = sim.random_range(state, state.delay_min, state.delay_max);
+        m.state_started_ms = 0;
+        if (delay < 500 && sim.plan_target(index))
+            continue;
+        m.waiting = true;
+        m.wait_until_ms = static_cast<std::uint64_t>(std::max(0, delay));
     }
     sim.persons_.reserve(sim.states_.size());
     for (const State &state : sim.states_)
@@ -129,44 +141,80 @@ void LevelSimulation::advance(double dt_seconds) {
         accumulator_ -= kFixedStep;
         time_ms_exact_ += kFixedStep * 1000.0;
         time_ms_ = static_cast<std::uint64_t>(std::llround(time_ms_exact_));
+        rebuild_occupancy();
+        const auto pause = [&](State &state, std::int32_t delay) {
+            state.movement.waiting = true;
+            state.movement.wait_until_ms =
+                time_ms_ + static_cast<std::uint64_t>(std::max(0, delay));
+        };
+        const auto finish_target = [&](State &state, std::size_t index) {
+            const std::int32_t delay = random_range(state, state.delay_min, state.delay_max);
+            state.movement.state_started_ms = time_ms_;
+            if (delay < 500 && plan_target(index))
+                return;
+            pause(state, delay);
+        };
         for (std::size_t index = 0; index < states_.size(); ++index) {
             State &state = states_[index];
             if (!state.can_move)
                 continue;
             PersonMovement &m = state.movement;
             if (m.moving) {
-                const float dx = m.target_x - m.x;
-                const float dy = m.target_y - m.y;
-                const float distance = std::sqrt(dx * dx + dy * dy);
-                const float speed = iso_speed(dx, dy, state.move_x, state.move_y) * 1000.0f /
-                                    static_cast<float>(state.go_delay_ms);
-                const float step = speed * static_cast<float>(kFixedStep);
-                if (distance <= step || (std::fabs(dx) < kArrive && std::fabs(dy) < kArrive)) {
-                    m.x = m.target_x;
-                    m.y = m.target_y;
+                if (m.path_index >= m.path.size()) {
                     m.moving = false;
-                    const std::int32_t delay =
-                        random_range(state, state.delay_min, state.delay_max);
-                    m.state_started_ms = time_ms_;
-                    if (delay < 500) {
-                        choose_target(state);
-                    } else {
-                        m.waiting = true;
-                        m.wait_until_ms = time_ms_ + static_cast<std::uint64_t>(delay);
-                    }
                 } else {
-                    m.x += dx / distance * step;
-                    m.y += dy / distance * step;
-                    m.direction16 = direction16_from_velocity(dx, dy);
-                    m.direction8 = direction16_to8(m.direction16);
+                    const Tile waypoint = m.path[m.path_index];
+                    m.target_x = waypoint.x * kTileW + 6.0f;
+                    m.target_y = waypoint.y * kTileH + 4.0f;
+                    bool occupied_now = false;
+                    if (!grid_.empty() && waypoint != tile_of(m) && waypoint.x >= 0 &&
+                        waypoint.y >= 0 && waypoint.x < grid_.width && waypoint.y < grid_.height)
+                        occupied_now =
+                            occupancy_[static_cast<std::size_t>(waypoint.y) * grid_.width +
+                                       waypoint.x] != 0;
+                    if (occupied_now) {
+                        m.moving = false;
+                    } else {
+                        const float dx = m.target_x - m.x;
+                        const float dy = m.target_y - m.y;
+                        const float distance = std::sqrt(dx * dx + dy * dy);
+                        const float speed = iso_speed(dx, dy, state.move_x, state.move_y) *
+                                            1000.0f / static_cast<float>(state.go_delay_ms);
+                        const float step = speed * static_cast<float>(kFixedStep);
+                        if (distance <= step ||
+                            (std::fabs(dx) < kArrive && std::fabs(dy) < kArrive)) {
+                            m.x = m.target_x;
+                            m.y = m.target_y;
+                            if (m.path_index + 1 < m.path.size()) {
+                                ++m.path_index;
+                            } else {
+                                m.moving = false;
+                                finish_target(state, index);
+                            }
+                        } else {
+                            m.x += dx / distance * step;
+                            m.y += dy / distance * step;
+                            m.direction16 = direction16_from_velocity(dx, dy);
+                            m.direction8 = direction16_to8(m.direction16);
+                        }
+                        if (m.moving && !grid_.empty() && m.path_index < m.path.size()) {
+                            const Tile reserved = m.path[m.path_index];
+                            if (reserved.x >= 0 && reserved.y >= 0 && reserved.x < grid_.width &&
+                                reserved.y < grid_.height)
+                                occupancy_[static_cast<std::size_t>(reserved.y) * grid_.width +
+                                           reserved.x] = 1;
+                        }
+                    }
                 }
             } else if (m.waiting) {
                 if (time_ms_ >= m.wait_until_ms) {
                     m.waiting = false;
-                    choose_target(state);
+                    if (!plan_target(index))
+                        pause(state, random_range(state, state.delay_min, state.delay_max));
                 }
             } else {
-                choose_target(state);
+                if (!plan_target(index))
+                    pause(state, random_range(state, state.delay_min, state.delay_max));
             }
             persons_[index] = m;
         }
@@ -181,11 +229,12 @@ bool LevelSimulation::can_move(std::size_t index) const {
            state.route_type != RouteType::stay_rotate;
 }
 
-void LevelSimulation::choose_target(State &state) {
+bool LevelSimulation::plan_target(std::size_t index) {
+    State &state = states_[index];
     PersonMovement &m = state.movement;
     if (state.route_type == RouteType::stay || state.route_type == RouteType::stay_rotate) {
         state.can_move = false;
-        return;
+        return false;
     }
     std::int32_t tile_x = 0;
     std::int32_t tile_y = 0;
@@ -210,25 +259,77 @@ void LevelSimulation::choose_target(State &state) {
         const std::int32_t base_tile_y =
             around_spawn ? state.spawn_tile_y
                          : static_cast<std::int32_t>(std::floor(base_y / kTileH));
+        tile_x = base_tile_x;
+        tile_y = base_tile_y;
         for (int attempt = 0; attempt < 64; ++attempt) {
             const std::int32_t candidate_x =
                 base_tile_x + random_range(state, -state.radius, state.radius);
             const std::int32_t candidate_y =
                 base_tile_y + random_range(state, -state.radius, state.radius);
-            if (candidate_x >= 0 && candidate_y >= 0 && candidate_x * kTileW + 6.0f < width_ &&
-                candidate_y * kTileH + 4.0f < height_) {
+            bool candidate_ok = candidate_x >= 0 && candidate_y >= 0 &&
+                                candidate_x * kTileW + 6.0f < width_ &&
+                                candidate_y * kTileH + 4.0f < height_;
+            if (candidate_ok && !grid_.empty()) {
+                candidate_ok = grid_.is_walkable(candidate_x, candidate_y) &&
+                               (occupancy_.empty() ||
+                                occupancy_[static_cast<std::size_t>(candidate_y) * grid_.width +
+                                           candidate_x] == 0);
+            }
+            if (candidate_ok) {
                 tile_x = candidate_x;
                 tile_y = candidate_y;
                 break;
             }
-            tile_x = base_tile_x;
-            tile_y = base_tile_y;
         }
     }
-    m.target_x = tile_x * kTileW + 6.0f;
-    m.target_y = tile_y * kTileH + 4.0f;
+    const Tile goal{tile_x, tile_y};
+    const Tile from = tile_of(m);
+    const std::vector<std::uint8_t> blocked = blocked_for(index);
+    std::vector<Tile> path;
+    if (grid_.empty() || line_of_sight(grid_, from, goal, blocked)) {
+        path = {from, goal};
+    } else {
+        path = find_path(grid_, from, goal, blocked);
+    }
+    if (path.size() < 2)
+        return false;
+    m.path = std::move(path);
+    m.path_index = 1;
+    m.target_x = m.path[1].x * kTileW + 6.0f;
+    m.target_y = m.path[1].y * kTileH + 4.0f;
     m.moving = true;
     m.state_started_ms = time_ms_;
+    if (!occupancy_.empty()) {
+        const Tile reserved = m.path.back();
+        if (reserved.x >= 0 && reserved.y >= 0 && reserved.x < grid_.width &&
+            reserved.y < grid_.height)
+            occupancy_[static_cast<std::size_t>(reserved.y) * grid_.width + reserved.x] = 1;
+    }
+    return true;
+}
+
+void LevelSimulation::rebuild_occupancy() {
+    occupancy_.clear();
+    if (grid_.empty())
+        return;
+    occupancy_.assign(
+        static_cast<std::size_t>(grid_.width) * static_cast<std::size_t>(grid_.height), 0);
+    for (const State &state : states_) {
+        const Tile tile = tile_of(state.movement);
+        if (tile.x < 0 || tile.y < 0 || tile.x >= grid_.width || tile.y >= grid_.height)
+            continue;
+        occupancy_[static_cast<std::size_t>(tile.y) * grid_.width + tile.x] = 1;
+    }
+}
+
+std::vector<std::uint8_t> LevelSimulation::blocked_for(std::size_t index) const {
+    std::vector<std::uint8_t> blocked = occupancy_;
+    if (blocked.empty())
+        return blocked;
+    const Tile self = tile_of(states_[index].movement);
+    if (self.x >= 0 && self.y >= 0 && self.x < grid_.width && self.y < grid_.height)
+        blocked[static_cast<std::size_t>(self.y) * grid_.width + self.x] = 0;
+    return blocked;
 }
 
 std::uint32_t LevelSimulation::next_random(State &state) {
