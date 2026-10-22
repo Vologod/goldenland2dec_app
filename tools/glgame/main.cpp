@@ -77,6 +77,7 @@ struct Options {
     bool font_set = false;
     bool no_font = false;
     bool no_persons = false;
+    bool walkable_overlay = false;
     std::uint64_t sim_ms = 0;
     std::string dialog;
     bool has_dialog = false;
@@ -100,6 +101,7 @@ void print_usage() {
         "  --font <ttf>         TrueType font for dialog text (default: system font)\n"
         "  --no-font            Force ASCII bitmap text (dev/debug, overrides --font)\n"
         "  --no-persons         Skip NPC sprites on the level\n"
+        "  --walkable-overlay   Draw blocked tiles in red on the level\n"
         "  --sim-ms <ms>        Simulation time for screenshots (ignored interactively)\n"
         "  --list-saves         Print save slots as tab-separated lines and exit\n"
         "  --screenshot <png>   Render the current state, save PNG and exit\n"
@@ -240,6 +242,8 @@ ParseStatus parse_args(int argc, char** argv, Options& options) {
             options.no_font = true;
         } else if (arg == "--no-persons") {
             options.no_persons = true;
+        } else if (arg == "--walkable-overlay") {
+            options.walkable_overlay = true;
         } else if (arg == "--sim-ms") {
             if (!next_value(arg, value)) return ParseStatus::error;
             if (!parse_milliseconds(value, options.sim_ms)) {
@@ -1408,6 +1412,7 @@ class Game {
         } else if (state_.state() == gl::core::AppState::level && level_) {
             gl::app::LevelScreenOptions options;
             options.debug_overlay = debug_overlay_;
+            options.walkable_overlay = options_.walkable_overlay;
             options.draw_persons = !options_.no_persons;
             level_->render(window_.renderer(), options, animation_ms);
             if (client_.snapshot().paused) {

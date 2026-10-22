@@ -483,6 +483,34 @@ TEST_CASE("glview debug overlay draws visible sprite rectangles") {
     CHECK(differing_pixels > 0);
 }
 
+TEST_CASE("glview --walkable-overlay changes the frame") {
+    const char* game_dir = std::getenv("GL_GAME_DIR");
+    REQUIRE(game_dir != nullptr);
+    TempDir dir;
+    const fs::path plain = dir.path / "walk_plain.png";
+    const fs::path overlay = dir.path / "walk_overlay.png";
+    REQUIRE(run_glview(glview_arguments(game_dir, plain, {"--frames", "5"})) == 0);
+    REQUIRE(run_glview(glview_arguments(game_dir, overlay,
+                                        {"--frames", "5", "--walkable-overlay"})) == 0);
+    int aw = 0, ah = 0, ac = 0, bw = 0, bh = 0, bc = 0;
+    const StbiImage a = load_png(plain, aw, ah, ac);
+    const StbiImage b = load_png(overlay, bw, bh, bc);
+    REQUIRE(a != nullptr);
+    REQUIRE(b != nullptr);
+    REQUIRE(aw == 1280);
+    REQUIRE(ah == 720);
+    std::uint64_t differing = 0;
+    for (int y = 0; y < ah; ++y)
+        for (int x = 0; x < aw; ++x) {
+            const std::size_t i = (static_cast<std::size_t>(y) * aw + x) * 4;
+            if (a.get()[i] != b.get()[i] || a.get()[i + 1] != b.get()[i + 1] ||
+                a.get()[i + 2] != b.get()[i + 2])
+                ++differing;
+        }
+    CAPTURE(differing);
+    CHECK(differing > 10000);
+}
+
 TEST_CASE("glview exits 3 when required level data is missing") {
     TempDir temp;
     const fs::path game_dir = temp.path / "game";

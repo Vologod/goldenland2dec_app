@@ -19,6 +19,7 @@ namespace gl::app {
 struct LevelScreenOptions {
     bool background_only = false;
     bool debug_overlay = false;
+    bool walkable_overlay = false;
     bool draw_persons = true;
 };
 
@@ -71,6 +72,7 @@ private:
                      std::uint64_t elapsed_ms) const;
     void draw_debug_overlay(SDL_Renderer* renderer, int screen_w, int screen_h,
                             std::uint64_t elapsed_ms) const;
+    void draw_walkable_overlay(SDL_Renderer* renderer) const;
 
     gl::game::Level level_;
     gl::render::Texture background_;

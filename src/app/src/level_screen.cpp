@@ -22,6 +22,8 @@ namespace {
 constexpr float kMinZoom = 0.25f;
 constexpr float kMaxZoom = 4.0f;
 constexpr float kPanSpeed = 600.0f;
+constexpr float kTileWidth = 12.0f;
+constexpr float kTileHeight = 9.0f;
 
 bool rect_visible(const SDL_FRect& rect, int width, int height) {
     return rect.x + rect.w > 0.0f && rect.y + rect.h > 0.0f &&
@@ -357,6 +359,10 @@ void LevelScreen::render(SDL_Renderer* renderer, const LevelScreenOptions& optio
         }
     }
 
+    if (options.walkable_overlay) {
+        draw_walkable_overlay(renderer);
+    }
+
     if (options.debug_overlay) {
         draw_debug_overlay(renderer, screen_w_, screen_h_, elapsed_ms);
     }
@@ -445,6 +451,21 @@ void LevelScreen::draw_debug_overlay(SDL_Renderer* renderer, int screen_w, int s
                                   static_cast<float>(frame.width()),
                                   static_cast<float>(frame.height()));
         if (rect_visible(rect, screen_w, screen_h)) SDL_RenderDrawRectF(renderer, &rect);
+    }
+}
+
+void LevelScreen::draw_walkable_overlay(SDL_Renderer* renderer) const {
+    if (level_.walkable.empty()) return;
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+    SDL_SetRenderDrawColor(renderer, 255, 0, 0, 96);
+    for (std::int32_t y = 0; y < level_.walkable.height; ++y) {
+        for (std::int32_t x = 0; x < level_.walkable.width; ++x) {
+            if (level_.walkable.is_walkable(x, y)) continue;
+            const SDL_FRect rect = gl::render::to_screen(
+                camera_, static_cast<float>(x) * kTileWidth,
+                static_cast<float>(y) * kTileHeight, kTileWidth, kTileHeight);
+            if (rect_visible(rect, screen_w_, screen_h_)) SDL_RenderFillRectF(renderer, &rect);
+        }
     }
 }
 

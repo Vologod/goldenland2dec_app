@@ -32,6 +32,7 @@ struct Options {
     int frames = 1;
     bool background_only = false;
     bool debug_overlay = false;
+    bool walkable_overlay = false;
     bool no_persons = false;
     std::uint64_t sim_ms = 0;
     bool sim_ms_set = false;
@@ -53,6 +54,7 @@ void print_usage() {
               "  --no-persons       Skip NPC sprites\n"
               "  --sim-ms <ms>      Simulation time for screenshots (ignored interactively)\n"
               "  --debug-overlay    Draw sprite debug rectangles in screenshot mode\n"
+              "  --walkable-overlay Draw blocked tiles in red on the level\n"
               "  -h, --help         Show this help and exit\n"
               "\n"
               "Exit codes: 0 success, 1 arguments, 2 I/O, 3 format/load.");
@@ -170,6 +172,8 @@ ParseStatus parse_args(int argc, char** argv, Options& options) {
             options.sim_ms_set = true;
         } else if (arg == "--debug-overlay") {
             options.debug_overlay = true;
+        } else if (arg == "--walkable-overlay") {
+            options.walkable_overlay = true;
         } else {
             std::fprintf(stderr, "glview: unknown argument: %s\n", argv[i]);
             print_usage();
@@ -380,6 +384,7 @@ int main(int argc, char** argv) {
         gl::app::LevelScreenOptions screen_options;
         screen_options.background_only = options.background_only;
         screen_options.debug_overlay = options.debug_overlay;
+        screen_options.walkable_overlay = options.walkable_overlay;
         screen_options.draw_persons = !options.no_persons;
         if (!options.screenshot.empty()) {
             return save_screenshot(window.renderer(), options.screenshot, options.frames,
