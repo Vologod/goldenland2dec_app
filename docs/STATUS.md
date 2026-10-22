@@ -1,6 +1,36 @@
 # STATUS
 
-Обновлено: 2026-10-21
+Обновлено: 2026-10-22
+
+## P4b — NPC movement (2026-10-22)
+
+- Tasks 1–6 завершены на ветке `p4b-movement`: SEF `cell_groups`, route/direction
+  helpers, route + `_go` metadata, детерминированный `LevelSimulation`, отрисовка
+  движущихся NPC, automated acceptance + docs.
+- Полный `ctest` с `GL_GAME_DIR` — **15/15 passed**, 534.58 s, exit 0
+  (`gl_assets_real_tests` 411.76 s, `glgame_screenshot_tests` 58.17 s,
+  `glview_screenshot_tests` 50.09 s, `gl_cs_tools_tests` 6.75 s,
+  `gl_game_tests` 3.99 s; остальные — < 2 s). `cmake --build build` — успех.
+  Суммарно по 15 исполняемым файлам: **391 test case / 5544 assertions**, 0 failed.
+- PAD: **276/276** реальных `.pad`, 2450 анимаций, 0 ошибок; SEF sweep **261/261**;
+  `l1_1` — **16 persons**, `cell_groups` найдены (`track1` 9, `track2` 22, `track3` 8,
+  `track4` 7 клеток), у всех 6 movers есть `_go`.
+- Screenshot `glview l1_1` 1280x720: `16 persons`, `uploaded 16 person sprites`,
+  ни одного warning про `_go`. NPC-mask XOR между `--sim-ms 0` и `--sim-ms 10000` —
+  **3001 px** (>1000); маска NPC к фону без persons — 3869 px (t=0) и 3574 px (t=10 с).
+  Повторный прогон t=10 с побайтово совпал (SHA-256
+  `0AD62384FBCC50144203AA88ECF125DEC64504C80F1D08B7561821752851EB3E`).
+- Детерминизм 60 с (`seed 0x5EED`, как в `LevelScreen`): два прогона совпали во всех
+  16 позициях/состояниях. Типы: 10 `STAY`, 1 `MOVED`, 3 `MOVED_FLIP`, 2 `RANDOM_RADIUS`;
+  в t=60 с — 3 moving + 3 waiting у 6 подвижных, 10 `STAY`. Все позиции в границах.
+- **P4b automated acceptance passed.** **Manual desktop gate OPEN** — пользователь
+  должен запустить `glgame --game-dir "I:\Games\Златогорье-2" --level l1_1` и проверить
+  4 NPC на маршрутах + 2 `RANDOM_RADIUS`, направления/анимации, `Esc`/меню. Агент GUI
+  не запускал и manual pass не подтверждает.
+- Известные ограничения: `parse_route_type` неизвестное значение молча даёт `stay`
+  (warning отложен); `RANDOM*` не клампят кандидата, а отбрасывают его и после 64
+  попыток возвращаются к базовой клетке; `RANDOM_RADIUS` в t=60 с может быть в wait.
+  Следующая задача — **P4c** (клик → диалог).
 
 ## P4a — NPCs on the level (2026-10-21)
 
@@ -22,10 +52,9 @@
 - Критерии spec §6 выполнены автоматизированно: 16 NPC загружаются и рисуются,
   все `.pad` парсятся, screenshot с NPC отличается от кадра без NPC,
   `gl_assets`/`gl_game` остаются SDL-free.
-- **P4a automated acceptance passed.** **Manual desktop gate OPEN** — пользователь
-  должен запустить `glgame --game-dir "I:\Games\Златогорье-2" --level l1_1`,
-  убедиться, что NPC видны в правильных местах/направлениях, и что `Esc`/меню
-  работают. Агент GUI не запускал и manual pass не подтверждает.
+- **P4a automated acceptance passed**; manual desktop gate пройден пользователем
+  2026-10-21 (NPC в правильных местах/направлениях, idle-анимация, `Esc`/меню);
+  **P4a принята**.
 - Известные ограничения P4a: нет Y-сортировки (P4b); `--no-persons` не пропускает
   загрузку/декодирование спрайтов (только отрисовку); NPC с общим `res_name`
   загружают текстуру повторно. Следующая задача — **P4b** (движение/маршруты/AI).
@@ -54,25 +83,27 @@ P2c — save/load каркас: реализация и автоматизиро
 нет). P3c — dialogs + SDB + TTF: Tasks 1–4 завершены 2026-10-21; автоматизированная
 приёмка пройдена (13/13 ctest, `glscript --sdb`, dialog PNG), manual dialog UI gate
 пройден пользователем 2026-10-21. P4a — NPC на уровне: Tasks 1–5 завершены
-2026-10-21, **automated acceptance passed** (15/15 ctest, 16 NPC, 276/276 `.pad`),
-**manual desktop gate OPEN**. Следующий — P4b (движение/маршруты/AI); P1b
-(Android/touch) и P2 backfill отложены.
+2026-10-21, automated acceptance passed, manual gate пройден — **P4a принята**.
+P4b — движение NPC: Tasks 1–6 завершены 2026-10-22, **automated acceptance passed**
+(15/15 ctest, 391 cases / 5544 assertions), **manual desktop gate OPEN**. Следующий —
+P4c (клик → диалог); P1b (Android/touch) и P2 backfill отложены.
 
 ## Текущая задача
 
-**P4a — Task 5 (automated acceptance + docs) завершён 2026-10-21; P4a automated
-acceptance passed.** Полный `ctest` с `GL_GAME_DIR` — **15/15 passed**, 849.95 s,
-exit 0; `cmake --build build` — `ninja: no work to do`. PAD targeted real-тест:
-`entries=276 parsed=276 failures=0 animations=2450`, 0.85 s; `l1_1` —
-`persons=16`, 15 уникальных скриптов. `gl_game_tests` — 3/3, 192 assertions
-(real loader: 16 instances, 6 `tb_stay` + 10 `rt_stay`); `person_render_tests` —
-6/6, 41 assertion. Screenshot `glview --level l1_1 --screenshot ... --width 1280
---height 720` — exit 0, логи `16 persons` / `uploaded 16 person sprites`, PNG
-1280x720, 3 120 861 байт, 72 887 цветов (выборка каждые 2 px), отличие от
-`--no-persons` 3 828 пикселей, повторный прогон совпал (SHA-256
-`8B377011...E074AA7A`). **Manual desktop gate OPEN:** пользователь должен
-запустить `glgame --game-dir "I:\Games\Златогорье-2" --level l1_1`, проверить
-NPC и `Esc`/меню; агент GUI не запускал. Следующая задача — P4b.
+**P4b — Task 6 (automated acceptance + docs) завершён 2026-10-22; P4b automated
+acceptance passed.** Полный `ctest` с `GL_GAME_DIR` — **15/15 passed**, 534.58 s,
+exit 0; `cmake --build build` — успех (`Copying MinGW runtime DLLs`). По 15
+исполняемым файлам — **391 test case / 5544 assertions**, 0 failed; PAD
+`entries=276 parsed=276 failures=0 animations=2450`; SEF `261/261`; `l1_1` —
+`persons=16`, 6 movers с `_go`. Screenshot `glview` 1280x720: `16 persons`,
+`uploaded 16 person sprites`, без `_go`-warning; NPC-mask XOR t=0 vs t=10 с —
+**3001 px**; повторный прогон t=10 с совпал побайтово (SHA-256
+`0AD62384...2851EB3E`). 60-с детерминизм (seed `0x5EED`): два прогона совпали;
+в t=60 с 3 moving + 3 waiting из 6 подвижных, 10 `STAY`.
+**Manual desktop gate OPEN:** пользователь должен запустить
+`glgame --game-dir "I:\Games\Златогорье-2" --level l1_1`, проверить 4 NPC на
+маршрутах + 2 `RANDOM_RADIUS`, направления/анимации, `Esc`/меню; агент GUI не
+запускал и manual pass не подтверждает. Следующая задача — P4c.
 
 **P3c — Task 4 (automated acceptance + docs) завершён 2026-10-21; P3c automated
 acceptance passed.** `cmake --build build` — `ninja: no work to do`, exit 0. Полный
@@ -566,21 +597,39 @@ P0 закрыт 2026-10-19; далее выполнялись задачи P1 (�
 - 2026-10-21: build — MinGW runtime DLLs (`libc++.dll`, `libunwind.dll`,
   `libwinpthread-1.dll`) копируются в `build/bin`, запуск без toolchain в `PATH`;
   commit `dd3445b`.
+- 2026-10-22: P4b Task 1 — SEF `cell_groups` (`SefCellGroup`, `SefData::cell_groups`,
+  `cell_NN x y` в любом порядке, пустая группа); `l1_1` — 9 групп (`track1` 9,
+  `track2` 22, `track3` 8, `track4` 7, 5 `box*`), SEF sweep 261/261.
+- 2026-10-22: P4b Task 2 — `gl::game::person_movement`: `RouteType`,
+  `direction16_from_velocity` (пороги 0.2079/0.5878/0.8616/0.9863),
+  `direction16_to8`/`direction8_to16`, `iso_speed`.
+- 2026-10-22: P4b Task 3 — `PersonInstance::route_cells`/`go_type`/`go_move_x/y`/
+  `go_delay_ms`; `cell_groups` резолвятся регистронезависимо, `rt_go` с fallback на
+  `tb_go`; `RANDOM*` не требуют клеток; warning только для route-типов без маршрута/`_go`.
+- 2026-10-22: P4b Task 4 — `gl::game::LevelSimulation` (SDL-free, шаг 1/60,
+  xorshift32 seed от уровня/имени/индекса, `MOVED`/`MOVED_FLIP`, `RANDOM*`,
+  паузы, 4-px прибытие, диагональная скорость, `state_started_ms`).
+- 2026-10-22: P4b Task 5 — `LevelScreen` владеет симуляцией, грузит go-листы/тени и
+  рисует движущихся NPC (16 направлений); `--sim-ms`/`--no-persons` в `glview`/`glgame`;
+  screenshot-тесты t=0 vs t=10 с; `person_render_tests` 9/9 (52 assertions).
+- 2026-10-22: P4b Task 6 — automated acceptance + docs: полный `ctest` **15/15**
+  (534.58 s, exit 0), **391 cases / 5544 assertions**, NPC-mask XOR 3001 px,
+  детерминизм 60 с подтверждён; **P4b automated acceptance passed**, manual gate OPEN.
+  Спека/план/`formats.md` выровнены с реализацией (silent unknown route, RANDOM
+  fallback, реальные индексы маршрутов, `state_started_ms`).
 
 ## Следующие задачи
 
-1. P4b: движение NPC по маршрутам — spec/plan готовы
-   (`docs/specs/2026-10-22-p4b-person-movement-design.md`,
-   `docs/plans/2026-10-22-p4b-person-movement.md`), 6 задач; критерии — spec §6.
-   Проверка: `cmake --build build`; `ctest --test-dir build --output-on-failure` с
-   `$env:GL_GAME_DIR = "I:\Games\Златогорье-2"`; ручной гейт
-   `build\bin\glgame.exe --game-dir "I:\Games\Златогорье-2" --level l1_1`.
-2. P4c: клик → диалог (после P4b).
-3. P1b: Android/touch — отложенный follow-up P1.
-4. P7-follow-up: свободный TTF для Android (P9), прокрутка длинных диалогов, layout-константы.
+1. P4c: клик → диалог (после P4b; manual desktop gate P4b ещё открыт).
+2. P1b: Android/touch — отложенный follow-up P1.
+3. P7-follow-up: свободный TTF для Android (P9), прокрутка длинных диалогов, layout-константы.
 
 ## Открытые вопросы
 
+- P4b: manual desktop gate OPEN — 4 NPC на маршрутах + 2 `RANDOM_RADIUS`, направления,
+  `_go`-анимации, `Esc`/меню. В t=60 с симуляция даёт 3 moving + 3 waiting из 6
+  подвижных (10 `STAY`); формулировка «4 движущихся, 10 стоящих» относится к 4
+  route-followers (`MOVED`/`MOVED_FLIP`), а не к мгновенному числу moving.
 - P1: финальный manual desktop pass — WASD/стрелки, `Home` и визуальный `F1` toggle
   на обычном рабочем столе. В текущей headless-сессии клавиатурный фокус недоступен;
   drag-панорама и wheel-зум проверены инъекцией мыши, overlay — screenshot-тестом.

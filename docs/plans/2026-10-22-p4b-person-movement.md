@@ -34,7 +34,7 @@
 - Consumes: `Lexer`, `next_non_semicolon`, `to_utf8`, `format_error_at` (уже есть в `sef.cpp`).
 - Produces: `struct SefCellGroup { std::string name; std::vector<std::pair<std::uint16_t,std::uint16_t>> cells; };` и `SefData::cell_groups`.
 
-- [ ] **Step 1: Write failing synthetic tests**
+- [x] **Step 1: Write failing synthetic tests**
 
 В `tests/assets/test_sef.cpp` добавить:
 
@@ -83,7 +83,7 @@ REQUIRE(find("track2") != nullptr);
 CHECK(find("track2")->cells.size() == 22);
 ```
 
-- [ ] **Step 2: Run tests, verify failure**
+- [x] **Step 2: Run tests, verify failure**
 
 ```powershell
 cmake --build build
@@ -91,7 +91,7 @@ build\bin\gl_assets_tests.exe --test-case="*cell_groups*"
 ```
 Ожидаемо: compile error — нет `cell_groups`.
 
-- [ ] **Step 3: Add types**
+- [x] **Step 3: Add types**
 
 В `sef.hpp`:
 
@@ -108,7 +108,7 @@ std::vector<SefCellGroup> cell_groups;
 ```
 Добавить `#include <utility>`.
 
-- [ ] **Step 4: Parse the section**
+- [x] **Step 4: Parse the section**
 
 В `sef.cpp` (анонимный namespace, рядом с `parse_persons`) добавить:
 
@@ -205,7 +205,7 @@ if (key.text == "cell_groups") {
 }
 ```
 
-- [ ] **Step 5: Run tests**
+- [x] **Step 5: Run tests**
 
 ```powershell
 cmake --build build
@@ -214,7 +214,7 @@ $env:GL_GAME_DIR="I:\Games\Златогорье-2"; build\bin\gl_assets_real_tes
 ```
 Ожидаемо: все проходят; реальный SEF-sweep 261/261.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```powershell
 git add src/assets/include/gl/assets/sef.hpp src/assets/src/sef.cpp tests/assets/test_sef.cpp tests/assets/test_real_persons.cpp
@@ -241,7 +241,7 @@ git commit -m "feat(assets): parse SEF cell_groups"
   `std::uint8_t direction8_to16(std::uint8_t) noexcept;`
   `float iso_speed(float vx, float vy, float move_x, float move_y) noexcept;`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 `tests/game/test_person_movement.cpp`:
 
@@ -296,7 +296,7 @@ TEST_CASE("isometric speed blend") {
 }
 ```
 
-- [ ] **Step 2: Run, verify failure**
+- [x] **Step 2: Run, verify failure**
 
 ```powershell
 cmake --build build
@@ -304,7 +304,7 @@ build\bin\gl_game_tests.exe --test-case="*direction*"
 ```
 Ожидаемо: ошибка компиляции (нет заголовка).
 
-- [ ] **Step 3: Implement header**
+- [x] **Step 3: Implement header**
 
 `person_movement.hpp`:
 
@@ -325,7 +325,7 @@ float iso_speed(float vx, float vy, float move_x, float move_y) noexcept;
 }
 ```
 
-- [ ] **Step 4: Implement helpers**
+- [x] **Step 4: Implement helpers**
 
 `person_movement.cpp`:
 
@@ -403,7 +403,7 @@ float iso_speed(float vx, float vy, float move_x, float move_y) noexcept {
 }
 ```
 
-- [ ] **Step 5: Wire CMake and run**
+- [x] **Step 5: Wire CMake and run**
 
 В `src/game/CMakeLists.txt` добавить `src/person_movement.cpp`;
 в `tests/game/CMakeLists.txt` — `test_person_movement.cpp`.
@@ -413,7 +413,7 @@ cmake --build build
 build\bin\gl_game_tests.exe --test-case="*direction*,*route*,*speed*"
 ```
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```powershell
 git add src/game tests/game
@@ -436,7 +436,7 @@ git commit -m "feat(game): add route type and 16-way direction helpers"
   `std::optional<gl::assets::PadAnimationType> go_type;`
   `float go_move_x = 0; float go_move_y = 0; std::int32_t go_delay_ms = 0;`
 
-- [ ] **Step 1: Failing real test**
+- [x] **Step 1: Failing real test**
 
 Добавить в `test_real_person_loader.cpp`:
 
@@ -455,23 +455,26 @@ TEST_CASE("real data: l1_1 routes and go animations" *
             continue;
         }
         ++movers;
-        CHECK(!person.route_cells.empty());
+        if (person.route_type == "RANDOM_RADIUS" || person.route_type == "RANDOM")
+            CHECK(person.route_cells.empty());  // RANDOM* не используют маршрут
+        else
+            CHECK(!person.route_cells.empty());
         REQUIRE(person.go_type.has_value());
         CHECK(person.go_delay_ms > 0);
         CHECK(person.go_move_x > 0.0f);
         CHECK(person.go_move_y > 0.0f);
     }
-    CHECK(movers == 6);
+    CHECK(movers == 6);                              // 4 route + 2 RANDOM_RADIUS
     CHECK(persons->at(1).route_cells.size() == 7);   // track4
     CHECK(persons->at(9).route_cells.size() == 9);   // track1
-    CHECK(persons->at(12).route_cells.size() == 8);  // track3
-    CHECK(persons->at(13).route_cells.size() == 22); // track2
+    CHECK(persons->at(11).route_cells.size() == 8);  // track3
+    CHECK(persons->at(12).route_cells.size() == 22); // track2
 }
 ```
 
-- [ ] **Step 2: Run, verify failure** — нет полей `route_cells`/`go_type`.
+- [x] **Step 2: Run, verify failure** — нет полей `route_cells`/`go_type`.
 
-- [ ] **Step 3: Extend `PersonInstance`**
+- [x] **Step 3: Extend `PersonInstance`**
 
 ```cpp
 #include <optional>
@@ -484,7 +487,7 @@ float go_move_y = 0.0f;
 std::int32_t go_delay_ms = 0;
 ```
 
-- [ ] **Step 4: Resolve routes and go in `load_persons`**
+- [x] **Step 4: Resolve routes and go in `load_persons`**
 
 Перед циклом собрать `std::map<std::string, const SefCellGroup*>` с ключом `ascii_lower(name)`
 (использовать существующий `lower_path` после нормализации). В цикле после PAD:
@@ -513,10 +516,11 @@ if (go != nullptr) {
 }
 ```
 
-Если `route_type != "STAY"` и (`route_cells.empty()` или `!go_type`), писать
-`gl::log(warning, ...)`; симуляция оставит NPC стоять.
+Warning пишется только для route-типов: `!stays && ((!wanders && route_cells.empty()) ||
+!go_type)`, где `stays` — `STAY`/`STAY_ROTATE`, `wanders` — `RANDOM`/`RANDOM_RADIUS`
+(у них маршрутных клеток нет по определению). Симуляция оставит такого NPC стоять.
 
-- [ ] **Step 5: Synthetic loader test**
+- [x] **Step 5: Synthetic loader test**
 
 Добавить в `test_person_loader.cpp` помощник (рядом с `write_sef`):
 
@@ -558,7 +562,7 @@ TEST_CASE("person loader: resolves route cells from cell_groups") {
 }
 ```
 
-- [ ] **Step 6: Run**
+- [x] **Step 6: Run**
 
 ```powershell
 cmake --build build
@@ -566,7 +570,7 @@ build\bin\gl_game_tests.exe
 $env:GL_GAME_DIR="I:\Games\Златогорье-2"; build\bin\gl_game_tests.exe
 ```
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```powershell
 git add src/game tests/game
@@ -610,7 +614,7 @@ public:
 };
 ```
 
-- [ ] **Step 1: Failing tests**
+- [x] **Step 1: Failing tests**
 
 `test_level_simulation.cpp`:
 
@@ -702,14 +706,14 @@ TEST_CASE("person without go cannot move") {
 }
 ```
 
-- [ ] **Step 2: Run, verify failure**
+- [x] **Step 2: Run, verify failure**
 
 ```powershell
 cmake --build build
 ```
 Ожидаемо: нет `level_simulation.hpp`.
 
-- [ ] **Step 3: Implement header and logic**
+- [x] **Step 3: Implement header and logic**
 
 `level_simulation.hpp`:
 
@@ -949,14 +953,14 @@ std::int32_t LevelSimulation::random_range(State& state, std::int32_t low, std::
 
 `can_move(index)` возвращает `states_[index].can_move && !route_type stay`.
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 ```powershell
 cmake --build build
 build\bin\gl_game_tests.exe --test-case="*simulation*,*MOVED*,*delay*,*RANDOM*,*deterministic*"
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add src/game tests/game
@@ -982,7 +986,7 @@ git commit -m "feat(game): add deterministic NPC route simulation"
 - Consumes: `LevelSimulation` (Task 4).
 - Produces: `place_person_px(animation, direction, px, py)`; `LevelScreen::load(renderer, vfs, level, bool load_persons = true)`.
 
-- [ ] **Step 1: Failing helper test**
+- [x] **Step 1: Failing helper test**
 
 В `test_person_render.cpp`:
 
@@ -1000,7 +1004,7 @@ TEST_CASE("px placement uses float position") {
 }
 ```
 
-- [ ] **Step 2: Implement `place_person_px`**
+- [x] **Step 2: Implement `place_person_px`**
 
 `person_render.hpp`:
 
@@ -1014,7 +1018,7 @@ PersonShadowPlacement place_person_shadow_px(const gl::assets::PadAnimation& ani
 `person_render.cpp`: те же вычисления, но `x - anchor_x`, `y - anchor_y` без умножения
 на тайлы; `direction` передаётся как есть (`pad_person_row` сам выбирает 16/8 таблицу).
 
-- [ ] **Step 3: Extend `LevelScreen`**
+- [x] **Step 3: Extend `LevelScreen`**
 
 В `level_screen.hpp`:
 
@@ -1087,14 +1091,14 @@ for (const Person& person : persons_) {
 ```
 Тень: для `moving` — `go_shadow`, `place_person_shadow_px`, `pad_shadow_row(go_type, direction16)`.
 
-- [ ] **Step 4: `--no-persons` / `--sim-ms`**
+- [x] **Step 4: `--no-persons` / `--sim-ms`**
 
 - `glview`: парсить `--sim-ms N`; в screenshot-режиме передавать `N` как `elapsed_ms`
   в `render`. `--no-persons` — передавать `load_persons=false` в `LevelScreen::load`.
 - `glgame`: аналогично `--sim-ms` (для screenshot) и `--no-persons`; в обычном цикле
   `render(..., client_.snapshot().simulation_time_ms)` уже передаёт серверное время.
 
-- [ ] **Step 5: Screenshot tests**
+- [x] **Step 5: Screenshot tests**
 
 В `test_glview_screenshot.cpp`:
 
@@ -1169,7 +1173,7 @@ TEST_CASE("glgame NPCs move between t=0 and t=10s") {
 }
 ```
 
-- [ ] **Step 6: Run**
+- [x] **Step 6: Run**
 
 ```powershell
 cmake --build build
@@ -1179,7 +1183,7 @@ build\bin\glview_screenshot_tests.exe
 build\bin\glgame_screenshot_tests.exe
 ```
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```powershell
 git add src/app tools tests
@@ -1195,7 +1199,7 @@ git commit -m "feat(app): render moving NPCs from level simulation"
 - Modify: `docs/PROJECT.md`
 - Modify: `docs/plans/2026-10-22-p4b-person-movement.md`
 
-- [ ] **Step 1: Full real suite**
+- [x] **Step 1: Full real suite**
 
 ```powershell
 $env:GL_GAME_DIR="I:\Games\Златогорье-2"
@@ -1203,15 +1207,16 @@ ctest --test-dir build --output-on-failure
 ```
 Записать число тестов, assertions и время.
 
-- [ ] **Step 2: Evidence**
+- [x] **Step 2: Evidence**
 
 - `glview --level l1_1 --screenshot out0.png --sim-ms 0` и `--sim-ms 10000`:
   diff > 1000 px, 1280×720.
 - Лог: `16 persons`, у 4 движущихся загружены `go`-листы.
-- Реальный тест: `l1_1` 60 с — 4 движущихся, 10 стоящих; повторный прогон
-  совпадает.
+- Реальный тест: `l1_1` 60 с — 6 подвижных по типу (4 route-followers +
+  2 `RANDOM_RADIUS`), 10 `STAY`; при seed `0x5EED` в t=60 с 3 moving + 3 waiting;
+  повторный прогон совпадает.
 
-- [ ] **Step 3: Docs**
+- [x] **Step 3: Docs**
 
 - `docs/STATUS.md`: запись P4b Tasks 1–6, automated acceptance passed,
   **manual desktop gate OPEN**; следующая — P4c (клик → диалог).
@@ -1220,7 +1225,7 @@ ctest --test-dir build --output-on-failure
 - `docs/research/p4b-person-movement.md`: уточнить наблюдаемые значения,
   если появятся.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```powershell
 git add docs
