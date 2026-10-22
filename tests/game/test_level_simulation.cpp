@@ -303,9 +303,11 @@ TEST_CASE("real data: l1_1 movers stay walkable and apart" * doctest::skip(!game
     auto sim = LevelSimulation::create(level.value(), 42);
     auto twin = LevelSimulation::create(level.value(), 42);
     std::vector<char> spawn_walkable(level->persons.size(), 0);
-    for (std::size_t i = 0; i < level->persons.size(); ++i)
+    for (std::size_t i = 0; i < level->persons.size(); ++i) {
         spawn_walkable[i] =
             level->walkable.is_walkable(level->persons[i].tile_x, level->persons[i].tile_y);
+    }
+    std::vector<char> saw_path(level->persons.size(), 0);
     int walkable_movers = 0;
     for (int tick = 0; tick < 60 * 60; ++tick) {
         sim.advance(1.0 / 60.0);
@@ -317,6 +319,8 @@ TEST_CASE("real data: l1_1 movers stay walkable and apart" * doctest::skip(!game
             if (sim.can_move(a) && spawn_walkable[a]) {
                 CHECK(level->walkable.is_walkable(ax, ay));
                 ++walkable_movers;
+                if (persons[a].path.size() >= 2)
+                    saw_path[a] = 1;
             }
             for (std::size_t b = a + 1; b < persons.size(); ++b) {
                 const int bx = static_cast<int>((persons[b].x - 6.0f) / 12.0f + 0.5f);
@@ -326,6 +330,17 @@ TEST_CASE("real data: l1_1 movers stay walkable and apart" * doctest::skip(!game
         }
     }
     CHECK(walkable_movers > 0);
+    int walkable_spawn_movers = 0;
+    int walkable_spawn_movers_with_path = 0;
+    for (std::size_t i = 0; i < sim.persons().size(); ++i) {
+        if (!sim.can_move(i) || !spawn_walkable[i])
+            continue;
+        ++walkable_spawn_movers;
+        walkable_spawn_movers_with_path += saw_path[i] ? 1 : 0;
+    }
+    CHECK(walkable_spawn_movers > 0);
+    CAPTURE(walkable_spawn_movers_with_path);
+    CHECK(walkable_spawn_movers_with_path > 0);
     for (std::size_t i = 0; i < sim.persons().size(); ++i) {
         CHECK(sim.persons()[i].x == twin.persons()[i].x);
         CHECK(sim.persons()[i].y == twin.persons()[i].y);

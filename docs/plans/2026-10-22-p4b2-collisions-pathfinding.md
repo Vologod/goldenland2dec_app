@@ -48,7 +48,7 @@ WalkGrid build_walk_grid(const gl::assets::LvlData& level);
 ```
 - `gl::game::Level` получает `WalkGrid walkable;`.
 
-- [ ] **Step 1: Failing tests**
+- [x] **Step 1: Failing tests**
 
 `tests/game/test_walk_grid.cpp`:
 
@@ -109,9 +109,9 @@ TEST_CASE("real data: l1_1 walk grid" * doctest::skip(!game_dir_available())) {
 }
 ```
 
-- [ ] **Step 2: Run, verify failure** (нет заголовка/поля).
+- [x] **Step 2: Run, verify failure** (нет заголовка/поля).
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `walk_grid.hpp`:
 
@@ -169,7 +169,7 @@ WalkGrid build_walk_grid(const gl::assets::LvlData& level) {
 В `level.hpp`: `#include "gl/game/walk_grid.hpp"` и поле `WalkGrid walkable;`.
 В `level_loader.cpp` после разбора LVL: `level.walkable = build_walk_grid(lvl);`.
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 ```powershell
 cmake --build build
@@ -177,7 +177,7 @@ build\bin\gl_game_tests.exe --test-case="*walk grid*"
 $env:GL_GAME_DIR="I:\Games\Златогорье-2"; build\bin\gl_game_tests.exe --test-case="*l1_1 walk grid*"
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add src/game tests/game
@@ -207,7 +207,7 @@ std::vector<Tile> find_path(const WalkGrid& grid, Tile from, Tile to,
                             const std::vector<std::uint8_t>& blocked);
 ```
 
-- [ ] **Step 1: Failing tests**
+- [x] **Step 1: Failing tests**
 
 ```cpp
 #include "gl/game/pathfinder.hpp"
@@ -267,9 +267,9 @@ TEST_CASE("blocked cells are obstacles but the start cell is free") {
 }
 ```
 
-- [ ] **Step 2: Run, verify failure.**
+- [x] **Step 2: Run, verify failure.**
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `pathfinder.hpp`:
 
@@ -399,14 +399,14 @@ std::vector<Tile> find_path(const WalkGrid& grid, Tile from, Tile to,
 размерам — вызывать `find_path` на пустой сетке не нужно (симуляция обходит
 проверкой `grid_.empty()`).
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 ```powershell
 cmake --build build
 build\bin\gl_game_tests.exe --test-case="*path*,*line of sight*"
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/game tests/game
@@ -426,7 +426,7 @@ git commit -m "feat(game): add line-of-sight and A* pathfinding"
 - Consumes: `WalkGrid`, `Pathfinder`, существующие `PersonMovement`.
 - Produces: `PersonMovement::path` (очередь waypoint-ов) и поведение обхода.
 
-- [ ] **Step 1: Failing tests**
+- [x] **Step 1: Failing tests**
 
 Добавить в `test_level_simulation.cpp`:
 
@@ -491,9 +491,9 @@ TEST_CASE("two walkers never occupy the same tile") {
 }
 ```
 
-- [ ] **Step 2: Run, verify failure.**
+- [x] **Step 2: Run, verify failure.**
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 В `PersonMovement` добавить:
 
@@ -599,7 +599,7 @@ if (m.moving) {
 `(grid_.empty() || grid_.is_walkable(candidate)) &&` (occupancy пуст или клетка
 свободна); retry 64, затем пауза.
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 ```powershell
 cmake --build build
@@ -607,7 +607,7 @@ build\bin\gl_game_tests.exe --test-case="*walker*,*simulation*,*MOVED*,*RANDOM*"
 $env:GL_GAME_DIR="I:\Games\Златогорье-2"; build\bin\gl_game_tests.exe
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/game tests/game
@@ -629,7 +629,7 @@ git commit -m "feat(game): avoid obstacles and other NPCs in level simulation"
 - `LevelScreenOptions` получает `bool walkable_overlay = false;`.
 - `--walkable-overlay` в обоих инструментах.
 
-- [ ] **Step 1: Failing screenshot test**
+- [x] **Step 1: Failing screenshot test**
 
 ```cpp
 TEST_CASE("glview --walkable-overlay changes the frame") {
@@ -661,7 +661,7 @@ TEST_CASE("glview --walkable-overlay changes the frame") {
 }
 ```
 
-- [ ] **Step 2: Implement overlay**
+- [x] **Step 2: Implement overlay**
 
 В `render` после отрисовки анимаций, если `options.walkable_overlay`:
 для каждого тайла `(x,y)` с `!walkable.is_walkable(x,y)` нарисовать
@@ -671,14 +671,14 @@ SDL_BLENDMODE_BLEND)` + `SDL_SetRenderDrawColor(renderer, 255, 0, 0, 96)` +
 
 В `glview`/`glgame`: флаг `--walkable-overlay` → `options.walkable_overlay = true`.
 
-- [ ] **Step 3: Run**
+- [x] **Step 3: Run**
 
 ```powershell
 cmake --build build
 $env:GL_GAME_DIR="I:\Games\Златогорье-2"; build\bin\glview_screenshot_tests.exe --test-case="*walkable*"
 ```
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/app tools tests
@@ -692,7 +692,7 @@ git commit -m "feat(app): add walkable overlay for collision verification"
 **Files:**
 - Modify: `docs/STATUS.md`, `docs/PROJECT.md`, `docs/plans/2026-10-22-p4b2-collisions-pathfinding.md`
 
-- [ ] **Step 1: Full suite**
+- [x] **Step 1: Full suite**
 
 ```powershell
 $env:GL_GAME_DIR="I:\Games\Златогорье-2"
@@ -700,27 +700,27 @@ ctest --test-dir build --output-on-failure
 ```
 Записать число тестов/assertions и время.
 
-- [ ] **Step 2: Evidence**
+- [x] **Step 2: Evidence**
 
 - Real-тест `l1_1` 60 с: 0 заходов в заблокированные тайлы, 0 совпадений тайлов,
   детерминизм; path не пуст для movers.
 - `--walkable-overlay` PNG 1280×720; ручная сверка с фоном.
 - Логи без ошибок pathfinding.
 
-- [ ] **Step 3: Docs**
+- [x] **Step 3: Docs**
 
 - `STATUS.md`: P4b2 Tasks 1–5, automated passed, **manual gate OPEN**; далее P4c.
 - `PROJECT.md`: P4 статус.
 - План: отметить чекбоксы.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add docs
 git commit -m "docs(p4b2): record automated acceptance"
 ```
 
-- [ ] **Step 5: Manual gate**
+- [ ] **Step 5: Manual gate (OPEN, user)**
 
 ```powershell
 build\bin\glgame.exe --game-dir "I:\Games\Златогорье-2" --level l1_1
