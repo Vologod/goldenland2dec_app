@@ -258,9 +258,9 @@ animations[..]  : {
   `{0..8,7..1}` (9..15 mirror). `anchor_x` is approximately `frameWidth/2`
   (examples: 20/41, 17/34, 13/26), so a horizontal UV flip keeps the feet in
   place.
-- Frame index is `((sim_time_ms - state_started_ms) / delay) % framesPerRow` for a
-  moving NPC, where `state_started_ms` is the moment the current `_go` target was
-  chosen (so every leg restarts the animation); standing NPCs use
-  `simulation_time_ms / delay`. `delay <= 0` is treated as 1. Example initial
+- Frame index is `((sim_time_ms - state_started_ms) / delay) % framesPerRow` for
+  both moving and waiting NPCs, where `state_started_ms` is the moment the current
+  `_go` target was chosen or the pause began (so every leg and every wait restarts
+  the animation). `delay <= 0` is treated as 1. Example initial
   `l1_1` view shows NPCs at tiles `(38,51)` and `(59,49)`; the accepted 1280x720
   screenshot differs from `--no-persons` by 3 828 pixels (P4a Task 5).

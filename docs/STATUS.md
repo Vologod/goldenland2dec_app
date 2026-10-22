@@ -7,11 +7,11 @@
 - Tasks 1–6 завершены на ветке `p4b-movement`: SEF `cell_groups`, route/direction
   helpers, route + `_go` metadata, детерминированный `LevelSimulation`, отрисовка
   движущихся NPC, automated acceptance + docs.
-- Полный `ctest` с `GL_GAME_DIR` — **15/15 passed**, 528.13 s, exit 0
-  (`gl_assets_real_tests` 403.79 s, `glgame_screenshot_tests` 58.17 s,
-  `glview_screenshot_tests` 50.14 s, `gl_cs_tools_tests` 6.87 s,
-  `gl_game_tests` 5.33 s; остальные — < 2 s). `cmake --build build` — успех.
-  Суммарно по 15 исполняемым файлам: **392 test case / 5560 assertions**, 0 failed.
+- Полный `ctest` с `GL_GAME_DIR` — **15/15 passed**, 503.48 s, exit 0
+  (`gl_assets_real_tests` 385.15 s, `glgame_screenshot_tests` 55.72 s,
+  `glview_screenshot_tests` 46.63 s, `gl_cs_tools_tests` 6.29 s,
+  `gl_game_tests` 4.99 s; остальные — < 2 s). `cmake --build build` — успех.
+  Суммарно по 15 исполняемым файлам: **393 test case / 5581 assertions**, 0 failed.
 - PAD: **276/276** реальных `.pad`, 2450 анимаций, 0 ошибок; SEF sweep **261/261**;
   `l1_1` — **16 persons**, 9 групп `cell_groups` (5 `box*` + 4 `track*`:
   `track1` 9, `track2` 22, `track3` 8, `track4` 7 клеток), у всех 6 movers есть `_go`.
@@ -85,7 +85,7 @@ P2c — save/load каркас: реализация и автоматизиро
 пройден пользователем 2026-10-21. P4a — NPC на уровне: Tasks 1–5 завершены
 2026-10-21, automated acceptance passed, manual gate пройден — **P4a принята**.
 P4b — движение NPC: Tasks 1–6 завершены 2026-10-22, **automated acceptance passed**
-(15/15 ctest, 391 cases / 5544 assertions), **manual desktop gate OPEN**. Следующий —
+(15/15 ctest, 393 cases / 5581 assertions), **manual desktop gate OPEN**. Следующий —
 P4c (клик → диалог); P1b (Android/touch) и P2 backfill отложены.
 
 ## Текущая задача
@@ -95,7 +95,7 @@ acceptance passed.** Fix round 1 добавил постоянный real-тес
 (10 stationary / 6 movable, bounds, детерминизм, 4 route + 2 `RANDOM_RADIUS`).
 Полный `ctest` с `GL_GAME_DIR` — **15/15 passed**, 528.13 s, exit 0;
 `cmake --build build` — успех (`Copying MinGW runtime DLLs`). По 15
-исполняемым файлам — **392 test case / 5560 assertions**, 0 failed; PAD
+исполняемым файлам — **393 test case / 5581 assertions**, 0 failed; PAD
 `entries=276 parsed=276 failures=0 animations=2450`; SEF `261/261`; `l1_1` —
 `persons=16`, 6 movers с `_go`. Screenshot `glview` 1280x720: `16 persons`,
 `uploaded 16 person sprites`, без `_go`-warning; NPC-mask XOR t=0 vs t=10 с —
@@ -624,6 +624,12 @@ P0 закрыт 2026-10-19; далее выполнялись задачи P1 (�
   10 stationary / 6 movable, границы `2760x2016` на каждом шаге, бит-в-бит
   повторный прогон, 1 `MOVED` + 3 `MOVED_FLIP` с маршрутами, 2 `RANDOM_RADIUS`
   без маршрута; **392 cases / 5560 assertions**, полный `ctest` 15/15 (528.13 s).
+- 2026-10-22: P4b final review fixes — POSIX capture `2>&1`; cap `--sim-ms` на
+  86'400'000 ms в `glview`/`glgame`; warning о corrupt `_go` (delay/movement) и
+  `can_move=false`; `PersonMovement` очищен до публичных полей; формулы в
+  `formats.md`/spec выровнены; тесты zero-velocity/`iso_speed` и synthetic `tb_go`;
+  60-с приёмка усилена (displacement + 3 moving / 3 waiting). Полный `ctest` 15/15
+  (503.48 s): **393 cases / 5581 assertions**.
 
 ## Следующие задачи
 

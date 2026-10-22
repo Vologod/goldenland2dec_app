@@ -64,10 +64,8 @@ struct PersonMovement {
     std::uint8_t direction8 = 0;
     std::uint8_t direction16 = 0;
     bool moving = false;
-    std::size_t route_index = 0;
     std::uint64_t wait_until_ms = 0;
     bool waiting = false;
-    std::uint32_t rng = 1;       // детерминированный ГПСЧ (xorshift32)
 };
 
 class LevelSimulation {
@@ -79,7 +77,7 @@ public:
 ```
 
 - Маршрутные клетки копируются в `PersonInstance::route_cells` при загрузке.
-- RNG — xorshift32; seed = `hash(level.name) ^ hash(person.name) ^ index`.
+- RNG — xorshift32; seed = `hash(level.name) ^ hash(person.name) ^ (index * 0x9E3779B9u)`.
   Начальное состояние ненулевое; детерминизм по уровню/индексу.
 - `STAY` не двигается; если позиция смещена — возврат к spawn (на будущее).
 - `STAY_ROTATE` в P4b = `STAY` + однократный warning на уровень.
