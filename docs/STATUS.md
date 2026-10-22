@@ -636,7 +636,10 @@ P0 закрыт 2026-10-19; далее выполнялись задачи P1 (�
 
 ## Следующие задачи
 
-1. P4b2: коллизии/pathfinding NPC по маскам уровня (LAO/MDF), обход статики.
+1. P4b2: коллизии/pathfinding NPC — spec/plan готовы
+   (`docs/specs/2026-10-22-p4b2-collisions-pathfinding-design.md`,
+   `docs/plans/2026-10-22-p4b2-collisions-pathfinding.md`), 5 задач; проходимость —
+   бит `0x100` маски LVL, A* + occupancy (D-028).
 2. P4c: клик → диалог (после P4b2).
 3. P1b: Android/touch — отложенный follow-up P1.
 4. P7-follow-up: свободный TTF для Android (P9), прокрутка длинных диалогов, layout-константы.
