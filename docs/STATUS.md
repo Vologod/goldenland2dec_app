@@ -4,16 +4,16 @@
 
 ## P4b2 — Collisions and pathfinding (2026-10-22)
 
-- Tasks 1–5 завершены на ветке `p4b2-collisions`: `WalkGrid` из LVL (`0x100`),
+- Tasks 1–5 завершены на ветке `p4b2-collisions`: `WalkGrid` из LVL (слово
+  первой записи чанка, `relief` биты 8..11, column-major порядок),
   `line_of_sight` + A*, occupancy/обход в `LevelSimulation`, `--walkable-overlay`,
   automated acceptance + docs. P4b-поведение сохранено.
 - Build: `cmake --build build` — успех (`Copying MinGW runtime DLLs`).
-- Полный `ctest` с `GL_GAME_DIR` — **15/15 passed**, 676.64 s, exit 0
-  (`gl_assets_real_tests` 503.16 s, `glview_screenshot_tests` 71.16 s,
-  `glgame_screenshot_tests` 69.02 s, `gl_game_tests` 20.20 s,
-  `gl_cs_tools_tests` 8.07 s; остальные — < 3 s). Суммарно по 15 исполняемым
-  файлам: **411 test case / 462 413 assertions**, 0 failed.
-- `gl_game_tests` целиком — 39 cases / **459 152 assertions**, 0 failed; в его
+- Полный `ctest` с `GL_GAME_DIR` — **15/15 passed**, 748.38 s, exit 0
+  (`gl_assets_real_tests` 563.48 s, `glview_screenshot_tests` 75.17 s,
+  `glgame_screenshot_tests` 73.91 s, `gl_game_tests` 20.71 s,
+  `gl_cs_tools_tests` 8.61 s; остальные — < 3 s).
+- `gl_game_tests` целиком — 41 case / **462 766 assertions**, 0 failed; в его
   составе real `l1_1` 60 с (`seed 42`): ни один NPC с проходимым спавном не зашёл
   в заблокированный тайл, ни одна пара не делила тайл, два прогона совпали;
   4 из 5 таких movers строят непустой path (`L0.P744_oficer1` — см. ограничения).
@@ -29,7 +29,7 @@
 - Известные ограничения: `L0.P7_Kolbasens_Rodstvennik1` спавнится на заблокированном
   тайле (walkability-проверка только для movers с проходимым спавном; NPC может
   выйти, если путь появится); `L0.P744_oficer1` (`MOVED`) не строит путь, потому что
-  первая клетка маршрута `(186,147)` заблокирована маской (route не скипается);
+  первая клетка маршрута `(186,147)` заблокирована по `relief` (route не скипается);
   достижимая RANDOM-цель может быть отброшена после 3 неудачных планов (~1.5 с);
   глобального доказательства отсутствия дедлоков нет; `--walkable-overlay` не
   восстанавливает blend mode (влияет только на debug-кадр).
@@ -685,12 +685,11 @@ P0 закрыт 2026-10-19; далее выполнялись задачи P1 (�
 
 ## Следующие задачи
 
-1. **P4b2 — BLOCKED:** источник коллизий не подтверждён. Spec/plan и ветка
-   `p4b2-collisions` (Tasks 1–5, тайловый бит `0x100`) построены на неверной модели:
-   overlay не совпадает с домами (подтверждено пользователем), а реверс показал, что
-   флаги движения не хранятся в LVL и выставляются в рантайме сеттерами мира
-   (см. `docs/research/p4b2-walkability-pathfinding.md`). Нужен oracle
-   (`r_noway_show`) или дальнейший межмодульный реверс вызывающего.
+1. **P4b2 — collision model исправлен (2026-10-22):** слово первой записи чанка
+   (`relief|sound<<16`, биты 8..11) + column-major порядок; `l1_1` — 18028/51520
+   заблокированы, сверка с live-памятью (`world+0x330`, getter `FUN_00426234`)
+   точная; ~331 клетка меняется в рантайме дверями/скриптами — вне P4b2. Полный
+   `ctest` 15/15. Manual desktop gate (overlay vs фон, обход NPC) — OPEN, затем P4c.
 2. P4c: клик → диалог (после P4b2).
 3. P1b: Android/touch — отложенный follow-up P1.
 4. P7-follow-up: свободный TTF для Android (P9), прокрутка длинных диалогов, layout-константы.
