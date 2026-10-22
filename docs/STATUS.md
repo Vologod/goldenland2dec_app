@@ -91,9 +91,10 @@ P4c (клик → диалог); P1b (Android/touch) и P2 backfill отложе
 ## Текущая задача
 
 **P4b — Task 6 (automated acceptance + docs) завершён 2026-10-22; P4b automated
-acceptance passed.** Fix round 1 добавил постоянный real-тест 60 с `l1_1`
-(10 stationary / 6 movable, bounds, детерминизм, 4 route + 2 `RANDOM_RADIUS`).
-Полный `ctest` с `GL_GAME_DIR` — **15/15 passed**, 528.13 s, exit 0;
+acceptance passed.** Fix rounds добавили постоянный real-тест 60 с `l1_1`
+(10 stationary / 6 movable, bounds, детерминизм, 4 route + 2 `RANDOM_RADIUS`)
+и финальную волну hardening. Полный `ctest` с `GL_GAME_DIR` — **15/15 passed**,
+503.48 s, exit 0;
 `cmake --build build` — успех (`Copying MinGW runtime DLLs`). По 15
 исполняемым файлам — **393 test case / 5581 assertions**, 0 failed; PAD
 `entries=276 parsed=276 failures=0 animations=2450`; SEF `261/261`; `l1_1` —
