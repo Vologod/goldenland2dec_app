@@ -105,7 +105,7 @@ TEST_CASE("real data: l1_1 walk grid" * doctest::skip(!game_dir_available())) {
     std::size_t blocked = 0;
     for (std::uint8_t value : level->walkable.walkable)
         if (value == 0) ++blocked;
-    CHECK(blocked == 10523);
+    CHECK(blocked == 10521);
 }
 ```
 

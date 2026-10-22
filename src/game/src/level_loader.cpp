@@ -89,6 +89,7 @@ Result<Level> load_level(GameVfs &vfs, std::string_view level_name) {
         auto lvl = parse_lvl(lvl_data.value());
         if (!lvl)
             return contextual(lvl.error(), "cannot parse level LVL", lvl_file);
+        level.walkable = build_walk_grid(lvl.value());
 
         const std::string background_file = pack_path(level.pack, "bitmaps/layer.jpg");
         auto background_data = vfs.read(background_file);

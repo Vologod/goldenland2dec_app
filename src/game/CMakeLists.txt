@@ -3,6 +3,7 @@ add_library(gl_game STATIC
     src/level_simulation.cpp
     src/person.cpp
     src/person_movement.cpp
+    src/walk_grid.cpp
 )
 target_include_directories(gl_game PUBLIC include)
 target_link_libraries(gl_game PUBLIC gl_assets)

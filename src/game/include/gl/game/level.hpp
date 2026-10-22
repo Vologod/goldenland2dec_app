@@ -3,6 +3,7 @@
 #include "gl/assets/result.hpp"
 #include "gl/assets/vfs.hpp"
 #include "gl/game/person.hpp"
+#include "gl/game/walk_grid.hpp"
 #include <cstdint>
 #include <string>
 #include <string_view>
@@ -29,6 +30,7 @@ struct Level {
     std::vector<LevelStatic> statics;
     std::vector<LevelAnimation> animations;
     std::vector<PersonInstance> persons;
+    WalkGrid walkable;
 };
 
 gl::Result<Level> load_level(gl::assets::GameVfs &vfs, std::string_view level_name);
