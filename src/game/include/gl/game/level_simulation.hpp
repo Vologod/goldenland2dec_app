@@ -46,11 +46,16 @@ class LevelSimulation {
         std::int32_t spawn_tile_x = 0;
         std::int32_t spawn_tile_y = 0;
         std::int32_t route_index = 0;
+        Tile goal;
+        bool has_goal = false;
         std::uint32_t rng = 1;
         bool can_move = false;
     };
+    bool pick_goal(std::size_t index);
+    void consume_goal(State &state);
     bool plan_target(std::size_t index);
     void rebuild_occupancy();
+    void mark_occupied(Tile tile);
     std::vector<std::uint8_t> blocked_for(std::size_t index) const;
     std::uint32_t next_random(State &state);
     std::int32_t random_range(State &state, std::int32_t low, std::int32_t high);

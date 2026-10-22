@@ -1,6 +1,8 @@
+#include "gl/assets/vfs.hpp"
 #include "gl/game/level_simulation.hpp"
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 #include <doctest/doctest.h>
 #include <utility>
 #include <vector>
@@ -8,6 +10,8 @@
 using namespace gl::game;
 
 namespace {
+bool game_dir_available() { return std::getenv("GL_GAME_DIR") != nullptr; }
+
 Level make_level(std::string route_type, std::vector<std::pair<std::int32_t, std::int32_t>> cells,
                  std::int32_t delay_min, std::int32_t delay_max) {
     Level level;
@@ -232,5 +236,98 @@ TEST_CASE("two walkers never occupy the same tile") {
         const int bx = static_cast<int>((b.x - 6.0f) / 12.0f + 0.5f);
         const int by = static_cast<int>((b.y - 4.0f) / 9.0f + 0.5f);
         CHECK_FALSE((ax == bx && ay == by));
+    }
+}
+
+TEST_CASE("blocked MOVED goal is retried and not skipped") {
+    Level level = make_walled_level();
+    level.persons[0].route_cells = {{7, 2}, {12, 2}};
+    level.persons[0].delay_min = 0;
+    level.persons[0].delay_max = 0;
+    auto sim = LevelSimulation::create(level, 1);
+    bool saw_waiting = false;
+    for (int i = 0; i < 60 * 10; ++i) {
+        sim.advance(1.0 / 60.0);
+        saw_waiting = saw_waiting || sim.persons()[0].waiting;
+        CHECK(sim.persons()[0].x < 7 * 12);
+    }
+    CHECK(saw_waiting);
+    CHECK(sim.persons()[0].x == doctest::Approx(2.0f * 12 + 6));
+}
+
+TEST_CASE("two walkers crossing with clear LOS never share a tile") {
+    Level level;
+    level.name = "cross";
+    level.width = 45 * 12;
+    level.height = 45 * 9;
+    level.walkable.width = 45;
+    level.walkable.height = 45;
+    level.walkable.walkable.assign(45 * 45, 1);
+    PersonInstance horizontal;
+    horizontal.name = "horizontal";
+    horizontal.tile_x = 4;
+    horizontal.tile_y = 20;
+    horizontal.route_type = "MOVED";
+    horizontal.route_cells = {{40, 20}};
+    horizontal.go_type = gl::assets::PadAnimationType::rt_go;
+    horizontal.go_move_x = 6.0f;
+    horizontal.go_move_y = 5.0f;
+    horizontal.go_delay_ms = 100;
+    level.persons.push_back(horizontal);
+    PersonInstance vertical = horizontal;
+    vertical.name = "vertical";
+    vertical.tile_x = 20;
+    vertical.tile_y = 2;
+    vertical.route_cells = {{20, 42}};
+    level.persons.push_back(vertical);
+    auto sim = LevelSimulation::create(level, 1);
+    for (int i = 0; i < 60 * 12; ++i) {
+        sim.advance(1.0 / 60.0);
+        const auto &a = sim.persons()[0];
+        const auto &b = sim.persons()[1];
+        const int ax = static_cast<int>((a.x - 6.0f) / 12.0f + 0.5f);
+        const int ay = static_cast<int>((a.y - 4.0f) / 9.0f + 0.5f);
+        const int bx = static_cast<int>((b.x - 6.0f) / 12.0f + 0.5f);
+        const int by = static_cast<int>((b.y - 4.0f) / 9.0f + 0.5f);
+        CHECK_FALSE((ax == bx && ay == by));
+    }
+    CHECK(sim.persons()[0].x > 20 * 12);
+    CHECK(sim.persons()[1].y > 20 * 9);
+}
+
+TEST_CASE("real data: l1_1 movers stay walkable and apart" * doctest::skip(!game_dir_available())) {
+    auto vfs = gl::assets::GameVfs::mount(std::getenv("GL_GAME_DIR"));
+    REQUIRE(vfs.has_value());
+    auto level = gl::game::load_level(vfs.value(), "l1_1");
+    REQUIRE(level.has_value());
+    auto sim = LevelSimulation::create(level.value(), 42);
+    auto twin = LevelSimulation::create(level.value(), 42);
+    std::vector<char> spawn_walkable(level->persons.size(), 0);
+    for (std::size_t i = 0; i < level->persons.size(); ++i)
+        spawn_walkable[i] =
+            level->walkable.is_walkable(level->persons[i].tile_x, level->persons[i].tile_y);
+    int walkable_movers = 0;
+    for (int tick = 0; tick < 60 * 60; ++tick) {
+        sim.advance(1.0 / 60.0);
+        twin.advance(1.0 / 60.0);
+        const auto &persons = sim.persons();
+        for (std::size_t a = 0; a < persons.size(); ++a) {
+            const int ax = static_cast<int>((persons[a].x - 6.0f) / 12.0f + 0.5f);
+            const int ay = static_cast<int>((persons[a].y - 4.0f) / 9.0f + 0.5f);
+            if (sim.can_move(a) && spawn_walkable[a]) {
+                CHECK(level->walkable.is_walkable(ax, ay));
+                ++walkable_movers;
+            }
+            for (std::size_t b = a + 1; b < persons.size(); ++b) {
+                const int bx = static_cast<int>((persons[b].x - 6.0f) / 12.0f + 0.5f);
+                const int by = static_cast<int>((persons[b].y - 4.0f) / 9.0f + 0.5f);
+                CHECK_FALSE((ax == bx && ay == by));
+            }
+        }
+    }
+    CHECK(walkable_movers > 0);
+    for (std::size_t i = 0; i < sim.persons().size(); ++i) {
+        CHECK(sim.persons()[i].x == twin.persons()[i].x);
+        CHECK(sim.persons()[i].y == twin.persons()[i].y);
     }
 }
