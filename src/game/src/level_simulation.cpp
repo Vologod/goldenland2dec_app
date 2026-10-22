@@ -47,6 +47,7 @@ std::vector<Tile> line_cells(Tile from, Tile to) {
 }
 
 constexpr std::int32_t kMinBackoffMs = 500;
+constexpr std::int32_t kRandomGoalRetries = 3;
 
 std::uint32_t hash_name(std::string_view text) {
     std::uint32_t hash = 2166136261u;
@@ -322,6 +323,7 @@ void LevelSimulation::consume_goal(State &state) {
             state.route_index += ((next_random(state) & 1u) != 0) ? 1 : -1;
     }
     state.has_goal = false;
+    state.goal_failures = 0;
 }
 
 bool LevelSimulation::plan_target(std::size_t index) {
@@ -340,8 +342,17 @@ bool LevelSimulation::plan_target(std::size_t index) {
     } else {
         path = find_path(grid_, from, goal, blocked);
     }
-    if (path.size() < 2)
+    if (path.size() < 2) {
+        ++state.goal_failures;
+        const bool random_route =
+            state.route_type == RouteType::random || state.route_type == RouteType::random_radius;
+        if (random_route && state.goal_failures >= kRandomGoalRetries) {
+            state.has_goal = false;
+            state.goal_failures = 0;
+        }
         return false;
+    }
+    state.goal_failures = 0;
     m.path = std::move(path);
     m.path_index = 1;
     m.target_x = m.path[1].x * kTileW + 6.0f;

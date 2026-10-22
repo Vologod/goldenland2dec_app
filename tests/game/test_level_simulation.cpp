@@ -331,3 +331,45 @@ TEST_CASE("real data: l1_1 movers stay walkable and apart" * doctest::skip(!game
         CHECK(sim.persons()[i].y == twin.persons()[i].y);
     }
 }
+
+TEST_CASE("RANDOM resamples after repeated unreachable goals") {
+    Level level;
+    level.name = "split";
+    level.width = 30 * 12;
+    level.height = 30 * 9;
+    level.walkable.width = 30;
+    level.walkable.height = 30;
+    level.walkable.walkable.assign(30 * 30, 0);
+    for (int y = 0; y < 30; ++y)
+        for (int x = 0; x < 30; ++x)
+            level.walkable.walkable[static_cast<std::size_t>(y) * 30 + x] =
+                (x <= 9 || x >= 14) ? 1 : 0;
+    PersonInstance person;
+    person.name = "random_walker";
+    person.tile_x = 4;
+    person.tile_y = 15;
+    person.route_type = "RANDOM";
+    person.radius = 20;
+    person.go_type = gl::assets::PadAnimationType::rt_go;
+    person.go_move_x = 6.0f;
+    person.go_move_y = 5.0f;
+    person.go_delay_ms = 100;
+    level.persons.push_back(person);
+
+    std::uint64_t seed = 0;
+    for (std::uint64_t candidate = 1; candidate <= 500 && seed == 0; ++candidate) {
+        auto probe = LevelSimulation::create(level, candidate);
+        if (probe.persons()[0].waiting)
+            seed = candidate;
+    }
+    REQUIRE(seed != 0);
+    auto sim = LevelSimulation::create(level, seed);
+    bool saw_moving = false;
+    float start_x = sim.persons()[0].x;
+    for (int i = 0; i < 60 * 60; ++i) {
+        sim.advance(1.0 / 60.0);
+        saw_moving = saw_moving || sim.persons()[0].moving;
+    }
+    CHECK(saw_moving);
+    CHECK(std::fabs(sim.persons()[0].x - start_x) > 1.0f);
+}

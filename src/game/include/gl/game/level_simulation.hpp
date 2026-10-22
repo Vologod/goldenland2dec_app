@@ -48,6 +48,7 @@ class LevelSimulation {
         std::int32_t route_index = 0;
         Tile goal;
         bool has_goal = false;
+        std::int32_t goal_failures = 0;
         std::uint32_t rng = 1;
         bool can_move = false;
     };
