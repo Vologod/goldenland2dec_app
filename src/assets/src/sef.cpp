@@ -318,8 +318,11 @@ VoidResult parse_cell_group_fields(Lexer& lexer, SefCellGroup& group) {
         Token value = lexer.next();
         if (lexer.failed())
             return format_error_at("unterminated SEF cell group", key.line);
-        if (value.kind == TokenKind::colon)
+        if (value.kind == TokenKind::colon) {
             value = lexer.next();
+            if (lexer.failed())
+                return format_error_at("unterminated SEF cell group", key.line);
+        }
         if (key.text == "name") {
             if (value.kind != TokenKind::string)
                 return format_error_at("SEF cell group name is not a string", value.line);
@@ -351,6 +354,8 @@ VoidResult parse_cell_group_fields(Lexer& lexer, SefCellGroup& group) {
 
 Result<std::vector<SefCellGroup>> parse_cell_groups(Lexer& lexer) {
     const Token open = next_non_semicolon(lexer);
+    if (lexer.failed())
+        return format_error_at("unterminated SEF cell_groups", open.line);
     if (open.kind != TokenKind::lbrace)
         return format_error_at("SEF cell_groups is not a block", open.line);
     std::vector<SefCellGroup> groups;

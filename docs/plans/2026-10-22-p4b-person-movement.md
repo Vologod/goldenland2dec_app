@@ -69,7 +69,7 @@ auto sef_bytes = vfs.value().read("levels/single/l1_1/l1_1.sef");
 REQUIRE(sef_bytes.has_value());
 auto sef = gl::assets::parse_sef(sef_bytes.value());
 REQUIRE(sef.has_value());
-CHECK(sef->cell_groups.size() == 8);
+CHECK(sef->cell_groups.size() == 9);  // 5 box* + 4 track*
 auto find = [&](std::string_view name) -> const gl::assets::SefCellGroup* {
     for (const auto& group : sef->cell_groups)
         if (group.name == name) return &group;

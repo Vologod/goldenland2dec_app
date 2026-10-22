@@ -189,3 +189,59 @@ TEST_CASE("SEF parses cell_groups") {
     CHECK(sef->cell_groups[1].name == "empty");
     CHECK(sef->cell_groups[1].cells.empty());
 }
+
+TEST_CASE("SEF: rejects a cell_group with a non-numeric coordinate") {
+    const std::string text =
+        "pack: \"L1_1\"\n"
+        "cell_groups:\n{\n"
+        "  name: \"track1\"\n  {\n"
+        "    cell_00 abc 127\n"
+        "  }\n"
+        "}\n";
+    auto sef = gl::assets::parse_sef(as_bytes(text));
+    REQUIRE_FALSE(sef.has_value());
+    CHECK(sef.error().code == gl::ErrorCode::format);
+    CHECK(sef.error().message.find("bad SEF cell coordinate") != std::string::npos);
+}
+
+TEST_CASE("SEF: rejects a cell_group cell missing its second coordinate") {
+    const std::string text =
+        "pack: \"L1_1\"\n"
+        "cell_groups:\n{\n"
+        "  name: \"track1\"\n  {\n"
+        "    cell_00 161\n"
+        "  }\n"
+        "}\n";
+    auto sef = gl::assets::parse_sef(as_bytes(text));
+    REQUIRE_FALSE(sef.has_value());
+    CHECK(sef.error().code == gl::ErrorCode::format);
+    CHECK(sef.error().message.find("bad SEF cell coordinate") != std::string::npos);
+}
+
+TEST_CASE("SEF: rejects a negative cell_group coordinate") {
+    const std::string text =
+        "pack: \"L1_1\"\n"
+        "cell_groups:\n{\n"
+        "  name: \"track1\"\n  {\n"
+        "    cell_00 -1 127\n"
+        "  }\n"
+        "}\n";
+    auto sef = gl::assets::parse_sef(as_bytes(text));
+    REQUIRE_FALSE(sef.has_value());
+    CHECK(sef.error().code == gl::ErrorCode::format);
+    CHECK(sef.error().message.find("out of range") != std::string::npos);
+}
+
+TEST_CASE("SEF: rejects a cell_group coordinate above 0xFFFF") {
+    const std::string text =
+        "pack: \"L1_1\"\n"
+        "cell_groups:\n{\n"
+        "  name: \"track1\"\n  {\n"
+        "    cell_00 70000 127\n"
+        "  }\n"
+        "}\n";
+    auto sef = gl::assets::parse_sef(as_bytes(text));
+    REQUIRE_FALSE(sef.has_value());
+    CHECK(sef.error().code == gl::ErrorCode::format);
+    CHECK(sef.error().message.find("out of range") != std::string::npos);
+}
