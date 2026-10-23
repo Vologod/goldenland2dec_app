@@ -13,6 +13,8 @@ constexpr float kTileW = 12.0f;
 constexpr float kTileH = 9.0f;
 constexpr float kArrive = 4.0f;
 constexpr double kFixedStep = 1.0 / 60.0;
+// Live l1_1 measurement at sv_game_speed 0: go delay 80 ms -> ~63 ms, 85 ms -> ~68 ms.
+constexpr float kMovementDelayFactor = 0.8f;
 
 Tile tile_at(float x, float y) {
     return Tile{static_cast<std::int32_t>(std::lround((x - 6.0f) / kTileW)),
@@ -176,8 +178,9 @@ void LevelSimulation::advance(double dt_seconds) {
                     const float dx = m.target_x - m.x;
                     const float dy = m.target_y - m.y;
                     const float distance = std::sqrt(dx * dx + dy * dy);
-                    const float speed = iso_speed(dx, dy, state.move_x, state.move_y) *
-                                        1000.0f / static_cast<float>(state.go_delay_ms);
+                    const float speed =
+                        iso_speed(dx, dy, state.move_x, state.move_y) * 1000.0f /
+                        (static_cast<float>(state.go_delay_ms) * kMovementDelayFactor);
                     const float step = speed * static_cast<float>(kFixedStep);
                     const bool arrives = distance <= step ||
                                          (std::fabs(dx) < kArrive && std::fabs(dy) < kArrive);

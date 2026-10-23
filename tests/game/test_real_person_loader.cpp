@@ -215,8 +215,8 @@ TEST_CASE("real data: l1_1 60 s simulation is bounded and deterministic" *
         if (std::hypot(movement.x - spawn_x, movement.y - spawn_y) > 1.0f)
             ++displaced;
     }
-    CHECK(moving == 1);
-    CHECK(waiting == 5);
+    CHECK(moving == 3);
+    CHECK(waiting == 3);
     CHECK(moving + waiting == movable);
     CHECK(displaced >= 1);
 }

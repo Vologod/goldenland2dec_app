@@ -1,6 +1,26 @@
 # STATUS
 
 Обновлено: 2026-10-23
+## A5 — Movement speed/time base (2026-10-23)
+
+- Скорость NPC: `iso_speed(dx,dy,move_x,move_y) * 1000 / (go_delay_ms * 0.8)`
+  (`kMovementDelayFactor = 0.8`, D-033) — прежняя формула ×1.25. Шаг порта
+  остаётся 1/60 с; оригинал квантует обновления к 35 Гц.
+- Live-память `GoldenLand.exe` v1.3, `l1_1`: шаг позиции точно равен `iso_speed`
+  (5.254 px у move 6/5, 3.862 px у move 4/3); интервал 80 мс go → ~63 мс,
+  85 мс → ~68 мс (тики 35 Гц: 56/84 мс); `sv_fps = 35`, `sv_game_speed = 0`,
+  `gv_anim_speed = 0`. Метод и адреса — `docs/research/p4b-person-movement.md`.
+- Тесты: добавлены два unit-теста формулы для измеренных случаев
+  (go 80/move 6×5 → 93.75 px/s; go 85/move 4×3 → 58.82 px/s); 4-px прибытие
+  пересчитано на 26 тиков/3.5 px; `MOVED_FLIP` проверяется на первом прибытии;
+  60-с ожидания — 3 moving + 3 waiting; пороги stability — `<150` на NPC,
+  `<200` суммарно (P692: 113 abort за 180 с из-за транзиентного конфликта на
+  углу с `oficer1`; прежний баг A1 давал 266).
+- Проверка: `cmake --build build` — успех; `gl_game_tests` — **63/63**,
+  509 020 assertions, 0 failed; полный `ctest` с `GL_GAME_DIR` — **15/15
+  passed**, 567.53 s. D-033.
+- Следующая — **A6** (occupancy), затем A4/A7.
+
 ## A3 — RANDOM/RANDOM_RADIUS parity (2026-10-23)
 
 - `LevelSimulation::pick_goal` для `RANDOM`/`RANDOM_RADIUS` воспроизводит

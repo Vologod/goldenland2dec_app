@@ -147,13 +147,41 @@ TEST_CASE("delay under 500 ms does not stop") {
     CHECK_FALSE(sim.persons()[0].waiting);
 }
 
+TEST_CASE("movement speed uses go step per 0.8-scaled delay (go 80, move 6x5)") {
+    Level level = make_level("MOVED", {{40, 10}}, 0, 0);
+    level.persons[0].go_delay_ms = 80;
+    level.persons[0].go_move_x = 6.0f;
+    level.persons[0].go_move_y = 5.0f;
+    auto sim = LevelSimulation::create(level, 1);
+    const float start_x = sim.persons()[0].x;
+    for (int i = 0; i < 60; ++i)
+        sim.advance(1.0 / 60.0);
+    const float speed = level.persons[0].go_move_x * 1000.0f /
+                        (static_cast<float>(level.persons[0].go_delay_ms) * 0.8f);
+    CHECK(sim.persons()[0].x == doctest::Approx(start_x + speed).epsilon(1e-4));
+}
+
+TEST_CASE("movement speed uses go step per 0.8-scaled delay (go 85, move 4x3)") {
+    Level level = make_level("MOVED", {{40, 10}}, 0, 0);
+    level.persons[0].go_delay_ms = 85;
+    level.persons[0].go_move_x = 4.0f;
+    level.persons[0].go_move_y = 3.0f;
+    auto sim = LevelSimulation::create(level, 1);
+    const float start_x = sim.persons()[0].x;
+    for (int i = 0; i < 60; ++i)
+        sim.advance(1.0 / 60.0);
+    const float speed = level.persons[0].go_move_x * 1000.0f /
+                        (static_cast<float>(level.persons[0].go_delay_ms) * 0.8f);
+    CHECK(sim.persons()[0].x == doctest::Approx(start_x + speed).epsilon(1e-4));
+}
+
 TEST_CASE("4 px arrival snaps to target") {
     Level level = make_level("MOVED", {{10, 10}, {13, 10}}, 0, 0);
     auto sim = LevelSimulation::create(level, 1);
-    for (int i = 0; i < 33; ++i)
+    for (int i = 0; i < 26; ++i)
         sim.advance(1.0 / 60.0);
     const auto &before = sim.persons()[0];
-    CHECK(before.x == doctest::Approx(13.0f * 12 + 6 - 3.0f));
+    CHECK(before.x == doctest::Approx(13.0f * 12 + 6 - 3.5f));
     CHECK(before.x < 13.0f * 12 + 6);
     sim.advance(1.0 / 60.0);
     CHECK(sim.persons()[0].x == doctest::Approx(13.0f * 12 + 6));
@@ -194,10 +222,15 @@ TEST_CASE("MOVED_FLIP walks one route step with fixed seed") {
     Level level = make_level("MOVED_FLIP", {{11, 10}, {14, 10}, {14, 13}}, 0, 0);
     auto plus = LevelSimulation::create(level, 1);
     auto minus = LevelSimulation::create(level, 5006);
-    for (int i = 0; i < 10; ++i) {
-        plus.advance(1.0 / 60.0);
-        minus.advance(1.0 / 60.0);
-    }
+    const auto advance_to_first_arrival = [](LevelSimulation &sim) {
+        for (int i = 0; i < 60; ++i) {
+            sim.advance(1.0 / 60.0);
+            if (std::fabs(sim.persons()[0].x - (11.0f * 12 + 6)) < 1e-3f)
+                return;
+        }
+    };
+    advance_to_first_arrival(plus);
+    advance_to_first_arrival(minus);
     CHECK(plus.persons()[0].target_x == doctest::Approx(14.0f * 12 + 6));
     CHECK(plus.persons()[0].target_y == doctest::Approx(10.0f * 9 + 4));
     CHECK(minus.persons()[0].target_x == doctest::Approx(11.0f * 12 + 6));
