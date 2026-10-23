@@ -28,8 +28,10 @@ public:
     bool can_interact(const PersonInstance& person, const PersonMovement& movement) const;
     const Hero& hero() const { return hero_; }
 private:
+    bool tile_occupied_by_person(Tile tile) const;
+    std::vector<std::uint8_t> blocked_for(Tile target) const;
     const Level& level_;
-    [[maybe_unused]] const LevelSimulation* simulation_;
+    const LevelSimulation* simulation_;
     Hero hero_;
 };
 }
