@@ -187,6 +187,83 @@ TEST_CASE("4 px arrival snaps to target") {
     CHECK(sim.persons()[0].x == doctest::Approx(13.0f * 12 + 6));
 }
 
+TEST_CASE("STAY at its spawn tile does not move or wander") {
+    Level level = make_level("STAY", {}, 0, 0);
+    auto sim = LevelSimulation::create(level, 1);
+    const float spawn_x = 10.0f * 12 + 6;
+    const float spawn_y = 10.0f * 9 + 4;
+    for (int i = 0; i < 60 * 10; ++i) {
+        sim.advance(1.0 / 60.0);
+        const auto &p = sim.persons()[0];
+        CHECK_FALSE(p.moving);
+        CHECK(p.x == doctest::Approx(spawn_x));
+        CHECK(p.y == doctest::Approx(spawn_y));
+        CHECK(p.target_x == doctest::Approx(spawn_x));
+        CHECK(p.target_y == doctest::Approx(spawn_y));
+        CHECK(p.path.empty());
+    }
+}
+
+TEST_CASE("displaced STAY walks back to its spawn tile and stops") {
+    Level level = make_level("STAY", {}, 0, 0);
+    level.walkable.width = 30;
+    level.walkable.height = 30;
+    level.walkable.walkable.assign(30 * 30, 1);
+    auto sim = LevelSimulation::create(level, 1);
+    sim.place_person(0, Tile{14, 10});
+
+    const float spawn_x = 10.0f * 12 + 6;
+    const float spawn_y = 10.0f * 9 + 4;
+    bool arrived = false;
+    for (int i = 0; i < 60 * 5 && !arrived; ++i) {
+        sim.advance(1.0 / 60.0);
+        const auto &p = sim.persons()[0];
+        arrived = std::fabs(p.x - spawn_x) < 1e-3f && std::fabs(p.y - spawn_y) < 1e-3f;
+    }
+    REQUIRE(arrived);
+    CHECK(sim.persons()[0].x == doctest::Approx(spawn_x));
+    CHECK(sim.persons()[0].y == doctest::Approx(spawn_y));
+    CHECK_FALSE(sim.persons()[0].moving);
+
+    for (int i = 0; i < 60 * 5; ++i) {
+        sim.advance(1.0 / 60.0);
+        const auto &p = sim.persons()[0];
+        CHECK_FALSE(p.moving);
+        CHECK(p.x == doctest::Approx(spawn_x));
+        CHECK(p.y == doctest::Approx(spawn_y));
+    }
+}
+
+TEST_CASE("STAY_ROTATE changes direction on the rotation cadence without moving") {
+    Level level = make_level("STAY_ROTATE", {}, 0, 0);
+    auto sim = LevelSimulation::create(level, 1);
+    MsvcRandom expected(1);
+    const auto code_to_index = [](std::int32_t code) {
+        return static_cast<std::uint8_t>(std::min(code, 25) - 10);
+    };
+    const float spawn_x = 10.0f * 12 + 6;
+    const float spawn_y = 10.0f * 9 + 4;
+    REQUIRE(sim.persons()[0].waiting);
+    CHECK_FALSE(sim.persons()[0].moving);
+    for (int cycle = 0; cycle < 6; ++cycle) {
+        CAPTURE(cycle);
+        const std::uint8_t index = code_to_index(expected.range(10, 25));
+        const auto &p = sim.persons()[0];
+        CHECK(p.direction16 == index);
+        CHECK(p.direction8 == direction16_to8(index));
+        CHECK(p.x == doctest::Approx(spawn_x));
+        CHECK(p.y == doctest::Approx(spawn_y));
+        if (cycle == 5)
+            break;
+        for (int tick = 0; tick < 30; ++tick) {
+            sim.advance(1.0 / 60.0);
+            CHECK_FALSE(sim.persons()[0].moving);
+            CHECK(sim.persons()[0].x == doctest::Approx(spawn_x));
+            CHECK(sim.persons()[0].y == doctest::Approx(spawn_y));
+        }
+    }
+}
+
 TEST_CASE("delay_min above delay_max is swapped") {
     Level level = make_level("MOVED", {{10, 10}, {13, 10}}, 600, 100);
     auto sim = LevelSimulation::create(level, 1);

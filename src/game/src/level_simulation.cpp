@@ -24,6 +24,9 @@ Tile tile_at(float x, float y) {
 Tile tile_of(const PersonMovement &movement) { return tile_at(movement.x, movement.y); }
 
 constexpr std::int32_t kMinBackoffMs = 500;
+// The original schedules a SET_DIRECTION action for STAY_ROTATE; its action duration is not
+// extracted yet, so the port uses a bounded 500 ms pause to avoid rotating on every tick.
+constexpr std::int32_t kRotatePauseMs = 500;
 constexpr std::int32_t kRandomSampleSafetyLimit = 1'000'000;
 
 bool is_route_requiring(RouteType type) {
@@ -39,7 +42,6 @@ LevelSimulation LevelSimulation::create(const Level &level, std::uint64_t seed) 
     sim.height_ = static_cast<float>(level.height);
     sim.level_name_ = level.name;
     sim.states_.reserve(level.persons.size());
-    bool stay_rotate_warned = false;
     for (std::size_t i = 0; i < level.persons.size(); ++i) {
         const PersonInstance &person = level.persons[i];
         State state;
@@ -64,22 +66,20 @@ LevelSimulation LevelSimulation::create(const Level &level, std::uint64_t seed) 
         state.movement.target_y = state.spawn_y;
         state.movement.direction8 = person.direction;
         state.movement.direction16 = direction8_to16(person.direction);
-        state.can_move = person.go_type.has_value() && state.go_delay_ms > 0 &&
-                         (state.move_x > 0.0f || state.move_y > 0.0f) &&
-                         (!state.route.empty() || state.route_type == RouteType::random_radius ||
-                          state.route_type == RouteType::random);
+        const bool has_go = person.go_type.has_value() && state.go_delay_ms > 0 &&
+                            (state.move_x > 0.0f || state.move_y > 0.0f);
+        if (state.route_type == RouteType::stay_rotate) {
+            state.can_move = true;
+        } else if (state.route_type == RouteType::stay) {
+            state.can_move = has_go;
+        } else {
+            state.can_move =
+                has_go && (!state.route.empty() || state.route_type == RouteType::random_radius ||
+                           state.route_type == RouteType::random);
+        }
         if ((state.route_type == RouteType::moved || state.route_type == RouteType::moved_flip) &&
             state.route.empty()) {
             state.can_move = false;
-        }
-        if (state.route_type == RouteType::stay || state.route_type == RouteType::stay_rotate) {
-            state.can_move = false;
-        }
-        if (state.route_type == RouteType::stay_rotate && !stay_rotate_warned) {
-            gl::log(gl::LogLevel::warning,
-                    "level '" + level.name +
-                        "': STAY_ROTATE is not implemented; persons will stay in place");
-            stay_rotate_warned = true;
         }
         if ((state.route_type == RouteType::moved || state.route_type == RouteType::moved_flip) &&
             state.route.empty()) {
@@ -116,6 +116,8 @@ LevelSimulation LevelSimulation::create(const Level &level, std::uint64_t seed) 
             m.wait_until_ms = static_cast<std::uint64_t>(delay);
             continue;
         }
+        if (sim.select_idle(index, delay))
+            continue;
         if (!sim.plan_target(index)) {
             m.moving = false;
             m.waiting = true;
@@ -159,6 +161,8 @@ void LevelSimulation::advance(double dt_seconds) {
             const std::int32_t delay = rng_.range(state.delay_min, state.delay_max);
             consume_goal(state);
             state.movement.state_started_ms = time_ms_;
+            if (select_idle(index, delay))
+                return;
             if (delay < 500 && plan_target(index))
                 return;
             pause(state, delay < 500 ? kMinBackoffMs : delay);
@@ -217,14 +221,28 @@ void LevelSimulation::advance(double dt_seconds) {
             } else if (m.waiting) {
                 if (time_ms_ >= m.wait_until_ms) {
                     m.waiting = false;
-                    if (!plan_target(index))
+                    if (state.route_type == RouteType::stay ||
+                        state.route_type == RouteType::stay_rotate) {
+                        const std::int32_t delay = rng_.range(state.delay_min, state.delay_max);
+                        if (!select_idle(index, delay) && !plan_target(index))
+                            pause(state, std::max(kMinBackoffMs,
+                                                  rng_.range(state.delay_min, state.delay_max)));
+                    } else if (!plan_target(index)) {
                         pause(state, std::max(kMinBackoffMs,
                                               rng_.range(state.delay_min, state.delay_max)));
+                    }
                 }
             } else {
-                if (!plan_target(index))
+                if (state.route_type == RouteType::stay ||
+                    state.route_type == RouteType::stay_rotate) {
+                    const std::int32_t delay = rng_.range(state.delay_min, state.delay_max);
+                    if (!select_idle(index, delay) && !plan_target(index))
+                        pause(state, std::max(kMinBackoffMs,
+                                              rng_.range(state.delay_min, state.delay_max)));
+                } else if (!plan_target(index)) {
                     pause(state, std::max(kMinBackoffMs,
                                           rng_.range(state.delay_min, state.delay_max)));
+                }
             }
             persons_[index] = m;
         }
@@ -234,19 +252,68 @@ void LevelSimulation::advance(double dt_seconds) {
 bool LevelSimulation::can_move(std::size_t index) const {
     if (index >= states_.size())
         return false;
-    const State &state = states_[index];
-    return state.can_move && state.route_type != RouteType::stay &&
-           state.route_type != RouteType::stay_rotate;
+    return states_[index].can_move;
+}
+
+void LevelSimulation::place_person(std::size_t index, Tile tile) {
+    if (index >= states_.size())
+        return;
+    State &state = states_[index];
+    PersonMovement &m = state.movement;
+    m.x = tile.x * kTileW + 6.0f;
+    m.y = tile.y * kTileH + 4.0f;
+    m.target_x = m.x;
+    m.target_y = m.y;
+    m.moving = false;
+    m.waiting = false;
+    m.path.clear();
+    m.path_index = 0;
+    state.has_goal = false;
+    persons_[index] = m;
+    rebuild_occupancy();
+}
+
+bool LevelSimulation::select_idle(std::size_t index, std::int32_t delay) {
+    State &state = states_[index];
+    PersonMovement &m = state.movement;
+    if (state.route_type != RouteType::stay && state.route_type != RouteType::stay_rotate)
+        return false;
+    if (delay >= kMinBackoffMs) {
+        m.moving = false;
+        m.waiting = true;
+        m.wait_until_ms = time_ms_ + static_cast<std::uint64_t>(delay);
+        return true;
+    }
+    if (state.route_type == RouteType::stay) {
+        if (tile_of(m) != Tile{state.spawn_tile_x, state.spawn_tile_y})
+            return false;
+        state.has_goal = false;
+        m.moving = false;
+        m.waiting = false;
+        return true;
+    }
+    const std::int32_t code = rng_.range(10, 25);
+    const std::uint8_t direction16 = static_cast<std::uint8_t>(std::min(code, 25) - 10);
+    m.direction16 = direction16;
+    m.direction8 = direction16_to8(direction16);
+    m.state_started_ms = time_ms_;
+    m.moving = false;
+    m.waiting = true;
+    m.wait_until_ms = time_ms_ + static_cast<std::uint64_t>(kRotatePauseMs);
+    return true;
 }
 
 bool LevelSimulation::pick_goal(std::size_t index) {
     State &state = states_[index];
     if (state.has_goal)
         return true;
-    if (state.route_type == RouteType::stay || state.route_type == RouteType::stay_rotate) {
-        state.can_move = false;
-        return false;
+    if (state.route_type == RouteType::stay) {
+        state.goal = Tile{state.spawn_tile_x, state.spawn_tile_y};
+        state.has_goal = true;
+        return true;
     }
+    if (state.route_type == RouteType::stay_rotate)
+        return false;
     if (state.route_type == RouteType::moved || state.route_type == RouteType::moved_flip) {
         const std::int32_t count = static_cast<std::int32_t>(state.route.size());
         if (state.route_index < 0 || state.route_index >= count)
@@ -397,4 +464,3 @@ bool LevelSimulation::tile_occupied(std::size_t index, Tile tile) const {
 }
 
 } // namespace gl::game
-

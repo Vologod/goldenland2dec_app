@@ -57,8 +57,8 @@ evidence of original-game parity.
 | B3 | `MOVED_FLIP`: same, index `+= rand(0.5) ? +1 : -1` | `src/game/src/level_simulation.cpp:250-255,301-303,393-405` | `docs/research/p4b-person-movement.md:48-50` | partial | ±1 rule is implemented, but the RNG is not the original CRT `rand`, and the advance happens on arrival, not at selection. |
 | B4 | `RANDOM_RADIUS`: target around spawn; `radius==0 -> 13` | `src/game/src/level_simulation.cpp:52,256-289` | `docs/research/p4b-person-movement.md:51-59` (`FUN_1401c2a0`, RVA `0x1c2a0`); D-032 | partial (superseded by D-032) | Stale 64-attempt cap / occupancy filter / 3-failure abandonment removed by D-032: the loop is unbounded except the port's 1'000'000 safety cap, rejects only out-of-bounds/non-walkable candidates and uses CRT RNG. Residual occupied-goal gap tracked as C12. |
 | B5 | `RANDOM`: target around current position | `src/game/src/level_simulation.cpp:256-289` | `docs/research/p4b-person-movement.md:52-59`; D-032 | partial (superseded by D-032) | Same loop/RNG as B4 after D-032; current tile now uses `tile_of` (matches the stored tile). Stale `floor(x/12)` note superseded by D-032. |
-| B6 | `STAY`: if displaced from spawn, return; otherwise stand | `src/game/src/level_simulation.cpp:82-84,246-249` | `docs/research/p4b-person-movement.md:53` | unverified | Port force-disables movement for `STAY` and never returns to spawn. No displacement handling exists. |
-| B7 | `STAY_ROTATE`: rotate in place | `src/game/src/level_simulation.cpp:85-90` | `docs/research/p4b-person-movement.md:54` says it does not occur in `l1_1`; formula not extracted | unverified | Not implemented; a one-time warning is logged and the person stands still. |
+| B6 | `STAY`: if displaced from spawn, return; otherwise stand | `src/game/src/level_simulation.cpp:73-74,260-275,289-297,312-316` | `docs/research/p4b-person-movement.md` («STAY / STAY_ROTATE (A4)», `FUN_1401c93c`, типы 0/1); D-035; synthetic tests in `tests/game/test_level_simulation.cpp` | resolved (A4/D-035) | Return-to-spawn uses the normal LOS/A*/occupancy pipeline; arrival is exact. No residual gap beyond the shared pathfinding/A* assumptions. |
+| B7 | `STAY_ROTATE`: rotate in place | `src/game/src/level_simulation.cpp:71-72,278-305` | `docs/research/p4b-person-movement.md` («STAY / STAY_ROTATE (A4)»: `+0x63c=0`, `+0x2990=0`, `rand(10,25)` -> `SET_DIRECTION`); D-035; synthetic tests | resolved (A4/D-035) | Direction code mapping is implemented (`direction16 = d-10`, `direction8` via `direction16_to8`). Action duration/animation of `SET_DIRECTION` is not extracted; port uses a bounded 500 ms pause. `+0x600 = DAT_14088dbc` is not modelled; code 26 (`range` may return `max+1`) is clamped to 25. |
 | B8 | Delay `< 500 ms`: no pause, immediately next target | `src/game/src/level_simulation.cpp:129-136,157-164` | `docs/research/p4b-person-movement.md:61-72` (`FUN_1401c378`, RVA `0x1c378`); `tests/game/test_level_simulation.cpp:72-82,168-175` | partial | Threshold is verified; the port adds a 500 ms fallback pause when the immediate replan fails, which is not in the described original path. |
 | B9 | Random delay `rand(delay_min..delay_max)`; delay values clamped/swapped | `src/game/src/level_simulation.cpp:53-56,400-405` | `docs/research/p4b-person-movement.md:66-69` (`FUN_140061e4`; "inclusive-ish CRT rand") | partial | Inclusive vs exclusive bounds and the distribution are not pinned; clamping to >=0 and swapping min/max are port additions. |
 | B10 | Speed unit: `movement_x/y` are px per go-animation frame; `speed = iso_speed(...)*1000/(go_delay*0.8)` px/s; fixed 1/60 s step | `src/game/src/level_simulation.cpp:180-182`; `src/game/src/level_simulation.cpp:16,143-150` | `docs/research/p4b-person-movement.md:165-191` live measurement: per-update step equals `iso_speed` (5.254 px for move 6/5, 3.862 px for move 4/3), update interval = `go_delay*0.8` quantized at 35 Hz (80→~63 ms, 85→~68 ms); D-033; `tests/game/test_level_simulation.cpp:150-176`, `tests/game/test_person_movement.cpp:52-54` | verified (A5/D-033, live measurement) | Unit and 0.8 factor are pinned; the original quantizes updates to 35 Hz (56/84 ms), while the port integrates at 1/60 s (`docs/DECISIONS.md:40`). Exact per-tick integration order remains a port choice. |
@@ -116,7 +116,9 @@ evidence of original-game parity.
 6. **PAD anchor/crops rendering (A6)**: crops are ignored and anchor semantics are not tied to
    `Client.dll`; only the 16 `l1_1` sheets are known to fit.
 7. **No Y-sorting (A15)**: persons are drawn after all statics/animations in SEF order.
-8. **STAY semantics (B6/B7)**: return-to-spawn is missing; `STAY_ROTATE` is unimplemented.
+8. **STAY semantics (B6/B7) — resolved by A4/D-035**: return-to-spawn and
+   `STAY_ROTATE` are implemented. Residual: `SET_DIRECTION` action duration is not
+   extracted (port uses 500 ms), and `+0x600` bookkeeping is not modelled.
 9. **Blocked spawn (C15)**: `Kolbasens` can start on a blocked tile; no original reconcile rule.
 10. **Blocked first route cell (C16)**: `oficer1` never skips a blocked route cell because of
     the route-index timing.
@@ -141,4 +143,6 @@ evidence of original-game parity.
 - LVL chunk word, column-major order, `0x100<<sub`, 18028/51520 blocked and the live-grid
   0/51520 match (`C1-C4`).
 - A* diagonal corner-cutting (`C9`).
+- `STAY`/`STAY_ROTATE` selection flow (`B6-B7`, A4/D-035); only the rotate action
+  duration and `+0x600` bookkeeping remain open.
 - Occupancy-only collision during movement and the jitter fix (`C13-C14`).

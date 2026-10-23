@@ -29,6 +29,7 @@ class LevelSimulation {
     static LevelSimulation create(const Level &level, std::uint64_t seed);
     void advance(double dt_seconds);
     const std::vector<PersonMovement> &persons() const { return persons_; }
+    void place_person(std::size_t index, Tile tile);
     bool can_move(std::size_t index) const;
     std::uint64_t time_ms() const { return time_ms_; }
 
@@ -55,6 +56,7 @@ class LevelSimulation {
         bool can_move = false;
     };
     bool pick_goal(std::size_t index);
+    bool select_idle(std::size_t index, std::int32_t delay);
     void consume_goal(State &state);
     bool plan_target(std::size_t index);
     void rebuild_occupancy();
@@ -74,4 +76,3 @@ class LevelSimulation {
     MsvcRandom rng_;
 };
 } // namespace gl::game
-

@@ -1,6 +1,39 @@
 # STATUS
 
 Обновлено: 2026-10-23
+## A4 — STAY / STAY_ROTATE (2026-10-23)
+
+- `FUN_1401c93c` (RVA `0x1c93c`), типы 0/1: `STAY` после гейта паузы сравнивает
+  текущую клетку (`+0x604/+0x608`) со spawn (`+0x5f8/+0x5fc`); при равенстве
+  ничего не делает, при смещении планирует GO к spawn и по прибытии снова
+  `STAY`. `STAY_ROTATE` после гейта при `d < 500` обнуляет `+0x63c`/`+0x2990`,
+  берёт `rand(10,25)`, ставит `SET_DIRECTION` (`direction16 = d-10`,
+  `direction8 = direction16_to8`), при `d >= 500` ждёт. `+0x600 =
+  DAT_14088dbc` не моделируется (нет поведенческих доказательств).
+- Порт: `can_move` для `STAY`/`STAY_ROTATE` больше не форсится в `false`;
+  `STAY` активен при наличии `_go`, `STAY_ROTATE` — всегда. `STAY` возвращается
+  к spawn через существующий LOS/A*/occupancy, проверка — по тайлам. Для теста
+  смещения добавлен `LevelSimulation::place_person`. `STAY_ROTATE` не двигается,
+  меняет направление из `rng_.range(10,25)` и ставит паузу **500 мс**
+  (`kRotatePauseMs`); длительность действия/анимация `SET_DIRECTION` в
+  оригинале не извлечена — 500 мс это ограничитель порта. Код 26 от
+  `range` (`max+1`, A1) ограничивается до 25.
+- Real `l1_1`: `STAY` на spawn не двигаются; 6 route-movers теперь получают
+  сдвинутую последовательность общего MSVC `rand`, потому что 10 `STAY` тоже
+  проходят гейт паузы. В t=60 с — 2 moving + 4 waiting из 6 movers (было 3+3).
+  Stability: P692 6 aborted (<150), остальные movers <50; пороги не менялись.
+- Тесты: synthetic — `STAY` в spawn не двигается; смещённый `STAY` возвращается
+  точно в центр spawn и останавливается без блуждания; `STAY_ROTATE` меняет
+  направление по ожидаемой последовательности `rand(10,25)` каждые 500 мс и
+  никогда не двигается. Real 60-с тест обновлён на route-movers + проверку
+  «все `STAY` на spawn».
+- Проверка: `cmake --build build` — успех; `gl_game_tests` (с `--no-skip`) —
+  **68/68**, 550 029 assertions, 0 failed; полный `ctest` с `GL_GAME_DIR` —
+  **15/15 passed**, 666.51 s. D-035;
+  `docs/research/p4b-person-movement.md` («STAY / STAY_ROTATE (A4)»), spec §4.2,
+  `parity-audit-2026-10-22.md` (A4 resolved), `parity-audit-p4.md` (B6/B7).
+- Следующая — **A7** (Y-сортировка/отрисовка), затем P4c.
+
 ## A6 — Occupancy model (2026-10-23)
 
 - Подтверждено по `Server.dll` v1.3: `DAT_14088dac` (RVA `0x88dac`) — клеточная
@@ -31,8 +64,8 @@
   **65/65**, 509 029 assertions, 0 failed; полный `ctest` с `GL_GAME_DIR` —
   **15/15 passed**, 728.17 s. Документы: `docs/research/p4b-person-movement.md`
   («Занятость (occupancy) — A6»), spec P4b2 §4.3, `parity-audit-2026-10-22.md`
-  (A1/A2/A3/A5 resolved, A6 narrowed).
-- Следующая — **A4/A7**, затем P4c.
+  (A1/A2/A3/A4/A5 resolved, A6 narrowed).
+- Следующая — **A7**, затем P4c.
 
 ## A5 — Movement speed/time base (2026-10-23)
 
@@ -290,12 +323,20 @@ P1b (Android/touch) и P2 backfill отложены.
 
 ## Текущая задача
 
+**A4 — STAY / STAY_ROTATE завершён 2026-10-23.** `STAY` возвращается к spawn
+через LOS/A*/occupancy и стоит в spawn без блуждания; `STAY_ROTATE` вращается
+на месте (`rand(10,25)` → `direction16/direction8`) с паузой 500 мс и не
+двигается. `can_move` больше не форсится в `false`; synthetic-тесты на возврат,
+покой и смену направления; real 60-с тест обновлён (2 moving + 4 waiting из 6
+movers). `gl_game_tests` **68/68** (550 029 assertions); `ctest` **15/15**
+(666.51 s). D-035. Следующая — A7.
+
 **A6 — Occupancy model (narrowed) завершён 2026-10-23.** Резервирования цели/пути
 удалены (D-034): occupancy — только текущие тайлы, пересборка каждый тик. Измерение
 `l1_1` 180 с: 110 occupancy-abort P692, все — текущая клетка `oficer1` `(143,151)`,
 0 из-за резервов; после правки те же 113 aborted. Остаток — corner clipping, правило
 входа не менялось, порог P692 не ослаблялся. `ctest` **15/15** (749.81 s),
-`gl_game_tests` **65/65** (509 027 assertions). Следующая — A4/A7.
+`gl_game_tests` **65/65** (509 027 assertions). Следующая — A7 (A4 закрыт выше).
 
 **A1 — RNG parity завершён 2026-10-23.** Глобальный MSVC CRT `rand` с seed 1,
 формула `FUN_140061e4` (включая `max+1`) и `coin` из `FUN_14006288`, порядок

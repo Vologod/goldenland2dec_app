@@ -148,17 +148,18 @@ TEST_CASE("real data: l1_1 60 s simulation is bounded and deterministic" *
     auto first = gl::game::LevelSimulation::create(level, 1);
     auto second = gl::game::LevelSimulation::create(level, 1);
 
-    int movable = 0;
-    int stationary = 0;
+    int simulated = 0;
+    int route_movers = 0;
     int moved = 0;
     int moved_flip = 0;
     int random_radius = 0;
     for (std::size_t i = 0; i < level.persons.size(); ++i) {
         const gl::game::PersonInstance &person = level.persons[i];
         if (first.can_move(i))
-            ++movable;
-        else
-            ++stationary;
+            ++simulated;
+        if (person.route_type == "STAY" || person.route_type == "STAY_ROTATE")
+            continue;
+        ++route_movers;
         if (person.route_type == "MOVED") {
             ++moved;
             CHECK_FALSE(person.route_cells.empty());
@@ -170,8 +171,8 @@ TEST_CASE("real data: l1_1 60 s simulation is bounded and deterministic" *
             CHECK(person.route_cells.empty());
         }
     }
-    CHECK(stationary == 10);
-    CHECK(movable == 6);
+    CHECK(simulated == 16);
+    CHECK(route_movers == 6);
     CHECK(moved == 1);
     CHECK(moved_flip == 3);
     CHECK(random_radius == 2);
@@ -202,21 +203,28 @@ TEST_CASE("real data: l1_1 60 s simulation is bounded and deterministic" *
     int waiting = 0;
     int displaced = 0;
     for (std::size_t i = 0; i < first.persons().size(); ++i) {
-        if (!first.can_move(i))
-            continue;
         const gl::game::PersonMovement &movement = first.persons()[i];
+        const gl::game::PersonInstance &source = level.persons[i];
+        const float spawn_x = source.tile_x * 12.0f + 6.0f;
+        const float spawn_y = source.tile_y * 9.0f + 4.0f;
+        const bool at_spawn = std::hypot(movement.x - spawn_x, movement.y - spawn_y) < 1.0f;
+        const bool mover = source.route_type != "STAY" && source.route_type != "STAY_ROTATE";
+        if (!mover) {
+            CHECK(at_spawn);
+            CHECK_FALSE(movement.moving);
+            continue;
+        }
         if (movement.moving)
             ++moving;
         if (movement.waiting)
             ++waiting;
-        const gl::game::PersonInstance &source = level.persons[i];
-        const float spawn_x = source.tile_x * 12.0f + 6.0f;
-        const float spawn_y = source.tile_y * 9.0f + 4.0f;
-        if (std::hypot(movement.x - spawn_x, movement.y - spawn_y) > 1.0f)
+        if (!at_spawn)
             ++displaced;
     }
-    CHECK(moving == 3);
-    CHECK(waiting == 3);
-    CHECK(moving + waiting == movable);
+    // STAY delay gates now consume the shared MSVC rand stream, which changes the mover
+    // draw sequence relative to P4b: 2 moving + 4 waiting out of 6 route movers at t=60 s.
+    CHECK(moving == 2);
+    CHECK(waiting == 4);
+    CHECK(moving + waiting == route_movers);
     CHECK(displaced >= 1);
 }
