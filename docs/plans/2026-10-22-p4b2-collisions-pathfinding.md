@@ -562,7 +562,7 @@ std::vector<std::uint8_t> LevelSimulation::blocked_for(std::size_t index) const 
         blocked[static_cast<std::size_t>(tile.y) * grid_.width + tile.x] = 0;
     };
     clear(tile_of(state.movement));
-    if (state.has_goal) clear(state.goal); // собственный резерв цели
+    if (state.has_goal) clear(state.goal); // собственная цель исключена из occupancy
     return blocked;
 }
 

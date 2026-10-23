@@ -614,77 +614,61 @@ TEST_CASE("two walkers never occupy the same tile") {
     }
 }
 
-TEST_CASE("occupancy uses current tiles only and frees a vacated cell") {
+TEST_CASE("same-tick planning ignores another NPC's reserved goal cell") {
     Level level;
-    level.name = "current_occupancy";
-    level.width = 40 * 12;
-    level.height = 40 * 9;
-    level.walkable.width = 40;
-    level.walkable.height = 40;
-    level.walkable.walkable.assign(40 * 40, 1);
+    level.name = "same_tick_reservation";
+    level.width = 16 * 12;
+    level.height = 12 * 9;
+    level.walkable.width = 16;
+    level.walkable.height = 12;
+    level.walkable.walkable.assign(16 * 12, 1);
+    const Tile reserved{6, 2};
+    for (std::int32_t y = 0; y < level.walkable.height; ++y) {
+        if (y != reserved.y)
+            level.walkable.walkable[static_cast<std::size_t>(y) * 16 + reserved.x] = 0;
+    }
 
-    PersonInstance mover;
-    mover.name = "mover";
-    mover.tile_x = 8;
-    mover.tile_y = 10;
-    mover.route_type = "MOVED";
-    mover.route_cells = {{12, 10}, {8, 10}};
-    mover.go_type = gl::assets::PadAnimationType::rt_go;
-    mover.go_move_x = 6.0f;
-    mover.go_move_y = 5.0f;
-    mover.go_delay_ms = 100;
-    mover.delay_min = 0;
-    mover.delay_max = 0;
-    level.persons.push_back(mover);
+    PersonInstance earlier;
+    earlier.name = "earlier";
+    earlier.tile_x = 2;
+    earlier.tile_y = 2;
+    earlier.route_type = "MOVED";
+    earlier.route_cells = {{reserved.x, reserved.y}};
+    earlier.go_type = gl::assets::PadAnimationType::rt_go;
+    earlier.go_move_x = 6.0f;
+    earlier.go_move_y = 5.0f;
+    earlier.go_delay_ms = 100;
+    earlier.delay_min = 500;
+    earlier.delay_max = 500;
+    level.persons.push_back(earlier);
 
-    PersonInstance blocker;
-    blocker.name = "blocker";
-    blocker.tile_x = 10;
-    blocker.tile_y = 10;
-    blocker.route_type = "MOVED";
-    blocker.route_cells = {{10, 20}, {10, 21}};
-    blocker.go_type = gl::assets::PadAnimationType::rt_go;
-    blocker.go_move_x = 6.0f;
-    blocker.go_move_y = 5.0f;
-    blocker.go_delay_ms = 100;
-    blocker.delay_min = 5000;
-    blocker.delay_max = 5000;
-    level.persons.push_back(blocker);
+    PersonInstance later;
+    later.name = "later";
+    later.tile_x = 2;
+    later.tile_y = 0;
+    later.route_type = "MOVED";
+    later.route_cells = {{10, 0}};
+    later.go_type = gl::assets::PadAnimationType::rt_go;
+    later.go_move_x = 6.0f;
+    later.go_move_y = 5.0f;
+    later.go_delay_ms = 100;
+    later.delay_min = 500;
+    later.delay_max = 500;
+    level.persons.push_back(later);
 
     auto sim = LevelSimulation::create(level, 1);
-    const Tile blocker_start{10, 10};
-    const auto tile_of = [](const PersonMovement &p) {
-        return Tile{static_cast<std::int32_t>(std::lround((p.x - 6.0f) / 12.0f)),
-                    static_cast<std::int32_t>(std::lround((p.y - 4.0f) / 9.0f))};
-    };
-    bool shared_tile = false;
-    bool path_through_occupant = false;
-    bool saw_detour = false;
-    bool saw_free_crossing = false;
-    bool reached_far_cell = false;
-    for (int tick = 0; tick < 60 * 12; ++tick) {
+    REQUIRE(sim.persons()[0].waiting);
+    REQUIRE(sim.persons()[1].waiting);
+    while (sim.time_ms() < 500)
         sim.advance(1.0 / 60.0);
-        const PersonMovement &m = sim.persons()[0];
-        const PersonMovement &b = sim.persons()[1];
-        const Tile mover_tile = tile_of(m);
-        const Tile blocker_tile = tile_of(b);
-        if (mover_tile.x >= 12)
-            reached_far_cell = true;
-        if (blocker_tile == blocker_start) {
-            shared_tile = shared_tile || mover_tile == blocker_start;
-            if (m.path.size() > 2)
-                saw_detour = true;
-            for (const Tile &cell : m.path)
-                path_through_occupant = path_through_occupant || cell == blocker_start;
-        } else if (mover_tile == blocker_start) {
-            saw_free_crossing = true;
-        }
-    }
-    CHECK_FALSE(shared_tile);
-    CHECK_FALSE(path_through_occupant);
-    CHECK(saw_detour);
-    CHECK(reached_far_cell);
-    CHECK(saw_free_crossing);
+
+    const PersonMovement &first = sim.persons()[0];
+    const PersonMovement &second = sim.persons()[1];
+    CHECK(first.moving);
+    REQUIRE(second.moving);
+    REQUIRE(second.path.size() >= 2);
+    CHECK(std::find(second.path.begin(), second.path.end(), reserved) != second.path.end());
+    CHECK(second.path.back() == Tile{10, 0});
 }
 
 TEST_CASE("blocked MOVED route cell is skipped after failed planning") {
