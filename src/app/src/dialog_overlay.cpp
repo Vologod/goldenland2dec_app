@@ -109,10 +109,31 @@ float DialogOverlay::text_width() const {
     return std::max(static_cast<float>(style_.viewport_width) - 2.0f * style_.margin, 40.0f);
 }
 
+std::size_t DialogOverlay::answer_line_count(std::size_t index) const {
+    if (index >= answers_.size())
+        return 0;
+    const std::string label = std::to_string(index + 1) + ". " + answers_[index];
+    const std::vector<std::string> lines =
+        wrap_text(label, std::max(text_width() - 16.0f, 1.0f), style_.fallback_text_scale, font_);
+    return std::max<std::size_t>(lines.size(), 1);
+}
+
+float DialogOverlay::answer_row_height(std::size_t index) const {
+    if (index >= answers_.size())
+        return 0.0f;
+    const float line_height = std::max(style_.line_height, 1.0f);
+    const float wrapped = static_cast<float>(answer_line_count(index)) * line_height +
+                          style_.answer_gap;
+    return std::max(style_.answer_row_height, wrapped);
+}
+
 float DialogOverlay::answers_top() const {
-    const float row = std::max(style_.answer_row_height, 1.0f);
+    float total = 0.0f;
+    for (std::size_t index = 0; index < answers_.size(); ++index) {
+        total += answer_row_height(index);
+    }
     const float bottom = static_cast<float>(style_.viewport_height) - style_.bottom_margin;
-    const float top = bottom - static_cast<float>(answers_.size()) * row;
+    const float top = bottom - total;
     const float minimum = panel_y() + style_.margin + style_.line_height + style_.line_gap;
     return std::max(top, minimum);
 }
@@ -120,8 +141,11 @@ float DialogOverlay::answers_top() const {
 SDL_FRect DialogOverlay::answer_rect(std::size_t index) const {
     if (index >= answers_.size())
         return SDL_FRect{};
-    const float row = std::max(style_.answer_row_height, 1.0f);
-    const float top = answers_top() + static_cast<float>(index) * row;
+    float top = answers_top();
+    for (std::size_t previous = 0; previous < index; ++previous) {
+        top += answer_row_height(previous);
+    }
+    const float row = answer_row_height(index);
     const float bottom = std::min(top + row - 2.0f, content_bottom());
     return SDL_FRect{style_.margin, top, text_width(), std::max(bottom - top, 0.0f)};
 }
@@ -138,6 +162,10 @@ std::optional<std::size_t> DialogOverlay::hit_test(int sx, int sy) const {
         }
     }
     return std::nullopt;
+}
+
+void DialogOverlay::set_selected(std::size_t index) {
+    if (index < answers_.size()) selected_ = index;
 }
 
 void DialogOverlay::move_selection(int delta) {
@@ -173,18 +201,24 @@ void DialogOverlay::render(SDL_Renderer *renderer, const gl::render::Font *font)
     const float line_height = std::max(style_.line_height, 1.0f);
     const float text_width_limit = text_width();
     const float content_limit = content_bottom();
+    const float text_limit =
+        answers_.empty()
+            ? content_limit
+            : std::max(answers_top() - style_.line_gap, panel_y() + style_.margin + line_height);
 
     float y = panel_y() + style_.margin;
     if (!speaker_.empty()) {
-        draw_line(renderer, font, style_.fallback_text_scale, speaker_, style_.margin, y,
-                  kSpeakerColor);
+        if (y + line_height <= text_limit) {
+            draw_line(renderer, font, style_.fallback_text_scale, speaker_, style_.margin, y,
+                      kSpeakerColor);
+        }
         y += line_height + style_.line_gap;
     }
     if (!text_.empty()) {
         const std::vector<std::string> lines =
             wrap_text(text_, text_width_limit, style_.fallback_text_scale, font);
         for (const std::string &line : lines) {
-            if (y + line_height > content_limit)
+            if (y + line_height > text_limit)
                 break;
             draw_line(renderer, font, style_.fallback_text_scale, line, style_.margin, y,
                       kTextColor);

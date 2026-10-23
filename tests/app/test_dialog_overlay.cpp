@@ -91,6 +91,23 @@ TEST_CASE("dialog overlay clear resets selection and answers") {
     CHECK(rect.h == 0.0f);
 }
 
+TEST_CASE("dialog overlay sizes answer rows by wrapped line count") {
+    gl::app::DialogOverlay o;
+    gl::app::DialogOverlayStyle style;
+    style.viewport_width = 200;
+    style.viewport_height = 480;
+    o.set_style(style);
+    o.set_content("", "",
+                  {"this is a long answer that must wrap across several narrow lines in the panel",
+                   "short"});
+    const SDL_FRect first = o.answer_rect(0);
+    const SDL_FRect second = o.answer_rect(1);
+    CHECK(first.h > style.answer_row_height);
+    CHECK(second.y - first.y > style.answer_row_height);
+    CHECK(o.hit_test(80, static_cast<int>(first.y + 2.0f)) ==
+          std::optional<std::size_t>{0});
+}
+
 TEST_CASE("dialog overlay uses a custom viewport for hit-testing") {
     gl::app::DialogOverlay o;
     gl::app::DialogOverlayStyle style;

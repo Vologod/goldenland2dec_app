@@ -34,6 +34,7 @@ class DialogOverlay {
 
     void set_style(const DialogOverlayStyle &style) { style_ = style; }
     const DialogOverlayStyle &style() const { return style_; }
+    void set_font(const gl::render::Font *font) { font_ = font; }
 
     std::optional<std::size_t> hit_test(int sx, int sy) const;
     SDL_FRect answer_rect(std::size_t index) const;
@@ -41,12 +42,15 @@ class DialogOverlay {
     void render(SDL_Renderer *renderer, const gl::render::Font *font = nullptr) const;
 
     std::size_t selected() const { return selected_; }
+    void set_selected(std::size_t index);
     void move_selection(int delta);
 
   private:
     float panel_height() const;
     float panel_y() const;
     float content_bottom() const;
+    std::size_t answer_line_count(std::size_t index) const;
+    float answer_row_height(std::size_t index) const;
     float answers_top() const;
     float text_width() const;
 
@@ -56,6 +60,7 @@ class DialogOverlay {
     std::vector<std::string> answers_;
     std::size_t selected_ = 0;
     bool active_ = false;
+    const gl::render::Font *font_ = nullptr;
 };
 
 } // namespace gl::app

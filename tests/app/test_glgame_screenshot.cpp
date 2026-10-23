@@ -1,9 +1,12 @@
 #define SDL_MAIN_HANDLED
 #define DOCTEST_CONFIG_IMPLEMENT
 #include <doctest.h>
+#include <gl/assets/sef.hpp>
+#include <gl/assets/vfs.hpp>
 #include <gl/render/font.hpp>
 #include <stb_image.h>
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <cstdint>
@@ -308,6 +311,40 @@ std::size_t count_differences(const std::vector<unsigned char>& first,
     return different;
 }
 
+std::size_t count_bottom_differences(const std::vector<unsigned char>& first,
+                                     const std::vector<unsigned char>& second, int width,
+                                     int height, int bottom_height) {
+    REQUIRE(first.size() == second.size());
+    const int start = std::max(height - bottom_height, 0);
+    std::size_t different = 0;
+    for (int y = start; y < height; ++y) {
+        for (int x = 0; x < width; ++x) {
+            const std::size_t index =
+                (static_cast<std::size_t>(y) * static_cast<std::size_t>(width) +
+                 static_cast<std::size_t>(x)) *
+                4;
+            if (first[index] != second[index] || first[index + 1] != second[index + 1] ||
+                first[index + 2] != second[index + 2] || first[index + 3] != second[index + 3]) {
+                ++different;
+            }
+        }
+    }
+    return different;
+}
+
+std::optional<std::size_t> first_talkable_person(const fs::path& game_dir) {
+    auto vfs = gl::assets::GameVfs::mount(game_dir);
+    if (!vfs) return std::nullopt;
+    auto bytes = vfs->read("levels/single/l1_1/l1_1.sef");
+    if (!bytes) return std::nullopt;
+    auto sef = gl::assets::parse_sef(bytes.value());
+    if (!sef) return std::nullopt;
+    for (std::size_t index = 0; index < sef->persons.size(); ++index) {
+        if (!sef->persons[index].dialog.empty()) return index;
+    }
+    return std::nullopt;
+}
+
 void check_dialog_content(const fs::path& dialog_png, const fs::path& menu_png) {
     int dialog_width = 0;
     int dialog_height = 0;
@@ -604,6 +641,73 @@ TEST_CASE("glgame renders a preloaded level into a 1280x720 PNG") {
     REQUIRE(fs::exists(png));
     CHECK(code == 0);
     check_png(png, 1280, 720);
+}
+
+TEST_CASE("glgame --click-npc opens the dialog overlay over the level" *
+          doctest::skip(!font_available())) {
+    const char* game_dir = std::getenv("GL_GAME_DIR");
+    REQUIRE(game_dir != nullptr);
+    const std::optional<std::size_t> talkable = first_talkable_person(game_dir);
+    REQUIRE(talkable.has_value());
+
+    TempDir temp;
+    const fs::path config = write_test_config(temp.path);
+    const fs::path baseline_png = temp.path / "click_baseline.png";
+    const fs::path dialog_png = temp.path / "click_dialog.png";
+
+    const int baseline_code = run_glgame(
+        screenshot_arguments(game_dir, config, baseline_png, {"--level", "l1_1"}));
+    std::string output;
+    const int dialog_code = run_glgame_capture(
+        screenshot_arguments(game_dir, config, dialog_png,
+                             {"--level", "l1_1", "--click-npc", std::to_string(*talkable)}),
+        output);
+    CAPTURE(baseline_code);
+    CAPTURE(dialog_code);
+    CAPTURE(output);
+    REQUIRE(fs::exists(baseline_png));
+    REQUIRE(fs::exists(dialog_png));
+    CHECK(baseline_code == 0);
+    CHECK(dialog_code == 0);
+    CHECK(output.find("dialog: '") != std::string::npos);
+    check_png(baseline_png, 1280, 720);
+    check_png(dialog_png, 1280, 720);
+
+    int baseline_width = 0;
+    int baseline_height = 0;
+    int dialog_width = 0;
+    int dialog_height = 0;
+    const std::vector<unsigned char> baseline =
+        read_png(baseline_png, baseline_width, baseline_height);
+    const std::vector<unsigned char> dialog = read_png(dialog_png, dialog_width, dialog_height);
+    REQUIRE(baseline_width == dialog_width);
+    REQUIRE(baseline_height == dialog_height);
+    const std::size_t different =
+        count_bottom_differences(baseline, dialog, dialog_width, dialog_height, 220);
+    CAPTURE(different);
+    CHECK(different > 1280u * 220u / 10u);
+}
+
+TEST_CASE("glgame --click-world sets the hero goal without opening a dialog" *
+          doctest::skip(!font_available())) {
+    const char* game_dir = std::getenv("GL_GAME_DIR");
+    REQUIRE(game_dir != nullptr);
+
+    TempDir temp;
+    const fs::path config = write_test_config(temp.path);
+    const fs::path png = temp.path / "click_world.png";
+
+    std::string output;
+    const int code = run_glgame_capture(
+        screenshot_arguments(game_dir, config, png,
+                             {"--level", "l1_1", "--click-world", "180", "21"}),
+        output);
+    CAPTURE(code);
+    CAPTURE(output);
+    REQUIRE(fs::exists(png));
+    CHECK(code == 0);
+    check_png(png, 1280, 720);
+    CHECK(output.find("dialog: '") == std::string::npos);
 }
 
 TEST_CASE("glgame --no-persons hides NPC sprites") {

@@ -1,3 +1,4 @@
+#include <gl/app/dialog_overlay.hpp>
 #include <gl/app/level_screen.hpp>
 #include <gl/assets/cs.hpp>
 #include <gl/assets/log.hpp>
@@ -9,6 +10,7 @@
 #include <gl/core/save_manager.hpp>
 #include <gl/core/server.hpp>
 #include <gl/core/state.hpp>
+#include <gl/game/dialog_path.hpp>
 #include <gl/platform/sdl_context.hpp>
 #include <gl/render/font.hpp>
 #include <gl/render/text.hpp>
@@ -23,6 +25,7 @@
 #include <algorithm>
 #include <charconv>
 #include <climits>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
@@ -81,6 +84,11 @@ struct Options {
     std::uint64_t sim_ms = 0;
     std::string dialog;
     bool has_dialog = false;
+    int click_npc = 0;
+    bool has_click_npc = false;
+    int click_world_x = 0;
+    int click_world_y = 0;
+    bool has_click_world = false;
     std::vector<std::string> exec;
 };
 
@@ -103,6 +111,8 @@ void print_usage() {
         "  --no-persons         Skip NPC sprites on the level\n"
         "  --walkable-overlay   Draw blocked tiles in red on the level\n"
         "  --sim-ms <ms>        Simulation time for screenshots (ignored interactively)\n"
+        "  --click-npc <index>  Headless test: click the person instance by index\n"
+        "  --click-world <x> <y> Headless test: click the walk tile at x y\n"
         "  --list-saves         Print save slots as tab-separated lines and exit\n"
         "  --screenshot <png>   Render the current state, save PNG and exit\n"
         "  --exec \"<command>\"   Run a console command after boot (repeatable)\n"
@@ -251,6 +261,24 @@ ParseStatus parse_args(int argc, char** argv, Options& options) {
                              static_cast<int>(value.size()), value.data());
                 return ParseStatus::error;
             }
+        } else if (arg == "--click-npc") {
+            if (!next_value(arg, value)) return ParseStatus::error;
+            if (!parse_int(value, options.click_npc) || options.click_npc < 0) {
+                std::fprintf(stderr, "glgame: invalid --click-npc: %.*s\n",
+                             static_cast<int>(value.size()), value.data());
+                return ParseStatus::error;
+            }
+            options.has_click_npc = true;
+        } else if (arg == "--click-world") {
+            if (!next_value(arg, value) || !parse_int(value, options.click_world_x)) {
+                std::fprintf(stderr, "glgame: invalid --click-world x\n");
+                return ParseStatus::error;
+            }
+            if (!next_value(arg, value) || !parse_int(value, options.click_world_y)) {
+                std::fprintf(stderr, "glgame: invalid --click-world y\n");
+                return ParseStatus::error;
+            }
+            options.has_click_world = true;
         } else if (arg == "--list-saves") {
             options.list_saves = true;
         } else if (arg == "--screenshot") {
@@ -361,6 +389,7 @@ struct DialogContext {
     std::unique_ptr<gl::script::ScriptVm> vm;
     std::unique_ptr<gl::script::DialogSession> session;
     std::string path;
+    std::string speaker;
 };
 
 class Game {
@@ -413,6 +442,7 @@ class Game {
         } else if (options_.has_level && !options_.menu) {
             if (!load_level(level_name_)) return 3;
             if (!state_.transition(gl::core::AppState::level)) return 3;
+            apply_cli_click();
         }
 
         update_viewport();
@@ -449,7 +479,12 @@ class Game {
 
         const int pitch = width * 4;
         std::vector<std::uint8_t> pixels(static_cast<std::size_t>(pixel_count) * 4);
-        render(0, options_.sim_ms);
+        if (options_.has_click_npc || options_.has_click_world) {
+            run_headless_click();
+            render(0, 0);
+        } else {
+            render(0, options_.sim_ms);
+        }
         if (SDL_RenderReadPixels(renderer, nullptr, SDL_PIXELFORMAT_RGBA32, pixels.data(),
                                  pitch) != 0) {
             std::fprintf(stderr, "glgame: SDL_RenderReadPixels failed: %s\n", SDL_GetError());
@@ -504,7 +539,9 @@ class Game {
                 }
             }
 
-            render(SDL_GetTicks64(), client_.snapshot().simulation_time_ms);
+            const std::uint64_t animation_ms = client_.snapshot().simulation_time_ms;
+            render(SDL_GetTicks64(), animation_ms);
+            advance_hero_after_render(animation_ms);
             SDL_RenderPresent(window_.renderer());
             SDL_Delay(1);
         }
@@ -540,9 +577,10 @@ class Game {
         if (!font_) {
             gl::log(gl::LogLevel::warning, "font: no TrueType font available, using ASCII fallback");
         }
+        update_dialog_style();
     }
 
-    gl::Result<void> open_dialog(std::string_view virtual_path) {
+    gl::Result<void> open_dialog(std::string_view virtual_path, std::string_view speaker = {}) {
         const auto report = [&](const gl::Error& error) {
             gl::log(gl::LogLevel::error,
                     "dialog '" + std::string(virtual_path) + "': " + error.message);
@@ -566,6 +604,7 @@ class Game {
 
         auto context = std::make_unique<DialogContext>();
         context->path = std::string(virtual_path);
+        context->speaker = std::string(speaker);
         context->sdb = std::move(sdb.value());
         context->vm =
             std::make_unique<gl::script::ScriptVm>(std::move(nodes.value()), context->host);
@@ -580,18 +619,47 @@ class Game {
         }
 
         dialog_ = std::move(context);
-        dialog_selected_ = 0;
-        dialog_message_.clear();
+        refresh_dialog_overlay();
         gl::log(gl::LogLevel::info,
-                "dialog: '" + dialog_->path + "' answers=" +
+                "dialog: '" + dialog_->path + "' speaker='" + dialog_->speaker + "' answers=" +
                     std::to_string(dialog_->session->answers().size()));
         return {};
     }
 
     void close_dialog() {
         dialog_.reset();
-        dialog_message_.clear();
-        dialog_selected_ = 0;
+        dialog_overlay_.clear();
+        pending_talk_.reset();
+    }
+
+    void refresh_dialog_overlay() {
+        if (!dialog_ || !dialog_->session) {
+            dialog_overlay_.clear();
+            return;
+        }
+        std::vector<std::string> answers;
+        if (dialog_->session->waiting()) {
+            const std::span<const gl::script::DialogLine> lines = dialog_->session->answers();
+            answers.reserve(lines.size());
+            for (const gl::script::DialogLine& line : lines) answers.push_back(line.text);
+        }
+        dialog_overlay_.set_content(dialog_->speaker,
+                                    std::string(dialog_->session->npc_text()),
+                                    std::move(answers));
+    }
+
+    void update_dialog_style() {
+        gl::app::DialogOverlayStyle style;
+        style.viewport_width = viewport_width_;
+        style.viewport_height = viewport_height_;
+        style.margin = kDialogMargin;
+        style.line_height = ui_line_height();
+        style.line_gap = 2.0f;
+        style.answer_gap = kDialogAnswerGap;
+        style.answer_row_height = std::max(ui_line_height() + kDialogAnswerGap, 36.0f);
+        style.fallback_text_scale = kScale;
+        dialog_overlay_.set_style(style);
+        dialog_overlay_.set_font(font_ ? &*font_ : nullptr);
     }
 
     bool dialog_waiting() const {
@@ -649,137 +717,161 @@ class Game {
         return lines;
     }
 
-    float dialog_panel_height() const {
-        const float requested = static_cast<float>(viewport_height_) * 0.55f;
-        return std::min(std::max(requested, 220.0f),
-                        std::max(static_cast<float>(viewport_height_) - 40.0f, 220.0f));
-    }
-
-    float dialog_panel_y() const {
-        return static_cast<float>(viewport_height_) - dialog_panel_height();
-    }
-
-    float dialog_text_width() const {
-        return std::max(static_cast<float>(viewport_width_) - 2.0f * kDialogMargin, 40.0f);
-    }
-
-    bool dialog_has_bottom_message() const {
-        return dialog_waiting() && !dialog_message_.empty();
-    }
-
-    float dialog_content_bottom() const {
-        return static_cast<float>(viewport_height_) -
-               (dialog_has_bottom_message() ? 68.0f : 40.0f);
-    }
-
-    float dialog_message_y() const {
-        return static_cast<float>(viewport_height_) - 56.0f;
-    }
-
-    std::vector<std::string> dialog_npc_lines() const {
-        if (!dialog_waiting()) return {};
-        return ui_wrap(dialog_->session->npc_text(), dialog_text_width());
-    }
-
-    std::string dialog_answer_label(int index) const {
-        if (!dialog_waiting()) return {};
-        const std::span<const gl::script::DialogLine> answers = dialog_->session->answers();
-        if (index < 0 || static_cast<std::size_t>(index) >= answers.size()) return {};
-        return std::to_string(index + 1) + ". " +
-               answers[static_cast<std::size_t>(index)].text;
-    }
-
-    float dialog_answers_top() const {
-        const float line_height = ui_line_height();
-        const float content_bottom = dialog_content_bottom();
-        float y = dialog_panel_y() + kDialogMargin;
-        if (dialog_waiting()) {
-            const std::vector<std::string> lines = dialog_npc_lines();
-            for (std::size_t index = 0; index < lines.size(); ++index) {
-                if (y + line_height > content_bottom) break;
-                y += line_height + 2.0f;
-            }
-        } else {
-            y += line_height + 2.0f;
-        }
-        return y + 12.0f;
-    }
-
-    float dialog_answer_height(int index) const {
-        const std::vector<std::string> lines =
-            ui_wrap(dialog_answer_label(index), dialog_text_width() - 16.0f);
-        const std::size_t count = std::max<std::size_t>(lines.size(), 1);
-        return static_cast<float>(count) * ui_line_height() + kDialogAnswerGap;
-    }
-
-    float dialog_answer_top(int index) const {
-        float y = dialog_answers_top();
-        for (int i = 0; i < index; ++i) y += dialog_answer_height(i);
-        return y;
-    }
-
-    SDL_FRect dialog_answer_rect(int index) const {
-        const float top = dialog_answer_top(index);
-        const float bottom =
-            std::min(top + dialog_answer_height(index) - 2.0f, dialog_content_bottom());
-        return SDL_FRect{kDialogMargin, top, dialog_text_width(),
-                         std::max(bottom - top, 0.0f)};
-    }
-
     void dialog_move(int delta) {
         if (!dialog_waiting()) return;
-        const int count = static_cast<int>(dialog_->session->answers().size());
-        if (count <= 0) return;
-        dialog_selected_ = (dialog_selected_ + delta + count) % count;
+        dialog_overlay_.move_selection(delta);
     }
 
     void dialog_activate() {
         if (!dialog_waiting()) return;
         const std::span<const gl::script::DialogLine> answers = dialog_->session->answers();
-        if (answers.empty() || dialog_selected_ < 0 ||
-            static_cast<std::size_t>(dialog_selected_) >= answers.size()) {
-            return;
-        }
-        const gl::Result<void> chosen =
-            dialog_->session->choose(static_cast<std::size_t>(dialog_selected_));
+        const std::size_t selected = dialog_overlay_.selected();
+        if (answers.empty() || selected >= answers.size()) return;
+        const gl::Result<void> chosen = dialog_->session->choose(selected);
         if (!chosen) {
             gl::log(gl::LogLevel::error, "dialog: " + chosen.error().message);
-            dialog_message_ = "dialog error: " + chosen.error().message;
             return;
         }
-        dialog_selected_ = 0;
-        if (dialog_->session->waiting()) {
-            dialog_message_.clear();
-        } else {
-            dialog_message_ = "Dialog ended. Press Esc.";
-        }
+        refresh_dialog_overlay();
     }
 
     void dialog_hover(int x, int y) {
         if (!dialog_waiting()) return;
-        const int count = static_cast<int>(dialog_->session->answers().size());
-        for (int index = 0; index < count; ++index) {
-            const SDL_FRect rect = dialog_answer_rect(index);
-            if (static_cast<float>(x) >= rect.x && static_cast<float>(x) < rect.x + rect.w &&
-                static_cast<float>(y) >= rect.y && static_cast<float>(y) < rect.y + rect.h) {
-                dialog_selected_ = index;
-                return;
-            }
-        }
+        const std::optional<std::size_t> index = dialog_overlay_.hit_test(x, y);
+        if (index) dialog_overlay_.set_selected(*index);
     }
 
     void dialog_click(int x, int y) {
         if (!dialog_waiting()) return;
-        const int count = static_cast<int>(dialog_->session->answers().size());
-        for (int index = 0; index < count; ++index) {
-            const SDL_FRect rect = dialog_answer_rect(index);
-            if (static_cast<float>(x) >= rect.x && static_cast<float>(x) < rect.x + rect.w &&
-                static_cast<float>(y) >= rect.y && static_cast<float>(y) < rect.y + rect.h) {
-                dialog_selected_ = index;
-                dialog_activate();
-                return;
+        const std::optional<std::size_t> index = dialog_overlay_.hit_test(x, y);
+        if (!index) return;
+        dialog_overlay_.set_selected(*index);
+        dialog_activate();
+    }
+
+    bool can_interact_person(std::size_t index) {
+        if (!level_) return false;
+        const std::vector<gl::game::PersonInstance>& persons = level_->level().persons;
+        const std::vector<gl::game::PersonMovement>& movements =
+            level_->simulation().persons();
+        if (index >= persons.size() || index >= movements.size()) return false;
+        return level_->hero().can_interact(persons[index], movements[index]);
+    }
+
+    std::optional<std::string> talk_script_for(std::size_t index) const {
+        if (!level_) return std::nullopt;
+        const std::vector<gl::game::PersonInstance>& persons = level_->level().persons;
+        if (index >= persons.size()) return std::nullopt;
+        std::optional<std::string> script = gl::game::dialog_script_path(persons[index]);
+        if (!script) return std::nullopt;
+        if (!vfs_.exists(*script)) {
+            gl::log(gl::LogLevel::warning,
+                    "person '" + persons[index].name + "': missing dialog script '" +
+                        *script + "'");
+            return std::nullopt;
+        }
+        return script;
+    }
+
+    void handle_person_click(std::size_t index) {
+        if (!level_) return;
+        const std::vector<gl::game::PersonInstance>& persons = level_->level().persons;
+        if (index >= persons.size()) return;
+        const gl::game::PersonInstance& person = persons[index];
+        const std::optional<std::string> script = talk_script_for(index);
+        if (script && can_interact_person(index)) {
+            pending_talk_.reset();
+            const gl::Result<void> opened = open_dialog(*script, person.name);
+            if (!opened) {
+                gl::log(gl::LogLevel::warning,
+                        "person '" + person.name + "': cannot open dialog: " +
+                            opened.error().message);
+            }
+            return;
+        }
+        pending_talk_ = script ? std::optional<std::size_t>(index) : std::nullopt;
+        if (!level_->hero().set_goal(gl::game::Tile{person.tile_x, person.tile_y})) {
+            gl::log(gl::LogLevel::warning,
+                    "person '" + person.name + "': cannot path to the NPC tile");
+        }
+    }
+
+    void handle_level_click(int x, int y) {
+        if (!level_) return;
+        const gl::app::ClickTarget target = level_->click_target(x, y);
+        if (target.person) {
+            handle_person_click(*target.person);
+            return;
+        }
+        pending_talk_.reset();
+        if (target.tile && !level_->hero().set_goal(*target.tile)) {
+            gl::log(gl::LogLevel::warning, "cannot path to the clicked tile");
+        }
+    }
+
+    void maybe_open_pending_dialog() {
+        if (!pending_talk_ || !level_) return;
+        const std::size_t index = *pending_talk_;
+        const std::vector<gl::game::PersonInstance>& persons = level_->level().persons;
+        if (index >= persons.size()) {
+            pending_talk_.reset();
+            return;
+        }
+        if (!can_interact_person(index)) return;
+        const std::optional<std::string> script = talk_script_for(index);
+        pending_talk_.reset();
+        if (!script) return;
+        const gl::Result<void> opened = open_dialog(*script, persons[index].name);
+        if (!opened) {
+            gl::log(gl::LogLevel::warning,
+                    "person '" + persons[index].name + "': cannot open dialog: " +
+                        opened.error().message);
+        }
+    }
+
+    void apply_cli_click() {
+        if (!level_) return;
+        if (options_.has_click_npc) {
+            handle_person_click(static_cast<std::size_t>(options_.click_npc));
+        } else if (options_.has_click_world) {
+            pending_talk_.reset();
+            if (!level_->hero().set_goal(
+                    gl::game::Tile{options_.click_world_x, options_.click_world_y})) {
+                gl::log(gl::LogLevel::warning, "cannot path to the clicked world tile");
             }
         }
+    }
+
+    void advance_scene(double dt_seconds) {
+        if (!level_) return;
+        level_->simulation().advance(dt_seconds);
+        level_->hero().advance(dt_seconds);
+        maybe_open_pending_dialog();
+    }
+
+    void run_headless_click() {
+        if (!level_ || dialog_) return;
+        constexpr double kStepSeconds = 0.05;
+        const double limit_seconds = options_.sim_ms > 0
+                                         ? static_cast<double>(options_.sim_ms) / 1000.0
+                                         : 60.0;
+        for (double elapsed = 0.0; elapsed < limit_seconds; elapsed += kStepSeconds) {
+            advance_scene(kStepSeconds);
+            if (dialog_ || !level_->hero().hero().has_goal) break;
+        }
+    }
+
+    void advance_hero_after_render(std::uint64_t animation_ms) {
+        if (!(state_.state() == gl::core::AppState::level && level_)) {
+            level_animation_ms_ = animation_ms;
+            return;
+        }
+        const std::uint64_t delta =
+            animation_ms > level_animation_ms_ ? animation_ms - level_animation_ms_ : 0;
+        level_animation_ms_ = animation_ms;
+        if (dialog_ || delta == 0) return;
+        level_->hero().advance(static_cast<double>(delta) / 1000.0);
+        maybe_open_pending_dialog();
     }
 
     void handle_dialog_key(const SDL_KeyboardEvent& key) {
@@ -1008,6 +1100,8 @@ class Game {
         }
         level_.emplace(std::move(screen.value()));
         level_name_ = std::string(name);
+        level_animation_ms_ = 0;
+        pending_talk_.reset();
         update_viewport();
         return true;
     }
@@ -1053,6 +1147,7 @@ class Game {
         viewport_width_ = width;
         viewport_height_ = height;
         if (level_) level_->set_viewport(width, height);
+        update_dialog_style();
     }
 
     void handle_event(const SDL_Event& event) {
@@ -1078,11 +1173,16 @@ class Game {
                     save_hover(event.motion.x, event.motion.y);
                 } else if (state_.state() == gl::core::AppState::menu) {
                     menu_hover(event.motion.x, event.motion.y);
-                } else if (state_.state() == gl::core::AppState::level && dragging_ &&
+                } else if (state_.state() == gl::core::AppState::level && mouse_down_ &&
                            level_) {
-                    const float zoom = level_->camera().zoom;
-                    level_->pan(-static_cast<float>(event.motion.xrel) / zoom,
-                                -static_cast<float>(event.motion.yrel) / zoom);
+                    const int dx = event.motion.x - mouse_down_x_;
+                    const int dy = event.motion.y - mouse_down_y_;
+                    if (!dragging_ && dx * dx + dy * dy >= 16) dragging_ = true;
+                    if (dragging_) {
+                        const float zoom = level_->camera().zoom;
+                        level_->pan(-static_cast<float>(event.motion.xrel) / zoom,
+                                    -static_cast<float>(event.motion.yrel) / zoom);
+                    }
                 }
                 return;
             case SDL_MOUSEBUTTONDOWN:
@@ -1094,11 +1194,24 @@ class Game {
                 } else if (state_.state() == gl::core::AppState::menu) {
                     menu_click(event.button.x, event.button.y);
                 } else if (state_.state() == gl::core::AppState::level) {
-                    dragging_ = true;
+                    mouse_down_ = true;
+                    mouse_down_x_ = event.button.x;
+                    mouse_down_y_ = event.button.y;
+                    dragging_ = false;
                 }
                 return;
             case SDL_MOUSEBUTTONUP:
-                if (event.button.button == SDL_BUTTON_LEFT) dragging_ = false;
+                if (event.button.button != SDL_BUTTON_LEFT) return;
+                if (mouse_down_ && !dialog_ && !save_slots_ && !console_visible_ &&
+                    state_.state() == gl::core::AppState::level && level_) {
+                    const int dx = event.button.x - mouse_down_x_;
+                    const int dy = event.button.y - mouse_down_y_;
+                    if (!dragging_ && dx * dx + dy * dy < 16) {
+                        handle_level_click(event.button.x, event.button.y);
+                    }
+                }
+                mouse_down_ = false;
+                dragging_ = false;
                 return;
             case SDL_MOUSEWHEEL:
                 if (console_visible_ || state_.state() != gl::core::AppState::level ||
@@ -1119,6 +1232,7 @@ class Game {
                     update_viewport();
                 } else if (event.window.event == SDL_WINDOWEVENT_LEAVE ||
                            event.window.event == SDL_WINDOWEVENT_FOCUS_LOST) {
+                    mouse_down_ = false;
                     dragging_ = false;
                 }
                 return;
@@ -1173,6 +1287,7 @@ class Game {
 
         if (state_.state() == gl::core::AppState::level && level_) {
             if (symbol == SDLK_ESCAPE) {
+                mouse_down_ = false;
                 dragging_ = false;
                 level_.reset();
                 state_.transition(gl::core::AppState::menu);
@@ -1277,6 +1392,7 @@ class Game {
         if (index == 0) {
             if (!load_level(kNewGameLevel)) return;
             if (state_.transition(gl::core::AppState::level)) {
+                mouse_down_ = false;
                 dragging_ = false;
                 debug_overlay_ = false;
             }
@@ -1407,15 +1523,17 @@ class Game {
 
     void render(std::uint64_t now_ms, std::uint64_t animation_ms) {
         update_viewport();
-        if (dialog_ && dialog_->session) {
-            render_dialog();
-        } else if (state_.state() == gl::core::AppState::level && level_) {
+        update_dialog_style();
+
+        bool scene_drawn = false;
+        if (state_.state() == gl::core::AppState::level && level_) {
             gl::app::LevelScreenOptions options;
             options.debug_overlay = debug_overlay_;
             options.walkable_overlay = options_.walkable_overlay;
             options.draw_persons = !options_.no_persons;
             level_->render(window_.renderer(), options, animation_ms);
-            if (client_.snapshot().paused) {
+            scene_drawn = true;
+            if (client_.snapshot().paused && !dialog_overlay_.active()) {
                 const std::string_view label = "PAUSED";
                 const float width = gl::render::text_width(label, kTitleScale);
                 gl::render::draw_text(window_.renderer(), label,
@@ -1423,97 +1541,24 @@ class Game {
                                       24.0f, kTitleScale,
                                       gl::render::Color{255, 210, 90, 255});
             }
-        } else if (save_slots_) {
-            render_save_slots();
-        } else {
-            render_menu();
+        }
+
+        if (dialog_overlay_.active()) {
+            if (!scene_drawn) {
+                SDL_SetRenderDrawBlendMode(window_.renderer(), SDL_BLENDMODE_NONE);
+                SDL_SetRenderDrawColor(window_.renderer(), 12, 14, 20, 255);
+                SDL_RenderClear(window_.renderer());
+            }
+            dialog_overlay_.render(window_.renderer(), font_ ? &*font_ : nullptr);
+        } else if (!scene_drawn) {
+            if (save_slots_) {
+                render_save_slots();
+            } else {
+                render_menu();
+            }
         }
 
         if (console_visible_) render_console(now_ms);
-    }
-
-    void render_dialog() {
-        SDL_Renderer* renderer = window_.renderer();
-        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
-        SDL_SetRenderDrawColor(renderer, 12, 14, 20, 255);
-        SDL_RenderClear(renderer);
-
-        const float panel_y = dialog_panel_y();
-        const float panel_height = dialog_panel_height();
-        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-        SDL_SetRenderDrawColor(renderer, 5, 7, 11, 235);
-        const SDL_FRect panel{0.0f, panel_y, static_cast<float>(viewport_width_), panel_height};
-        SDL_RenderFillRectF(renderer, &panel);
-        SDL_SetRenderDrawColor(renderer, 232, 201, 112, 255);
-        SDL_RenderDrawLine(renderer, 0, static_cast<int>(panel_y), viewport_width_,
-                           static_cast<int>(panel_y));
-
-        const gl::render::Color text_color{232, 232, 238, 255};
-        const gl::render::Color answer_color{210, 214, 222, 255};
-        const gl::render::Color selected_color{255, 232, 160, 255};
-        const float line_height = ui_line_height();
-        const float content_bottom = dialog_content_bottom();
-
-        float y = panel_y + kDialogMargin;
-        if (dialog_waiting()) {
-            const std::vector<std::string> lines = dialog_npc_lines();
-            for (const std::string& line : lines) {
-                if (y + line_height > content_bottom) break;
-                draw_ui_text(line, kDialogMargin, y, text_color);
-                y += line_height + 2.0f;
-            }
-        } else {
-            const std::string message =
-                dialog_message_.empty() ? "Dialog ended. Press Esc." : dialog_message_;
-            draw_ui_text(message, kDialogMargin, y, selected_color);
-            y += line_height + 2.0f;
-        }
-
-        if (dialog_waiting()) {
-            const std::span<const gl::script::DialogLine> answers = dialog_->session->answers();
-            if (answers.empty()) {
-                const float message_y = dialog_answers_top();
-                if (message_y + line_height <= content_bottom) {
-                    draw_ui_text("No answers. Press Esc.", kDialogMargin, message_y,
-                                 selected_color);
-                }
-            } else {
-                const int count = static_cast<int>(answers.size());
-                for (int index = 0; index < count; ++index) {
-                    const SDL_FRect rect = dialog_answer_rect(index);
-                    if (rect.y >= content_bottom) break;
-                    const bool selected = dialog_selected_ == index;
-                    if (selected) {
-                        SDL_SetRenderDrawColor(renderer, 60, 52, 24, 210);
-                        SDL_RenderFillRectF(renderer, &rect);
-                        SDL_SetRenderDrawColor(renderer, 232, 201, 112, 255);
-                        SDL_RenderDrawRectF(renderer, &rect);
-                    }
-
-                    const std::vector<std::string> lines =
-                        ui_wrap(dialog_answer_label(index), rect.w - 16.0f);
-                    float text_y = rect.y + 2.0f;
-                    for (const std::string& line : lines) {
-                        if (text_y + line_height > content_bottom) break;
-                        draw_ui_text(line, rect.x + 8.0f, text_y,
-                                     selected ? selected_color : answer_color);
-                        text_y += line_height + 1.0f;
-                    }
-                }
-            }
-        }
-
-        const float hint_y = static_cast<float>(viewport_height_) - 28.0f;
-        if (dialog_has_bottom_message()) {
-            draw_ui_text(dialog_message_, kDialogMargin, dialog_message_y(),
-                         gl::render::Color{255, 170, 120, 255});
-        }
-        const bool has_answers =
-            dialog_waiting() && !dialog_->session->answers().empty();
-        const std::string_view hint = has_answers
-                                          ? "Up/Down or mouse to select, Enter to choose, Esc to close"
-                                          : "Esc to close";
-        draw_ui_text(hint, kDialogMargin, hint_y, gl::render::Color{110, 112, 122, 255});
     }
 
     void render_save_slots() {
@@ -1702,8 +1747,11 @@ class Game {
     bool console_visible_ = false;
     bool screenshot_mode_ = false;
     bool dirty_ = false;
+    bool mouse_down_ = false;
     bool dragging_ = false;
     bool debug_overlay_ = false;
+    int mouse_down_x_ = 0;
+    int mouse_down_y_ = 0;
     int viewport_width_ = 0;
     int viewport_height_ = 0;
     int menu_selected_ = 0;
@@ -1713,10 +1761,11 @@ class Game {
     std::string save_message_;
     std::optional<gl::render::Font> font_;
     std::unique_ptr<DialogContext> dialog_;
+    gl::app::DialogOverlay dialog_overlay_;
+    std::optional<std::size_t> pending_talk_;
+    std::uint64_t level_animation_ms_ = 0;
     bool test_dialog_available_ = false;
     bool dialog_launched_from_cli_ = false;
-    int dialog_selected_ = 0;
-    std::string dialog_message_;
 };
 
 } // namespace
