@@ -22,3 +22,10 @@ target_link_libraries(level_click_tests PRIVATE gl_app)
 gl_enable_warnings(level_click_tests)
 
 add_test(NAME level_click_tests COMMAND level_click_tests)
+
+add_executable(dialog_overlay_tests test_dialog_overlay.cpp)
+target_include_directories(dialog_overlay_tests PRIVATE ${CMAKE_SOURCE_DIR}/third_party/doctest)
+target_link_libraries(dialog_overlay_tests PRIVATE gl_app)
+gl_enable_warnings(dialog_overlay_tests)
+
+add_test(NAME dialog_overlay_tests COMMAND dialog_overlay_tests)
