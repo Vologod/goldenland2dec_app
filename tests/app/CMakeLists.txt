@@ -15,3 +15,10 @@ target_link_libraries(person_render_tests PRIVATE gl_app)
 gl_enable_warnings(person_render_tests)
 
 add_test(NAME person_render_tests COMMAND person_render_tests)
+
+add_executable(level_click_tests test_level_click.cpp)
+target_include_directories(level_click_tests PRIVATE ${CMAKE_SOURCE_DIR}/third_party/doctest)
+target_link_libraries(level_click_tests PRIVATE gl_app)
+gl_enable_warnings(level_click_tests)
+
+add_test(NAME level_click_tests COMMAND level_click_tests)

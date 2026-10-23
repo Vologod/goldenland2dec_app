@@ -5,13 +5,16 @@
 #include <gl/app/person_render.hpp>
 #include <gl/assets/result.hpp>
 #include <gl/assets/vfs.hpp>
+#include <gl/game/hero.hpp>
 #include <gl/game/level.hpp>
 #include <gl/game/level_simulation.hpp>
+#include <gl/game/pathfinder.hpp>
 #include <gl/render/camera.hpp>
 #include <gl/render/texture.hpp>
 
 #include <cstdint>
 #include <optional>
+#include <span>
 #include <string_view>
 #include <vector>
 
@@ -23,12 +26,32 @@ struct LevelScreenOptions {
     bool walkable_overlay = false;
     bool draw_persons = true;
     bool draw_masks = true;
+    bool draw_hero = true;
 };
+
+struct ClickTarget {
+    std::optional<std::size_t> person;
+    std::optional<gl::game::Tile> tile;
+};
+
+struct PersonHitTarget {
+    std::size_t person = 0;
+    SDL_FRect rect{};
+    float baseline = 0.0f;
+    float center_x = 0.0f;
+};
+
+gl::game::Tile screen_to_tile(const gl::render::Camera& camera, int sx, int sy);
+
+std::optional<std::size_t> hit_test_persons(std::span<const PersonHitTarget> targets,
+                                            int sx, int sy);
 
 class LevelScreen {
 public:
     static Result<LevelScreen> load(SDL_Renderer* renderer, gl::assets::GameVfs& vfs,
                                     std::string_view level_name, bool load_persons = true);
+
+    LevelScreen(LevelScreen&& other) noexcept;
 
     void render(SDL_Renderer* renderer, const LevelScreenOptions& options,
                 std::uint64_t elapsed_ms);
@@ -42,6 +65,12 @@ public:
     const gl::render::Camera& camera() const { return camera_; }
     const gl::game::Level& level() const { return level_; }
     gl::game::LevelSimulation& simulation() { return simulation_; }
+
+    ClickTarget click_target(int sx, int sy) const;
+    std::optional<std::size_t> person_at_screen(int sx, int sy) const;
+    bool world_to_tile(int sx, int sy, gl::game::Tile& out) const;
+    gl::game::HeroController& hero();
+    const gl::game::HeroController& hero() const;
 
 private:
     struct Sprite {
@@ -77,12 +106,25 @@ private:
 
     enum class PersonPass { shadow, body };
 
+    struct HeroBinding {
+        HeroBinding(const gl::game::Level& level,
+                    const gl::game::LevelSimulation* simulation)
+            : level_ptr(&level), simulation_ptr(simulation),
+              controller(level, simulation) {}
+
+        const gl::game::Level* level_ptr = nullptr;
+        const gl::game::LevelSimulation* simulation_ptr = nullptr;
+        gl::game::HeroController controller;
+    };
+
     LevelScreen(gl::game::Level level, gl::render::Texture background);
 
+    void ensure_hero() const;
     float world_width() const;
     float world_height() const;
     void draw_person(SDL_Renderer* renderer, const Person& person,
                      std::uint64_t elapsed_ms, PersonPass pass) const;
+    void draw_hero_marker(SDL_Renderer* renderer) const;
     void draw_debug_overlay(SDL_Renderer* renderer, int screen_w, int screen_h,
                             std::uint64_t elapsed_ms) const;
     void draw_walkable_overlay(SDL_Renderer* renderer) const;
@@ -97,6 +139,7 @@ private:
     std::vector<std::size_t> person_order_;
     std::vector<std::size_t> mask_order_;
     gl::game::LevelSimulation simulation_;
+    mutable std::optional<HeroBinding> hero_;
     std::uint64_t simulated_ms_ = 0;
     std::uint64_t last_simulation_ms_ = 0;
     gl::render::Camera camera_;

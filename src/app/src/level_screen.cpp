@@ -74,8 +74,62 @@ bool decode_person_image(gl::assets::GameVfs& vfs, const std::string& path,
 
 }
 
+gl::game::Tile screen_to_tile(const gl::render::Camera& camera, int sx, int sy) {
+    const float zoom = camera.zoom > 0.0f ? camera.zoom : 1.0f;
+    return gl::game::tile_at(camera.x + static_cast<float>(sx) / zoom,
+                             camera.y + static_cast<float>(sy) / zoom);
+}
+
+std::optional<std::size_t> hit_test_persons(std::span<const PersonHitTarget> targets,
+                                            int sx, int sy) {
+    const PersonHitTarget* best = nullptr;
+    float best_distance = 0.0f;
+    const float screen_x = static_cast<float>(sx);
+    const float screen_y = static_cast<float>(sy);
+    for (const PersonHitTarget& target : targets) {
+        if (!(screen_x >= target.rect.x && screen_x < target.rect.x + target.rect.w &&
+              screen_y >= target.rect.y && screen_y < target.rect.y + target.rect.h)) {
+            continue;
+        }
+        const float dx = screen_x - target.center_x;
+        const float dy = screen_y - (target.rect.y + target.rect.h * 0.5f);
+        const float distance = dx * dx + dy * dy;
+        if (best == nullptr || target.baseline > best->baseline ||
+            (target.baseline == best->baseline && distance < best_distance) ||
+            (target.baseline == best->baseline && distance == best_distance &&
+             target.person < best->person)) {
+            best = &target;
+            best_distance = distance;
+        }
+    }
+    if (best == nullptr) return std::nullopt;
+    return best->person;
+}
+
 LevelScreen::LevelScreen(gl::game::Level level, gl::render::Texture background)
     : level_(std::move(level)), background_(std::move(background)) {}
+
+LevelScreen::LevelScreen(LevelScreen&& other) noexcept
+    : level_(std::move(other.level_)),
+      background_(std::move(other.background_)),
+      statics_(std::move(other.statics_)),
+      animations_(std::move(other.animations_)),
+      persons_(std::move(other.persons_)),
+      masks_(std::move(other.masks_)),
+      person_keys_(std::move(other.person_keys_)),
+      person_order_(std::move(other.person_order_)),
+      mask_order_(std::move(other.mask_order_)),
+      simulation_(std::move(other.simulation_)),
+      simulated_ms_(other.simulated_ms_),
+      last_simulation_ms_(other.last_simulation_ms_),
+      camera_(other.camera_),
+      screen_w_(other.screen_w_),
+      screen_h_(other.screen_h_) {
+    if (other.hero_) {
+        hero_.emplace(level_, &simulation_);
+        hero_->controller.spawn_at_first_entrance();
+    }
+}
 
 float LevelScreen::world_width() const { return static_cast<float>(level_.width); }
 
@@ -348,6 +402,7 @@ Result<LevelScreen> LevelScreen::load(SDL_Renderer* renderer, gl::assets::GameVf
                     std::to_string(screen.persons_.size()) + " person sprites");
     }
 
+    screen.ensure_hero();
     return screen;
 }
 
@@ -373,23 +428,36 @@ void LevelScreen::render(SDL_Renderer* renderer, const LevelScreenOptions& optio
                                  static_cast<float>(animation.y), screen_w_, screen_h_);
     }
 
-    if (options.draw_persons) {
-        if (!persons_.empty()) {
-            const std::uint64_t target = elapsed_ms;
-            if (target > last_simulation_ms_) {
-                simulation_.advance(
-                    static_cast<double>(target - last_simulation_ms_) / 1000.0);
-                last_simulation_ms_ = target;
+    if (options.draw_persons && !persons_.empty()) {
+        const std::uint64_t target = elapsed_ms;
+        if (target > last_simulation_ms_) {
+            simulation_.advance(static_cast<double>(target - last_simulation_ms_) / 1000.0);
+            last_simulation_ms_ = target;
+        }
+    }
+    simulated_ms_ = simulation_.time_ms();
+
+    const bool draw_hero = options.draw_hero;
+    if (draw_hero) ensure_hero();
+
+    if (options.draw_persons || draw_hero) {
+        person_keys_.clear();
+        person_keys_.reserve(persons_.size() + (draw_hero ? 1 : 0));
+        if (options.draw_persons) {
+            for (const Person& person : persons_) {
+                const gl::game::PersonMovement& movement =
+                    simulation_.persons()[person.instance];
+                person_keys_.push_back(PersonDrawKey{movement.x, movement.y});
             }
         }
-        simulated_ms_ = simulation_.time_ms();
-        person_keys_.clear();
-        person_keys_.reserve(persons_.size());
-        for (const Person& person : persons_) {
-            const gl::game::PersonMovement& movement = simulation_.persons()[person.instance];
-            person_keys_.push_back(PersonDrawKey{movement.x, movement.y});
+        const bool hero_has_key = draw_hero && hero_.has_value();
+        if (hero_has_key) {
+            const gl::game::Hero& state = hero_->controller.hero();
+            person_keys_.push_back(PersonDrawKey{state.x, state.y});
         }
         person_order_ = sort_person_indices(person_keys_);
+        const std::size_t hero_key =
+            hero_has_key ? person_keys_.size() - 1 : person_keys_.size();
         const std::size_t mask_count = options.draw_masks ? mask_order_.size() : 0;
         const auto draw_pass = [&](PersonPass pass) {
             std::size_t person_index = 0;
@@ -404,8 +472,12 @@ void LevelScreen::render(SDL_Renderer* renderer, const LevelScreenOptions& optio
                         (key.y == mask.baseline && key.x <= mask.center_x);
                 }
                 if (draw_person_next) {
-                    draw_person(renderer, persons_[person_order_[person_index]],
-                                simulated_ms_, pass);
+                    const std::size_t key_index = person_order_[person_index];
+                    if (key_index == hero_key) {
+                        if (pass == PersonPass::body) draw_hero_marker(renderer);
+                    } else if (options.draw_persons) {
+                        draw_person(renderer, persons_[key_index], simulated_ms_, pass);
+                    }
                     ++person_index;
                 } else {
                     const MaskOverlay& mask = masks_[mask_order_[mask_index]];
@@ -417,7 +489,7 @@ void LevelScreen::render(SDL_Renderer* renderer, const LevelScreenOptions& optio
                 }
             }
         };
-        draw_pass(PersonPass::shadow);
+        if (options.draw_persons) draw_pass(PersonPass::shadow);
         draw_pass(PersonPass::body);
     }
 
@@ -481,6 +553,84 @@ void LevelScreen::draw_person(SDL_Renderer* renderer, const Person& person,
 
     draw_source(renderer, texture, source, destination,
                 placement.mirror ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE);
+}
+
+ClickTarget LevelScreen::click_target(int sx, int sy) const {
+    ClickTarget target;
+    target.person = person_at_screen(sx, sy);
+    gl::game::Tile tile{};
+    if (world_to_tile(sx, sy, tile)) target.tile = tile;
+    return target;
+}
+
+std::optional<std::size_t> LevelScreen::person_at_screen(int sx, int sy) const {
+    std::vector<PersonHitTarget> targets;
+    targets.reserve(persons_.size());
+    for (const Person& person : persons_) {
+        if (person.instance >= level_.persons.size()) continue;
+        if (person.instance >= simulation_.persons().size()) continue;
+        const gl::game::PersonInstance& instance = level_.persons[person.instance];
+        if (person.animation >= instance.pad.size()) continue;
+        const gl::assets::PadAnimation& animation = instance.pad[person.animation];
+        if (animation.frame_width <= 0 || animation.frame_height <= 0) continue;
+        const gl::game::PersonMovement& movement =
+            simulation_.persons()[person.instance];
+        const PersonPlacement placement =
+            place_person_px(animation, movement.direction8, movement.x, movement.y);
+        const SDL_FRect rect =
+            gl::render::to_screen(camera_, placement.draw_x, placement.draw_y,
+                                  static_cast<float>(animation.frame_width),
+                                  static_cast<float>(animation.frame_height));
+        targets.push_back(PersonHitTarget{person.instance, rect, movement.y,
+                                          rect.x + rect.w * 0.5f});
+    }
+    return hit_test_persons(targets, sx, sy);
+}
+
+bool LevelScreen::world_to_tile(int sx, int sy, gl::game::Tile& out) const {
+    out = screen_to_tile(camera_, sx, sy);
+    if (level_.walkable.empty()) return true;
+    return out.x >= 0 && out.y >= 0 && out.x < level_.walkable.width &&
+           out.y < level_.walkable.height;
+}
+
+void LevelScreen::ensure_hero() const {
+    if (hero_ && hero_->level_ptr == &level_ &&
+        hero_->simulation_ptr == &simulation_) {
+        return;
+    }
+    hero_.reset();
+    hero_.emplace(level_, &simulation_);
+    hero_->controller.spawn_at_first_entrance();
+}
+
+gl::game::HeroController& LevelScreen::hero() {
+    ensure_hero();
+    return hero_->controller;
+}
+
+const gl::game::HeroController& LevelScreen::hero() const {
+    ensure_hero();
+    return hero_->controller;
+}
+
+void LevelScreen::draw_hero_marker(SDL_Renderer* renderer) const {
+    if (!hero_ || !(camera_.zoom > 0.0f)) return;
+    const gl::game::Hero& state = hero_->controller.hero();
+    const float screen_x = (state.x - camera_.x) * camera_.zoom;
+    const float screen_y = (state.y - camera_.y) * camera_.zoom;
+    const float radius =
+        static_cast<float>(gl::game::kHeroMarkerSize) * 0.5f * camera_.zoom;
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+    SDL_SetRenderDrawColor(renderer, 255, 215, 0, 180);
+    SDL_RenderDrawLineF(renderer, screen_x, screen_y - radius, screen_x + radius,
+                        screen_y);
+    SDL_RenderDrawLineF(renderer, screen_x + radius, screen_y, screen_x,
+                        screen_y + radius);
+    SDL_RenderDrawLineF(renderer, screen_x, screen_y + radius, screen_x - radius,
+                        screen_y);
+    SDL_RenderDrawLineF(renderer, screen_x - radius, screen_y, screen_x,
+                        screen_y - radius);
 }
 
 void LevelScreen::draw_debug_overlay(SDL_Renderer* renderer, int screen_w, int screen_h,
