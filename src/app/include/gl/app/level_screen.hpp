@@ -29,22 +29,56 @@ struct LevelScreenOptions {
     bool draw_hero = true;
 };
 
+struct Rect {
+    float x = 0.0f;
+    float y = 0.0f;
+    float w = 0.0f;
+    float h = 0.0f;
+};
+
 struct ClickTarget {
+    // Index into Level::persons / LevelSimulation::persons(), not LevelScreen::persons_.
     std::optional<std::size_t> person;
     std::optional<gl::game::Tile> tile;
 };
 
 struct PersonHitTarget {
+    // Index into Level::persons / LevelSimulation::persons(), not LevelScreen::persons_.
     std::size_t person = 0;
     SDL_FRect rect{};
     float baseline = 0.0f;
     float center_x = 0.0f;
 };
 
+struct PersonHitRect {
+    bool valid = false;
+    SDL_FRect rect{};
+    std::size_t row = 0;
+};
+
 gl::game::Tile screen_to_tile(const gl::render::Camera& camera, int sx, int sy);
+
+bool world_to_tile(const gl::render::Camera& camera, const gl::game::WalkGrid& grid,
+                   int sx, int sy, gl::game::Tile& out);
+
+PersonHitRect person_hit_rect(const gl::game::PersonInstance& person,
+                              const gl::game::PersonMovement& movement,
+                              const gl::assets::PadAnimation& animation,
+                              const gl::render::Camera& camera);
+
+Rect hero_marker_rect(const gl::game::Hero& hero, const gl::render::Camera& camera);
+
+PersonDrawKey hero_draw_key(const gl::game::Hero& hero);
+
+std::vector<std::size_t> sort_body_keys(std::span<const PersonDrawKey> person_keys,
+                                        const std::optional<PersonDrawKey>& hero_key);
 
 std::optional<std::size_t> hit_test_persons(std::span<const PersonHitTarget> targets,
                                             int sx, int sy);
+
+ClickTarget click_target(std::span<const PersonHitTarget> persons,
+                         const gl::render::Camera& camera, const gl::game::WalkGrid& grid,
+                         int sx, int sy);
 
 class LevelScreen {
 public:
@@ -120,6 +154,7 @@ private:
     LevelScreen(gl::game::Level level, gl::render::Texture background);
 
     void ensure_hero() const;
+    std::vector<PersonHitTarget> person_hit_targets() const;
     float world_width() const;
     float world_height() const;
     void draw_person(SDL_Renderer* renderer, const Person& person,
