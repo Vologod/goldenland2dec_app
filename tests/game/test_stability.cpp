@@ -96,11 +96,23 @@ TEST_CASE("real data: l1_1 simulation has no jittering NPCs" *
         }
     }
 
+    // Known corner conflict with L0.P744_oficer1 aborts ~113 moves for P692 in 180 s.
+    // Exempt only that NPC; all other NPCs and their total stay at the A1 threshold.
+    // TODO(A6): remove the P692 exemption and tighten it to 50 after occupancy parity.
+    constexpr int kMaxAbortedMoves = 50;
+    constexpr int kP692MaxAbortedMoves = 150;
     int total_aborted = 0;
+    bool p692_seen = false;
     for (std::size_t i = 0; i < count; ++i) {
         const auto &p = sim.persons()[i];
         const MoveStats &s = stats[i];
-        total_aborted += s.aborted_moves;
+        if (level->persons[i].name == "L0.P692_citizen5") {
+            p692_seen = true;
+            CHECK(s.aborted_moves < kP692MaxAbortedMoves);
+        } else {
+            total_aborted += s.aborted_moves;
+            CHECK(s.aborted_moves < kMaxAbortedMoves);
+        }
         if (level->persons[i].name == "L0.P7_Kolbasens_Rodstvennik1") {
             MESSAGE("P7 final path=" << p.path.size() << " idx=" << p.path_index
                                       << " wait_until=" << p.wait_until_ms
@@ -126,9 +138,9 @@ TEST_CASE("real data: l1_1 simulation has no jittering NPCs" *
                                         << p.x << "," << p.y << ") target=(" << p.target_x
                                         << "," << p.target_y << ") moving=" << p.moving
                                         << " waiting=" << p.waiting);
-        CHECK(s.aborted_moves < 150);
         CHECK(s.max_5s_window < 100);
     }
+    CHECK(p692_seen);
     CAPTURE(total_aborted);
-    CHECK(total_aborted < 200);
+    CHECK(total_aborted < kMaxAbortedMoves);
 }

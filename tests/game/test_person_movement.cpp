@@ -48,3 +48,7 @@ TEST_CASE("isometric speed blend") {
     CHECK(iso_speed(0.0f, 1.0f, 6.0f, 5.0f) == doctest::Approx(5.0f));
     CHECK(iso_speed(1.0f, 1.0f, 6.0f, 5.0f) == doctest::Approx(5.5f));
 }
+
+TEST_CASE("isometric speed blend matches measured go frame step for move 6x5") {
+    CHECK(iso_speed(7.0f, 12.0f, 6.0f, 5.0f) == doctest::Approx(5.254f).epsilon(1e-3f));
+}

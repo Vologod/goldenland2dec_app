@@ -196,13 +196,19 @@ Live-память `GoldenLand.exe` v1.3, `L0.P744_oficer1` (`MOVED`, `track3`):
   (`track4` 7, `track1` 9, `track2` 22 клетки), 2 `RANDOM_RADIUS` (маршрута нет).
 - SEF `cell_groups`: 9 групп — 5 `box*` + 4 `track*`.
 - `LevelSimulation`, seed 1 (начальное состояние MSVC `rand`), шаг 1/60: t=60 с —
-  1 moving + 5 waiting у 6 подвижных, 10 `STAY`; позиции в границах `2760x2016`;
+  3 moving + 3 waiting у 6 подвижных, 10 `STAY`; позиции в границах `2760x2016`;
   повторный прогон бит-в-бит совпадает.
-- A1 review, 180 с, seed 1: `L0.P692_citizen5` — 18 toggles / 9 завершённых ходов,
-  0 aborted (смещение < 0.05 px), средняя длина хода 193.2 px (max 224.3),
+- A1 review (до A5), 180 с, seed 1: `L0.P692_citizen5` — 18 toggles / 9 завершённых
+  ходов, 0 aborted (смещение < 0.05 px), средняя длина хода 193.2 px (max 224.3),
   `max_5s_window=1`. Контрольный прогон со старым порядком «цель до паузы» дал
   541 toggle, 266 aborted и 264 short-ходов: это thrash нулевых перезапусков, а не
   легитимные короткие ходы.
+- A5 stability, 180 с, seed 1: `L0.P692_citizen5` — 113 aborted из-за транзиентного
+  конфликта на углу с `L0.P744_oficer1`. Это известное остаточное расхождение
+  occupancy; для P692 порог stability временно `<150`, для остальных NPC и их
+  суммарного значения — прежний `<50`. После A6 (occupancy) порог P692 вернуть к
+  `<50`; TODO стоит в `tests/game/test_stability.cpp`. Остальные movers за 180 с
+  дают 3–5 aborted (`P678_citizen4`, `P640_children2`), всего без P692 — 8.
 
 ## Что не подтверждено
 
