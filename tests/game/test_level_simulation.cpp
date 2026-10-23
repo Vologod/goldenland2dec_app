@@ -236,6 +236,204 @@ TEST_CASE("RANDOM_RADIUS stays within radius plus one") {
     }
 }
 
+TEST_CASE("RANDOM_RADIUS only targets walkable in-bounds tiles") {
+    Level level;
+    level.name = "obstacles";
+    level.width = 40 * 12;
+    level.height = 40 * 9;
+    level.walkable.width = 40;
+    level.walkable.height = 40;
+    level.walkable.walkable.assign(40 * 40, 1);
+    for (int y = 0; y < 40; ++y) {
+        for (int x = 0; x < 40; ++x) {
+            if ((x * 3 + y * 5) % 11 == 0)
+                level.walkable.walkable[static_cast<std::size_t>(y) * 40 + x] = 0;
+        }
+    }
+    PersonInstance person;
+    person.name = "random_radius_walker";
+    person.tile_x = 20;
+    person.tile_y = 20;
+    person.route_type = "RANDOM_RADIUS";
+    person.radius = 6;
+    person.go_type = gl::assets::PadAnimationType::rt_go;
+    person.go_move_x = 6.0f;
+    person.go_move_y = 5.0f;
+    person.go_delay_ms = 100;
+    level.persons.push_back(person);
+
+    auto sim = LevelSimulation::create(level, 1);
+    std::vector<Tile> goals;
+    for (int i = 0; i < 60 * 120; ++i) {
+        sim.advance(1.0 / 60.0);
+        const auto &p = sim.persons()[0];
+        if (p.path.size() < 2)
+            continue;
+        const Tile goal = p.path.back();
+        CHECK(goal.x >= 0);
+        CHECK(goal.y >= 0);
+        CHECK(goal.x < level.walkable.width);
+        CHECK(goal.y < level.walkable.height);
+        CHECK(level.walkable.is_walkable(goal.x, goal.y));
+        if (goals.empty() || goals.back() != goal)
+            goals.push_back(goal);
+    }
+    CHECK(goals.size() > 3);
+}
+
+TEST_CASE("RANDOM_RADIUS may select a tile occupied by another person") {
+    Level level;
+    level.name = "occupied";
+    level.width = 30 * 12;
+    level.height = 30 * 9;
+    level.walkable.width = 30;
+    level.walkable.height = 30;
+    level.walkable.walkable.assign(30 * 30, 1);
+    PersonInstance walker;
+    walker.name = "random_radius_walker";
+    walker.tile_x = 10;
+    walker.tile_y = 10;
+    walker.route_type = "RANDOM_RADIUS";
+    walker.radius = 1;
+    walker.go_type = gl::assets::PadAnimationType::rt_go;
+    walker.go_move_x = 6.0f;
+    walker.go_move_y = 5.0f;
+    walker.go_delay_ms = 100;
+    level.persons.push_back(walker);
+    PersonInstance blocker = walker;
+    blocker.name = "blocker";
+    blocker.tile_x = 11;
+    blocker.tile_y = 10;
+    blocker.route_type = "STAY";
+    blocker.route_cells.clear();
+    level.persons.push_back(blocker);
+
+    auto sim = LevelSimulation::create(level, 1);
+    bool saw_occupied_goal = false;
+    for (int i = 0; i < 60 * 120 && !saw_occupied_goal; ++i) {
+        sim.advance(1.0 / 60.0);
+        const auto &p = sim.persons()[0];
+        if (p.path.size() >= 2 && p.path.back() == Tile{11, 10})
+            saw_occupied_goal = true;
+    }
+    CHECK(saw_occupied_goal);
+}
+
+TEST_CASE("RANDOM_RADIUS can repeat the same candidate") {
+    Level level;
+    level.name = "repeat";
+    level.width = 30 * 12;
+    level.height = 30 * 9;
+    level.walkable.width = 30;
+    level.walkable.height = 30;
+    level.walkable.walkable.assign(30 * 30, 1);
+    PersonInstance person;
+    person.name = "random_radius_walker";
+    person.tile_x = 10;
+    person.tile_y = 10;
+    person.route_type = "RANDOM_RADIUS";
+    person.radius = 1;
+    person.go_type = gl::assets::PadAnimationType::rt_go;
+    person.go_move_x = 6.0f;
+    person.go_move_y = 5.0f;
+    person.go_delay_ms = 100;
+    level.persons.push_back(person);
+
+    auto sim = LevelSimulation::create(level, 1);
+    std::vector<Tile> goals;
+    for (int i = 0; i < 60 * 180; ++i) {
+        sim.advance(1.0 / 60.0);
+        const auto &p = sim.persons()[0];
+        if (p.path.size() < 2)
+            continue;
+        const Tile goal = p.path.back();
+        if (goals.empty() || goals.back() != goal)
+            goals.push_back(goal);
+    }
+    REQUIRE(goals.size() > 9);
+    bool saw_repeat = false;
+    for (std::size_t a = 0; a < goals.size() && !saw_repeat; ++a) {
+        for (std::size_t b = a + 1; b < goals.size(); ++b) {
+            if (goals[a] == goals[b]) {
+                saw_repeat = true;
+                break;
+            }
+        }
+    }
+    CHECK(saw_repeat);
+}
+
+TEST_CASE("RANDOM with out-of-bounds base keeps the base tile") {
+    Level level = make_level("RANDOM", {}, 0, 0);
+    level.persons[0].tile_x = -2;
+    level.persons[0].tile_y = 10;
+    auto sim = LevelSimulation::create(level, 1);
+    const auto &p = sim.persons()[0];
+    CHECK(p.x == doctest::Approx(-2.0f * 12 + 6));
+    CHECK(p.target_x == doctest::Approx(-2.0f * 12 + 6));
+    CHECK(p.target_y == doctest::Approx(10.0f * 9 + 4));
+    REQUIRE(p.path.size() >= 2);
+    CHECK(p.path.back() == Tile{-2, 10});
+}
+
+TEST_CASE("failed RANDOM plan resamples on the next attempt") {
+    Level level;
+    level.name = "split";
+    level.width = 30 * 12;
+    level.height = 30 * 9;
+    level.walkable.width = 30;
+    level.walkable.height = 30;
+    level.walkable.walkable.assign(30 * 30, 0);
+    for (int y = 0; y < 30; ++y)
+        for (int x = 0; x < 30; ++x)
+            level.walkable.walkable[static_cast<std::size_t>(y) * 30 + x] =
+                (x <= 9 || x >= 14) ? 1 : 0;
+    PersonInstance person;
+    person.name = "random_walker";
+    person.tile_x = 4;
+    person.tile_y = 15;
+    person.route_type = "RANDOM";
+    person.radius = 20;
+    person.go_type = gl::assets::PadAnimationType::rt_go;
+    person.go_move_x = 6.0f;
+    person.go_move_y = 5.0f;
+    person.go_delay_ms = 100;
+    level.persons.push_back(person);
+
+    const auto sample_goal = [&](MsvcRandom &rng) {
+        for (;;) {
+            const Tile candidate{4 + rng.range(-20, 20), 15 + rng.range(-20, 20)};
+            if (candidate.x < 0 || candidate.y < 0 || candidate.x >= 30 || candidate.y >= 30)
+                continue;
+            if (!level.walkable.is_walkable(candidate.x, candidate.y))
+                continue;
+            return candidate;
+        }
+    };
+    std::uint64_t seed = 0;
+    Tile expected{};
+    for (std::uint64_t candidate_seed = 1;
+         candidate_seed <= 20000 && seed == 0; ++candidate_seed) {
+        MsvcRandom rng(static_cast<std::uint32_t>(candidate_seed));
+        const Tile first = sample_goal(rng);
+        if (first.x <= 9)
+            continue;
+        const Tile second = sample_goal(rng);
+        if (second.x >= 14)
+            continue;
+        seed = candidate_seed;
+        expected = second;
+    }
+    REQUIRE(seed != 0);
+    auto sim = LevelSimulation::create(level, seed);
+    for (int i = 0; i < 40; ++i)
+        sim.advance(1.0 / 60.0);
+    const auto &p = sim.persons()[0];
+    CHECK(p.moving);
+    REQUIRE(p.path.size() >= 2);
+    CHECK(p.path.back() == expected);
+}
+
 TEST_CASE("simulation is deterministic") {
     Level level = make_level("MOVED_FLIP", {{10, 10}, {13, 10}, {13, 13}, {10, 13}}, 0, 900);
     auto a = LevelSimulation::create(level, 1);

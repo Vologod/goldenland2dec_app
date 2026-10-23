@@ -22,7 +22,7 @@ Tile tile_at(float x, float y) {
 Tile tile_of(const PersonMovement &movement) { return tile_at(movement.x, movement.y); }
 
 constexpr std::int32_t kMinBackoffMs = 500;
-constexpr std::int32_t kRandomGoalRetries = 3;
+constexpr std::int32_t kRandomSampleSafetyLimit = 1'000'000;
 
 bool is_route_requiring(RouteType type) {
     return type == RouteType::moved || type == RouteType::moved_flip ||
@@ -267,28 +267,38 @@ bool LevelSimulation::pick_goal(std::size_t index) {
         const std::int32_t base_tile_y =
             around_spawn ? state.spawn_tile_y
                          : static_cast<std::int32_t>(std::floor(base_y / kTileH));
-        bool found = false;
-        for (int attempt = 0; attempt < 64 && !found; ++attempt) {
-            const std::int32_t candidate_x =
-                base_tile_x + rng_.range(-state.radius, state.radius);
-            const std::int32_t candidate_y =
-                base_tile_y + rng_.range(-state.radius, state.radius);
-            bool candidate_ok = candidate_x >= 0 && candidate_y >= 0 &&
-                                candidate_x * kTileW + 6.0f < width_ &&
-                                candidate_y * kTileH + 4.0f < height_;
-            if (candidate_ok && !grid_.empty()) {
-                candidate_ok = grid_.is_walkable(candidate_x, candidate_y) &&
-                               (occupancy_.empty() ||
-                                occupancy_[static_cast<std::size_t>(candidate_y) * grid_.width +
-                                           candidate_x] == 0);
-            }
-            if (candidate_ok) {
-                state.goal = Tile{candidate_x, candidate_y};
-                found = true;
-            }
+        const auto in_bounds = [&](Tile tile) {
+            return tile.x >= 0 && tile.y >= 0 && tile.x * kTileW + 6.0f < width_ &&
+                   tile.y * kTileH + 4.0f < height_;
+        };
+        const auto acceptable = [&](Tile tile) {
+            return in_bounds(tile) &&
+                   (grid_.empty() || grid_.is_walkable(tile.x, tile.y));
+        };
+        const Tile base{base_tile_x, base_tile_y};
+        if (!in_bounds(base)) {
+            state.goal = base;
+            state.has_goal = true;
+            return true;
         }
-        if (!found)
-            return false;
+        Tile candidate = base;
+        bool found = false;
+        for (std::int32_t attempt = 0; attempt < kRandomSampleSafetyLimit; ++attempt) {
+            const Tile sample{base_tile_x + rng_.range(-state.radius, state.radius),
+                              base_tile_y + rng_.range(-state.radius, state.radius)};
+            if (!acceptable(sample))
+                continue;
+            candidate = sample;
+            found = true;
+            break;
+        }
+        if (!found) {
+            gl::log(gl::LogLevel::warning,
+                    "RANDOM goal sampling exhausted the safety limit without a walkable "
+                    "candidate; using the base tile");
+            candidate = base;
+        }
+        state.goal = candidate;
     }
     state.has_goal = true;
     return true;
@@ -320,7 +330,7 @@ bool LevelSimulation::plan_target(std::size_t index) {
         ++state.goal_failures;
         const bool random_route =
             state.route_type == RouteType::random || state.route_type == RouteType::random_radius;
-        if (random_route && state.goal_failures >= kRandomGoalRetries) {
+        if (random_route) {
             state.has_goal = false;
             state.goal_failures = 0;
         } else if (newly_selected && (state.route_type == RouteType::moved ||
