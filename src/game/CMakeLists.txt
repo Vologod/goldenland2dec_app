@@ -1,4 +1,5 @@
 add_library(gl_game STATIC
+    src/hero.cpp
     src/level_loader.cpp
     src/level_simulation.cpp
     src/msvc_random.cpp

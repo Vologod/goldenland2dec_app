@@ -16,11 +16,6 @@ constexpr double kFixedStep = 1.0 / 60.0;
 // Live l1_1 measurement at sv_game_speed 0: go delay 80 ms -> ~63 ms, 85 ms -> ~68 ms.
 constexpr float kMovementDelayFactor = 0.8f;
 
-Tile tile_at(float x, float y) {
-    return Tile{static_cast<std::int32_t>(std::lround((x - 6.0f) / kTileW)),
-                static_cast<std::int32_t>(std::lround((y - 4.0f) / kTileH))};
-}
-
 Tile tile_of(const PersonMovement &movement) { return tile_at(movement.x, movement.y); }
 
 constexpr std::int32_t kMinBackoffMs = 500;
