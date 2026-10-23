@@ -1,5 +1,6 @@
 #include <gl/app/dialog_overlay.hpp>
 #include <gl/app/level_screen.hpp>
+#include <gl/app/pending_talk.hpp>
 #include <gl/assets/cs.hpp>
 #include <gl/assets/log.hpp>
 #include <gl/assets/sdb.hpp>
@@ -789,8 +790,10 @@ class Game {
             }
             return;
         }
-        pending_talk_ = script ? std::optional<std::size_t>(index) : std::nullopt;
-        if (!level_->hero().set_goal(gl::game::Tile{person.tile_x, person.tile_y})) {
+        const bool goal_set =
+            level_->hero().set_goal(gl::game::Tile{person.tile_x, person.tile_y});
+        pending_talk_ = script && goal_set ? std::optional<std::size_t>(index) : std::nullopt;
+        if (!goal_set) {
             gl::log(gl::LogLevel::warning,
                     "person '" + person.name + "': cannot path to the NPC tile");
         }
@@ -817,7 +820,13 @@ class Game {
             pending_talk_.reset();
             return;
         }
-        if (!can_interact_person(index)) return;
+        const gl::app::PendingTalkDecision decision = gl::app::resolve_pending_talk(
+            can_interact_person(index), level_->hero().hero().has_goal);
+        if (decision == gl::app::PendingTalkDecision::abandon) {
+            pending_talk_.reset();
+            return;
+        }
+        if (decision == gl::app::PendingTalkDecision::wait) return;
         const std::optional<std::string> script = talk_script_for(index);
         pending_talk_.reset();
         if (!script) return;

@@ -2,6 +2,7 @@
 #define DOCTEST_CONFIG_IMPLEMENT
 #include <doctest.h>
 #include <gl/app/level_screen.hpp>
+#include <gl/app/pending_talk.hpp>
 #include <gl/app/person_render.hpp>
 #include <gl/game/hero.hpp>
 #include <gl/game/walk_grid.hpp>
@@ -46,6 +47,23 @@ gl::game::WalkGrid make_grid(std::int32_t width, std::int32_t height) {
     return grid;
 }
 
+}
+
+TEST_CASE("pending talk waits while the hero is still pathing") {
+    CHECK(gl::app::resolve_pending_talk(false, true) ==
+          gl::app::PendingTalkDecision::wait);
+}
+
+TEST_CASE("pending talk opens when interaction range is reached") {
+    CHECK(gl::app::resolve_pending_talk(true, true) ==
+          gl::app::PendingTalkDecision::open);
+    CHECK(gl::app::resolve_pending_talk(true, false) ==
+          gl::app::PendingTalkDecision::open);
+}
+
+TEST_CASE("pending talk is abandoned when the path ends out of range") {
+    CHECK(gl::app::resolve_pending_talk(false, false) ==
+          gl::app::PendingTalkDecision::abandon);
 }
 
 TEST_CASE("screen_to_tile maps camera and zoom") {
