@@ -4,6 +4,7 @@
 #include "gl/game/pathfinder.hpp"
 #include "gl/game/person_movement.hpp"
 #include <cstdint>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -47,9 +48,10 @@ class LevelSimulation {
         std::int32_t spawn_tile_x = 0;
         std::int32_t spawn_tile_y = 0;
         std::int32_t route_index = 0;
+        std::string name;
         Tile goal;
         bool has_goal = false;
-        std::int32_t goal_failures = 0;
+        bool warned_degenerate_goal = false;
         bool can_move = false;
     };
     bool pick_goal(std::size_t index);
@@ -68,6 +70,7 @@ class LevelSimulation {
     double accumulator_ = 0.0;
     float width_ = 0.0f;
     float height_ = 0.0f;
+    std::string level_name_;
     MsvcRandom rng_;
 };
 } // namespace gl::game

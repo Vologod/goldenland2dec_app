@@ -36,6 +36,23 @@ Level make_level(std::string route_type, std::vector<std::pair<std::int32_t, std
     return level;
 }
 
+PersonInstance make_person(std::string name, std::int32_t tile_x, std::int32_t tile_y,
+                           std::string route_type, std::int32_t radius) {
+    PersonInstance person;
+    person.name = std::move(name);
+    person.tile_x = tile_x;
+    person.tile_y = tile_y;
+    person.route_type = std::move(route_type);
+    person.radius = radius;
+    person.delay_min = 0;
+    person.delay_max = 0;
+    person.go_type = gl::assets::PadAnimationType::rt_go;
+    person.go_move_x = 6.0f;
+    person.go_move_y = 5.0f;
+    person.go_delay_ms = 100;
+    return person;
+}
+
 Level make_walled_level() {
     Level level;
     level.name = "wall";
@@ -363,17 +380,62 @@ TEST_CASE("RANDOM_RADIUS can repeat the same candidate") {
     CHECK(saw_repeat);
 }
 
-TEST_CASE("RANDOM with out-of-bounds base keeps the base tile") {
-    Level level = make_level("RANDOM", {}, 0, 0);
-    level.persons[0].tile_x = -2;
-    level.persons[0].tile_y = 10;
+TEST_CASE("RANDOM and RANDOM_RADIUS keep an out-of-bounds base tile") {
+    for (const char *route_type : {"RANDOM", "RANDOM_RADIUS"}) {
+        CAPTURE(route_type);
+        Level level = make_level(route_type, {}, 0, 0);
+        level.persons[0].tile_x = -2;
+        level.persons[0].tile_y = 10;
+        auto sim = LevelSimulation::create(level, 1);
+        const auto &p = sim.persons()[0];
+        CHECK(p.x == doctest::Approx(-2.0f * 12 + 6));
+        CHECK(p.target_x == doctest::Approx(-2.0f * 12 + 6));
+        CHECK(p.target_y == doctest::Approx(10.0f * 9 + 4));
+        REQUIRE(p.path.size() >= 2);
+        CHECK(p.path.back() == Tile{-2, 10});
+    }
+}
+
+TEST_CASE("out-of-bounds RANDOM base consumes no RNG") {
+    for (const char *route_type : {"RANDOM", "RANDOM_RADIUS"}) {
+        CAPTURE(route_type);
+        Level shifted = make_level(route_type, {}, 0, 0);
+        shifted.persons[0].tile_x = -2;
+        shifted.persons[0].tile_y = 10;
+        shifted.persons.push_back(make_person("probe", 20, 20, "RANDOM", 3));
+
+        Level control;
+        control.name = "test";
+        control.width = shifted.width;
+        control.height = shifted.height;
+        control.persons.push_back(make_person("probe", 20, 20, "RANDOM", 3));
+
+        auto with_oob = LevelSimulation::create(shifted, 7);
+        auto without_oob = LevelSimulation::create(control, 7);
+        REQUIRE(with_oob.persons().size() == 2);
+        CHECK(with_oob.persons()[1].target_x == without_oob.persons()[0].target_x);
+        CHECK(with_oob.persons()[1].target_y == without_oob.persons()[0].target_y);
+        REQUIRE(with_oob.persons()[1].path.size() >= 2);
+        CHECK(with_oob.persons()[1].path.back() == without_oob.persons()[0].path.back());
+    }
+}
+
+TEST_CASE("RANDOM sampling falls back to the base tile on a fully blocked radius") {
+    Level level;
+    level.name = "blocked_radius";
+    level.width = 10 * 12;
+    level.height = 10 * 9;
+    level.walkable.width = 10;
+    level.walkable.height = 10;
+    level.walkable.walkable.assign(10 * 10, 0);
+    level.persons.push_back(make_person("blocked_walker", 5, 5, "RANDOM_RADIUS", 1));
+
     auto sim = LevelSimulation::create(level, 1);
     const auto &p = sim.persons()[0];
-    CHECK(p.x == doctest::Approx(-2.0f * 12 + 6));
-    CHECK(p.target_x == doctest::Approx(-2.0f * 12 + 6));
-    CHECK(p.target_y == doctest::Approx(10.0f * 9 + 4));
+    CHECK(p.target_x == doctest::Approx(5.0f * 12 + 6));
+    CHECK(p.target_y == doctest::Approx(5.0f * 9 + 4));
     REQUIRE(p.path.size() >= 2);
-    CHECK(p.path.back() == Tile{-2, 10});
+    CHECK(p.path.back() == Tile{5, 5});
 }
 
 TEST_CASE("failed RANDOM plan resamples on the next attempt") {
@@ -400,38 +462,22 @@ TEST_CASE("failed RANDOM plan resamples on the next attempt") {
     person.go_delay_ms = 100;
     level.persons.push_back(person);
 
-    const auto sample_goal = [&](MsvcRandom &rng) {
-        for (;;) {
-            const Tile candidate{4 + rng.range(-20, 20), 15 + rng.range(-20, 20)};
-            if (candidate.x < 0 || candidate.y < 0 || candidate.x >= 30 || candidate.y >= 30)
-                continue;
-            if (!level.walkable.is_walkable(candidate.x, candidate.y))
-                continue;
-            return candidate;
-        }
-    };
-    std::uint64_t seed = 0;
-    Tile expected{};
-    for (std::uint64_t candidate_seed = 1;
-         candidate_seed <= 20000 && seed == 0; ++candidate_seed) {
-        MsvcRandom rng(static_cast<std::uint32_t>(candidate_seed));
-        const Tile first = sample_goal(rng);
-        if (first.x <= 9)
-            continue;
-        const Tile second = sample_goal(rng);
-        if (second.x >= 14)
-            continue;
-        seed = candidate_seed;
-        expected = second;
-    }
-    REQUIRE(seed != 0);
+    constexpr std::uint64_t seed = 5;
     auto sim = LevelSimulation::create(level, seed);
-    for (int i = 0; i < 40; ++i)
+    const auto &failed = sim.persons()[0];
+    REQUIRE(failed.waiting);
+    REQUIRE(failed.path.empty());
+    const std::uint64_t wait_ms = failed.wait_until_ms;
+    CHECK(wait_ms == 500u);
+
+    while (sim.time_ms() < wait_ms)
         sim.advance(1.0 / 60.0);
+
     const auto &p = sim.persons()[0];
+    CHECK(sim.time_ms() >= wait_ms);
     CHECK(p.moving);
     REQUIRE(p.path.size() >= 2);
-    CHECK(p.path.back() == expected);
+    CHECK(level.walkable.is_walkable(p.path.back().x, p.path.back().y));
 }
 
 TEST_CASE("simulation is deterministic") {

@@ -35,11 +35,13 @@ LevelSimulation LevelSimulation::create(const Level &level, std::uint64_t seed) 
     sim.rng_ = MsvcRandom(static_cast<std::uint32_t>(seed));
     sim.width_ = static_cast<float>(level.width);
     sim.height_ = static_cast<float>(level.height);
+    sim.level_name_ = level.name;
     sim.states_.reserve(level.persons.size());
     bool stay_rotate_warned = false;
     for (std::size_t i = 0; i < level.persons.size(); ++i) {
         const PersonInstance &person = level.persons[i];
         State state;
+        state.name = person.name;
         state.route_type = parse_route_type(person.route_type);
         state.route = person.route_cells;
         state.radius = person.radius > 0 ? person.radius : 13;
@@ -259,23 +261,14 @@ bool LevelSimulation::pick_goal(std::size_t index) {
     } else {
         PersonMovement &m = state.movement;
         const bool around_spawn = state.route_type == RouteType::random_radius;
-        const float base_x = around_spawn ? state.spawn_x : m.x;
-        const float base_y = around_spawn ? state.spawn_y : m.y;
-        const std::int32_t base_tile_x =
-            around_spawn ? state.spawn_tile_x
-                         : static_cast<std::int32_t>(std::floor(base_x / kTileW));
-        const std::int32_t base_tile_y =
-            around_spawn ? state.spawn_tile_y
-                         : static_cast<std::int32_t>(std::floor(base_y / kTileH));
+        const Tile base = around_spawn ? Tile{state.spawn_tile_x, state.spawn_tile_y} : tile_of(m);
         const auto in_bounds = [&](Tile tile) {
             return tile.x >= 0 && tile.y >= 0 && tile.x * kTileW + 6.0f < width_ &&
                    tile.y * kTileH + 4.0f < height_;
         };
         const auto acceptable = [&](Tile tile) {
-            return in_bounds(tile) &&
-                   (grid_.empty() || grid_.is_walkable(tile.x, tile.y));
+            return in_bounds(tile) && (grid_.empty() || grid_.is_walkable(tile.x, tile.y));
         };
-        const Tile base{base_tile_x, base_tile_y};
         if (!in_bounds(base)) {
             state.goal = base;
             state.has_goal = true;
@@ -284,8 +277,8 @@ bool LevelSimulation::pick_goal(std::size_t index) {
         Tile candidate = base;
         bool found = false;
         for (std::int32_t attempt = 0; attempt < kRandomSampleSafetyLimit; ++attempt) {
-            const Tile sample{base_tile_x + rng_.range(-state.radius, state.radius),
-                              base_tile_y + rng_.range(-state.radius, state.radius)};
+            const Tile sample{base.x + rng_.range(-state.radius, state.radius),
+                              base.y + rng_.range(-state.radius, state.radius)};
             if (!acceptable(sample))
                 continue;
             candidate = sample;
@@ -293,10 +286,18 @@ bool LevelSimulation::pick_goal(std::size_t index) {
             break;
         }
         if (!found) {
-            gl::log(gl::LogLevel::warning,
-                    "RANDOM goal sampling exhausted the safety limit without a walkable "
-                    "candidate; using the base tile");
+            if (!state.warned_degenerate_goal) {
+                gl::log(gl::LogLevel::warning,
+                        "level '" + level_name_ + "': person '" + state.name +
+                            "': RANDOM goal sampling exhausted " +
+                            std::to_string(kRandomSampleSafetyLimit) +
+                            " attempts without a walkable candidate; using base tile (" +
+                            std::to_string(base.x) + "," + std::to_string(base.y) + ")");
+                state.warned_degenerate_goal = true;
+            }
             candidate = base;
+        } else {
+            state.warned_degenerate_goal = false;
         }
         state.goal = candidate;
     }
@@ -308,7 +309,6 @@ void LevelSimulation::consume_goal(State &state) {
     if (!state.has_goal)
         return;
     state.has_goal = false;
-    state.goal_failures = 0;
 }
 
 bool LevelSimulation::plan_target(std::size_t index) {
@@ -327,19 +327,16 @@ bool LevelSimulation::plan_target(std::size_t index) {
         path = find_path(grid_, from, goal, blocked);
     }
     if (path.size() < 2) {
-        ++state.goal_failures;
         const bool random_route =
             state.route_type == RouteType::random || state.route_type == RouteType::random_radius;
         if (random_route) {
             state.has_goal = false;
-            state.goal_failures = 0;
         } else if (newly_selected && (state.route_type == RouteType::moved ||
                                       state.route_type == RouteType::moved_flip)) {
             consume_goal(state);
         }
         return false;
     }
-    state.goal_failures = 0;
     m.path = std::move(path);
     m.path_index = 1;
     m.target_x = m.path[1].x * kTileW + 6.0f;
