@@ -193,11 +193,11 @@ void DialogOverlay::render(SDL_Renderer *renderer, const gl::render::Font *font)
     }
 
     if (answers_.empty()) {
-        const float message_y = answers_top();
-        if (message_y + line_height <= content_limit) {
-            draw_line(renderer, font, style_.fallback_text_scale, "No answers.", style_.margin,
-                      message_y, kSelectedColor);
-        }
+        const float message_min = panel_y() + style_.margin;
+        const float message_max = std::max(content_limit - line_height, message_min);
+        const float message_y = std::min(std::max(y, message_min), message_max);
+        draw_line(renderer, font, style_.fallback_text_scale, "No answers.", style_.margin,
+                  message_y, kSelectedColor);
     } else {
         for (std::size_t index = 0; index < answers_.size(); ++index) {
             const SDL_FRect rect = answer_rect(index);

@@ -62,6 +62,35 @@ TEST_CASE("dialog overlay selection wraps in both directions") {
     CHECK(o.selected() == 0);
 }
 
+TEST_CASE("dialog overlay handles empty text and empty answers") {
+    gl::app::DialogOverlay o;
+    o.set_content("", "", {});
+    CHECK(o.active());
+    CHECK(o.hit_test(80, 600) == std::nullopt);
+    CHECK(o.hit_test(80, 672) == std::nullopt);
+    CHECK(o.selected() == 0);
+    o.move_selection(1);
+    CHECK(o.selected() == 0);
+    const SDL_FRect rect = o.answer_rect(0);
+    CHECK(rect.w == 0.0f);
+    CHECK(rect.h == 0.0f);
+}
+
+TEST_CASE("dialog overlay clear resets selection and answers") {
+    gl::app::DialogOverlay o;
+    o.set_content("Стражник", "Текст", {"Уйти", "Спросить"});
+    o.move_selection(1);
+    REQUIRE(o.selected() == 1);
+    o.clear();
+    CHECK_FALSE(o.active());
+    CHECK(o.selected() == 0);
+    CHECK(o.hit_test(80, 600) == std::nullopt);
+    CHECK(o.hit_test(80, 660) == std::nullopt);
+    const SDL_FRect rect = o.answer_rect(0);
+    CHECK(rect.w == 0.0f);
+    CHECK(rect.h == 0.0f);
+}
+
 TEST_CASE("dialog overlay uses a custom viewport for hit-testing") {
     gl::app::DialogOverlay o;
     gl::app::DialogOverlayStyle style;
