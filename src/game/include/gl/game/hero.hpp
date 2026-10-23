@@ -4,7 +4,6 @@
 #include "gl/game/pathfinder.hpp"
 #include <cstddef>
 #include <cstdint>
-#include <optional>
 #include <vector>
 
 namespace gl::game {
