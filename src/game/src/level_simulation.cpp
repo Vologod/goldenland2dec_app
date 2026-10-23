@@ -212,8 +212,6 @@ void LevelSimulation::advance(double dt_seconds) {
                         m.direction16 = direction16_from_velocity(dx, dy);
                         m.direction8 = direction16_to8(m.direction16);
                     }
-                    if (m.moving && m.path_index < m.path.size())
-                        mark_occupied(m.path[m.path_index]);
                     mark_occupied(tile_of(m));
                 }
             } else if (m.waiting) {
@@ -346,7 +344,6 @@ bool LevelSimulation::plan_target(std::size_t index) {
     m.target_y = m.path[1].y * kTileH + 4.0f;
     m.moving = true;
     m.state_started_ms = time_ms_;
-    mark_occupied(m.path.back());
     return true;
 }
 

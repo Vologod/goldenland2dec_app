@@ -96,9 +96,11 @@ TEST_CASE("real data: l1_1 simulation has no jittering NPCs" *
         }
     }
 
-    // Known corner conflict with L0.P744_oficer1 aborts ~113 moves for P692 in 180 s.
-    // Exempt only that NPC; all other NPCs and their total stay at the A1 threshold.
-    // TODO(A6): remove the P692 exemption and tighten it to 50 after occupancy parity.
+    // A6: 110 of P692's 113 aborted transitions are occupancy stops against
+    // L0.P744_oficer1's current tile (143,151), not path/goal reservations. P692 replans
+    // around the tile, but its diagonal step clips the occupied corner first and it waits
+    // until oficer1 leaves. Removing reservations changed nothing; this is corner clipping,
+    // so the A6 threshold stays at 150 instead of being loosened further.
     constexpr int kMaxAbortedMoves = 50;
     constexpr int kP692MaxAbortedMoves = 150;
     int total_aborted = 0;
