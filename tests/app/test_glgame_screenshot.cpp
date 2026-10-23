@@ -3,6 +3,7 @@
 #include <doctest.h>
 #include <gl/assets/sef.hpp>
 #include <gl/assets/vfs.hpp>
+#include <gl/game/level.hpp>
 #include <gl/render/font.hpp>
 #include <stb_image.h>
 
@@ -332,15 +333,28 @@ std::size_t count_bottom_differences(const std::vector<unsigned char>& first,
     return different;
 }
 
-std::optional<std::size_t> first_talkable_person(const fs::path& game_dir) {
+std::optional<gl::game::Level> load_test_level(const fs::path& game_dir) {
     auto vfs = gl::assets::GameVfs::mount(game_dir);
     if (!vfs) return std::nullopt;
-    auto bytes = vfs->read("levels/single/l1_1/l1_1.sef");
-    if (!bytes) return std::nullopt;
-    auto sef = gl::assets::parse_sef(bytes.value());
-    if (!sef) return std::nullopt;
-    for (std::size_t index = 0; index < sef->persons.size(); ++index) {
-        if (!sef->persons[index].dialog.empty()) return index;
+    auto level = gl::game::load_level(vfs.value(), "l1_1");
+    if (!level) return std::nullopt;
+    return std::move(level.value());
+}
+
+std::optional<std::size_t> level_person_index(const fs::path& game_dir, std::string_view name) {
+    auto level = load_test_level(game_dir);
+    if (!level) return std::nullopt;
+    for (std::size_t index = 0; index < level->persons.size(); ++index) {
+        if (level->persons[index].name == name) return index;
+    }
+    return std::nullopt;
+}
+
+std::optional<std::size_t> first_talkable_person(const fs::path& game_dir) {
+    auto level = load_test_level(game_dir);
+    if (!level) return std::nullopt;
+    for (std::size_t index = 0; index < level->persons.size(); ++index) {
+        if (!level->persons[index].dialog.empty()) return index;
     }
     return std::nullopt;
 }
@@ -670,6 +684,56 @@ TEST_CASE("glgame --click-npc opens the dialog overlay over the level" *
     CHECK(baseline_code == 0);
     CHECK(dialog_code == 0);
     CHECK(output.find("dialog: '") != std::string::npos);
+    check_png(baseline_png, 1280, 720);
+    check_png(dialog_png, 1280, 720);
+
+    int baseline_width = 0;
+    int baseline_height = 0;
+    int dialog_width = 0;
+    int dialog_height = 0;
+    const std::vector<unsigned char> baseline =
+        read_png(baseline_png, baseline_width, baseline_height);
+    const std::vector<unsigned char> dialog = read_png(dialog_png, dialog_width, dialog_height);
+    REQUIRE(baseline_width == dialog_width);
+    REQUIRE(baseline_height == dialog_height);
+    const std::size_t different =
+        count_bottom_differences(baseline, dialog, dialog_width, dialog_height, 220);
+    CAPTURE(different);
+    CHECK(different > 1280u * 220u / 10u);
+}
+
+TEST_CASE("glgame clicks the real l1_1 P621 circus worker and opens its dialog" *
+          doctest::skip(!font_available())) {
+    const char* game_dir = std::getenv("GL_GAME_DIR");
+    REQUIRE(game_dir != nullptr);
+    const std::optional<std::size_t> person =
+        level_person_index(game_dir, "L1.P621_Svet_3CircusWorkerV");
+    REQUIRE(person.has_value());
+    CAPTURE(*person);
+
+    TempDir temp;
+    const fs::path config = write_test_config(temp.path);
+    const fs::path baseline_png = temp.path / "p621_baseline.png";
+    const fs::path dialog_png = temp.path / "p621_dialog.png";
+
+    const int baseline_code = run_glgame(
+        screenshot_arguments(game_dir, config, baseline_png, {"--level", "l1_1"}));
+    std::string output;
+    const int dialog_code = run_glgame_capture(
+        screenshot_arguments(game_dir, config, dialog_png,
+                             {"--level", "l1_1", "--click-npc", std::to_string(*person)}),
+        output);
+    CAPTURE(baseline_code);
+    CAPTURE(dialog_code);
+    CAPTURE(output);
+    REQUIRE(fs::exists(baseline_png));
+    REQUIRE(fs::exists(dialog_png));
+    CHECK(baseline_code == 0);
+    CHECK(dialog_code == 0);
+    CHECK(output.find("dialog: 'scripts/dialogs/l1_1/"
+                      "l1.p621_svet_3circusworkerv.d621.age.cs'") != std::string::npos);
+    CHECK(output.find("speaker='L1.P621_Svet_3CircusWorkerV'") != std::string::npos);
+    CHECK(output.find("answers=2") != std::string::npos);
     check_png(baseline_png, 1280, 720);
     check_png(dialog_png, 1280, 720);
 

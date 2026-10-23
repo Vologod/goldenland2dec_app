@@ -1,7 +1,32 @@
 # STATUS
 
 Обновлено: 2026-10-23
-## P4c — клик → диалог: реверс клиента (в работе, 2026-10-23)
+## P4c — клик → диалог (реализовано; automated acceptance passed, manual gate OPEN, 2026-10-23)
+
+- Реализованы Tasks 1–7: SEF `points_entrance`; `Hero`/`HeroController` (spawn
+  на первом walkable entrance, путь через `find_path`, AABB `can_interact`,
+  скорость `iso_speed`); hero-маркер 20 px участвует в Y-sort и масках;
+  `ClickTarget`/`click_target` и hit-test по PAD-кадру; `dialog_script_path`;
+  `DialogOverlay` поверх уровня; в `glgame` — `--click-npc`/`--click-world`,
+  pending talk до подхода и `Esc` → возврат в уровень. D-038.
+- Real `l1_1` automated: индекс `L1.P621_Svet_3CircusWorkerV` берётся из
+  загруженного `Level::persons` (не из сырого SEF; фактически 13).
+  `glgame --level l1_1 --click-npc 13 --screenshot` → exit 0, герой доходит,
+  открывается `scripts/dialogs/l1_1/l1.p621_svet_3circusworkerv.d621.age.cs`,
+  в логе `speaker='L1.P621_Svet_3CircusWorkerV'`, `answers=2`; нижние 220 px
+  отличаются от кадра без клика больше чем на 10%.
+- Проверка: `cmake --build build` — успех; `glgame_screenshot_tests` — **18/18**,
+  343 assertions; полный `ctest` с `GL_GAME_DIR` — **17/17 passed**, 1006.47 s,
+  exit 0.
+- **Manual desktop gate OPEN:** пользователь должен в `glgame` проверить клик по
+  NPC → подход → диалог поверх уровня, `Esc` → уровень, клик по земле и NPC без
+  диалога. Без этого **P4c не принят** (`[~]`). Известные ограничения: hero —
+  маркер, а не PAD Вертаса; `CanInteract` — AABB-приближение вместо 6-осевой
+  формулы оригинала; серверный `0x12`/`OpenDialog` не реализован; точный
+  PAD/визуал Вертаса — вне P4c.
+- Spec/plan готовы: `docs/specs/2026-10-23-p4c-click-dialog-design.md`,
+  `docs/plans/2026-10-23-p4c-click-dialog.md`.
+**Реверс клиента:**
 
 - Live-тест: один левый клик по дальнему стражнику → герой идёт к нему, затем
   диалог открывается сам. `Shot0000.bmp` SHA-256 `58E5054C…376C1F`: синий
@@ -30,12 +55,8 @@
   `0x1204c464` (панель/строки). Клиент умеет открывать диалог локально, не
   дожидаясь server `0x12`/`OpenDialog`; server-путь — сетевая ветка.
   `gv_meet_offset` в этом пути не участвует — это AI/meet. ~90 px на скриншоте
-  нельзя объявлять фиксированным радиусом. Далее: P4c spec/plan + минимальный
-  hero (маркер на первом walkable `points_entrance`), подход и dialog overlay.
+  нельзя объявлять фиксированным радиусом.
 - Детали — `docs/research/p4b2-render-order.md`, раздел P4c.
-- Spec/plan готовы: `docs/specs/2026-10-23-p4c-click-dialog-design.md`,
-  `docs/plans/2026-10-23-p4c-click-dialog.md`; D-038 (маркер + AABB +
-  локальный диалог). Реализация ещё не начата.
 
 ## A8 — Cell mask / foreground occlusion (реализовано, 2026-10-23)
 
@@ -424,28 +445,28 @@ P4b — движение NPC: Tasks 1–6 завершены 2026-10-22, automat
 manual desktop gate пройден — **P4b принят**. P4b2 — коллизии/pathfinding: Tasks 1–5
 завершены 2026-10-22, **automated acceptance passed** (15/15 ctest, 413 cases /
 466 027 assertions; правило сверено с live-сеткой: 0/51520), **manual desktop gate
-OPEN — не принят**. Следующий — P4c (клик → диалог);
+OPEN — не принят**. P4c — клик → диалог: Tasks 1–7 завершены 2026-10-23,
+**automated acceptance passed** (`glgame_screenshot_tests` 18/18; полный ctest
+17/17), **manual desktop gate OPEN — не принят**. Следующий — manual gate P4c;
 P1b (Android/touch) и P2 backfill отложены.
 
 ## Текущая задача
 
-**P4c — клик → диалог: реверс клиента (в работе 2026-10-23).**
-Серверный путь `0x12` → `OpenDialog` без distance-гейта извлечён. Live-тест:
-клик по дальнему стражнику → герой идёт, затем диалог открывается сам.
-Клиент: talk-курсор `0xc` ставится по флагу `+0x14 & 0x40`; `gv_meet_offset=0.1`
-используется в AI/meet-предикатах `FUN_120b3464`/`FUN_120b3574`, но это не
-обработчик клика. Ввод мыши — в `GoldenLand.exe` (`FUN_0040ad04`, vtable
-`0x47fce0`); world-click — в Client.dll: `CLevelScreen::update` `0x1203f7e4`
-→ `0x12041520` (input) → `0x12040084`/`0x12040f68` (left/right click).
-Для entity `+0x9c == 0x32` и action `+0xc0` 6/7 ставится команда в очередь
-`0x12040c28` (code `0x4f`/`0x52`/`0x45`/`0x56`). Очередь читает
-`CLevelScreen::update` `0x1203f7e4`; wrapper `0x1204cf39` → `0x1203e3a8`;
-для уровня `0x1205625c`: code `0x4f` → `0x1204bf94(entity id)` (ветка
-`entity+0x8 == 6` → `0x1204c361`, кадры героя `0x12`/`0x16`); code `0x27`
-→ `0x1204c7ac` (локальный диалог) → `0x1204c464` (панель/строки). Клиент
-открывает диалог локально, server `0x12`/`OpenDialog` — сетевая ветка.
-На `Shot0000` герой остановился в ~90 px; фиксированный радиус не подтверждён.
-Далее: spec/plan P4c и минимальный hero (маркер, подход, dialog overlay).
+**P4c — клик → диалог: Tasks 1–7 + real acceptance (automated passed 2026-10-23;
+manual gate OPEN).**
+Реализованы hero (spawn на первом walkable entrance, путь, AABB `can_interact`,
+маркер 20 px в Y-sort/масках), hit-test по PAD-кадру, `dialog_script_path`,
+`DialogOverlay` поверх уровня и `glgame --click-npc/--click-world` с pending talk.
+Real `l1_1`: `L1.P621_Svet_3CircusWorkerV` (индекс 13 из `Level::persons`,
+не сырой SEF) → exit 0, открывается
+`scripts/dialogs/l1_1/l1.p621_svet_3circusworkerv.d621.age.cs`,
+`speaker='L1.P621_Svet_3CircusWorkerV'`, `answers=2`, overlay поверх уровня.
+Проверка: `glgame_screenshot_tests` **18/18** (343 assertions); полный `ctest`
+с `GL_GAME_DIR` — **17/17 passed**, 1006.47 s, exit 0. **Manual desktop gate
+OPEN:** клик по NPC → подход → диалог, `Esc` → уровень, клик по земле, NPC без
+диалога; без этого P4c не принят (`[~]`). Ограничения: hero — маркер, а не PAD
+Вертаса; `CanInteract` — AABB вместо 6-осевой формулы; server `0x12` не
+реализован; точный PAD/визуал Вертаса вне P4c.
 
 **A8 — Cell mask / foreground occlusion реализован 2026-10-23.**
 `BLK_MDSC`/`mask_<number>.csx`: alpha=0-силуэт = occluding foreground, top-left.
