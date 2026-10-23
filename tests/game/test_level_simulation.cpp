@@ -264,6 +264,92 @@ TEST_CASE("STAY_ROTATE changes direction on the rotation cadence without moving"
     }
 }
 
+TEST_CASE("STAY_ROTATE with a delay of 500 ms or more waits without rotating") {
+    Level level = make_level("STAY_ROTATE", {}, 1000, 1000);
+    auto sim = LevelSimulation::create(level, 1);
+    const auto &start = sim.persons()[0];
+    const std::uint8_t direction16 = start.direction16;
+    const std::uint8_t direction8 = start.direction8;
+    REQUIRE(start.waiting);
+    CHECK_FALSE(start.moving);
+    CHECK(start.wait_until_ms == 1000u);
+    for (int i = 0; i < 60 * 10; ++i) {
+        sim.advance(1.0 / 60.0);
+        const auto &p = sim.persons()[0];
+        CHECK_FALSE(p.moving);
+        CHECK(p.direction16 == direction16);
+        CHECK(p.direction8 == direction8);
+        CHECK(p.x == doctest::Approx(10.0f * 12 + 6));
+        CHECK(p.y == doctest::Approx(10.0f * 9 + 4));
+    }
+}
+
+TEST_CASE("STAY_ROTATE clamps an out-of-range code 26 to direction index 15") {
+    Level level = make_level("STAY_ROTATE", {}, 0, 0);
+    auto sim = LevelSimulation::create(level, 4028364353u);
+    const auto &p = sim.persons()[0];
+    CHECK(p.direction16 == 15);
+    CHECK(p.direction8 == direction16_to8(15));
+    CHECK_FALSE(p.moving);
+    CHECK(p.waiting);
+    CHECK(p.wait_until_ms == 500u);
+}
+
+TEST_CASE("at-spawn STAY with a long delay does not consume rand per tick") {
+    Level level = make_level("STAY", {}, 0, 9000);
+    level.walkable.width = 40;
+    level.walkable.height = 40;
+    level.walkable.walkable.assign(40 * 40, 1);
+    level.persons.push_back(make_person("mover", 20, 10, "RANDOM", 3));
+
+    std::uint64_t seed = 0;
+    std::int32_t delay = 0;
+    std::int32_t dx1 = 0;
+    std::int32_t dy1 = 0;
+    std::int32_t dx2 = 0;
+    std::int32_t dy2 = 0;
+    for (std::uint64_t candidate = 1; candidate <= 100000; ++candidate) {
+        MsvcRandom probe(static_cast<std::uint32_t>(candidate));
+        const std::int32_t d = probe.range(0, 9000);
+        if (d < 3000)
+            continue;
+        seed = candidate;
+        delay = d;
+        dx1 = probe.range(-3, 3);
+        dy1 = probe.range(-3, 3);
+        dx2 = probe.range(-3, 3);
+        dy2 = probe.range(-3, 3);
+        break;
+    }
+    REQUIRE(seed != 0);
+
+    auto sim = LevelSimulation::create(level, seed);
+    REQUIRE(sim.persons()[0].waiting);
+    CHECK(sim.persons()[0].wait_until_ms == static_cast<std::uint64_t>(delay));
+    CHECK_FALSE(sim.persons()[0].moving);
+
+    const float first_x = (20 + dx1) * 12.0f + 6.0f;
+    const float first_y = (10 + dy1) * 9.0f + 4.0f;
+    CHECK(sim.persons()[1].target_x == doctest::Approx(first_x));
+    CHECK(sim.persons()[1].target_y == doctest::Approx(first_y));
+
+    const float second_x = (20 + dx1 + dx2) * 12.0f + 6.0f;
+    const float second_y = (10 + dy1 + dy2) * 9.0f + 4.0f;
+    bool saw_second = false;
+    for (int i = 0; i < 60 * 10 && !saw_second && sim.time_ms() < static_cast<std::uint64_t>(delay);
+         ++i) {
+        sim.advance(1.0 / 60.0);
+        const auto &p = sim.persons()[1];
+        if (std::fabs(p.target_x - first_x) < 1e-3f &&
+            std::fabs(p.target_y - first_y) < 1e-3f)
+            continue;
+        saw_second = true;
+        CHECK(p.target_x == doctest::Approx(second_x));
+        CHECK(p.target_y == doctest::Approx(second_y));
+    }
+    CHECK(saw_second);
+}
+
 TEST_CASE("delay_min above delay_max is swapped") {
     Level level = make_level("MOVED", {{10, 10}, {13, 10}}, 600, 100);
     auto sim = LevelSimulation::create(level, 1);
