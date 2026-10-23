@@ -78,9 +78,14 @@ public:
 ```
 
 - Маршрутные клетки копируются в `PersonInstance::route_cells` при загрузке.
-- RNG — xorshift32;
-  `seed ^ hash(level.name) ^ hash(person.name) ^ (index * 0x9E3779B9u)`.
-  Начальное состояние ненулевое; детерминизм по уровню/индексу.
+- RNG — один глобальный поток MSVC CRT `rand` (`state = state*0x343FD + 0x269EC3`,
+  `(state>>16)&0x7FFF`); `create(..., seed)` задаёт начальное состояние, в production
+  `seed = 1` (начальное состояние CRT без `srand`). `random_range(min,max)`:
+  `max<=min -> min`, иначе `min + round((max-min+0.99999)*rand/32767.0)` (возможен
+  `max+1` при `rand=32767`); `coin(p)` — `rand/32767.0 < p` для `0 < p <= 1`.
+- Порядок вызовов: пауза (`random_range`) бросается до выбора цели; `MOVED_FLIP`
+  делает `index += coin(0.5) ? +1 : -1` при выборе цели; `RANDOM*` — две выборки
+  на попытку.
 - `STAY` не двигается; если позиция смещена — возврат к spawn (на будущее).
 - `STAY_ROTATE` в P4b = `STAY` + однократный warning на уровень.
 - Нет клеток у `MOVED*` или нет `_go` у route-типа — `STAY` + warning; `RANDOM*`

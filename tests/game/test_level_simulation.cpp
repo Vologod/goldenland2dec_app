@@ -35,6 +35,14 @@ Level make_level(std::string route_type, std::vector<std::pair<std::int32_t, std
     return level;
 }
 
+Level make_empty_level() {
+    Level level;
+    level.name = "empty";
+    level.width = 12;
+    level.height = 9;
+    return level;
+}
+
 Level make_walled_level() {
     Level level;
     level.name = "wall";
@@ -59,6 +67,36 @@ Level make_walled_level() {
     return level;
 }
 } // namespace
+
+TEST_CASE("MSVC rand sequence from initial state 1") {
+    auto sim = LevelSimulation::create(make_empty_level(), 1);
+    const std::uint32_t expected[] = {41,   18467, 6334,  26500, 19169,
+                                      15724, 11478, 29358, 26962, 24464};
+    for (std::uint32_t value : expected)
+        CHECK(sim.next_random() == value);
+}
+
+TEST_CASE("random_range matches original formula") {
+    auto sim = LevelSimulation::create(make_empty_level(), 1);
+    CHECK(sim.random_range(-3, 3) == -3);
+    CHECK(sim.random_range(-3, 3) == 1);
+    CHECK(sim.random_range(-3, 3) == -2);
+    CHECK(sim.random_range(-3, 3) == 3);
+}
+
+TEST_CASE("random_range degenerate bounds do not consume rand") {
+    auto sim = LevelSimulation::create(make_empty_level(), 1);
+    CHECK(sim.random_range(5, 5) == 5);
+    CHECK(sim.random_range(5, 4) == 5);
+    CHECK(sim.next_random() == 41);
+}
+
+TEST_CASE("random_range can return max plus one for rand 32767") {
+    auto probe = LevelSimulation::create(make_empty_level(), 4028364353u);
+    CHECK(probe.next_random() == 32767u);
+    auto sim = LevelSimulation::create(make_empty_level(), 4028364353u);
+    CHECK(sim.random_range(0, 1) == 2);
+}
 
 TEST_CASE("MOVED follows route cells in order") {
     Level level = make_level("MOVED", {{10, 10}, {13, 10}, {13, 13}}, 0, 0);
@@ -127,7 +165,7 @@ TEST_CASE("MOVED cycles route cells in order") {
 TEST_CASE("MOVED_FLIP walks one route step with fixed seed") {
     Level level = make_level("MOVED_FLIP", {{11, 10}, {14, 10}, {14, 13}}, 0, 0);
     auto plus = LevelSimulation::create(level, 1);
-    auto minus = LevelSimulation::create(level, 2);
+    auto minus = LevelSimulation::create(level, 5006);
     for (int i = 0; i < 10; ++i) {
         plus.advance(1.0 / 60.0);
         minus.advance(1.0 / 60.0);
@@ -141,13 +179,14 @@ TEST_CASE("MOVED_FLIP walks one route step with fixed seed") {
 TEST_CASE("RANDOM samples around current tile") {
     Level level = make_level("RANDOM", {}, 0, 0);
     level.persons[0].radius = 1;
-    auto sim = LevelSimulation::create(level, 11);
+    auto sim = LevelSimulation::create(level, 1);
     const auto tile = [](float value, float size) {
         return static_cast<std::int32_t>(std::floor(value / size));
     };
+    const std::int32_t max_offset = level.persons[0].radius + 1;
     const auto &start = sim.persons()[0];
-    CHECK(std::abs(tile(start.target_x, 12.0f) - tile(start.x, 12.0f)) <= 1);
-    CHECK(std::abs(tile(start.target_y, 9.0f) - tile(start.y, 9.0f)) <= 1);
+    CHECK(std::abs(tile(start.target_x, 12.0f) - tile(start.x, 12.0f)) <= max_offset);
+    CHECK(std::abs(tile(start.target_y, 9.0f) - tile(start.y, 9.0f)) <= max_offset);
     float last_x = start.target_x;
     float last_y = start.target_y;
     int samples = 0;
@@ -156,8 +195,8 @@ TEST_CASE("RANDOM samples around current tile") {
         const auto &p = sim.persons()[0];
         if (p.target_x == last_x && p.target_y == last_y)
             continue;
-        CHECK(std::abs(tile(p.target_x, 12.0f) - tile(p.x, 12.0f)) <= 1);
-        CHECK(std::abs(tile(p.target_y, 9.0f) - tile(p.y, 9.0f)) <= 1);
+        CHECK(std::abs(tile(p.target_x, 12.0f) - tile(p.x, 12.0f)) <= max_offset);
+        CHECK(std::abs(tile(p.target_y, 9.0f) - tile(p.y, 9.0f)) <= max_offset);
         last_x = p.target_x;
         last_y = p.target_y;
         ++samples;
@@ -174,21 +213,22 @@ TEST_CASE("delay over 500 ms waits") {
     CHECK(sim.persons()[0].x > 10.0f * 12 + 6 + 4.0f);
 }
 
-TEST_CASE("RANDOM_RADIUS stays within radius") {
+TEST_CASE("RANDOM_RADIUS stays within radius plus one") {
     Level level = make_level("RANDOM_RADIUS", {}, 0, 0);
-    auto sim = LevelSimulation::create(level, 3);
+    auto sim = LevelSimulation::create(level, 1);
+    const std::int32_t max_offset = level.persons[0].radius + 1;
     for (int i = 0; i < 600; ++i) {
         sim.advance(1.0 / 60.0);
         const auto &p = sim.persons()[0];
-        CHECK(std::fabs(p.x - (10.0f * 12 + 6)) <= 3 * 12 + 6);
-        CHECK(std::fabs(p.y - (10.0f * 9 + 4)) <= 3 * 9 + 4);
+        CHECK(std::fabs(p.x - (10.0f * 12 + 6)) <= max_offset * 12);
+        CHECK(std::fabs(p.y - (10.0f * 9 + 4)) <= max_offset * 9);
     }
 }
 
 TEST_CASE("simulation is deterministic") {
     Level level = make_level("MOVED_FLIP", {{10, 10}, {13, 10}, {13, 13}, {10, 13}}, 0, 900);
-    auto a = LevelSimulation::create(level, 7);
-    auto b = LevelSimulation::create(level, 7);
+    auto a = LevelSimulation::create(level, 1);
+    auto b = LevelSimulation::create(level, 1);
     for (int i = 0; i < 120; ++i) {
         a.advance(1.0 / 60.0);
         b.advance(1.0 / 60.0);
@@ -273,7 +313,7 @@ TEST_CASE("two walkers never occupy the same tile") {
     second.tile_y = 2;
     second.route_cells = {{2, 2}};
     level.persons.push_back(second);
-    auto sim = LevelSimulation::create(level, 5);
+    auto sim = LevelSimulation::create(level, 1);
     for (int i = 0; i < 60 * 30; ++i) {
         sim.advance(1.0 / 60.0);
         const auto &a = sim.persons()[0];
@@ -347,8 +387,8 @@ TEST_CASE("real data: l1_1 movers stay walkable and apart" * doctest::skip(!game
     REQUIRE(vfs.has_value());
     auto level = gl::game::load_level(vfs.value(), "l1_1");
     REQUIRE(level.has_value());
-    auto sim = LevelSimulation::create(level.value(), 42);
-    auto twin = LevelSimulation::create(level.value(), 42);
+    auto sim = LevelSimulation::create(level.value(), 1);
+    auto twin = LevelSimulation::create(level.value(), 1);
     std::vector<char> spawn_walkable(level->persons.size(), 0);
     for (std::size_t i = 0; i < level->persons.size(); ++i) {
         spawn_walkable[i] =

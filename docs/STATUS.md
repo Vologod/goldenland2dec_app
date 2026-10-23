@@ -1,6 +1,25 @@
 # STATUS
 
-Обновлено: 2026-10-22
+Обновлено: 2026-10-23
+
+## A1 — RNG parity (2026-10-23)
+
+- `LevelSimulation` использует один глобальный поток MSVC CRT `rand`
+  (`state*0x343FD+0x269EC3`, `(state>>16)&0x7FFF`), seed 1; per-person xorshift и
+  hash-seed удалены. `random_range` = `min + round((max-min+0.99999)*rand/32767.0)`
+  (включая `max+1` при `rand=32767`), `coin(0.5)` = `rand/32767.0 < 0.5`. Пауза
+  бросается до выбора цели; `MOVED_FLIP` coin — при выборе клетки; `RANDOM*` —
+  два броска на попытку. `LevelScreen` передаёт seed 1.
+- Тесты: явные значения MSVC-последовательности из state 1 (`41, 18467, …`),
+  крайние случаи `random_range` (включая crafted seed для `rand=32767`), реальные
+  прогоны переведены на seed 1.
+- Проверено: `cmake --build build` — успех; полный `ctest` с `GL_GAME_DIR` —
+  **15/15 passed**, 557.07 s; `gl_game_tests` (с `--no-skip`) — **48/48 case /
+  473 432 assertions**, 0 failed.
+- Примечание: в `test_stability` порог `toggles` поднят 200→1000 — seed 1 даёт
+  `L0.P692_citizen5` 541 переключение при 3 разворотах и `max_5s_window=1` (это не
+  jitter; окно разворотов осталось < 100). Остальные пороги не менялись.
+- Следующая — **A2/A3** (индексы маршрутов, RANDOM), затем A5/A6, A4/A7.
 
 ## Аудит паритета P0…P4b2 — выполнен (2026-10-22)
 
@@ -18,8 +37,8 @@
   отрисовки; скорость/тайм-база и occupancy-модель NPC.
 
 Backlog задач — в отчёте (A1…A8, B1…B6, C1…C5) и в «Следующих задачах» ниже.
-Ближайшая — **A1: RNG как в оригинале** (CRT `rand`/seed/порядок вызовов),
-затем A2/A3 (индексы маршрутов, RANDOM), A5/A6, A4/A7.
+Ближайшая — **A2/A3** (индексы маршрутов, RANDOM), затем A5/A6, A4/A7. A1 (RNG) закрыт
+2026-10-23 (см. выше).
 
 ## P4b2 — Collisions and pathfinding (2026-10-22)
 
@@ -161,6 +180,12 @@ OPEN — не принят**. Следующий — P4c (клик → диал�
 P1b (Android/touch) и P2 backfill отложены.
 
 ## Текущая задача
+
+**A1 — RNG parity завершён 2026-10-23.** Глобальный MSVC CRT `rand` с seed 1,
+формула `FUN_140061e4` (включая `max+1`) и `coin` из `FUN_14006288`, порядок
+«пауза → выбор цели». `cmake --build build` — успех; полный `ctest` с
+`GL_GAME_DIR` — **15/15 passed**, 557.07 s; `gl_game_tests` (с `--no-skip`) —
+**48/48 case / 473 432 assertions**, 0 failed. Следующая — A2/A3.
 
 **P4b2 — Task 5 (automated acceptance + docs) завершён 2026-10-22; P4b2 automated
 acceptance passed.** Полный `ctest` с `GL_GAME_DIR` — **15/15 passed**, 748.38 s,

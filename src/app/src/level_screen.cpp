@@ -310,7 +310,7 @@ Result<LevelScreen> LevelScreen::load(SDL_Renderer* renderer, gl::assets::GameVf
                                              instance_index, animation_index, go_animation});
         }
 
-        screen.simulation_ = gl::game::LevelSimulation::create(screen.level_, 0x5EED);
+        screen.simulation_ = gl::game::LevelSimulation::create(screen.level_, 1);
     }
 
     if (!screen.persons_.empty()) {

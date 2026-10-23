@@ -29,6 +29,8 @@ class LevelSimulation {
     const std::vector<PersonMovement> &persons() const { return persons_; }
     bool can_move(std::size_t index) const;
     std::uint64_t time_ms() const { return time_ms_; }
+    std::uint32_t next_random();
+    std::int32_t random_range(std::int32_t low, std::int32_t high);
 
   private:
     struct State {
@@ -49,7 +51,6 @@ class LevelSimulation {
         Tile goal;
         bool has_goal = false;
         std::int32_t goal_failures = 0;
-        std::uint32_t rng = 1;
         bool can_move = false;
     };
     bool pick_goal(std::size_t index);
@@ -59,8 +60,8 @@ class LevelSimulation {
     void mark_occupied(Tile tile);
     bool tile_occupied(std::size_t index, Tile tile) const;
     std::vector<std::uint8_t> blocked_for(std::size_t index) const;
-    std::uint32_t next_random(State &state);
-    std::int32_t random_range(State &state, std::int32_t low, std::int32_t high);
+    double rng_fraction();
+    bool coin(double probability);
     std::vector<State> states_;
     std::vector<PersonMovement> persons_;
     WalkGrid grid_;
@@ -70,6 +71,7 @@ class LevelSimulation {
     double accumulator_ = 0.0;
     float width_ = 0.0f;
     float height_ = 0.0f;
+    std::uint32_t rng_state_ = 1;
 };
 } // namespace gl::game
 

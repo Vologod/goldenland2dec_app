@@ -145,8 +145,8 @@ TEST_CASE("real data: l1_1 60 s simulation is bounded and deterministic" *
     level.height = kL11Height;
     level.persons = std::move(persons.value());
 
-    auto first = gl::game::LevelSimulation::create(level, 0x5EED);
-    auto second = gl::game::LevelSimulation::create(level, 0x5EED);
+    auto first = gl::game::LevelSimulation::create(level, 1);
+    auto second = gl::game::LevelSimulation::create(level, 1);
 
     int movable = 0;
     int stationary = 0;
@@ -215,7 +215,7 @@ TEST_CASE("real data: l1_1 60 s simulation is bounded and deterministic" *
         if (std::hypot(movement.x - spawn_x, movement.y - spawn_y) > 1.0f)
             ++displaced;
     }
-    CHECK(moving == 3);
-    CHECK(waiting == 3);
+    CHECK(moving == 2);
+    CHECK(waiting == 4);
     CHECK(displaced >= 1);
 }
