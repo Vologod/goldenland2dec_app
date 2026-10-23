@@ -1,4 +1,6 @@
 #include <doctest/doctest.h>
+#include <algorithm>
+#include <cstdlib>
 #include "gl/assets/pad.hpp"
 #include "gl/game/hero.hpp"
 #include "gl/game/level.hpp"
@@ -65,9 +67,28 @@ TEST_CASE("hero paths to a free cell next to npc") {
     gl::game::HeroController hero(level, &simulation);
     hero.spawn_at_tile({0, 2});
     CHECK(hero.set_goal({2, 2}));
-    CHECK_FALSE(hero.hero().path.empty());
-    CHECK(hero.hero().path.back() != gl::game::Tile{2, 2});
-    CHECK(hero.hero().path.back().y == 2);
+    REQUIRE_FALSE(hero.hero().path.empty());
+    const gl::game::Tile end = hero.hero().path.back();
+    CHECK(end != gl::game::Tile{2, 2});
+    CHECK(end != gl::game::Tile{0, 2});
+    CHECK(std::max(std::abs(end.x - 2), std::abs(end.y - 2)) == 1);
+    CHECK(std::find(hero.hero().path.begin(), hero.hero().path.end(),
+                    gl::game::Tile{2, 2}) == hero.hero().path.end());
+    CHECK(end.y == 2);
+}
+
+TEST_CASE("set_goal rejects a non-walkable goal instead of falling back") {
+    gl::game::Level level;
+    level.walkable.width = 8;
+    level.walkable.height = 8;
+    level.walkable.walkable.assign(64, 1);
+    level.walkable.walkable[2 * 8 + 3] = 0;
+    gl::game::HeroController hero(level, nullptr);
+    hero.spawn_at_tile({0, 2});
+    CHECK_FALSE(hero.set_goal({3, 2}));
+    CHECK_FALSE(hero.hero().has_goal);
+    CHECK(hero.hero().path.empty());
+    CHECK(hero.hero().goal == hero.hero().tile);
 }
 
 TEST_CASE("rejected set_goal clears the previous goal") {
@@ -102,6 +123,64 @@ TEST_CASE("can_interact uses npc frame extents") {
     hero.spawn_at_tile({0, 0});
     hero.set_hero_world(125.0f, 100.0f);
     CHECK(hero.can_interact(p, m));
+}
+
+TEST_CASE("can_interact applies npc anchor offsets") {
+    gl::game::PersonInstance p;
+    p.stay_type = gl::assets::PadAnimationType::rt_stay;
+    gl::assets::PadAnimation a;
+    a.frame_width = 40;
+    a.frame_height = 60;
+    a.anchor_x = 20;
+    a.anchor_y = 55;
+    p.pad.push_back(a);
+    gl::game::PersonMovement m;
+    m.x = 100;
+    m.y = 100;
+    gl::game::Level level;
+    gl::game::HeroController hero(level, nullptr);
+    hero.spawn_at_tile({0, 0});
+    hero.set_hero_world(85.0f, 60.0f);
+    CHECK(hero.can_interact(p, m));
+}
+
+TEST_CASE("can_interact is false without a matching stay animation") {
+    gl::game::PersonInstance p;
+    p.stay_type = gl::assets::PadAnimationType::rt_stay;
+    gl::assets::PadAnimation a;
+    a.type = gl::assets::PadAnimationType::tb_stay;
+    a.frame_width = 40;
+    a.frame_height = 60;
+    a.anchor_x = 20;
+    a.anchor_y = 55;
+    p.pad.push_back(a);
+    gl::game::PersonMovement m;
+    m.x = 100;
+    m.y = 100;
+    gl::game::Level level;
+    gl::game::HeroController hero(level, nullptr);
+    hero.spawn_at_tile({0, 0});
+    hero.set_hero_world(100.0f, 100.0f);
+    CHECK_FALSE(hero.can_interact(p, m));
+}
+
+TEST_CASE("can_interact is false for a zero-size npc frame") {
+    gl::game::PersonInstance p;
+    p.stay_type = gl::assets::PadAnimationType::rt_stay;
+    gl::assets::PadAnimation a;
+    a.frame_width = 0;
+    a.frame_height = 0;
+    a.anchor_x = 0;
+    a.anchor_y = 0;
+    p.pad.push_back(a);
+    gl::game::PersonMovement m;
+    m.x = 100;
+    m.y = 100;
+    gl::game::Level level;
+    gl::game::HeroController hero(level, nullptr);
+    hero.spawn_at_tile({0, 0});
+    hero.set_hero_world(100.0f, 100.0f);
+    CHECK_FALSE(hero.can_interact(p, m));
 }
 
 TEST_CASE("can_interact is false when the marker is outside the npc frame") {

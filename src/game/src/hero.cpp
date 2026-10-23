@@ -213,7 +213,7 @@ bool HeroController::can_interact(const PersonInstance& person,
             break;
         }
     }
-    if (animation == nullptr)
+    if (animation == nullptr || animation->frame_width <= 0 || animation->frame_height <= 0)
         return false;
     const WorldRect npc{
         movement.x - static_cast<float>(animation->anchor_x),
