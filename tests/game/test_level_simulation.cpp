@@ -337,20 +337,24 @@ TEST_CASE("two walkers never occupy the same tile") {
     }
 }
 
-TEST_CASE("blocked MOVED goal is retried and not skipped") {
+TEST_CASE("blocked MOVED route cell is skipped after failed planning") {
     Level level = make_walled_level();
     level.persons[0].route_cells = {{7, 2}, {12, 2}};
     level.persons[0].delay_min = 0;
     level.persons[0].delay_max = 0;
     auto sim = LevelSimulation::create(level, 1);
-    bool saw_waiting = false;
-    for (int i = 0; i < 60 * 10; ++i) {
+    CHECK(sim.persons()[0].waiting);
+    bool saw_path = false;
+    bool reached = false;
+    for (int i = 0; i < 60 * 10 && !reached; ++i) {
         sim.advance(1.0 / 60.0);
-        saw_waiting = saw_waiting || sim.persons()[0].waiting;
-        CHECK(sim.persons()[0].x < 7 * 12);
+        const auto &p = sim.persons()[0];
+        saw_path = saw_path || p.path.size() >= 2;
+        reached =
+            std::fabs(p.x - (12.0f * 12 + 6)) < 0.01f && std::fabs(p.y - (2.0f * 9 + 4)) < 0.01f;
     }
-    CHECK(saw_waiting);
-    CHECK(sim.persons()[0].x == doctest::Approx(2.0f * 12 + 6));
+    CHECK(saw_path);
+    CHECK(reached);
 }
 
 TEST_CASE("two walkers crossing with clear LOS never share a tile") {
@@ -443,6 +447,35 @@ TEST_CASE("real data: l1_1 movers stay walkable and apart" * doctest::skip(!game
         CHECK(sim.persons()[i].x == twin.persons()[i].x);
         CHECK(sim.persons()[i].y == twin.persons()[i].y);
     }
+}
+
+TEST_CASE("real data: l1_1 oficer1 is not stuck on its first route cell" *
+          doctest::skip(!game_dir_available())) {
+    auto vfs = gl::assets::GameVfs::mount(std::getenv("GL_GAME_DIR"));
+    REQUIRE(vfs.has_value());
+    auto level = gl::game::load_level(vfs.value(), "l1_1");
+    REQUIRE(level.has_value());
+    std::size_t oficer = level->persons.size();
+    for (std::size_t i = 0; i < level->persons.size(); ++i) {
+        if (level->persons[i].name == "L0.P744_oficer1")
+            oficer = i;
+    }
+    REQUIRE(oficer < level->persons.size());
+    auto sim = LevelSimulation::create(level.value(), 1);
+    const int start_tile_x = static_cast<int>((sim.persons()[oficer].x - 6.0f) / 12.0f + 0.5f);
+    const int start_tile_y = static_cast<int>((sim.persons()[oficer].y - 4.0f) / 9.0f + 0.5f);
+    bool saw_path = false;
+    bool changed_tile = false;
+    for (int tick = 0; tick < 60 * 60; ++tick) {
+        sim.advance(1.0 / 60.0);
+        const auto &p = sim.persons()[oficer];
+        saw_path = saw_path || p.path.size() >= 2;
+        const int tile_x = static_cast<int>((p.x - 6.0f) / 12.0f + 0.5f);
+        const int tile_y = static_cast<int>((p.y - 4.0f) / 9.0f + 0.5f);
+        changed_tile = changed_tile || tile_x != start_tile_x || tile_y != start_tile_y;
+    }
+    CHECK(saw_path);
+    CHECK(changed_tile);
 }
 
 TEST_CASE("RANDOM resamples after repeated unreachable goals") {

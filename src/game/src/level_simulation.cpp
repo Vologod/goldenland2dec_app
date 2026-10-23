@@ -304,6 +304,7 @@ void LevelSimulation::consume_goal(State &state) {
 bool LevelSimulation::plan_target(std::size_t index) {
     State &state = states_[index];
     PersonMovement &m = state.movement;
+    const bool newly_selected = !state.has_goal;
     if (!pick_goal(index))
         return false;
     const Tile goal = state.goal;
@@ -322,6 +323,9 @@ bool LevelSimulation::plan_target(std::size_t index) {
         if (random_route && state.goal_failures >= kRandomGoalRetries) {
             state.has_goal = false;
             state.goal_failures = 0;
+        } else if (newly_selected && (state.route_type == RouteType::moved ||
+                                      state.route_type == RouteType::moved_flip)) {
+            consume_goal(state);
         }
         return false;
     }
