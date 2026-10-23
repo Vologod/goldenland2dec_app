@@ -14,7 +14,8 @@
 - `gl_assets` и `gl_game` не зависят от SDL.
 - Слои только вниз: `app → game → assets`.
 - Скорость: `movement_x/y` PAD — px за кадр `_go`; `px/s = movement * 1000 / delay` (D-026).
-- RNG детерминированный (xorshift32), seed от уровня/имени/индекса.
+- RNG — один поток MSVC CRT `rand` с начальным состоянием 1 (D-030); per-person
+  xorshift из этого плана отменён.
 - Данные игры не коммитить; не менять `third_party`.
 - Полные прогоны: `$env:GL_GAME_DIR = "I:\Games\Златогорье-2"`; тесты без переменной скипаются.
 - Toolchain PATH:
@@ -759,18 +760,16 @@ private:
         float spawn_x = 0.0f;
         float spawn_y = 0.0f;
         std::int32_t route_index = 0;
-        std::uint32_t rng = 1;
         bool can_move = false;
     };
     void choose_target(State& state);
-    std::uint32_t next_random(State& state);
-    std::int32_t random_range(State& state, std::int32_t low, std::int32_t high);
     std::vector<State> states_;
     std::vector<PersonMovement> persons_;
     std::uint64_t time_ms_ = 0;
     double accumulator_ = 0.0;
     float width_ = 0.0f;
     float height_ = 0.0f;
+    MsvcRandom rng_;   // D-030: общий поток, не per-person
 };
 }
 ```
@@ -784,14 +783,9 @@ constexpr float kTileW = 12.0f;
 constexpr float kTileH = 9.0f;
 constexpr float kArrive = 4.0f;
 
-std::uint32_t hash_name(std::string_view text) {
-    std::uint32_t hash = 2166136261u;
-    for (unsigned char c : text) hash = (hash ^ c) * 16777619u;
-    return hash;
-}
-
 LevelSimulation LevelSimulation::create(const Level& level, std::uint64_t seed) {
     LevelSimulation sim;
+    sim.rng_ = MsvcRandom(static_cast<std::uint32_t>(seed));
     sim.width_ = static_cast<float>(level.width);
     sim.height_ = static_cast<float>(level.height);
     sim.states_.reserve(level.persons.size());
@@ -812,9 +806,6 @@ LevelSimulation LevelSimulation::create(const Level& level, std::uint64_t seed) 
         state.movement.y = state.spawn_y;
         state.movement.direction8 = person.direction;
         state.movement.direction16 = direction8_to16(person.direction);
-        state.rng = static_cast<std::uint32_t>(seed) ^ hash_name(level.name) ^
-                    hash_name(person.name) ^ (static_cast<std::uint32_t>(i) * 0x9E3779B9u);
-        if (state.rng == 0) state.rng = 0x12345678u;
         state.can_move = person.go_type.has_value() && state.go_delay_ms > 0 &&
                          (!state.route.empty() || state.route_type == RouteType::random_radius ||
                           state.route_type == RouteType::random);
@@ -856,7 +847,7 @@ void LevelSimulation::advance(double dt_seconds) {
                     m.x = m.target_x;
                     m.y = m.target_y;
                     m.moving = false;
-                    const std::int32_t delay = random_range(state, state.delay_min, state.delay_max);
+                    const std::int32_t delay = rng_.range(state.delay_min, state.delay_max);
                     m.state_started_ms = time_ms_;
                     if (delay < 500) {
                         choose_target(state);
@@ -905,7 +896,7 @@ void LevelSimulation::choose_target(State& state) {
         if (state.route_type == RouteType::moved) {
             state.route_index = (state.route_index + 1) % count;
         } else {
-            state.route_index += ((next_random(state) & 1u) != 0) ? 1 : -1;
+            state.route_index += rng_.coin(0.5) ? 1 : -1;
         }
     } else {
         const float base_x = state.route_type == RouteType::random_radius
@@ -914,9 +905,9 @@ void LevelSimulation::choose_target(State& state) {
             ? state.spawn_y : m.y;
         for (int attempt = 0; attempt < 64; ++attempt) {
             const std::int32_t candidate_x = static_cast<std::int32_t>(
-                std::lround(base_x / kTileW)) + random_range(state, -state.radius, state.radius);
+                std::lround(base_x / kTileW)) + rng_.range(-state.radius, state.radius);
             const std::int32_t candidate_y = static_cast<std::int32_t>(
-                std::lround(base_y / kTileH)) + random_range(state, -state.radius, state.radius);
+                std::lround(base_y / kTileH)) + rng_.range(-state.radius, state.radius);
             if (candidate_x >= 0 && candidate_y >= 0 &&
                 candidate_x * kTileW + 6.0f < width_ &&
                 candidate_y * kTileH + 4.0f < height_) {
@@ -935,20 +926,17 @@ void LevelSimulation::choose_target(State& state) {
 }
 ```
 
-RNG:
+RNG (D-030, заменяет xorshift из этого плана):
 
 ```cpp
-std::uint32_t LevelSimulation::next_random(State& state) {
-    state.rng ^= state.rng << 13;
-    state.rng ^= state.rng >> 17;
-    state.rng ^= state.rng << 5;
-    return state.rng;
-}
-std::int32_t LevelSimulation::random_range(State& state, std::int32_t low, std::int32_t high) {
-    if (high <= low) return low;
-    const std::uint32_t span = static_cast<std::uint32_t>(high - low) + 1u;
-    return low + static_cast<std::int32_t>(next_random(state) % span);
-}
+class MsvcRandom {   // src/game/include/gl/game/msvc_random.hpp
+public:
+    explicit MsvcRandom(std::uint32_t seed = 1) noexcept;
+    std::uint32_t next() noexcept;       // state = state*0x343FD + 0x269EC3
+    double fraction() noexcept;          // next() / 32767.0
+    std::int32_t range(std::int32_t low, std::int32_t high) noexcept;
+    bool coin(double probability) noexcept;
+};
 ```
 
 `can_move(index)` возвращает `states_[index].can_move && !route_type stay`.

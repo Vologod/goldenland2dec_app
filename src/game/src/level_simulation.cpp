@@ -32,7 +32,7 @@ bool is_route_requiring(RouteType type) {
 
 LevelSimulation LevelSimulation::create(const Level &level, std::uint64_t seed) {
     LevelSimulation sim;
-    sim.rng_state_ = static_cast<std::uint32_t>(seed);
+    sim.rng_ = MsvcRandom(static_cast<std::uint32_t>(seed));
     sim.width_ = static_cast<float>(level.width);
     sim.height_ = static_cast<float>(level.height);
     sim.states_.reserve(level.persons.size());
@@ -104,24 +104,32 @@ LevelSimulation LevelSimulation::create(const Level &level, std::uint64_t seed) 
         if (!state.can_move)
             continue;
         PersonMovement &m = state.movement;
-        const bool planned = sim.plan_target(index);
-        if (!planned) {
+        const std::int32_t delay = sim.rng_.range(state.delay_min, state.delay_max);
+        m.state_started_ms = 0;
+        if (delay >= kMinBackoffMs) {
+            m.moving = false;
+            m.waiting = true;
+            m.wait_until_ms = static_cast<std::uint64_t>(delay);
+            continue;
+        }
+        if (!sim.plan_target(index)) {
             m.moving = false;
             m.waiting = true;
             m.wait_until_ms = static_cast<std::uint64_t>(
-                std::max(kMinBackoffMs, sim.random_range(state.delay_min, state.delay_max)));
+                std::max(kMinBackoffMs, sim.rng_.range(state.delay_min, state.delay_max)));
             continue;
         }
         if (std::fabs(m.target_x - m.x) >= 1e-3f || std::fabs(m.target_y - m.y) >= 1e-3f)
             continue;
-        m.moving = false;
         sim.consume_goal(state);
-        const std::int32_t delay = sim.random_range(state.delay_min, state.delay_max);
+        const std::int32_t retry_delay = sim.rng_.range(state.delay_min, state.delay_max);
         m.state_started_ms = 0;
-        if (delay < 500 && sim.plan_target(index))
+        if (retry_delay < kMinBackoffMs && sim.plan_target(index))
             continue;
+        m.moving = false;
         m.waiting = true;
-        m.wait_until_ms = static_cast<std::uint64_t>(delay < 500 ? kMinBackoffMs : delay);
+        m.wait_until_ms = static_cast<std::uint64_t>(
+            retry_delay < kMinBackoffMs ? kMinBackoffMs : retry_delay);
     }
     sim.persons_.reserve(sim.states_.size());
     for (const State &state : sim.states_)
@@ -144,7 +152,7 @@ void LevelSimulation::advance(double dt_seconds) {
                 time_ms_ + static_cast<std::uint64_t>(std::max(0, delay));
         };
         const auto finish_target = [&](State &state, std::size_t index) {
-            const std::int32_t delay = random_range(state.delay_min, state.delay_max);
+            const std::int32_t delay = rng_.range(state.delay_min, state.delay_max);
             consume_goal(state);
             state.movement.state_started_ms = time_ms_;
             if (delay < 500 && plan_target(index))
@@ -208,12 +216,12 @@ void LevelSimulation::advance(double dt_seconds) {
                     m.waiting = false;
                     if (!plan_target(index))
                         pause(state, std::max(kMinBackoffMs,
-                                              random_range(state.delay_min, state.delay_max)));
+                                              rng_.range(state.delay_min, state.delay_max)));
                 }
             } else {
                 if (!plan_target(index))
                     pause(state, std::max(kMinBackoffMs,
-                                          random_range(state.delay_min, state.delay_max)));
+                                          rng_.range(state.delay_min, state.delay_max)));
             }
             persons_[index] = m;
         }
@@ -246,7 +254,7 @@ bool LevelSimulation::pick_goal(std::size_t index) {
             if (count > 0)
                 state.route_index = (state.route_index + 1) % count;
         } else {
-            state.route_index += coin(0.5) ? 1 : -1;
+            state.route_index += rng_.coin(0.5) ? 1 : -1;
         }
     } else {
         PersonMovement &m = state.movement;
@@ -262,9 +270,9 @@ bool LevelSimulation::pick_goal(std::size_t index) {
         bool found = false;
         for (int attempt = 0; attempt < 64 && !found; ++attempt) {
             const std::int32_t candidate_x =
-                base_tile_x + random_range(-state.radius, state.radius);
+                base_tile_x + rng_.range(-state.radius, state.radius);
             const std::int32_t candidate_y =
-                base_tile_y + random_range(-state.radius, state.radius);
+                base_tile_y + rng_.range(-state.radius, state.radius);
             bool candidate_ok = candidate_x >= 0 && candidate_y >= 0 &&
                                 candidate_x * kTileW + 6.0f < width_ &&
                                 candidate_y * kTileH + 4.0f < height_;
@@ -377,29 +385,5 @@ bool LevelSimulation::tile_occupied(std::size_t index, Tile tile) const {
     return occupancy_[static_cast<std::size_t>(tile.y) * grid_.width + tile.x] != 0;
 }
 
-std::uint32_t LevelSimulation::next_random() {
-    rng_state_ = rng_state_ * 0x343FDu + 0x269EC3u;
-    return (rng_state_ >> 16) & 0x7FFFu;
-}
-
-double LevelSimulation::rng_fraction() {
-    return static_cast<double>(next_random()) / 32767.0;
-}
-
-bool LevelSimulation::coin(double probability) {
-    if (!(probability > 0.0))
-        return false;
-    if (probability > 1.0)
-        return true;
-    return rng_fraction() < probability;
-}
-
-std::int32_t LevelSimulation::random_range(std::int32_t low, std::int32_t high) {
-    if (high <= low)
-        return low;
-    const double span = static_cast<double>(high - low) + 0.99999;
-    const double scaled = span * static_cast<double>(next_random()) / 32767.0;
-    return low + static_cast<std::int32_t>(std::nearbyint(scaled));
-}
 } // namespace gl::game
 

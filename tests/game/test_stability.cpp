@@ -10,7 +10,21 @@
 
 namespace {
 bool game_dir_available() { return std::getenv("GL_GAME_DIR") != nullptr; }
-}
+
+struct MoveStats {
+    int toggles = 0;
+    int started_moves = 0;
+    int ended_moves = 0;
+    int aborted_moves = 0;
+    int short_moves = 0;
+    int long_moves = 0;
+    int reversals = 0;
+    int window_reversals = 0;
+    int max_5s_window = 0;
+    double total_move_distance = 0.0;
+    double max_move_distance = 0.0;
+};
+} // namespace
 
 TEST_CASE("real data: l1_1 simulation has no jittering NPCs" *
           doctest::skip(!game_dir_available())) {
@@ -22,8 +36,9 @@ TEST_CASE("real data: l1_1 simulation has no jittering NPCs" *
     auto sim = gl::game::LevelSimulation::create(level.value(), 1);
     const std::size_t count = sim.persons().size();
     std::vector<float> prev_x(count), prev_y(count), prev_dx(count), prev_dy(count);
-    std::vector<int> reversals(count), toggles(count), window_reversals(count), max_window(count);
+    std::vector<float> move_distance(count);
     std::vector<bool> prev_moving(count);
+    std::vector<MoveStats> stats(count);
     for (std::size_t i = 0; i < count; ++i) {
         prev_x[i] = sim.persons()[i].x;
         prev_y[i] = sim.persons()[i].y;
@@ -34,17 +49,36 @@ TEST_CASE("real data: l1_1 simulation has no jittering NPCs" *
         sim.advance(1.0 / 60.0);
         for (std::size_t i = 0; i < count; ++i) {
             const auto &p = sim.persons()[i];
+            MoveStats &s = stats[i];
             const float dx = p.x - prev_x[i];
             const float dy = p.y - prev_y[i];
+            const float len = std::sqrt(dx * dx + dy * dy);
             if (p.moving != prev_moving[i]) {
-                ++toggles[i];
+                ++s.toggles;
+                if (p.moving) {
+                    ++s.started_moves;
+                    move_distance[i] = 0.0f;
+                } else {
+                    ++s.ended_moves;
+                    if (len < 0.05f)
+                        ++s.aborted_moves;
+                    if (move_distance[i] < 0.05f) {
+                        ++s.short_moves;
+                    } else {
+                        ++s.long_moves;
+                        s.total_move_distance += move_distance[i];
+                        s.max_move_distance =
+                            std::max<double>(s.max_move_distance, move_distance[i]);
+                    }
+                }
                 prev_moving[i] = p.moving;
             }
-            const float len = std::sqrt(dx * dx + dy * dy);
+            if (p.moving)
+                move_distance[i] += len;
             const float prev_len = std::sqrt(prev_dx[i] * prev_dx[i] + prev_dy[i] * prev_dy[i]);
             if (len > 0.05f && prev_len > 0.05f && dx * prev_dx[i] + dy * prev_dy[i] < 0.0f) {
-                ++reversals[i];
-                ++window_reversals[i];
+                ++s.reversals;
+                ++s.window_reversals;
             }
             if (len > 0.05f) {
                 prev_dx[i] = dx;
@@ -55,27 +89,46 @@ TEST_CASE("real data: l1_1 simulation has no jittering NPCs" *
         }
         if ((tick + 1) % 300 == 0) {
             for (std::size_t i = 0; i < count; ++i) {
-                max_window[i] = std::max(max_window[i], window_reversals[i]);
-                window_reversals[i] = 0;
+                stats[i].max_5s_window =
+                    std::max(stats[i].max_5s_window, stats[i].window_reversals);
+                stats[i].window_reversals = 0;
             }
         }
     }
 
+    int total_aborted = 0;
     for (std::size_t i = 0; i < count; ++i) {
         const auto &p = sim.persons()[i];
+        const MoveStats &s = stats[i];
+        total_aborted += s.aborted_moves;
         if (level->persons[i].name == "L0.P7_Kolbasens_Rodstvennik1") {
             MESSAGE("P7 final path=" << p.path.size() << " idx=" << p.path_index
                                       << " wait_until=" << p.wait_until_ms
                                       << " now=" << sim.time_ms());
         }
-        MESSAGE(level->persons[i].name << " toggles=" << toggles[i] << " reversals=" << reversals[i]
-                                        << " max_5s_window=" << max_window[i] << " pos=(" << p.x
-                                        << "," << p.y << ") target=(" << p.target_x << ","
-                                        << p.target_y << ") moving=" << p.moving
+        if (level->persons[i].name == "L0.P692_citizen5") {
+            const double average =
+                s.long_moves > 0 ? s.total_move_distance / s.long_moves : 0.0;
+            MESSAGE("P692 toggles="
+                    << s.toggles << " started=" << s.started_moves
+                    << " ended=" << s.ended_moves << " aborted=" << s.aborted_moves
+                    << " short=" << s.short_moves << " long=" << s.long_moves
+                    << " avg_long_move_px=" << average
+                    << " max_long_move_px=" << s.max_move_distance
+                    << " reversals=" << s.reversals << " max_5s_window=" << s.max_5s_window);
+        }
+        MESSAGE(level->persons[i].name << " toggles=" << s.toggles
+                                        << " aborted=" << s.aborted_moves
+                                        << " short_moves=" << s.short_moves
+                                        << " long_moves=" << s.long_moves
+                                        << " reversals=" << s.reversals
+                                        << " max_5s_window=" << s.max_5s_window << " pos=("
+                                        << p.x << "," << p.y << ") target=(" << p.target_x
+                                        << "," << p.target_y << ") moving=" << p.moving
                                         << " waiting=" << p.waiting);
-        CHECK(toggles[i] < 1000);
-        CHECK(max_window[i] < 100);
+        CHECK(s.aborted_moves < 50);
+        CHECK(s.max_5s_window < 100);
     }
+    CAPTURE(total_aborted);
+    CHECK(total_aborted < 50);
 }
-
-

@@ -4,21 +4,32 @@
 
 ## A1 — RNG parity (2026-10-23)
 
-- `LevelSimulation` использует один глобальный поток MSVC CRT `rand`
-  (`state*0x343FD+0x269EC3`, `(state>>16)&0x7FFF`), seed 1; per-person xorshift и
-  hash-seed удалены. `random_range` = `min + round((max-min+0.99999)*rand/32767.0)`
-  (включая `max+1` при `rand=32767`), `coin(0.5)` = `rand/32767.0 < 0.5`. Пауза
-  бросается до выбора цели; `MOVED_FLIP` coin — при выборе клетки; `RANDOM*` —
-  два броска на попытку. `LevelScreen` передаёт seed 1.
-- Тесты: явные значения MSVC-последовательности из state 1 (`41, 18467, …`),
-  крайние случаи `random_range` (включая crafted seed для `rand=32767`), реальные
-  прогоны переведены на seed 1.
+- `LevelSimulation` использует `gl::game::MsvcRandom` (`msvc_random.hpp/.cpp`) —
+  один глобальный поток MSVC CRT `rand` (`state*0x343FD+0x269EC3`,
+  `(state>>16)&0x7FFF`), seed 1; per-person xorshift и hash-seed удалены. Публичные
+  `next_random`/`random_range` убраны; `MsvcRandom::range` =
+  `min + round((max-min+0.99999)*rand/32767.0)` (включая `max+1` при `rand=32767`),
+  `coin(p)` = `p<=0 ? false : p>1 ? true : fraction() < p`. `LevelScreen` передаёт seed 1.
+- Порядок инициализации: в `create` сначала бросается пауза
+  (`range(delay_min,delay_max)`), цель выбирается только при `<500`
+  (`FUN_1401c378` до `FUN_1401c93c`); на прибытии/после паузы — та же
+  последовательность. `MOVED_FLIP` coin — при выборе клетки; `RANDOM*` — два броска
+  на попытку.
+- Тесты: `MsvcRandom` напрямую (MSVC-последовательность из state 1, degenerate range,
+  `max+1`, coin 0/1/>1); integration-тесты прибивают порядок «пауза → цель» для
+  `RANDOM` и `MOVED_FLIP` по известной MSVC-последовательности.
+- Стабильность: вместо порога `toggles` считаются aborted moves (переход
+  `moving true→false` при смещении < 0.05 px); порог `< 50` на NPC и суммарно,
+  `max_5s_window < 100`. `L0.P692_citizen5` при исправленном порядке: 18 toggles,
+  9 завершённых ходов, 0 aborted/short, средняя длина 193.2 px (max 224.3),
+  `max_5s_window=1` — это легитимные длинные ходы. Контрольный прогон со старым
+  порядком дал те же 541 toggle, 266 aborted и 264 short-ходов — прежние
+  переключения были thrash из-за выбора цели до броска паузы, а не короткими ходами.
+- `l1_1`, seed 1, t=60 с: 1 moving + 5 waiting из 6 подвижных (10 `STAY`);
+  детерминизм и границы сохранены.
 - Проверено: `cmake --build build` — успех; полный `ctest` с `GL_GAME_DIR` —
-  **15/15 passed**, 557.07 s; `gl_game_tests` (с `--no-skip`) — **48/48 case /
-  473 432 assertions**, 0 failed.
-- Примечание: в `test_stability` порог `toggles` поднят 200→1000 — seed 1 даёт
-  `L0.P692_citizen5` 541 переключение при 3 разворотах и `max_5s_window=1` (это не
-  jitter; окно разворотов осталось < 100). Остальные пороги не менялись.
+  **15/15 passed**, 547.97 s; `gl_game_tests` (с `--no-skip`) — **53/53 case /
+  473 459 assertions**, 0 failed.
 - Следующая — **A2/A3** (индексы маршрутов, RANDOM), затем A5/A6, A4/A7.
 
 ## Аудит паритета P0…P4b2 — выполнен (2026-10-22)
@@ -746,10 +757,8 @@ P0 закрыт 2026-10-19; далее выполнялись задачи P1 (�
 
 ## Следующие задачи
 
-1. **A1: RNG как в оригинале** — извлечь CRT `rand` seed/порядок вызовов из
-   `Server.dll`, заменить per-person xorshift (D-026 пересмотреть), тест на
-   детерминизм/последовательность. Затем A2 (индексы MOVED/FLIP, blocked route
-   cell), A3 (RANDOM-правила), A5 (скорость/тайм-база), A6 (occupancy), A4/A7
+1. **A2: индексы MOVED/FLIP, blocked route cell** — A1 (RNG) закрыт 2026-10-23.
+   Затем A3 (RANDOM-правила), A5 (скорость/тайм-база), A6 (occupancy), A4/A7
    (STAY/STAY_ROTATE, Y-sort/anchors). Backlog — `parity-audit-2026-10-22.md`.
 2. P4c: клик → диалог (после P4-паритета).
 3. P1b: Android/touch — отложенный follow-up P1.
@@ -757,6 +766,10 @@ P0 закрыт 2026-10-19; далее выполнялись задачи P1 (�
 
 ## Открытые вопросы
 
+- A1/RNG: в оригинале поток CRT `rand` process-global и продолжается между загрузками
+  уровней; в порте `LevelSimulation` создаёт `MsvcRandom(seed)` заново на каждый
+  уровень. Внутри одного уровня последовательность совпадает, межуровневая
+  непрерывность не воспроизведена.
 - P4b: manual gate пройден; принято ограничение — NPC проходят сквозь визуальные
   объекты. Коллизии/pathfinding вынесены в P4b2 (D-027). В t=60 с симуляция даёт
   3 moving + 3 waiting из 6 подвижных (10 `STAY`); «4 движущихся» — это 4

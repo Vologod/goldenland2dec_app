@@ -1,5 +1,6 @@
 #include "gl/assets/vfs.hpp"
 #include "gl/game/level_simulation.hpp"
+#include "gl/game/msvc_random.hpp"
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
@@ -35,14 +36,6 @@ Level make_level(std::string route_type, std::vector<std::pair<std::int32_t, std
     return level;
 }
 
-Level make_empty_level() {
-    Level level;
-    level.name = "empty";
-    level.width = 12;
-    level.height = 9;
-    return level;
-}
-
 Level make_walled_level() {
     Level level;
     level.name = "wall";
@@ -68,34 +61,52 @@ Level make_walled_level() {
 }
 } // namespace
 
-TEST_CASE("MSVC rand sequence from initial state 1") {
-    auto sim = LevelSimulation::create(make_empty_level(), 1);
-    const std::uint32_t expected[] = {41,   18467, 6334,  26500, 19169,
-                                      15724, 11478, 29358, 26962, 24464};
-    for (std::uint32_t value : expected)
-        CHECK(sim.next_random() == value);
+TEST_CASE("initial planning rolls delay before selecting a RANDOM target") {
+    Level level = make_level("RANDOM", {}, 0, 1000);
+    level.persons[0].radius = 3;
+    auto sim = LevelSimulation::create(level, 1);
+
+    MsvcRandom rng(1);
+    const std::int32_t delay = rng.range(0, 1000);
+    REQUIRE(delay == 1);
+    const std::int32_t offset_x = rng.range(-3, 3);
+    const std::int32_t offset_y = rng.range(-3, 3);
+    CHECK(offset_x == 1);
+    CHECK(offset_y == -2);
+
+    const auto tile = [](float value, float size) {
+        return static_cast<std::int32_t>(std::floor(value / size));
+    };
+    const auto &p = sim.persons()[0];
+    CHECK_FALSE(p.waiting);
+    CHECK(p.moving);
+    CHECK(tile(p.target_x, 12.0f) == 10 + offset_x);
+    CHECK(tile(p.target_y, 9.0f) == 10 + offset_y);
 }
 
-TEST_CASE("random_range matches original formula") {
-    auto sim = LevelSimulation::create(make_empty_level(), 1);
-    CHECK(sim.random_range(-3, 3) == -3);
-    CHECK(sim.random_range(-3, 3) == 1);
-    CHECK(sim.random_range(-3, 3) == -2);
-    CHECK(sim.random_range(-3, 3) == 3);
+TEST_CASE("initial planning waits when the first delay is 500 ms or more") {
+    Level level = make_level("MOVED", {{11, 10}, {13, 10}}, 1000, 1000);
+    auto sim = LevelSimulation::create(level, 1);
+    const auto &p = sim.persons()[0];
+    CHECK(p.waiting);
+    CHECK_FALSE(p.moving);
+    CHECK(p.wait_until_ms == 1000u);
+    CHECK(p.path.empty());
+    CHECK(p.x == doctest::Approx(10.0f * 12 + 6));
 }
 
-TEST_CASE("random_range degenerate bounds do not consume rand") {
-    auto sim = LevelSimulation::create(make_empty_level(), 1);
-    CHECK(sim.random_range(5, 5) == 5);
-    CHECK(sim.random_range(5, 4) == 5);
-    CHECK(sim.next_random() == 41);
-}
+TEST_CASE("initial MOVED_FLIP planning rolls the delay before the coin") {
+    Level level = make_level("MOVED_FLIP", {{11, 10}, {14, 10}, {14, 13}}, 600, 700);
+    auto sim = LevelSimulation::create(level, 1);
 
-TEST_CASE("random_range can return max plus one for rand 32767") {
-    auto probe = LevelSimulation::create(make_empty_level(), 4028364353u);
-    CHECK(probe.next_random() == 32767u);
-    auto sim = LevelSimulation::create(make_empty_level(), 4028364353u);
-    CHECK(sim.random_range(0, 1) == 2);
+    MsvcRandom rng(1);
+    CHECK(rng.range(600, 700) == 600);
+
+    const auto &p = sim.persons()[0];
+    CHECK(p.waiting);
+    CHECK_FALSE(p.moving);
+    CHECK(p.wait_until_ms == 600u);
+    CHECK(p.path.empty());
 }
 
 TEST_CASE("MOVED follows route cells in order") {

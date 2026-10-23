@@ -78,14 +78,19 @@ public:
 ```
 
 - Маршрутные клетки копируются в `PersonInstance::route_cells` при загрузке.
+- RNG вынесен в `gl::game::MsvcRandom` (`src/game/include/gl/game/msvc_random.hpp`):
+  `next()`, `fraction()`, `range(min,max)`, `coin(p)`; `LevelSimulation` хранит его
+  приватно, публичных `next_random`/`random_range` нет.
 - RNG — один глобальный поток MSVC CRT `rand` (`state = state*0x343FD + 0x269EC3`,
   `(state>>16)&0x7FFF`); `create(..., seed)` задаёт начальное состояние, в production
-  `seed = 1` (начальное состояние CRT без `srand`). `random_range(min,max)`:
+  `seed = 1` (начальное состояние CRT без `srand`). `range(min,max)`:
   `max<=min -> min`, иначе `min + round((max-min+0.99999)*rand/32767.0)` (возможен
-  `max+1` при `rand=32767`); `coin(p)` — `rand/32767.0 < p` для `0 < p <= 1`.
-- Порядок вызовов: пауза (`random_range`) бросается до выбора цели; `MOVED_FLIP`
-  делает `index += coin(0.5) ? +1 : -1` при выборе цели; `RANDOM*` — две выборки
-  на попытку.
+  `max+1` при `rand=32767`); `coin(p)` — `p<=0 -> false`, `p>1 -> true`, иначе
+  `fraction() < p`.
+- Порядок вызовов: при создании сначала бросается пауза (`range(delay_min,delay_max)`);
+  только при `<500` выбирается цель. На прибытии/после паузы — та же последовательность:
+  пауза до выбора цели. `MOVED_FLIP` делает `index += coin(0.5) ? +1 : -1` после
+  выбора клетки; `RANDOM*` — две выборки на попытку.
 - `STAY` не двигается; если позиция смещена — возврат к spawn (на будущее).
 - `STAY_ROTATE` в P4b = `STAY` + однократный warning на уровень.
 - Нет клеток у `MOVED*` или нет `_go` у route-типа — `STAY` + warning; `RANDOM*`
@@ -127,7 +132,8 @@ Real (`GL_GAME_DIR`):
 - `l1_1`: 16 NPC; 6 не-`STAY` по типу (4 route-followers + 2 `RANDOM_RADIUS`),
   10 `STAY`; за 60 с все подвижные остаются в границах, у movers есть `_go`;
   детерминизм повторного прогона (одинаковые позиции). В конкретный момент часть
-  подвижных может быть в паузе: при seed `0x5EED` в t=60 с 3 moving + 3 waiting.
+  подвижных может быть в паузе: при seed 1 в t=60 с 1 moving + 5 waiting; счётчики
+  зависят от порядка бросков RNG (A1/D-030).
 - Все `cell_groups` из `l1_1.sef` находятся.
 
 Screenshots:
