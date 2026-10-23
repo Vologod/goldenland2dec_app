@@ -328,7 +328,9 @@ Expected: `spawn_at_tile`/path logic missing or path ends on NPC cell.
 - [ ] **Step 3: Implement path and AABB**
 
 - `blocked` lambda: out of bounds or NPC tile (from `simulation_->persons()`, except target tile); if `simulation_ == nullptr`, no NPC blocking.
-- If `find_path` fails or target tile occupied, search radius 1..3 in 8 directions for walkable/unoccupied; call `find_path` to that cell.
+- If target tile is occupied by an NPC, search radius 1..3 in 8 directions for
+  walkable/unoccupied; call `find_path` to that cell. If the target tile itself
+  is non-walkable, reject the goal (no fallback path for wall clicks).
 - `advance`: move along `path[path_index]` with `iso_speed` from `person_movement.hpp`; on reaching segment, increment; when done clear path/has_goal.
 - `can_interact`: compute NPC frame from `person.pad` matching `person.stay_type` (`frame_width`, `frame_height`, `anchor_x`, `anchor_y`); build world rect `{movement.x - anchor_x, movement.y - anchor_y, frame_width, frame_height}`; hero rect `{hero_.x - 10, hero_.y - 10, 20, 20}`; return `SDL_HasIntersection` equivalent (write plain AABB helper, no SDL in game layer).
 - Add `spawn_at_tile(Tile)` public for tests.
