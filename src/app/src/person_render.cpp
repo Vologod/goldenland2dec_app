@@ -1,5 +1,8 @@
 #include "gl/app/person_render.hpp"
 
+#include <algorithm>
+#include <numeric>
+
 namespace gl::app {
 namespace {
 
@@ -15,6 +18,27 @@ std::size_t person_frame_index(std::uint64_t elapsed_ms, std::int32_t delay_ms,
         delay_ms > 0 ? static_cast<std::uint64_t>(delay_ms) : std::uint64_t{1};
     return static_cast<std::size_t>((elapsed_ms / delay) %
                                     static_cast<std::uint64_t>(frames_per_row));
+}
+
+std::vector<std::size_t> sort_person_indices(std::span<const PersonDrawKey> keys) {
+    std::vector<std::size_t> order(keys.size());
+    std::iota(order.begin(), order.end(), std::size_t{0});
+    std::stable_sort(order.begin(), order.end(), [keys](std::size_t a, std::size_t b) {
+        if (keys[a].y != keys[b].y) return keys[a].y < keys[b].y;
+        return keys[a].x < keys[b].x;
+    });
+    return order;
+}
+
+FrameRect frame_rect(std::size_t column, std::size_t row, int frame_width,
+                     int frame_height) {
+    if (frame_width <= 0 || frame_height <= 0) return {};
+    return FrameRect{
+        static_cast<int>(column) * frame_width,
+        static_cast<int>(row) * frame_height,
+        frame_width,
+        frame_height,
+    };
 }
 
 PersonPlacement place_person(const gl::assets::PadAnimation& animation,

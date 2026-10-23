@@ -112,6 +112,30 @@ Result<Level> load_level(GameVfs &vfs, std::string_view level_name) {
                  std::to_string(lvl->map_size.pixel_height));
         }
 
+        level.masks.reserve(lvl->masks.size());
+        for (const LvlMask &mask : lvl->masks) {
+            const std::string path = pack_path(
+                level.pack, "bitmaps/masks/mask_" + std::to_string(mask.number) + ".csx");
+            auto data = vfs.read(path);
+            if (!data) {
+                warn("level '" + level.name + "': " +
+                     contextual(data.error(), "skipping mask", path).message);
+                continue;
+            }
+            auto csx = decode_csx(data.value());
+            if (!csx) {
+                warn("level '" + level.name + "': " +
+                     contextual(csx.error(), "skipping mask", path).message);
+                continue;
+            }
+            LevelMask object;
+            object.number = mask.number;
+            object.x = static_cast<std::int32_t>(mask.x);
+            object.y = static_cast<std::int32_t>(mask.y);
+            object.image = to_image(csx.value());
+            level.masks.push_back(std::move(object));
+        }
+
         std::vector<LvlDescription> static_descriptions = lvl->statics;
         std::stable_sort(
             static_descriptions.begin(), static_descriptions.end(),

@@ -1,5 +1,6 @@
 #include "gl/app/level_screen.hpp"
 
+#include "gl/app/mask_render.hpp"
 #include "gl/app/person_render.hpp"
 
 #include <gl/assets/csx.hpp>
@@ -9,6 +10,7 @@
 
 #include <SDL.h>
 
+#include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -135,6 +137,33 @@ Result<LevelScreen> LevelScreen::load(SDL_Renderer* renderer, gl::assets::GameVf
         screen.animations_.push_back(
             Animation{std::move(frames), object.x, object.y, object.delay_ms});
     }
+
+    screen.masks_.reserve(screen.level_.masks.size());
+    for (const gl::game::LevelMask& mask : screen.level_.masks) {
+        gl::assets::Image foreground =
+            compose_mask_foreground(screen.level_.background, mask.image, mask.x, mask.y);
+        if (foreground.rgba.empty()) continue;
+        auto created = gl::render::Texture::from_image(renderer, foreground);
+        if (!created) {
+            gl::log(gl::LogLevel::warning,
+                    "level '" + screen.level_.name + "': skipping mask " +
+                        std::to_string(mask.number) + ": " + created.error().message);
+            continue;
+        }
+        screen.masks_.push_back(MaskOverlay{
+            std::move(created.value()), mask.x, mask.y,
+            static_cast<float>(mask.y + static_cast<std::int32_t>(mask.image.height)),
+            static_cast<float>(mask.x) + static_cast<float>(mask.image.width) / 2.0f});
+    }
+    screen.mask_order_.resize(screen.masks_.size());
+    for (std::size_t i = 0; i < screen.mask_order_.size(); ++i) screen.mask_order_[i] = i;
+    std::stable_sort(screen.mask_order_.begin(), screen.mask_order_.end(),
+                     [&screen](std::size_t a, std::size_t b) {
+                         const MaskOverlay& ma = screen.masks_[a];
+                         const MaskOverlay& mb = screen.masks_[b];
+                         if (ma.baseline != mb.baseline) return ma.baseline < mb.baseline;
+                         return ma.center_x < mb.center_x;
+                     });
 
     if (load_persons) {
         screen.persons_.reserve(screen.level_.persons.size());
@@ -354,9 +383,42 @@ void LevelScreen::render(SDL_Renderer* renderer, const LevelScreenOptions& optio
             }
         }
         simulated_ms_ = simulation_.time_ms();
+        person_keys_.clear();
+        person_keys_.reserve(persons_.size());
         for (const Person& person : persons_) {
-            draw_person(renderer, person, simulated_ms_);
+            const gl::game::PersonMovement& movement = simulation_.persons()[person.instance];
+            person_keys_.push_back(PersonDrawKey{movement.x, movement.y});
         }
+        person_order_ = sort_person_indices(person_keys_);
+        const std::size_t mask_count = options.draw_masks ? mask_order_.size() : 0;
+        const auto draw_pass = [&](PersonPass pass) {
+            std::size_t person_index = 0;
+            std::size_t mask_index = 0;
+            while (person_index < person_order_.size() || mask_index < mask_count) {
+                bool draw_person_next = mask_index >= mask_count;
+                if (!draw_person_next && person_index < person_order_.size()) {
+                    const PersonDrawKey& key = person_keys_[person_order_[person_index]];
+                    const MaskOverlay& mask = masks_[mask_order_[mask_index]];
+                    draw_person_next =
+                        key.y < mask.baseline ||
+                        (key.y == mask.baseline && key.x <= mask.center_x);
+                }
+                if (draw_person_next) {
+                    draw_person(renderer, persons_[person_order_[person_index]],
+                                simulated_ms_, pass);
+                    ++person_index;
+                } else {
+                    const MaskOverlay& mask = masks_[mask_order_[mask_index]];
+                    gl::render::draw_texture(renderer, mask.texture, camera_,
+                                             static_cast<float>(mask.x),
+                                             static_cast<float>(mask.y), screen_w_,
+                                             screen_h_);
+                    ++mask_index;
+                }
+            }
+        };
+        draw_pass(PersonPass::shadow);
+        draw_pass(PersonPass::body);
     }
 
     if (options.walkable_overlay) {
@@ -369,54 +431,48 @@ void LevelScreen::render(SDL_Renderer* renderer, const LevelScreenOptions& optio
 }
 
 void LevelScreen::draw_person(SDL_Renderer* renderer, const Person& person,
-                              std::uint64_t elapsed_ms) const {
-    const gl::game::PersonInstance& instance = level_.persons[person.instance];
+                              std::uint64_t elapsed_ms, PersonPass pass) const {
+    if (person.instance >= level_.persons.size()) return;
     if (person.instance >= simulation_.persons().size()) return;
+    const gl::game::PersonInstance& instance = level_.persons[person.instance];
     const gl::game::PersonMovement& movement = simulation_.persons()[person.instance];
     const bool moving = movement.moving && person.go_texture.has_value() &&
                         person.go_animation < instance.pad.size();
     const gl::assets::PadAnimation& animation =
         moving ? instance.pad[person.go_animation] : instance.pad[person.animation];
-    const gl::render::Texture& texture = moving ? *person.go_texture : person.texture;
     const std::uint8_t direction = moving ? movement.direction16 : movement.direction8;
     const std::uint64_t frame_elapsed =
         elapsed_ms > movement.state_started_ms ? elapsed_ms - movement.state_started_ms : 0;
+    const std::size_t column =
+        person_frame_index(frame_elapsed, animation.delay, animation.frames_per_row);
+
+    if (pass == PersonPass::shadow) {
+        const std::optional<gl::render::Texture>& shadow_texture =
+            moving ? person.go_shadow : person.shadow;
+        if (!shadow_texture) return;
+        const PersonShadowPlacement shadow =
+            place_person_shadow_px(animation, direction, movement.x, movement.y);
+        if (shadow.row >= animation.shadow_crops.size()) return;
+        const FrameRect shadow_rect = frame_rect(
+            column, shadow.row, animation.shadow_width, animation.shadow_height);
+        const SDL_Rect source{shadow_rect.x, shadow_rect.y, shadow_rect.w, shadow_rect.h};
+        const SDL_FRect destination =
+            gl::render::to_screen(camera_, shadow.draw_x, shadow.draw_y,
+                                  static_cast<float>(animation.shadow_width),
+                                  static_cast<float>(animation.shadow_height));
+        if (rect_visible(destination, screen_w_, screen_h_)) {
+            draw_source(renderer, *shadow_texture, source, destination);
+        }
+        return;
+    }
 
     const PersonPlacement placement =
         place_person_px(animation, direction, movement.x, movement.y);
     if (placement.row >= animation.crops.size()) return;
-
-    const std::size_t column =
-        person_frame_index(frame_elapsed, animation.delay, animation.frames_per_row);
-
-    const std::optional<gl::render::Texture>& shadow_texture =
-        moving ? person.go_shadow : person.shadow;
-    if (shadow_texture) {
-        const PersonShadowPlacement shadow =
-            place_person_shadow_px(animation, direction, movement.x, movement.y);
-        if (shadow.row < animation.shadow_crops.size()) {
-            const SDL_Rect source{
-                static_cast<int>(column) * animation.shadow_width,
-                static_cast<int>(shadow.row) * animation.shadow_height,
-                animation.shadow_width,
-                animation.shadow_height,
-            };
-            const SDL_FRect destination =
-                gl::render::to_screen(camera_, shadow.draw_x, shadow.draw_y,
-                                      static_cast<float>(animation.shadow_width),
-                                      static_cast<float>(animation.shadow_height));
-            if (rect_visible(destination, screen_w_, screen_h_)) {
-                draw_source(renderer, *shadow_texture, source, destination);
-            }
-        }
-    }
-
-    const SDL_Rect source{
-        static_cast<int>(column) * animation.frame_width,
-        static_cast<int>(placement.row) * animation.frame_height,
-        animation.frame_width,
-        animation.frame_height,
-    };
+    const gl::render::Texture& texture = moving ? *person.go_texture : person.texture;
+    const FrameRect body_rect =
+        frame_rect(column, placement.row, animation.frame_width, animation.frame_height);
+    const SDL_Rect source{body_rect.x, body_rect.y, body_rect.w, body_rect.h};
     const SDL_FRect destination =
         gl::render::to_screen(camera_, placement.draw_x, placement.draw_y,
                               static_cast<float>(animation.frame_width),

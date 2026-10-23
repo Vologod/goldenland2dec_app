@@ -1,6 +1,12 @@
 #define DOCTEST_CONFIG_IMPLEMENT
 #include <doctest.h>
+#include <gl/app/mask_render.hpp>
 #include <gl/app/person_render.hpp>
+#include <gl/assets/vfs.hpp>
+#include <gl/game/level.hpp>
+
+#include <algorithm>
+#include <cstdlib>
 
 int main(int argc, char** argv) {
     doctest::Context context(argc, argv);
@@ -55,6 +61,110 @@ TEST_CASE("shadow px placement uses float position and identity rows") {
     CHECK(placement.draw_x == doctest::Approx(1610.0f - 31.0f));
     CHECK(placement.draw_y == doctest::Approx(1147.0f - 16.0f));
     CHECK(placement.row == 12);
+}
+
+TEST_CASE("person draw order sorts by Y then X") {
+    const std::array<gl::app::PersonDrawKey, 5> keys{{
+        {10.0f, 20.0f},
+        {5.0f, 20.0f},
+        {5.0f, 19.0f},
+        {5.0f, 19.0f},
+        {50.0f, 10.0f},
+    }};
+    const std::vector<std::size_t> order = gl::app::sort_person_indices(keys);
+    CHECK(order == std::vector<std::size_t>{4, 2, 3, 1, 0});
+}
+
+TEST_CASE("person draw order is stable for equal keys") {
+    const std::array<gl::app::PersonDrawKey, 3> keys{{
+        {7.0f, 42.0f},
+        {7.0f, 42.0f},
+        {7.0f, 42.0f},
+    }};
+    const std::vector<std::size_t> order = gl::app::sort_person_indices(keys);
+    CHECK(order == std::vector<std::size_t>{0, 1, 2});
+}
+
+TEST_CASE("same baseline sorts by X") {
+    const std::array<gl::app::PersonDrawKey, 2> keys{{{120.0f, 300.0f}, {84.0f, 300.0f}}};
+    const std::vector<std::size_t> order = gl::app::sort_person_indices(keys);
+    CHECK(order == std::vector<std::size_t>{1, 0});
+}
+
+TEST_CASE("mask foreground copies background through alpha zero silhouette") {
+    gl::assets::Image background;
+    background.width = 4;
+    background.height = 4;
+    background.rgba.assign(16, gl::assets::Rgba{10, 20, 30, 255});
+
+    gl::assets::Image mask;
+    mask.width = 2;
+    mask.height = 2;
+    mask.rgba.assign(4, gl::assets::Rgba{0, 0, 0, 255});
+    mask.rgba[0].a = 0;
+    mask.rgba[3].a = 0;
+
+    const gl::assets::Image out = gl::app::compose_mask_foreground(background, mask, 1, 1);
+    REQUIRE(out.width == 2);
+    REQUIRE(out.height == 2);
+    REQUIRE(out.rgba.size() == 4);
+    CHECK(out.rgba[0].r == 10);
+    CHECK(out.rgba[0].g == 20);
+    CHECK(out.rgba[0].b == 30);
+    CHECK(out.rgba[0].a == 255);
+    CHECK(out.rgba[1].a == 0);
+    CHECK(out.rgba[2].a == 0);
+    CHECK(out.rgba[3].r == 10);
+    CHECK(out.rgba[3].a == 255);
+}
+
+TEST_CASE("mask foreground skips out of bounds") {
+    gl::assets::Image background;
+    background.width = 1;
+    background.height = 1;
+    background.rgba.assign(1, gl::assets::Rgba{1, 2, 3, 255});
+
+    gl::assets::Image mask;
+    mask.width = 2;
+    mask.height = 1;
+    mask.rgba.assign(2, gl::assets::Rgba{0, 0, 0, 0});
+
+    const gl::assets::Image out = gl::app::compose_mask_foreground(background, mask, 0, 0);
+    REQUIRE(out.rgba.size() == 2);
+    CHECK(out.rgba[0].a == 255);
+    CHECK(out.rgba[1].a == 0);
+}
+
+TEST_CASE("mask foreground rejects empty images") {
+    gl::assets::Image background;
+    background.width = 2;
+    background.height = 2;
+    background.rgba.assign(4, gl::assets::Rgba{1, 2, 3, 255});
+    gl::assets::Image mask;
+    const gl::assets::Image out = gl::app::compose_mask_foreground(background, mask, 0, 0);
+    CHECK(out.rgba.empty());
+}
+
+TEST_CASE("frame rect is the full PAD cell") {
+    const gl::app::FrameRect rect = gl::app::frame_rect(3, 2, 40, 85);
+    CHECK(rect.x == 120);
+    CHECK(rect.y == 170);
+    CHECK(rect.w == 40);
+    CHECK(rect.h == 85);
+}
+
+TEST_CASE("frame rect ignores PAD crops") {
+    gl::assets::PadAnimation animation;
+    animation.frame_width = 32;
+    animation.frame_height = 64;
+    animation.frames_per_row = 12;
+    animation.crops = {{{1, 2, 3, 4}}};
+    const gl::app::FrameRect rect = gl::app::frame_rect(2, 0, animation.frame_width,
+                                                        animation.frame_height);
+    CHECK(rect.x == 64);
+    CHECK(rect.y == 0);
+    CHECK(rect.w == 32);
+    CHECK(rect.h == 64);
 }
 
 TEST_CASE("person frame index wraps by frames per row") {
@@ -132,4 +242,26 @@ TEST_CASE("shadow placement uses identity rows and shadow anchors") {
     const gl::app::PersonShadowPlacement go_placement =
         gl::app::place_person_shadow(go, 15, 0, 0);
     CHECK(go_placement.row == 15);
+}
+
+TEST_CASE("real data: l1_1 mask 45 foreground silhouette" *
+          doctest::skip(std::getenv("GL_GAME_DIR") == nullptr)) {
+    auto vfs = gl::assets::GameVfs::mount(std::getenv("GL_GAME_DIR"));
+    REQUIRE(vfs.has_value());
+    auto level = gl::game::load_level(vfs.value(), "l1_1");
+    REQUIRE(level.has_value());
+    const auto it = std::find_if(level->masks.begin(), level->masks.end(),
+                                 [](const gl::game::LevelMask& mask) {
+                                     return mask.number == 45;
+                                 });
+    REQUIRE(it != level->masks.end());
+    const gl::assets::Image foreground =
+        gl::app::compose_mask_foreground(level->background, it->image, it->x, it->y);
+    REQUIRE(foreground.width == 687);
+    REQUIRE(foreground.height == 741);
+    std::size_t opaque = 0;
+    for (const gl::assets::Rgba& pixel : foreground.rgba) {
+        if (pixel.a != 0) ++opaque;
+    }
+    CHECK(opaque == 182090);
 }

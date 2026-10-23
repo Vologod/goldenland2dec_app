@@ -14,6 +14,7 @@
 #include <cstdio>
 #include <exception>
 #include <filesystem>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <system_error>
@@ -34,8 +35,17 @@ struct Options {
     bool debug_overlay = false;
     bool walkable_overlay = false;
     bool no_persons = false;
+    bool no_masks = false;
     std::uint64_t sim_ms = 0;
     bool sim_ms_set = false;
+    std::optional<int> camera_x;
+    std::optional<int> camera_y;
+    struct PlacePerson {
+        std::size_t index = 0;
+        std::int32_t x = 0;
+        std::int32_t y = 0;
+    };
+    std::optional<PlacePerson> place_person;
 };
 
 enum class ParseStatus { ok, help, error };
@@ -53,6 +63,11 @@ void print_usage() {
               "  --background-only  Draw only the background (skip statics and animations)\n"
               "  --no-persons       Skip NPC sprites\n"
               "  --sim-ms <ms>      Simulation time for screenshots (ignored interactively)\n"
+              "  --camera-x <px>    World X of the left viewport edge (screenshot mode)\n"
+              "  --camera-y <px>    World Y of the top viewport edge (screenshot mode)\n"
+              "  --place-person <index> <tile_x> <tile_y>\n"
+              "                     Teleport a person before the screenshot\n"
+              "  --no-masks         Skip foreground mask overlays\n"
               "  --debug-overlay    Draw sprite debug rectangles in screenshot mode\n"
               "  --walkable-overlay Draw blocked tiles in red on the level\n"
               "  -h, --help         Show this help and exit\n"
@@ -170,6 +185,43 @@ ParseStatus parse_args(int argc, char** argv, Options& options) {
                 return ParseStatus::error;
             }
             options.sim_ms_set = true;
+        } else if (arg == "--camera-x") {
+            if (!next_value(arg, value)) return ParseStatus::error;
+            int parsed = 0;
+            if (!parse_int(value, parsed) || parsed < 0 || parsed > 1'000'000) {
+                std::fprintf(stderr, "glview: invalid --camera-x: %.*s\n",
+                             static_cast<int>(value.size()), value.data());
+                return ParseStatus::error;
+            }
+            options.camera_x = parsed;
+        } else if (arg == "--camera-y") {
+            if (!next_value(arg, value)) return ParseStatus::error;
+            int parsed = 0;
+            if (!parse_int(value, parsed) || parsed < 0 || parsed > 1'000'000) {
+                std::fprintf(stderr, "glview: invalid --camera-y: %.*s\n",
+                             static_cast<int>(value.size()), value.data());
+                return ParseStatus::error;
+            }
+            options.camera_y = parsed;
+        } else if (arg == "--no-masks") {
+            options.no_masks = true;
+        } else if (arg == "--place-person") {
+            if (i + 3 >= argc) {
+                std::fputs("glview: --place-person needs <index> <tile_x> <tile_y>\n", stderr);
+                return ParseStatus::error;
+            }
+            int index = 0;
+            int tile_x = 0;
+            int tile_y = 0;
+            if (!parse_int(argv[i + 1], index) || index < 0 ||
+                !parse_int(argv[i + 2], tile_x) || tile_x < 0 ||
+                !parse_int(argv[i + 3], tile_y) || tile_y < 0) {
+                std::fputs("glview: invalid --place-person arguments\n", stderr);
+                return ParseStatus::error;
+            }
+            options.place_person =
+                Options::PlacePerson{static_cast<std::size_t>(index), tile_x, tile_y};
+            i += 3;
         } else if (arg == "--debug-overlay") {
             options.debug_overlay = true;
         } else if (arg == "--walkable-overlay") {
@@ -379,13 +431,24 @@ int main(int argc, char** argv) {
                          SDL_GetError());
             return 2;
         }
+        if (options.place_person) {
+            screen.value().simulation().place_person(
+                options.place_person->index,
+                gl::game::Tile{options.place_person->x, options.place_person->y});
+        }
         screen.value().set_viewport(width, height);
+        if (options.camera_x && options.camera_y) {
+            const gl::render::Camera& camera = screen.value().camera();
+            screen.value().pan(static_cast<float>(*options.camera_x) - camera.x,
+                               static_cast<float>(*options.camera_y) - camera.y);
+        }
 
         gl::app::LevelScreenOptions screen_options;
         screen_options.background_only = options.background_only;
         screen_options.debug_overlay = options.debug_overlay;
         screen_options.walkable_overlay = options.walkable_overlay;
         screen_options.draw_persons = !options.no_persons;
+        screen_options.draw_masks = !options.no_masks;
         if (!options.screenshot.empty()) {
             return save_screenshot(window.renderer(), options.screenshot, options.frames,
                                    options.sim_ms, options.sim_ms_set, screen.value(),

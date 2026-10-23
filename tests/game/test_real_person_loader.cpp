@@ -4,6 +4,7 @@
 #include "gl/game/level_simulation.hpp"
 #include "gl/game/person.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
@@ -227,4 +228,23 @@ TEST_CASE("real data: l1_1 60 s simulation is bounded and deterministic" *
     CHECK(waiting == 4);
     CHECK(moving + waiting == route_movers);
     CHECK(displaced >= 1);
+}
+
+TEST_CASE("real data: l1_1 loads foreground mask descriptors" *
+          doctest::skip(!game_dir_available())) {
+    auto vfs = gl::assets::GameVfs::mount(std::getenv("GL_GAME_DIR"));
+    REQUIRE(vfs.has_value());
+    auto level = gl::game::load_level(vfs.value(), "l1_1");
+    REQUIRE(level.has_value());
+    CHECK(level->masks.size() == 62);
+    const auto it = std::find_if(level->masks.begin(), level->masks.end(),
+                                 [](const gl::game::LevelMask &mask) {
+                                     return mask.number == 45;
+                                 });
+    REQUIRE(it != level->masks.end());
+    CHECK(it->x == 885);
+    CHECK(it->y == 1275);
+    CHECK(it->image.width == 687);
+    CHECK(it->image.height == 741);
+    CHECK(it->image.rgba.size() == 687u * 741u);
 }

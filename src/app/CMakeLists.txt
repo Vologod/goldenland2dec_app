@@ -1,5 +1,6 @@
 add_library(gl_app STATIC
     src/level_screen.cpp
+    src/mask_render.cpp
     src/person_render.cpp
 )
 target_include_directories(gl_app PUBLIC include)

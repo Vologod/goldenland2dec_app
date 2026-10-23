@@ -1,14 +1,95 @@
 # STATUS
 
 Обновлено: 2026-10-23
-## A7 — Y-sort и анкоры (в работе, 2026-10-23)
+## P4c — клик → диалог: реверс клиента (в работе, 2026-10-23)
 
-- Реверс Client.dll: рендерер уровня — глобальный DAT_12111360, инициализация
-  FUN_1202e548; debug-спрайты (cell_baseline и др.) грузит FUN_1202d1ec.
-  Найдено в docs/research/p4b2-render-order.md.
-- Осталось: RefsTo 0x12111360 → draw/vtable-метод → список объектов и компаратор
-  baseline; подтвердить скриншотами оригинала; затем спека/план/реализация Y-sort,
-  анкоров и crops.
+- Live-тест: один левый клик по дальнему стражнику → герой идёт к нему, затем
+  диалог открывается сам. `Shot0000.bmp` SHA-256 `58E5054C…376C1F`: синий
+  герой слева, коричневый стражник справа, ~90 px; диалог уже открыт.
+- Сервер: talk `0x12` → `OpenDialog`, проверки расстояния нет (см. research).
+- Клиент: talk-курсор `0xc` (`talk.ani`) ставится по флагу `+0x14 & 0x40`
+  (`FUN_120c80a4`, `0x120c8142`) — клиент различает talkable NPC без
+  distance-гейта. `gv_meet_offset=0.1` (`0x12106adc`) используется в
+  `FUN_120b3464`/`FUN_120b3574`, но это AI/meet-предикаты из debug/AI-панели,
+  не доказанный обработчик клика.
+- Ввод мыши — в `GoldenLand.exe` (`7854019E…09FF`): `FUN_0040ad04` считает
+  edge-флаги ЛКМ/ПКМ/СКМ, позицию и double-click; `gv_double_click_speed`/
+  `gv_mouse_speed` = 1.2; vtable ввода `0x47fce0`, геттеры `+0x50`/`+0x54`.
+- World-click найден в Client.dll: `CLevelScreen::update` (`0x1203f7e4`) →
+  `0x12041520` (опрос input) → `0x12040084` (left-click) / `0x12040f68`
+  (right-click). Для entity `+0x9c == 0x32` и action `+0xc0` 6/7 ставится
+  команда в очередь `0x12040c28` (code `0x4f`/`0x52`/`0x45`/`0x56`).
+  Узел 0x14 байт `{id, code, arg, ?, next}`, head `screen+0x4`.
+- Очередь читает `CLevelScreen::update` (`0x1203f7e4`, возвращает head
+  `screen+0x4`); wrapper `0x1204cf39` → `0x1203e3a8` (таблица
+  `0x12126164`, коды `0x27..0x45`). Для уровня `0x1205625c`: code `0x4f`
+  → `0x1204bf94(entity id)`, также `0x56`/`0x46`/`0x47`/`0x41`/`0x4b`/`0x43`.
+  `0x1204bf94` — ветка `entity+0x8 == 6` → `0x1204c361`, кадры героя
+  `0x12`/`0x16`.
+- Локальный диалог: `0x1205625c` при code `0x27` → `0x1204c7ac` (открыть) →
+  `0x1204c464` (панель/строки). Клиент умеет открывать диалог локально, не
+  дожидаясь server `0x12`/`OpenDialog`; server-путь — сетевая ветка.
+  `gv_meet_offset` в этом пути не участвует — это AI/meet. ~90 px на скриншоте
+  нельзя объявлять фиксированным радиусом. Далее: P4c spec/plan + минимальный
+  hero (маркер на первом walkable `points_entrance`), подход и dialog overlay.
+- Детали — `docs/research/p4b2-render-order.md`, раздел P4c.
+- Spec/plan готовы: `docs/specs/2026-10-23-p4c-click-dialog-design.md`,
+  `docs/plans/2026-10-23-p4c-click-dialog.md`; D-038 (маркер + AABB +
+  локальный диалог). Реализация ещё не начата.
+
+## A8 — Cell mask / foreground occlusion (реализовано, 2026-10-23)
+
+- Причина перекрытия на `Shot0001` — не Y-sort, а foreground-маски:
+  `BLK_MDSC` (62 записи) + `levels/pack/l1_1/bitmaps/masks/mask_<number>.csx`.
+  `mask_45` 687×741 при (885,1275) — деревянная вышка; alpha=0-силуэт точно
+  совпал с вышкой в `layer.jpg` (182090 px). D-037.
+- Порт: `LevelMask` в `Level`; `compose_mask_foreground` (фон через alpha=0);
+  `LevelScreen` вставляет маски в Y-отсортированные проходы теней/тел по
+  baseline `y+height`, tie-break `x+width/2`. Добавлены
+  `--camera-x/--camera-y`, `--place-person`, `--no-masks` в `glview` для
+  проверки.
+- Проверка: `person_render_tests` — 18/18, 84 assertions; `glview_screenshot_tests`
+  — 10/10, 112 assertions; кадр «персонаж за вышкой» с масками и без:
+  разница >500 px, SHA-256 `219D87D8…B701F0` / `E2A55F80…DEFB6`. Полный
+  `ctest` с `GL_GAME_DIR` — **15/15 passed**, 630.63 s, exit 0.
+- Осталось: точная семантика `ApplyCellMask`/`r_masks_mode`/alt-масок;
+  интерактивный gate после появления hero. Spec/plan:
+  `docs/specs/2026-10-23-a8-cell-mask-occlusion-design.md`,
+  `docs/plans/2026-10-23-a8-cell-mask-occlusion.md`.
+
+## A7 — Y-sort и анкоры (реализовано, 2026-10-23; скриншоты оригинала получены)
+
+- Реверс завершён: `FUN_120c8e68` собирает видимые сущности (`DAT_12111360+0x95d0`,
+  128), `FUN_1202effc` рисует статики (`FUN_1202d53c`) и LAO-анимации
+  (`FUN_1202d984`) до динамических сущностей, затем сортирует список `qsort`
+  (`FUN_120e7e90`) компаратором `FUN_1202bbdc` и выполняет 9 проходов.
+  `EF_PERSON` (type 2): ключ `+0x1c` (Y), затем `+0x18` (X); проход 2 —
+  тени (режим 2, alpha 0.5), проход 7 — тела (режим 1, alpha 1.0).
+  Анкоры PAD: `draw = position - anchor`; источник кадра — полная ячейка.
+  Детали — `docs/research/p4b2-render-order.md`; D-036.
+- Порт: `PersonDrawKey`/`sort_person_indices` (stable sort по Y, затем X) в
+  `person_render`; `frame_rect` (полная ячейка, crops не применяются);
+  `LevelScreen` рисует тени и тела двумя проходами по одному порядку.
+  Статики/анимации остаются до динамических сущностей.
+- Проверка: `cmake --build build` — успех; `person_render_tests` — 14/14,
+  63 assertions; targeted real `l1_1` — 7/7, 489 891 assertions; `glview l1_1`
+  t=0 и t=10 с — PNG 1280×720, SHA-256 `4C494F76…9C77A8` и
+  `1AB7BF61…DD32D8`; повторный t=0 совпал побайтово. Полный `ctest` с
+  `GL_GAME_DIR` — **15/15 passed**, 766.49 s, exit 0.
+- Скриншоты оригинала: `Screenshots\Shot0000–0003.bmp` (1920×1080, игровая
+  область 1024×768), уровень `l1_1`, сцена цирка; SHA-256 в research. На
+  `Shot0002` нижние по экрану шут и силач перекрывают более высокого NPC —
+  Y-sort совпадает визуально. Live-снимок рендерера: `count=4`, порядок
+  `EF_TRIGGER` → `EF_PERSON y=1355` → `EF_PERSON y=1669` (совпадает с
+  компаратором).
+- **Важно:** на `Shot0001` игрок (зелёная подсветка) стоит за перилами
+  деревянной вышки, и перила перекрывают его. Вышка уже есть в `layer.jpg`,
+  поэтому это **не** Y-sort статиков, а клеточная маска: `FUN_1202bc54`
+  (`ApplyCellMask`), `r_masks_*`, LVL `tile.mask`/`BLK_MDSC`. Реализовано в
+  **A8** (см. выше): персонаж за вышкой перекрывается.
+- Осталось: manual gate A7/A8 после появления hero; spec/plan A7 —
+  `docs/specs/2026-10-23-a7-render-order-design.md`,
+  `docs/plans/2026-10-23-a7-render-order.md`.
 
 ## A4 review fixes (2026-10-23)
 
@@ -348,13 +429,45 @@ P1b (Android/touch) и P2 backfill отложены.
 
 ## Текущая задача
 
-**A4 — STAY / STAY_ROTATE завершён 2026-10-23.** `STAY` возвращается к spawn
-через LOS/A*/occupancy и стоит в spawn без блуждания; `STAY_ROTATE` вращается
-на месте (`rand(10,25)` → `direction16/direction8`) с паузой 500 мс и не
-двигается. `can_move` больше не форсится в `false`; synthetic-тесты на возврат,
-покой и смену направления; real 60-с тест обновлён (2 moving + 4 waiting из 6
-movers). `gl_game_tests` **68/68** (550 029 assertions); `ctest` **15/15**
-(666.51 s). D-035. Следующая — A7.
+**P4c — клик → диалог: реверс клиента (в работе 2026-10-23).**
+Серверный путь `0x12` → `OpenDialog` без distance-гейта извлечён. Live-тест:
+клик по дальнему стражнику → герой идёт, затем диалог открывается сам.
+Клиент: talk-курсор `0xc` ставится по флагу `+0x14 & 0x40`; `gv_meet_offset=0.1`
+используется в AI/meet-предикатах `FUN_120b3464`/`FUN_120b3574`, но это не
+обработчик клика. Ввод мыши — в `GoldenLand.exe` (`FUN_0040ad04`, vtable
+`0x47fce0`); world-click — в Client.dll: `CLevelScreen::update` `0x1203f7e4`
+→ `0x12041520` (input) → `0x12040084`/`0x12040f68` (left/right click).
+Для entity `+0x9c == 0x32` и action `+0xc0` 6/7 ставится команда в очередь
+`0x12040c28` (code `0x4f`/`0x52`/`0x45`/`0x56`). Очередь читает
+`CLevelScreen::update` `0x1203f7e4`; wrapper `0x1204cf39` → `0x1203e3a8`;
+для уровня `0x1205625c`: code `0x4f` → `0x1204bf94(entity id)` (ветка
+`entity+0x8 == 6` → `0x1204c361`, кадры героя `0x12`/`0x16`); code `0x27`
+→ `0x1204c7ac` (локальный диалог) → `0x1204c464` (панель/строки). Клиент
+открывает диалог локально, server `0x12`/`OpenDialog` — сетевая ветка.
+На `Shot0000` герой остановился в ~90 px; фиксированный радиус не подтверждён.
+Далее: spec/plan P4c и минимальный hero (маркер, подход, dialog overlay).
+
+**A8 — Cell mask / foreground occlusion реализован 2026-10-23.**
+`BLK_MDSC`/`mask_<number>.csx`: alpha=0-силуэт = occluding foreground, top-left.
+Порт: `LevelMask`, `compose_mask_foreground`, merge масок в Y-отсортированные
+проходы теней/тел по `y+height`; `glview` получил `--camera-x/--camera-y`,
+`--place-person`, `--no-masks`. `mask_45` 182090 px; кадр «персонаж за вышкой»
+с/без масок различается >500 px. `person_render_tests` 18/18,
+`glview_screenshot_tests` 10/10. D-037. Следующая — P4c.
+
+**A7 — Y-sort и анкоры реализованы 2026-10-23; скриншоты оригинала получены.**
+Реверс Client.dll: статики и LAO-анимации рисуются до динамических сущностей и
+не сортируются; `EF_PERSON` сортируется по Y (`+0x1c`), затем X (`+0x18`);
+тени (проход 2, alpha 0.5) и тела (проход 7, alpha 1.0) — два прохода по
+общему порядку. Порт: stable sort по `(movement.y, movement.x)`, два прохода
+теней/тел, полная ячейка кадра, PAD-анкоры без изменений. Оригинал `l1_1`:
+`Shot0000–0003` (цирк), на `Shot0002` нижние NPC перекрывают верхнего; live
+renderer даёт `EF_TRIGGER → PERSON y=1355 → PERSON y=1669`. На `Shot0001`
+игрок за перилами вышки перекрыт — это cell mask (`ApplyCellMask`), не Y-sort;
+реализовано в A8. `person_render_tests` 18/18 (84 assertions); targeted real
+`l1_1` 7/7 (489 891 assertions). D-036; spec/plan в
+`docs/specs/2026-10-23-a7-render-order-design.md` и
+`docs/plans/2026-10-23-a7-render-order.md`. Следующая — P4c.
 
 **A6 — Occupancy model (narrowed) завершён 2026-10-23.** Резервирования цели/пути
 удалены (D-034): occupancy — только текущие тайлы, пересборка каждый тик. Измерение

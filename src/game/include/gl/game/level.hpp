@@ -23,12 +23,19 @@ struct LevelAnimation {
     std::vector<gl::assets::Image> frames;
 };
 
+struct LevelMask {
+    std::uint32_t number = 0;
+    std::int32_t x = 0, y = 0;
+    gl::assets::Image image;
+};
+
 struct Level {
     std::string name, pack;
     std::uint32_t width = 0, height = 0;
     gl::assets::Image background;
     std::vector<LevelStatic> statics;
     std::vector<LevelAnimation> animations;
+    std::vector<LevelMask> masks;
     std::vector<PersonInstance> persons;
     WalkGrid walkable;
 };

@@ -525,3 +525,68 @@ TEST_CASE("glview exits 3 when required level data is missing") {
     CHECK(code == 3);
     CHECK_FALSE(fs::exists(png));
 }
+
+TEST_CASE("glview --camera-x/--camera-y move the screenshot viewport") {
+    const char* game_dir = std::getenv("GL_GAME_DIR");
+    REQUIRE(game_dir != nullptr);
+    TempDir dir;
+    const fs::path base = dir.path / "camera_base.png";
+    const fs::path tower = dir.path / "camera_tower.png";
+    REQUIRE(run_glview(glview_arguments(game_dir, base)) == 0);
+    REQUIRE(run_glview(glview_arguments(
+                game_dir, tower, {"--camera-x", "885", "--camera-y", "1275"})) == 0);
+    int aw = 0, ah = 0, ac = 0, bw = 0, bh = 0, bc = 0;
+    const StbiImage a = load_png(base, aw, ah, ac);
+    const StbiImage b = load_png(tower, bw, bh, bc);
+    REQUIRE(a != nullptr);
+    REQUIRE(b != nullptr);
+    REQUIRE(aw == 1280);
+    REQUIRE(ah == 720);
+    REQUIRE(bw == 1280);
+    REQUIRE(bh == 720);
+    std::uint64_t differing = 0;
+    for (int y = 0; y < ah; ++y)
+        for (int x = 0; x < aw; ++x) {
+            const std::size_t i = (static_cast<std::size_t>(y) * aw + x) * 4;
+            if (a.get()[i] != b.get()[i] || a.get()[i + 1] != b.get()[i + 1] ||
+                a.get()[i + 2] != b.get()[i + 2])
+                ++differing;
+        }
+    CAPTURE(differing);
+    CHECK(differing > 10000);
+}
+
+TEST_CASE("glview foreground masks occlude a person behind the tower") {
+    const char* game_dir = std::getenv("GL_GAME_DIR");
+    REQUIRE(game_dir != nullptr);
+    TempDir dir;
+    const fs::path masked = dir.path / "masked.png";
+    const fs::path plain = dir.path / "plain.png";
+    const std::vector<std::string> common = {"--camera-x", "885", "--camera-y", "1275",
+                                             "--place-person", "0", "100", "180",
+                                             "--sim-ms", "0"};
+    std::vector<std::string> masked_args = common;
+    std::vector<std::string> plain_args = common;
+    plain_args.push_back("--no-masks");
+    REQUIRE(run_glview(glview_arguments(game_dir, masked, masked_args)) == 0);
+    REQUIRE(run_glview(glview_arguments(game_dir, plain, plain_args)) == 0);
+    int aw = 0, ah = 0, ac = 0, bw = 0, bh = 0, bc = 0;
+    const StbiImage a = load_png(masked, aw, ah, ac);
+    const StbiImage b = load_png(plain, bw, bh, bc);
+    REQUIRE(a != nullptr);
+    REQUIRE(b != nullptr);
+    REQUIRE(aw == 1280);
+    REQUIRE(ah == 720);
+    REQUIRE(bw == 1280);
+    REQUIRE(bh == 720);
+    std::uint64_t differing = 0;
+    for (int y = 0; y < ah; ++y)
+        for (int x = 0; x < aw; ++x) {
+            const std::size_t i = (static_cast<std::size_t>(y) * aw + x) * 4;
+            if (a.get()[i] != b.get()[i] || a.get()[i + 1] != b.get()[i + 1] ||
+                a.get()[i + 2] != b.get()[i + 2])
+                ++differing;
+        }
+    CAPTURE(differing);
+    CHECK(differing > 500);
+}
