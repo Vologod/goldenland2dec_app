@@ -1,6 +1,7 @@
 #include "gl/assets/sef.hpp"
 #include "gl/assets/cp1251.hpp"
 
+#include <array>
 #include <charconv>
 #include <cstddef>
 #include <cstdint>
@@ -303,6 +304,118 @@ Result<std::vector<SefPerson>> parse_persons(Lexer& lexer) {
     }
 }
 
+std::uint8_t direction_index(std::string_view direction, bool& known) {
+    static constexpr std::array<std::string_view, 8> kDirections{
+        "UP", "UP_LEFT", "LEFT", "DOWN_LEFT", "DOWN", "DOWN_RIGHT", "RIGHT", "UP_RIGHT"};
+    std::string key(direction);
+    for (char& c : key) {
+        if (c >= 'a' && c <= 'z')
+            c = static_cast<char>(c - 'a' + 'A');
+        else if (c == '-' || c == ' ')
+            c = '_';
+    }
+    for (std::size_t i = 0; i < kDirections.size(); ++i) {
+        if (key == kDirections[i]) {
+            known = true;
+            return static_cast<std::uint8_t>(i);
+        }
+    }
+    known = false;
+    return 0;
+}
+
+VoidResult parse_entrance_fields(Lexer& lexer, SefEntrance& entrance) {
+    while (true) {
+        const Token key = next_non_semicolon(lexer);
+        if (lexer.failed())
+            return format_error_at("unterminated SEF points_entrance", key.line);
+        if (key.kind == TokenKind::end)
+            return format_error_at("truncated SEF points_entrance block", key.line);
+        if (key.kind == TokenKind::rbrace)
+            return VoidResult{std::monostate{}};
+        if (key.kind != TokenKind::word)
+            return format_error_at("unexpected token in SEF points_entrance block", key.line);
+
+        Token value = lexer.next();
+        if (lexer.failed())
+            return format_error_at("unterminated SEF points_entrance", key.line);
+        if (value.kind == TokenKind::colon) {
+            value = lexer.next();
+            if (lexer.failed())
+                return format_error_at("unterminated SEF points_entrance", key.line);
+        }
+        if (value.kind == TokenKind::end)
+            return format_error_at("truncated SEF points_entrance field", value.line);
+
+        if (key.text == "position") {
+            if (!token_int(value, entrance.x))
+                return format_error_at("bad SEF points_entrance position", value.line);
+            const Token y = lexer.next();
+            if (lexer.failed())
+                return format_error_at("unterminated SEF points_entrance", key.line);
+            if (!token_int(y, entrance.y))
+                return format_error_at("bad SEF points_entrance position", value.line);
+        } else if (key.text == "direction") {
+            std::string direction;
+            if (!token_text(value, direction))
+                return format_error_at("bad SEF points_entrance direction", value.line);
+            bool known = false;
+            entrance.direction = direction_index(direction, known);
+            if (!known)
+                return format_error_at("bad SEF points_entrance direction", value.line);
+        } else if (value.kind == TokenKind::lbrace) {
+            lexer.skip_balanced();
+            if (lexer.failed())
+                return format_error_at("unterminated SEF points_entrance block", value.line);
+        }
+    }
+}
+
+Result<std::vector<SefEntrance>> parse_entrances(Lexer& lexer) {
+    const Token open = next_non_semicolon(lexer);
+    if (lexer.failed())
+        return format_error_at("unterminated SEF points_entrance", open.line);
+    if (open.kind != TokenKind::lbrace)
+        return format_error_at("SEF points_entrance has no opening brace", open.line);
+
+    std::vector<SefEntrance> entrances;
+    while (true) {
+        const Token key = next_non_semicolon(lexer);
+        if (lexer.failed())
+            return format_error_at("unterminated SEF points_entrance", key.line);
+        if (key.kind == TokenKind::end)
+            return format_error_at("truncated SEF points_entrance section", key.line);
+        if (key.kind == TokenKind::rbrace)
+            return entrances;
+        if (key.kind != TokenKind::word || key.text != "name")
+            return format_error_at("SEF points_entrance entry has no name", key.line);
+
+        Token name = lexer.next();
+        if (lexer.failed())
+            return format_error_at("unterminated SEF points_entrance", name.line);
+        if (name.kind == TokenKind::colon) {
+            name = lexer.next();
+            if (lexer.failed())
+                return format_error_at("unterminated SEF points_entrance", name.line);
+        }
+
+        SefEntrance entrance;
+        if (!token_text(name, entrance.name))
+            return format_error_at("SEF points_entrance name is not a string", name.line);
+
+        const Token block = next_non_semicolon(lexer);
+        if (lexer.failed())
+            return format_error_at("unterminated SEF points_entrance", block.line);
+        if (block.kind != TokenKind::lbrace)
+            return format_error_at("SEF points_entrance entry has no block", block.line);
+
+        auto status = parse_entrance_fields(lexer, entrance);
+        if (!status)
+            return status.error();
+        entrances.push_back(std::move(entrance));
+    }
+}
+
 VoidResult parse_cell_group_fields(Lexer& lexer, SefCellGroup& group) {
     while (true) {
         const Token key = next_non_semicolon(lexer);
@@ -437,6 +550,14 @@ Result<SefData> parse_sef(std::span<const std::uint8_t> data) {
                 if (!persons)
                     return persons.error();
                 sef.persons = std::move(persons.value());
+                continue;
+            }
+
+            if (key.text == "points_entrance") {
+                auto entrances = parse_entrances(lexer);
+                if (!entrances)
+                    return entrances.error();
+                sef.entrances = std::move(entrances.value());
                 continue;
             }
 

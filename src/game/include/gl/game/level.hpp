@@ -1,6 +1,7 @@
 #pragma once
 #include "gl/assets/image.hpp"
 #include "gl/assets/result.hpp"
+#include "gl/assets/sef.hpp"
 #include "gl/assets/vfs.hpp"
 #include "gl/game/person.hpp"
 #include "gl/game/walk_grid.hpp"
@@ -37,6 +38,7 @@ struct Level {
     std::vector<LevelAnimation> animations;
     std::vector<LevelMask> masks;
     std::vector<PersonInstance> persons;
+    std::vector<gl::assets::SefEntrance> entrances;
     WalkGrid walkable;
 };
 

@@ -61,7 +61,7 @@ TEST_CASE("sef points_entrance parses names, positions, directions") {
     CHECK(sef->entrances[0].name == "L1_1_e_L1_1_1");
     CHECK(sef->entrances[0].x == 75);
     CHECK(sef->entrances[0].y == 55);
-    CHECK(sef->entrances[0].direction == 6);
+    CHECK(sef->entrances[0].direction == 3); // DOWN_LEFT in existing SEF map
     CHECK(sef->entrances[1].name == "GM");
     CHECK(sef->entrances[1].x == 175);
     CHECK(sef->entrances[1].y == 206);

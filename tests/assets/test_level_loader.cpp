@@ -30,6 +30,10 @@ TEST_CASE("level loader: l1_1 loads background, statics and animations" *
     CHECK(level->height == 2016);
     CHECK(level->background.width == 2760);
     CHECK(level->background.height == 2016);
+    REQUIRE(level->entrances.size() == 5);
+    CHECK(level->entrances[0].name == "L1_1_e_L1_1_4");
+    CHECK(level->entrances[0].x == 180);
+    CHECK(level->entrances[0].y == 21);
     REQUIRE(level->statics.size() == 2);
     CHECK(level->statics[0].x == 905);
     CHECK(level->statics[0].y == 368);

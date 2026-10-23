@@ -79,6 +79,7 @@ Result<Level> load_level(GameVfs &vfs, std::string_view level_name) {
         if (!sef)
             return contextual(sef.error(), "cannot parse level SEF", sef_file);
         level.pack = sef->pack;
+        level.entrances = sef->entrances;
         if (level.pack.empty())
             return Error{ErrorCode::format, "level SEF '" + sef_file + "' has an empty pack"};
 

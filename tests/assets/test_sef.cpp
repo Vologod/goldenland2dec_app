@@ -1,6 +1,8 @@
 #include "gl/assets/sef.hpp"
+#include "gl/assets/vfs.hpp"
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 #include <doctest/doctest.h>
 #include <span>
 #include <string>
@@ -12,6 +14,8 @@ namespace {
 std::span<const std::uint8_t> as_bytes(std::string_view text) {
     return {reinterpret_cast<const std::uint8_t*>(text.data()), text.size()};
 }
+
+bool game_dir_available() { return std::getenv("GL_GAME_DIR") != nullptr; }
 } // namespace
 
 TEST_CASE("SEF: extracts top-level fields") {
@@ -188,6 +192,58 @@ TEST_CASE("SEF parses cell_groups") {
     CHECK(sef->cell_groups[0].cells[0].second == 127);
     CHECK(sef->cell_groups[1].name == "empty");
     CHECK(sef->cell_groups[1].cells.empty());
+}
+
+TEST_CASE("sef points_entrance parses names, positions, directions") {
+    const std::string text =
+        "pack: \"l1_1\"\n"
+        "points_entrance:\n"
+        "{\n"
+        "  name: \"L1_1_e_L1_1_1\"\n"
+        "  {\n"
+        "    position 75 55\n"
+        "    direction \"DOWN_LEFT\"\n"
+        "  }\n"
+        "  name: \"GM\"\n"
+        "  {\n"
+        "    position 175 206\n"
+        "    direction \"UP\"\n"
+        "  }\n"
+        "}\n";
+    const auto data = as_bytes(text);
+    const auto sef = gl::assets::parse_sef(data);
+    REQUIRE(sef);
+    REQUIRE(sef->entrances.size() == 2);
+    CHECK(sef->entrances[0].name == "L1_1_e_L1_1_1");
+    CHECK(sef->entrances[0].x == 75);
+    CHECK(sef->entrances[0].y == 55);
+    CHECK(sef->entrances[0].direction == 3);
+    CHECK(sef->entrances[1].name == "GM");
+    CHECK(sef->entrances[1].x == 175);
+    CHECK(sef->entrances[1].y == 206);
+    CHECK(sef->entrances[1].direction == 0);
+}
+
+TEST_CASE("real l1_1 has five points_entrance" *
+          doctest::skip(!game_dir_available())) {
+    const char* dir = std::getenv("GL_GAME_DIR");
+    REQUIRE(dir != nullptr);
+    auto vfs = gl::assets::GameVfs::mount(dir);
+    REQUIRE(vfs);
+    auto bytes = vfs->read("levels/single/l1_1/l1_1.sef");
+    REQUIRE(bytes);
+    auto sef = gl::assets::parse_sef(bytes.value());
+    REQUIRE(sef);
+    REQUIRE(sef->entrances.size() == 5);
+    CHECK(sef->entrances[0].name == "L1_1_e_L1_1_4");
+    CHECK(sef->entrances[0].x == 180);
+    CHECK(sef->entrances[0].y == 21);
+    CHECK(sef->entrances[3].name == "L1_1_e_L1_2");
+    CHECK(sef->entrances[3].x == 36);
+    CHECK(sef->entrances[3].y == 60);
+    CHECK(sef->entrances[4].name == "GM");
+    CHECK(sef->entrances[4].x == 175);
+    CHECK(sef->entrances[4].y == 206);
 }
 
 TEST_CASE("SEF: rejects a cell_group with a non-numeric coordinate") {

@@ -27,6 +27,13 @@ struct SefCellGroup {
     std::vector<std::pair<std::uint16_t, std::uint16_t>> cells;
 };
 
+struct SefEntrance {
+    std::string name;
+    std::int32_t x = 0;
+    std::int32_t y = 0;
+    std::uint8_t direction = 0;
+};
+
 struct SefData {
     std::string pack;
     bool internal_location = false;
@@ -34,6 +41,7 @@ struct SefData {
     int weather = -1;
     std::vector<SefPerson> persons;
     std::vector<SefCellGroup> cell_groups;
+    std::vector<SefEntrance> entrances;
 };
 
 Result<SefData> parse_sef(std::span<const std::uint8_t> data);
