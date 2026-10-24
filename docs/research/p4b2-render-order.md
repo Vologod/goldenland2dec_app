@@ -501,6 +501,12 @@ Live-снимок того же процесса (Renderer `0x12111360`): кам
 - `.seq` — 61 байт: `0x0C` + 60 индексов (2/3) выбора кадра слоя.
   Client.dll рисует уже готовый PAD (`FUN_1202c424`), поэтому anchors
   нужно искать в exe loader/compositor, не в Client PAD.
+- **Exe compositor найден:** `FUN_0042279C` (GoldenLand.exe) собирает
+  5 слоёв в PAD: `FUN_00405CE4` создаёт surface, `FUN_00405A64` blit-ит
+  слой; seq-байт (2/3) выбирает слой. Anchors/размеры берутся из массивов
+  `this+0xB468..0xB488` и 16-байтовых записей `iVar2 + n*0x10`
+  (`x,y,w,h`); destination — `this+0xC360/0xC3E0`. Следующий шаг — связать
+  массивы с IAD/CSX и вывести anchors.
 - Ghidra `FUN_1202c424`: PAD из `render_item+0x48`/`+0x4c`, anchors
   `pad+0xa0..+0xb8`, draw `FUN_12017ae8`/`FUN_12008e00`.
   `0x12037e14/0x12037f8c` — не функции. Hero render_item/PAD не найден;
