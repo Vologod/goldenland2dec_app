@@ -836,7 +836,6 @@ void LevelScreen::draw_hero_base(SDL_Renderer* renderer, std::uint64_t elapsed_m
         direction =
             gl::assets::pad_person_row(gl::assets::PadAnimationType::tb_stay,
                                        hero.direction);
-        direction.row = 4 - direction.row;
     }
 
     const std::size_t column =

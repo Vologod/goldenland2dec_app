@@ -16,11 +16,11 @@
   --camera-y 94` показывает базового hero. Тесты: `glview_screenshot_tests`
   10/10, `person_render_tests` 18/18, `level_click_tests` 22/22;
   `glgame_screenshot_tests` 20/20.
-- **Добавлено:** направление idle через `pad_person_row(tb_stay)` с
-  инверсией строк (5 рядов, row4 = front) и walk `tb_go` (60x95, 13 колонок,
-  delay 80, 16-направленный `pad_person_row`); `hero_go_base_` грузится рядом
-  с idle. Idle-скриншот с направлением из SEF показывает hero лицом/боком у
-  двери. `run` пока не подключён.
+- **Направление:** live slot0 показал hero **спиной** (SEF direction 0);
+  правильно `pad_person_row(tb_stay)` без инверсии: row0 = back, row4 = front.
+  Раньше стояла инверсия `row = 4-row`, из-за неё hero был боком/лицом —
+  это и давало «криво». Walk `tb_go` 60x95/13 колонок/80 ms, 16-direction;
+  `run` пока не подключён.
 - **Slot0 outfit overlay:** live original PID 19692, hero entity `0x3830E38`;
   в памяти загружены `wear\bows\animation\tb_stay.csx`,
   `wear\bows\armor\dospeh_almaz\...`, `wear\bows\elbarms\ponogi_goluboy\...`.

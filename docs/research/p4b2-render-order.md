@@ -465,6 +465,9 @@ Live-снимок того же процесса (Renderer `0x12111360`): кам
   `Shlem_goluboy`; в live-путях есть `wear\bows\helmet\shlem_goluboy\...`.
   `glview --hero-armor` использует bows: base 68x93, armor 33x36 (21,14),
   legs 33x51 (22,39), helmet 17x23 (32,6); скриншот совпадает.
+  Live slot0 hero стоит **спиной** при SEF direction 0; правильная строка
+  `tb_stay` — row0=back, row4=front, **без инверсии**. Прежняя инверсия
+  `4-row` давала бок/лицо и воспринималась как кривой overlay.
 - Slot0 equipped outfit (2026-10-24, пользователь подтвердил): armor item
   `318` Almaz (`puppet\Bronya\Almaz`), elbarms `397` Goluboy
   (`puppet\ponozhi\Goluboi`), helmet `280` — «Шлем из чёрного металла
