@@ -6,6 +6,8 @@
 #include <gl/assets/csx.hpp>
 #include <gl/assets/image.hpp>
 #include <gl/assets/log.hpp>
+#include <gl/assets/pad.hpp>
+#include <gl/game/person_movement.hpp>
 #include <gl/render/animation.hpp>
 
 #include <SDL.h>
@@ -168,6 +170,7 @@ LevelScreen::LevelScreen(LevelScreen&& other) noexcept
       persons_(std::move(other.persons_)),
       masks_(std::move(other.masks_)),
       hero_base_(std::move(other.hero_base_)),
+      hero_go_base_(std::move(other.hero_go_base_)),
       person_keys_(std::move(other.person_keys_)),
       person_order_(std::move(other.person_order_)),
       mask_order_(std::move(other.mask_order_)),
@@ -470,6 +473,22 @@ Result<LevelScreen> LevelScreen::load(SDL_Renderer* renderer, gl::assets::GameVf
         gl::log(gl::LogLevel::warning,
                 "level '" + screen.level_.name + "': cannot decode hero base");
     }
+
+    gl::assets::Image hero_go_base;
+    if (decode_person_image(vfs, "wear/noweapon_thrw/animation/tb_go.csx",
+                            hero_go_base)) {
+        auto texture = gl::render::Texture::from_image(renderer, hero_go_base);
+        if (texture) {
+            screen.hero_go_base_.emplace(std::move(texture.value()));
+        } else {
+            gl::log(gl::LogLevel::warning,
+                    "level '" + screen.level_.name + "': cannot upload hero walk base: " +
+                        texture.error().message);
+        }
+    } else {
+        gl::log(gl::LogLevel::warning,
+                "level '" + screen.level_.name + "': cannot decode hero walk base");
+    }
     return screen;
 }
 
@@ -714,24 +733,48 @@ void LevelScreen::draw_hero_marker(SDL_Renderer* renderer) const {
 }
 
 void LevelScreen::draw_hero_base(SDL_Renderer* renderer, std::uint64_t elapsed_ms) const {
-    if (!hero_ || !hero_base_ || !(camera_.zoom > 0.0f)) return;
+    if (!hero_ || !(camera_.zoom > 0.0f)) return;
     const gl::game::Hero& hero = hero_->controller.hero();
+    const bool moving = hero.has_goal && !hero.path.empty() && hero_go_base_.has_value();
+    if (!moving && !hero_base_) return;
+    const gl::render::Texture& texture = moving ? *hero_go_base_ : *hero_base_;
 
-    constexpr int kFrameWidth = 48;
-    constexpr int kFrameHeight = 92;
-    constexpr int kColumns = 12;
-    constexpr int kIdleDelayMs = 140;
-    constexpr int kFrontRow = 4;
+    int frame_width = 0;
+    int frame_height = 0;
+    int columns = 0;
+    int delay_ms = 0;
+    gl::assets::PadDirectionRow direction{};
+    if (moving) {
+        frame_width = 60;
+        frame_height = 95;
+        columns = 13;
+        delay_ms = 80;
+        direction = gl::assets::pad_person_row(
+            gl::assets::PadAnimationType::tb_go,
+            gl::game::direction8_to16(hero.direction));
+    } else {
+        frame_width = 48;
+        frame_height = 92;
+        columns = 12;
+        delay_ms = 140;
+        direction =
+            gl::assets::pad_person_row(gl::assets::PadAnimationType::tb_stay,
+                                       hero.direction);
+        direction.row = 4 - direction.row;
+    }
+
     const std::size_t column =
-        static_cast<std::size_t>((elapsed_ms / kIdleDelayMs) % kColumns);
-    const SDL_Rect source{static_cast<int>(column) * kFrameWidth,
-                          kFrontRow * kFrameHeight, kFrameWidth, kFrameHeight};
+        static_cast<std::size_t>((elapsed_ms / delay_ms) % columns);
+    const SDL_Rect source{static_cast<int>(column) * frame_width,
+                          static_cast<int>(direction.row) * frame_height,
+                          frame_width, frame_height};
     const SDL_FRect destination =
-        gl::render::to_screen(camera_, hero.x - kFrameWidth * 0.5f,
-                              hero.y - kFrameHeight, static_cast<float>(kFrameWidth),
-                              static_cast<float>(kFrameHeight));
+        gl::render::to_screen(camera_, hero.x - frame_width * 0.5f,
+                              hero.y - frame_height, static_cast<float>(frame_width),
+                              static_cast<float>(frame_height));
     if (!rect_visible(destination, screen_w_, screen_h_)) return;
-    draw_source(renderer, *hero_base_, source, destination);
+    draw_source(renderer, texture, source, destination,
+                direction.mirror ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE);
 }
 
 void LevelScreen::draw_debug_overlay(SDL_Renderer* renderer, int screen_w, int screen_h,

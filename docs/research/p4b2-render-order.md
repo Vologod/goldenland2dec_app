@@ -429,6 +429,13 @@ Live-снимок того же процесса (Renderer `0x12111360`): кам
   hero-позицией; затем — выбор кадра по направлению 8/16 и IAD overlay.
   Точная геометрия кадра (48x92) пока выведена из размера листа и сетки
   12x5; её нужно подтвердить по IAD/клиентскому draw-коду до parity-гейта.
+- P4d direction/walk (2026-10-24): `tb_stay` — 5 рядов (row0 back …
+  row4 front), для hero `direction8` используется `pad_person_row(tb_stay)`
+  с инверсией `row = 4 - row`; `tb_go` — 780x855 = 13x9 кадров 60x95,
+  delay 80, `direction8_to16` + `pad_person_row(tb_go)`. Это рабочая
+  гипотеза: точные row/анкоры и `run` ещё не сверены с оригиналом.
+  `glview --hero-base --no-persons --no-masks --camera-x 1982 --camera-y 94`
+  даёт hero у двери; walk-скриншот пока не автоматизирован.
 
 ## Ограничения
 
