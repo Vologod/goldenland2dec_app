@@ -461,13 +461,15 @@ Live-снимок того же процесса (Renderer `0x12111360`): кам
   `0x3830E38`, name `Вертас` at `+0x44`; в памяти загружены пути
   `wear\bows\animation\tb_stay.csx`, `wear\bows\armor\dospeh_almaz\...`,
   `wear\bows\elbarms\ponogi_goluboy\...` (не `noweapon_thrw`). Значит
-  активный weapon-set — `bows`; `shlem_cherny` в памяти/путях отсутствует.
-  `glview --hero-armor` переключён на bows-базу (68x93), armor 33x36
-  (offset 21,14), legs 33x51 (offset 22,39); скриншот совпадает по силуэту.
+  активный weapon-set — `bows`. Item `280` — tech `HLM_1_12_1`, группа
+  `Shlem_goluboy`; в live-путях есть `wear\bows\helmet\shlem_goluboy\...`.
+  `glview --hero-armor` использует bows: base 68x93, armor 33x36 (21,14),
+  legs 33x51 (22,39), helmet 17x23 (32,6); скриншот совпадает.
 - Slot0 equipped outfit (2026-10-24, пользователь подтвердил): armor item
   `318` Almaz (`puppet\Bronya\Almaz`), elbarms `397` Goluboy
-  (`puppet\ponozhi\Goluboi`), helmet `280` Cherny
-  (`puppet\shlemy\Cherny`). В `BT_HERO` slot0 записи: `0x6d14` (397),
+  (`puppet\ponozhi\Goluboi`), helmet `280` — «Шлем из чёрного металла
+  удара судьбы» (`puppet\shlemy\Cherny`, tech `HLM_1_12_1`).
+  В `BT_HERO` slot0 записи: `0x6d14` (397),
   `0x6e00` (280), `0x6ed8` (318) — хвост item-списка, не фиксированные
   слоты. В `wear.pak` есть `dospeh_almaz` и `ponogi_goluboy`, но нет
   `shlem_cherny` (только diadem_/shlem_ goluboy/krasny/platina/bio/derevo),

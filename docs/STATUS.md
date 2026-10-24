@@ -25,10 +25,13 @@
   в памяти загружены `wear\bows\animation\tb_stay.csx`,
   `wear\bows\armor\dospeh_almaz\...`, `wear\bows\elbarms\ponogi_goluboy\...`.
   Значит активный weapon-set — `bows`, не `noweapon_thrw`. Item ID:
-  `318` armor Almaz, `397` elbarms Goluboy, `280` helmet Cherny.
-  `hero_armor_`/`hero_legs_` переключены на bows: base 68x93, armor 33x36
-  offset `(21,14)`, legs 33x51 offset `(22,39)` (row4). Шлем
-  `shlem_cherny` отсутствует в `wear.pak`/live-путях — не рисуется.
+  `318` armor Almaz, `397` elbarms Goluboy, `280` helmet
+  (tech `HLM_1_12_1`, группа `Shlem_goluboy`; полное имя «Шлем из чёрного
+  металла удара судьбы»).
+  `hero_armor_`/`hero_legs_`/`hero_helmet_` переключены на bows:
+  base 68x93, armor 33x36 offset `(21,14)`, legs 33x51 offset `(22,39)`,
+  helmet 17x23 offset `(32,6)` (row4). Шлем рисуется; `shlem_cherny` —
+  неверное имя ассета.
 - IAD-блоки: заголовок 8×u32 (`type,size,frames,fw,fh,iw,ih,table_offset`);
   `dospeh_kamen` блок type4: 12 кадров, 36x37, таблица 60 записей по 8 байт
   (`x,y,anchor_x,anchor_y` гипотеза). Точная семантика/анкоры ещё не

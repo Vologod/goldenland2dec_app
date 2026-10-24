@@ -175,6 +175,7 @@ LevelScreen::LevelScreen(LevelScreen&& other) noexcept
       hero_armor_(std::move(other.hero_armor_)),
       hero_legs_(std::move(other.hero_legs_)),
       hero_bow_base_(std::move(other.hero_bow_base_)),
+      hero_helmet_(std::move(other.hero_helmet_)),
       person_keys_(std::move(other.person_keys_)),
       person_order_(std::move(other.person_order_)),
       mask_order_(std::move(other.mask_order_)),
@@ -543,6 +544,23 @@ Result<LevelScreen> LevelScreen::load(SDL_Renderer* renderer, gl::assets::GameVf
         gl::log(gl::LogLevel::warning,
                 "level '" + screen.level_.name + "': cannot decode bow base");
     }
+
+    gl::assets::Image hero_helmet;
+    if (decode_person_image(
+            vfs, "wear/bows/helmet/shlem_goluboy/animation/tb_stay.csx",
+            hero_helmet)) {
+        auto texture = gl::render::Texture::from_image(renderer, hero_helmet);
+        if (texture) {
+            screen.hero_helmet_.emplace(std::move(texture.value()));
+        } else {
+            gl::log(gl::LogLevel::warning,
+                    "level '" + screen.level_.name + "': cannot upload hero helmet: " +
+                        texture.error().message);
+        }
+    } else {
+        gl::log(gl::LogLevel::warning,
+                "level '" + screen.level_.name + "': cannot decode hero helmet");
+    }
     return screen;
 }
 
@@ -867,6 +885,21 @@ void LevelScreen::draw_hero_base(SDL_Renderer* renderer, std::uint64_t elapsed_m
         hero.y - frame_height + legs_offset_y[direction.row],
         static_cast<float>(legs_frame_width), static_cast<float>(legs_frame_height));
     draw_source(renderer, *hero_legs_, legs_source, legs_destination,
+                direction.mirror ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE);
+
+    if (!bow_outfit || !hero_helmet_) return;
+    constexpr int kHelmetFrameWidth = 17;
+    constexpr int kHelmetFrameHeight = 23;
+    const std::array<int, 5> helmet_offset_x{31, 31, 33, 30, 32};
+    const std::array<int, 5> helmet_offset_y{10, 8, 16, 8, 6};
+    const SDL_Rect helmet_source{static_cast<int>(column) * kHelmetFrameWidth,
+                                 static_cast<int>(direction.row) * kHelmetFrameHeight,
+                                 kHelmetFrameWidth, kHelmetFrameHeight};
+    const SDL_FRect helmet_destination = gl::render::to_screen(
+        camera_, hero.x - frame_width * 0.5f + helmet_offset_x[direction.row],
+        hero.y - frame_height + helmet_offset_y[direction.row],
+        static_cast<float>(kHelmetFrameWidth), static_cast<float>(kHelmetFrameHeight));
+    draw_source(renderer, *hero_helmet_, helmet_source, helmet_destination,
                 direction.mirror ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE);
 }
 
