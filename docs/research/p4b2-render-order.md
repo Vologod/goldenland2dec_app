@@ -507,6 +507,12 @@ Live-снимок того же процесса (Renderer `0x12111360`): кам
   `this+0xB468..0xB488` и 16-байтовых записей `iVar2 + n*0x10`
   (`x,y,w,h`); destination — `this+0xC360/0xC3E0`. Следующий шаг — связать
   массивы с IAD/CSX и вывести anchors.
+- **Live-проверка (2026-10-24):** hero entity в slot0 существует
+  (`0x4D8BE00`), но `DAT_00469D58 -> 0x3E1D440` имеет нулевые
+  `+0xB468..+0xB488`; `+0xC360/+0xC3E0` заполнены. Значит этот
+  `this` — не активный runtime-менеджер (вероятно editor/paperdoll),
+  а игра рисует hero через PAD. Нужен поиск активного PAD/render_item,
+  не через `DAT_00469D58`.
 - **IAD parser в `GoldenLand.exe` `FUN_00423334`:** после magic `IAD `
   читает блоки (`type,size,frames,fw,fh,...`), затем 16-байтовые записи
   `(x1,y1,x2,y2)` — это **bounds**, не w/h. `FUN_0042279C` использует
