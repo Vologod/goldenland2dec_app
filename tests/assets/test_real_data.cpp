@@ -1,4 +1,5 @@
 #include "gl/assets/csx.hpp"
+#include "gl/assets/iad.hpp"
 #include "gl/assets/itm.hpp"
 #include "gl/assets/pak.hpp"
 #include "gl/assets/sdb.hpp"
@@ -124,4 +125,24 @@ TEST_CASE("real data: every non-empty CSX, SDB and ITM entry decodes" *
     CHECK(decoded[kCsx] > 0);
     CHECK(decoded[kSdb] > 0);
     CHECK(decoded[kItm] > 0);
+}
+TEST_CASE("real data: dospeh_kamen.iad parses into blocks" *
+          doctest::skip(!game_dir_available())) {
+    const char* dir = std::getenv("GL_GAME_DIR");
+    REQUIRE(dir != nullptr);
+    auto vfs = GameVfs::mount(dir);
+    REQUIRE(vfs.has_value());
+    auto data = vfs->read("wear/noweapon_thrw/armor/dospeh_kamen/dospeh_kamen.iad");
+    REQUIRE(data.has_value());
+    auto blocks = parse_iad(data.value());
+    REQUIRE(blocks.has_value());
+    REQUIRE(blocks->size() >= 3);
+    CHECK(blocks->front().type == 1);
+    CHECK(blocks->front().frames == 12);
+    CHECK(blocks->front().frame_width == 32);
+    CHECK(blocks->front().frame_height == 38);
+    CHECK(blocks->front().crops.size() == 60);
+    CHECK(blocks->at(1).type == 4);
+    CHECK(blocks->at(1).frame_width == 36);
+    CHECK(blocks->at(1).crops.size() == 60);
 }

@@ -30,8 +30,13 @@
   `dospeh_kamen` блок type4: 12 кадров, 36x37, таблица 60 записей по 8 байт
   (`x,y,anchor_x,anchor_y` гипотеза). Точная семантика/анкоры ещё не
   подтверждены.
-- **Следующий шаг:** разобрать IAD anchors/таблицу и заменить empirical
-  offset; затем source экипировки из save (слоты `BT_HERO`).
+- **IAD parser:** `gl::assets::parse_iad` (`src/assets/.../iad.hpp/.cpp`)
+  читает контейнер блоков (`type,size,frames,fw,fh,iw,ih,table_size`) и
+  crop-таблицу `x,y,w,h`; synthetic + real `dospeh_kamen.iad` tests
+  (блоки 1/4, 12 кадров, 60 crop-записей). `gl_assets_tests` 158/158,
+  `gl_assets_real_tests --test-case=*dospeh_kamen*` 1/1.
+- **Следующий шаг:** использовать IAD crops/anchors в overlay вместо
+  empirical offset; затем source экипировки из save (слоты `BT_HERO`).
 
 ## P4c parity debt — визуал Вертаса и 6-осевая CanInteract (открыто, 2026-10-24)
 

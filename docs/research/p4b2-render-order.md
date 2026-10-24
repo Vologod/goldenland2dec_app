@@ -448,7 +448,15 @@ Live-снимок того же процесса (Renderer `0x12111360`): кам
   статы (`3,8,7,15,13,8,7,11`); в хвосте блока — item-записи (например
   `0x8e8: 1124,5,11,17,2,22,380`), но экипировки в slot21 нет. Item ID
   `1124` = `T_RECIPE/00`, `1019` = quest, `812` = gold — это инвентарь,
-  не armor.
+  не armor. `BT_HERO` +0x134 (`34,33,26`) — bracelets; item types:
+  11 helmet, 12 armor, 13 shield, 14 elbarms, 15 bracelet, 16 amulet,
+  17 ring. В других слотах есть type12/13/14 (slot0: 300/325/318 armor,
+  353 shield, 380 elbarms), но привязка к equipped-слотам ещё не доказана.
+- IAD parser (2026-10-24): `parse_iad` читает блоки от offset 4:
+  `type,size,frames,fw,fh,iw,ih,table_size`, crop-таблица с +0x20,
+  запись `int16 x,y,w,h`; блок занимает `size+4`. Реальный
+  `dospeh_kamen.iad` даёт блок type1 (12, 32x38, 60 crop) и type4
+  (12, 36x37, 60 crop), всего ≥3 блока; synthetic + real tests passed.
 
 ## Ограничения
 
