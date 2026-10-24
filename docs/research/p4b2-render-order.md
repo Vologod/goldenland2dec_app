@@ -466,6 +466,17 @@ Live-снимок того же процесса (Renderer `0x12111360`): кам
   `shlem_cherny` (только diadem_/shlem_ goluboy/krasny/platina/bio/derevo),
   поэтому чёрный шлем пока без overlay. `glview --hero-armor` = Almaz +
   Goluboy; смещения alpha-корреляцией: armor `(7,16)`, legs `(9,37)` row4.
+- P4d BT_HERO writer (2026-10-24): `0x1401e690` пишет
+  `8+4+0x11c+12+0x600+12+8` байт плюс `0x1401d84c`: 4×32 байта и
+  `count×20`; для slot0 (quest_count=26) тело заканчивается на `+0x9D4`.
+  Следом `0x1401e340` пишет список: count `[edi+0xf44]`, индексы
+  `[edi+0xf34]`, каждый item через vtable. В slot0 там count=1, а
+  equipment ID `318/397/280` лежат позже (`0x6d14/0x6e00/0x6ed8`) — значит
+  их пишет другой sub-block, не `0x1401e340`.
+- `0x1404f4bc` item writer: 0xC0 байт raw item + `u32 subcount` +
+  `12*subcount` байт. Это подтверждает размер записи, но не даёт начала
+  списка экипировки; следующий target — caller после `0x1401e340` в
+  save-функции `0x14031e67..`.
 
 ## Ограничения
 
