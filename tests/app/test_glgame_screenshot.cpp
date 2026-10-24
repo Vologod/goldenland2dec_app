@@ -708,7 +708,7 @@ TEST_CASE("glgame --click-npc opens the dialog overlay over the level" *
     CHECK(different > 1280u * 220u / 10u);
 }
 
-TEST_CASE("glgame --click-npc with a non-talkable index opens no overlay" *
+TEST_CASE("glgame --click-npc with an out-of-range index opens no overlay" *
           doctest::skip(!font_available())) {
     const char* game_dir = std::getenv("GL_GAME_DIR");
     REQUIRE(game_dir != nullptr);
@@ -735,7 +735,7 @@ TEST_CASE("glgame --click-npc with a non-talkable index opens no overlay" *
     CHECK(baseline_code == 0);
     CHECK(click_code == 0);
     CHECK(output.find("dialog: '") == std::string::npos);
-    CHECK(output.find("not talkable") == std::string::npos);
+    CHECK(output.find("invalid person index") != std::string::npos);
     check_png(click_png, 1280, 720);
 
     int baseline_width = 0;

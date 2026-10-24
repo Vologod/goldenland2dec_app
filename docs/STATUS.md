@@ -25,8 +25,10 @@
   Движущиеся talkable NPC `L0.P678_citizen4` (MOVED_FLIP) и
   `L0.P7_Kolbasens_Rodstvennik1` (RANDOM_RADIUS) также открывают
   `scripts/dialogs/l1_1_nap/l1_svet_malepeasant1.age.cs` с непустым текстом.
-  Non-talkable/невалидный индекс `--click-npc` не открывает overlay и не
-  меняет кадр; `--click-world` проверен на не-spawn клетке `(218,50)`.
+  Невалидный индекс `--click-npc` не открывает overlay и не меняет кадр
+  (E2E); ветка non-talkable NPC без `scr_dialog` покрыта unit-helper, но не
+  real E2E — в `l1_1` нет такого NPC. Отсутствующий dialog script — unit +
+  warning-путь; `--click-world` проверен на не-spawn клетке `(218,50)`.
 - Проверка: `cmake --build build` — успех; `glgame_screenshot_tests` — **20/20**,
   391 assertion; `level_click_tests` — **22/22**, 71 assertion; `gl_game_tests`
   — **82/82**, 67 211 assertions (8 skipped); полный `ctest` с `GL_GAME_DIR`
