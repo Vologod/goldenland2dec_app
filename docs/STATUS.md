@@ -39,8 +39,11 @@
   crop-таблицу `x,y,w,h`; synthetic + real `dospeh_kamen.iad` tests
   (блоки 1/4, 12 кадров, 60 crop-записей). `gl_assets_tests` 158/158,
   `gl_assets_real_tests --test-case=*dospeh_kamen*` 1/1.
-- **Следующий шаг:** использовать IAD crops/anchors в overlay вместо
-  empirical offset; затем source экипировки из save (слоты `BT_HERO`).
+- **Сверка с оригиналом:** item ID `318/397/280` из slot0 → ITM type/icon
+  (`T_ARMOUR\Almaz`, `T_ELBARMS\Goluboi`, `T_HELM\Cherny`); `wear.pak`
+  содержит `dospeh_almaz`/`ponogi_goluboy`, но не `shlem_cherny`.
+- **Следующий шаг:** динамический разбор item-контейнеров `BT_HERO`
+  (`0x1404f4bc`) вместо хардкода slot0; затем IAD anchors.
 
 ## P4c parity debt — визуал Вертаса и 6-осевая CanInteract (открыто, 2026-10-24)
 
