@@ -1,9 +1,9 @@
 # STATUS
 
-Обновлено: 2026-10-23
-## P4c — клик → диалог (реализовано; automated acceptance passed, manual gate OPEN, 2026-10-23)
+Обновлено: 2026-10-24
+## P4c — клик → диалог (принят 2026-10-24; automated + manual gate passed)
 
-- Реализованы Tasks 1–7: SEF `points_entrance`; `Hero`/`HeroController` (spawn
+- Реализованы Tasks 1–8: SEF `points_entrance`; `Hero`/`HeroController` (spawn
   на первом walkable entrance, путь через `find_path`, AABB `can_interact`,
   скорость `iso_speed`); hero-маркер 20 px участвует в Y-sort и масках;
   `ClickTarget`/`click_target` и hit-test по PAD-кадру; `dialog_script_path`;
@@ -33,12 +33,12 @@
   391 assertion; `level_click_tests` — **22/22**, 71 assertion; `gl_game_tests`
   — **82/82**, 67 211 assertions (8 skipped); полный `ctest` с `GL_GAME_DIR`
   — **17/17 passed**, 865.27 s, exit 0.
-- **Manual desktop gate OPEN:** пользователь должен в `glgame` проверить клик по
-  NPC → подход → диалог поверх уровня, `Esc` → уровень, клик по земле и NPC без
-  диалога. Без этого **P4c не принят** (`[~]`). Известные ограничения: hero —
-  маркер, а не PAD Вертаса; `CanInteract` — AABB-приближение вместо 6-осевой
-  формулы оригинала; серверный `0x12`/`OpenDialog` не реализован; точный
-  PAD/визуал Вертаса — вне P4c.
+- **Manual desktop gate PASSED 2026-10-24:** пользователь проверил в `glgame`
+  клик по NPC → подход → диалог поверх уровня, `Esc` → уровень, клик по земле и
+  NPC без диалога. **P4c принят.** Известные ограничения: hero — маркер, а не
+  PAD Вертаса; `CanInteract` — AABB-приближение вместо 6-осевой формулы
+  оригинала; серверный `0x12`/`OpenDialog` не реализован; точный PAD/визуал
+  Вертаса — вне P4c.
 - Spec/plan готовы: `docs/specs/2026-10-23-p4c-click-dialog-design.md`,
   `docs/plans/2026-10-23-p4c-click-dialog.md`.
 **Реверс клиента:**
@@ -460,15 +460,14 @@ P4b — движение NPC: Tasks 1–6 завершены 2026-10-22, automat
 manual desktop gate пройден — **P4b принят**. P4b2 — коллизии/pathfinding: Tasks 1–5
 завершены 2026-10-22, **automated acceptance passed** (15/15 ctest, 413 cases /
 466 027 assertions; правило сверено с live-сеткой: 0/51520), **manual desktop gate
-OPEN — не принят**. P4c — клик → диалог: Tasks 1–7 завершены 2026-10-23,
-**automated acceptance passed** (`glgame_screenshot_tests` 20/20; полный ctest
-17/17), **manual desktop gate OPEN — не принят**. Следующий — manual gate P4c;
-P1b (Android/touch) и P2 backfill отложены.
+OPEN — не принят**. P4c — клик → диалог: Tasks 1–8 завершены, automated
+acceptance passed (`glgame_screenshot_tests` 20/20; полный ctest 17/17),
+**manual desktop gate пройден 2026-10-24 — P4c принят**. Следующие — P1b
+(Android/touch) и P2 backfill.
 
 ## Текущая задача
 
-**P4c — клик → диалог: Tasks 1–7 + real acceptance (automated passed 2026-10-23;
-manual gate OPEN).**
+**P4c — клик → диалог: принят 2026-10-24 (Tasks 1–8, automated + manual gate passed).**
 Реализованы hero (spawn на первом walkable entrance, путь, AABB `can_interact`,
 маркер 20 px в Y-sort/масках), hit-test по PAD-кадру, `dialog_script_path`,
 `DialogOverlay` поверх уровня и `glgame --click-npc/--click-world` с pending talk.
@@ -481,11 +480,11 @@ Real `l1_1`: `L1.P621_Svet_3CircusWorkerV` (индекс 13 из `Level::persons
 приоритет ввода overlay — D-039.
 Проверка: `glgame_screenshot_tests` **20/20** (391 assertion);
 `level_click_tests` **22/22**; полный `ctest` с `GL_GAME_DIR` — **17/17
-passed**, 865.27 s, exit 0. **Manual desktop gate
-OPEN:** клик по NPC → подход → диалог, `Esc` → уровень, клик по земле, NPC без
-диалога; без этого P4c не принят (`[~]`). Ограничения: hero — маркер, а не PAD
-Вертаса; `CanInteract` — AABB вместо 6-осевой формулы; server `0x12` не
-реализован; точный PAD/визуал Вертаса вне P4c.
+passed**, 865.27 s, exit 0. **Manual desktop gate PASSED 2026-10-24:** клик по
+NPC → подход → диалог, `Esc` → уровень, клик по земле, NPC без диалога.
+**P4c принят.** Ограничения: hero — маркер, а не PAD Вертаса; `CanInteract` —
+AABB вместо 6-осевой формулы; server `0x12` не реализован; точный
+PAD/визуал Вертаса вне P4c.
 
 **A8 — Cell mask / foreground occlusion реализован 2026-10-23.**
 `BLK_MDSC`/`mask_<number>.csx`: alpha=0-силуэт = occluding foreground, top-left.
@@ -1145,7 +1144,8 @@ P0 закрыт 2026-10-19; далее выполнялись задачи P1 (�
 - gv_free_camera: заглушка P2a — подключить к камере (отключение clamp/следования) или убрать.
 - gv_skip_logo: no-op в P2a; удалить из активных ключей или реализовать при экране логотипа.
 - Конфиг: валидировать ключи (не только значения) на CR/LF; атомарное сохранение уже есть.
-- ServerCore _resolution: зафиксировать допустимые границы в контракте события (сейчас shell ограничивает, сервер — нет).
+- ServerCore 
+_resolution: зафиксировать допустимые границы в контракте события (сейчас shell ограничивает, сервер — нет).
 - Тесты: 	est_real_main возвращает 77 безусловно при отсутствии GL_GAME_DIR; text height scaling; non-ASCII UI — P7.
 - Уточнить exit code в spec §7: отсутствующий обязательный аргумент CLI — 1, отсутствующий каталог — 2.
 
@@ -1184,7 +1184,8 @@ P0 закрыт 2026-10-19; далее выполнялись задачи P1 (�
 ## Backlog P4a (после приёмки)
 
 - SefPerson не хранит literary_name (есть в SEF, P4a не нужен) — добавить в P4b.
-- Нет Y-сортировки NPC (P4b); --no-persons всё равно декодирует текстуры; дубликат es_name грузится дважды; загрузка person'ов eager при каждом load_level — сделать ленивой/опциональной в P4b.
+- Нет Y-сортировки NPC (P4b); --no-persons всё равно декодирует текстуры; дубликат 
+es_name грузится дважды; загрузка person'ов eager при каждом load_level — сделать ленивой/опциональной в P4b.
 - Нет валидации размеров CSX против PAD в загрузчике (рендер проверяет); битая опциональная тень молчит.
 
 
