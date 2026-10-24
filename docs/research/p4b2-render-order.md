@@ -469,28 +469,6 @@ Live-снимок того же процесса (Renderer `0x12111360`): кам
   Live slot0 hero стоит **спиной** при SEF direction 0; правильная строка
   `tb_stay` — row0=back, row4=front, **без инверсии**. Прежняя инверсия
   `4-row` давала бок/лицо и воспринималась как кривой overlay.
-- Ghidra (2026-10-24): `FUN_1202c424` ? ???????? render path. ???
-  `param_2==1` PAD ??????? ?? `render_item+0x48` (??????? `+0x4c` ???
-  alpha/shadow), anchors ? `pad+0xa0..+0xb8` (`+0xb4/+0xb8` ????????? ?
-  culling), draw ? `FUN_12017ae8`/`FUN_12008e00`. `0x12037e14` ?
-  `0x12037f8c` ? Ghidra ?? ???????. Hero render_item candidate
-  `0x37F2954` ????? `+0x48 -> 0x3E67B28`, ?? ??? config/string map
-  (`net_port`/`cl_timeout`), ?????? ??? ?? hero PAD; ????? ??????
-  render_item. ????? `wear` ? ??????????? memory-?????? Client.dll ??
-  ??? refs (?????? ????? ? `.rsrc`/????????? ?????????), ??????? ????
-  ? wear-renderer ??? ?? ??????.
-- Draw-code probe (2026-10-24): `0x120c20cc` ? ?? draw, ? ???????????
-  0x3C-????????? ????? ? `entity+0x04` ? `entity+0x148`. Vtable
-  `0x12125B28` (`0x1203776c/0x1203784c/0x12037d9c/0x12037e14/0x12037f8c`)
-  ? entity-??????/healthbar, ?? wear-????. ????? ?????????? renderer ???
-  ???????, ??????? ???????? IAD/HAD anchors; `0x120c20cc` ??? ????? ?? ????????.
-- HAD base animation data (2026-10-24): `noweapon_thrw.had` и `bows.had`
-  — контейнер с header `type,size`; поля `+0x24/+0x28` (frame w/h?) и
-  `+0x2C/+0x30` (anchor?) дают noweapon `65x92 / 34,78`, bows
-  `70x92 / 37,78`; таблица с `+0x40`, 60 записей по 8 байт
-  (crop `x,y,w,h`). Это кандидат на замену empirical offset: body anchor
-  `(34,78)` / `(37,78)` вместо текущего центра-низа; семантику
-  `+0x2C/+0x30` ещё нужно подтвердить по draw-коду.
 - Slot0 equipped outfit (2026-10-24, пользователь подтвердил): armor item
   `318` Almaz (`puppet\Bronya\Almaz`), elbarms `397` Goluboy
   (`puppet\ponozhi\Goluboi`), helmet `280` — «Шлем из чёрного металла
@@ -512,6 +490,21 @@ Live-снимок того же процесса (Renderer `0x12111360`): кам
   `12*subcount` байт. Это подтверждает размер записи, но не даёт начала
   списка экипировки; следующий target — caller после `0x1401e340` в
   save-функции `0x14031e67..`.
+
+## P4d: wear loader в GoldenLand.exe (2026-10-24)
+
+- Строки `wear\%s\%s\%s\animation\%s` / `shadows` / `seq` находятся в
+  `GoldenLand.exe` (base `0x400000`, `.data1`, VA `0x484528..`), не в
+  Client.dll. Loader: `0x423A6C/0x424532`; грузит 5 слоёв
+  (`armor/elbarms/helmet/shield/weapon`), CSX+shadows и
+  `wear/<set>/seq/<anim>_<layer>.seq`.
+- `.seq` — 61 байт: `0x0C` + 60 индексов (2/3) выбора кадра слоя.
+  Client.dll рисует уже готовый PAD (`FUN_1202c424`), поэтому anchors
+  нужно искать в exe loader/compositor, не в Client PAD.
+- Ghidra `FUN_1202c424`: PAD из `render_item+0x48`/`+0x4c`, anchors
+  `pad+0xa0..+0xb8`, draw `FUN_12017ae8`/`FUN_12008e00`.
+  `0x12037e14/0x12037f8c` — не функции. Hero render_item/PAD не найден;
+  `0x37F2954+0x48 -> 0x3E67B28` — config/string map.
 
 ## Ограничения
 

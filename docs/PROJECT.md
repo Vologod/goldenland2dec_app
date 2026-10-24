@@ -54,6 +54,8 @@
 | P9 | Android | APK, упаковка ассетов, тач-управление, жизненный цикл | P1–P8 | `[ ]` |
 | P10 | Паритет и полировка | прохождение кампании, баланс, багфиксы | всё | `[ ]` |
 
+**P4d (hero equipment/render) — BLOCKED:** slot0 overlay есть, но точные engine anchors не извлечены. Wear-loader найден в `GoldenLand.exe` (`0x423A6C/0x424532`), `.seq` 61 байт; нужен decompile compositor. Детали — `STATUS.md`, `research/p4b2-render-order.md`.
+
 ## Архитектура (кратко)
 
 ```
@@ -83,7 +85,3 @@ ServerCore / ClientCore — граница оригинальной клиент
 - `docs/specs/` — утверждённые спецификации подпроектов.
 - `docs/plans/` — планы реализации.
 - `docs/research/` — факты о бинарниках, форматах, поведении (с источниками).
-
-## P4d status (2026-10-24)
-
-P4d (hero equipment/render) ? **BLOCKED**: ?????????? slot0 overlay ????, ?? ?????? engine anchors/PAD compositor ?? ?????????; empirical offsets ?? parity. ?????? ? `docs/STATUS.md`, `docs/research/p4b2-render-order.md`.
