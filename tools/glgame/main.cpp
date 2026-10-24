@@ -1599,6 +1599,7 @@ class Game {
             options.debug_overlay = debug_overlay_;
             options.walkable_overlay = options_.walkable_overlay;
             options.draw_persons = !options_.no_persons;
+            options.draw_hero_base = true;
             level_->render(window_.renderer(), options, animation_ms);
             scene_drawn = true;
             if (client_.snapshot().paused && !dialog_overlay_.active()) {

@@ -394,18 +394,41 @@ Live-снимок того же процесса (Renderer `0x12111360`): кам
   script-переменных (`hero_has_sword`, `L03_HeroHas...`, `herolife`), но
   прямых `PAD`/`persons`/`wear` путей нет: экипировка, вероятно, хранится
   числовыми item ID. Полный save-парсер (P2c) нужен, чтобы вытащить слоты
-  экипировки. `.hero` (`Вертас.hero`, 284 B, 2013) не обновляется при save
-  и, вероятно, хранит профиль/внешность, не текущие вещи.
+  экипировки. `.hero` (`Вертас.hero`, 284 B, 2013) — **не внешность**, а
+  статы/скиллы: первые 7 int32 `6,7,9,10,13,15,9` совпадают с классом Mage
+  из `scripts/hero.scr` (strength/constitution/dexterity/perception/
+  intelligence/wisdom/luck); далее бинарные флаги навыков.
+- `scripts/hero.scr` — шаблоны классов (`Default`, `Fighter`, `Mage`, `Thief`),
+  `sdb/hero.sdb` — 28 текстов навыков; ни один не задаёт модель.
 - `scripts/UI/hero_generator.scr` — только GUI (кнопки/поля), без ссылок на
   PAD/PRS; preview в `engineres/hero_generator/main.bmp` — статичная
   картинка (без рубашки, чёрный жилет, длинные волосы, коричневые штаны).
-  P1165/P1166 визуально близки, но пользователь их отклонил; база пока не
-  найдена.
-- `wear.pak` устроен как наборы по типу оружия:
-  `wear/<noweapon_thrw|onehand_wpn|two_swords|...>/{armor,helmet,elbarms,
-  weapon,shield,animation,shadows,seq}`, где `.iad` + CSX — слои экипировки.
-  IAD начинается с `IAD ` (version 1), структура похожа на PAD, но парсер
-  и семантика overlay ещё не реализованы.
+  P1165/P1166 визуально близки, но пользователь их отклонил; это концепт,
+  не in-world модель.
+- **Базовая модель hero найдена:** отдельного PAD нет, потому что hero
+  рисуется из `wear.pak`, а не из `persons.pak`. `scripts/herowear.scr`
+  задаёт соответствие категорий (`weapon`, `armor`, `helmet`, `elbarms`,
+  `shield`) и групп предметов каталогам wear-наборов.
+- `wear.pak` — 7 базовых наборов по типу оружия: `bows`, `noweapon_thrw`,
+  `onehand_wpn`, `two_axes_maces`, `two_spears_staffs`, `two_swords`,
+  `xbows_guns`. В каждом есть собственные `animation/*.csx` (базовое тело в
+  позе этого оружия) и overlay-каталоги `armor/`, `helmet/`, `elbarms/`,
+  `shield/` с `.iad` + CSX. База без оружия/метательного:
+  `wear/noweapon_thrw/animation/tb_stay.csx`, 576x460 = 12x5 кадров
+  (48x92); `tb_go` 780x855, `run` 816x900, `rt_stay` 780x460,
+  `rt_go` 900x864, `ss_attack` 792x470, `suffer` 636x485, `die` 1536x630.
+  Декодированный idle: `...\p4d\wear_base_tb_stay.png`.
+- IAD начинается с `IAD ` (version 1); наблюдаемый заголовок
+  `dospeh_kamen.iad`: size `0x510`, `12`, `32`, `38`, `166`, `153`,
+  `480`, `512`, далее 8-байтовые crop/anchor-записи. Структура похожа на
+  PAD, но семантика overlay/анкоров ещё не разобрана.
+- Вывод P4d base: `LevelScreen` должен рисовать hero как
+  `wear/<set>/animation/tb_stay.csx` (idle) + накладывать выбранные
+  overlay-CSX; PAD-путь для hero не используется. Первый проверяемый шаг —
+  декодировать и вывести `wear/noweapon_thrw/animation/tb_stay.csx` под
+  hero-позицией; затем — выбор кадра по направлению 8/16 и IAD overlay.
+  Точная геометрия кадра (48x92) пока выведена из размера листа и сетки
+  12x5; её нужно подтвердить по IAD/клиентскому draw-коду до parity-гейта.
 
 ## Ограничения
 

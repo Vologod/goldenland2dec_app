@@ -1,6 +1,25 @@
 # STATUS
 
 Обновлено: 2026-10-24
+## P4d — базовая модель hero из wear.pak (в работе, 2026-10-24)
+
+- **Базовая модель найдена:** hero не имеет PAD; база — `wear.pak` →
+  `wear/noweapon_thrw/animation/tb_stay.csx` (idle, 576x460 = 12x5,
+  кадр 48x92). Слои экипировки — `armor/helmet/elbarms/shield` с `.iad`+CSX.
+  `scripts/herowear.scr` — карта item-групп на wear-каталоги.
+- `.hero` — статы/скиллы (первые 7 int32 = Mage 6/7/9/10/13/15/9), не внешность.
+  `hero_generator.scr` — только GUI; preview — концепт.
+- **Сделано:** `LevelScreenOptions::draw_hero_base`; `LevelScreen` загружает
+  `wear/noweapon_thrw/animation/tb_stay.csx` и рисует idle (front row 4,
+  48x92, low-center) под hero; `glgame` включает base, `glview --hero-base`.
+  Скриншот `glview --hero-base --no-persons --no-masks --camera-x 1982
+  --camera-y 94` показывает базового hero. Тесты: `glview_screenshot_tests`
+  10/10, `person_render_tests` 18/18, `level_click_tests` 22/22;
+  `glgame_screenshot_tests` 20/20.
+- **Следующий шаг:** направление/анимация по `tb_go`/`run`, IAD overlay и
+  точная геометрия кадра/анкора; сейчас row 4/48x92 — рабочая гипотеза,
+  не parity-подтверждённая.
+
 ## P4c parity debt — визуал Вертаса и 6-осевая CanInteract (открыто, 2026-10-24)
 
 - Закрыто исследование PAD: отдельного `persons\hero` PAD нет

@@ -167,6 +167,7 @@ LevelScreen::LevelScreen(LevelScreen&& other) noexcept
       animations_(std::move(other.animations_)),
       persons_(std::move(other.persons_)),
       masks_(std::move(other.masks_)),
+      hero_base_(std::move(other.hero_base_)),
       person_keys_(std::move(other.person_keys_)),
       person_order_(std::move(other.person_order_)),
       mask_order_(std::move(other.mask_order_)),
@@ -454,6 +455,21 @@ Result<LevelScreen> LevelScreen::load(SDL_Renderer* renderer, gl::assets::GameVf
     }
 
     screen.ensure_hero();
+
+    gl::assets::Image hero_base;
+    if (decode_person_image(vfs, "wear/noweapon_thrw/animation/tb_stay.csx", hero_base)) {
+        auto texture = gl::render::Texture::from_image(renderer, hero_base);
+        if (texture) {
+            screen.hero_base_.emplace(std::move(texture.value()));
+        } else {
+            gl::log(gl::LogLevel::warning,
+                    "level '" + screen.level_.name + "': cannot upload hero base: " +
+                        texture.error().message);
+        }
+    } else {
+        gl::log(gl::LogLevel::warning,
+                "level '" + screen.level_.name + "': cannot decode hero base");
+    }
     return screen;
 }
 
@@ -528,7 +544,13 @@ void LevelScreen::render(SDL_Renderer* renderer, const LevelScreenOptions& optio
                 if (draw_person_next) {
                     const std::size_t key_index = person_order_[person_index];
                     if (hero_has_key && key_index == hero_sentinel) {
-                        if (pass == PersonPass::body) draw_hero_marker(renderer);
+                        if (pass == PersonPass::body) {
+                            if (options.draw_hero_base && hero_base_) {
+                                draw_hero_base(renderer, elapsed_ms);
+                            } else {
+                                draw_hero_marker(renderer);
+                            }
+                        }
                     } else if (options.draw_persons) {
                         draw_person(renderer, persons_[key_index], simulated_ms_, pass);
                     }
@@ -689,6 +711,27 @@ void LevelScreen::draw_hero_marker(SDL_Renderer* renderer) const {
 
     SDL_SetRenderDrawColor(renderer, old_r, old_g, old_b, old_a);
     SDL_SetRenderDrawBlendMode(renderer, old_blend);
+}
+
+void LevelScreen::draw_hero_base(SDL_Renderer* renderer, std::uint64_t elapsed_ms) const {
+    if (!hero_ || !hero_base_ || !(camera_.zoom > 0.0f)) return;
+    const gl::game::Hero& hero = hero_->controller.hero();
+
+    constexpr int kFrameWidth = 48;
+    constexpr int kFrameHeight = 92;
+    constexpr int kColumns = 12;
+    constexpr int kIdleDelayMs = 140;
+    constexpr int kFrontRow = 4;
+    const std::size_t column =
+        static_cast<std::size_t>((elapsed_ms / kIdleDelayMs) % kColumns);
+    const SDL_Rect source{static_cast<int>(column) * kFrameWidth,
+                          kFrontRow * kFrameHeight, kFrameWidth, kFrameHeight};
+    const SDL_FRect destination =
+        gl::render::to_screen(camera_, hero.x - kFrameWidth * 0.5f,
+                              hero.y - kFrameHeight, static_cast<float>(kFrameWidth),
+                              static_cast<float>(kFrameHeight));
+    if (!rect_visible(destination, screen_w_, screen_h_)) return;
+    draw_source(renderer, *hero_base_, source, destination);
 }
 
 void LevelScreen::draw_debug_overlay(SDL_Renderer* renderer, int screen_w, int screen_h,
