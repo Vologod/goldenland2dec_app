@@ -177,6 +177,7 @@ private:
     std::optional<gl::render::Texture> hero_base_;
     std::optional<gl::render::Texture> hero_go_base_;
     std::optional<gl::render::Texture> hero_armor_;
+    std::optional<gl::render::Texture> hero_legs_;
     std::vector<PersonDrawKey> person_keys_;
     std::vector<std::size_t> person_order_;
     std::vector<std::size_t> mask_order_;

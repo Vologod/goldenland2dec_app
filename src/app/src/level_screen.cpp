@@ -172,6 +172,7 @@ LevelScreen::LevelScreen(LevelScreen&& other) noexcept
       hero_base_(std::move(other.hero_base_)),
       hero_go_base_(std::move(other.hero_go_base_)),
       hero_armor_(std::move(other.hero_armor_)),
+      hero_legs_(std::move(other.hero_legs_)),
       person_keys_(std::move(other.person_keys_)),
       person_order_(std::move(other.person_order_)),
       mask_order_(std::move(other.mask_order_)),
@@ -494,7 +495,7 @@ Result<LevelScreen> LevelScreen::load(SDL_Renderer* renderer, gl::assets::GameVf
     gl::assets::Image hero_armor;
     if (decode_person_image(
             vfs,
-            "wear/noweapon_thrw/armor/dospeh_kamen/animation/tb_stay.csx",
+            "wear/noweapon_thrw/armor/dospeh_almaz/animation/tb_stay.csx",
             hero_armor)) {
         auto texture = gl::render::Texture::from_image(renderer, hero_armor);
         if (texture) {
@@ -507,6 +508,23 @@ Result<LevelScreen> LevelScreen::load(SDL_Renderer* renderer, gl::assets::GameVf
     } else {
         gl::log(gl::LogLevel::warning,
                 "level '" + screen.level_.name + "': cannot decode hero armor");
+    }
+
+    gl::assets::Image hero_legs;
+    if (decode_person_image(
+            vfs, "wear/noweapon_thrw/elbarms/ponogi_goluboy/animation/tb_stay.csx",
+            hero_legs)) {
+        auto texture = gl::render::Texture::from_image(renderer, hero_legs);
+        if (texture) {
+            screen.hero_legs_.emplace(std::move(texture.value()));
+        } else {
+            gl::log(gl::LogLevel::warning,
+                    "level '" + screen.level_.name + "': cannot upload hero legs: " +
+                        texture.error().message);
+        }
+    } else {
+        gl::log(gl::LogLevel::warning,
+                "level '" + screen.level_.name + "': cannot decode hero legs");
     }
     return screen;
 }
@@ -811,6 +829,23 @@ void LevelScreen::draw_hero_base(SDL_Renderer* renderer, std::uint64_t elapsed_m
         hero.y - frame_height + kArmorOffsetY[direction.row],
         static_cast<float>(kArmorFrameWidth), static_cast<float>(kArmorFrameHeight));
     draw_source(renderer, *hero_armor_, armor_source, armor_destination,
+                direction.mirror ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE);
+
+    if (!hero_legs_) return;
+    constexpr int kLegsFrameWidth = 36;
+    constexpr int kLegsFrameHeight = 51;
+    constexpr int kLegsColumns = 11;
+    constexpr int kLegsOffsetX = 9;
+    constexpr int kLegsOffsetY[5] = {36, 37, 38, 38, 37};
+    const std::size_t legs_column = column % kLegsColumns;
+    const SDL_Rect legs_source{static_cast<int>(legs_column) * kLegsFrameWidth,
+                               static_cast<int>(direction.row) * kLegsFrameHeight,
+                               kLegsFrameWidth, kLegsFrameHeight};
+    const SDL_FRect legs_destination = gl::render::to_screen(
+        camera_, hero.x - frame_width * 0.5f + kLegsOffsetX,
+        hero.y - frame_height + kLegsOffsetY[direction.row],
+        static_cast<float>(kLegsFrameWidth), static_cast<float>(kLegsFrameHeight));
+    draw_source(renderer, *hero_legs_, legs_source, legs_destination,
                 direction.mirror ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE);
 }
 

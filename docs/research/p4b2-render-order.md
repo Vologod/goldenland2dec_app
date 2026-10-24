@@ -457,6 +457,15 @@ Live-снимок того же процесса (Renderer `0x12111360`): кам
   запись `int16 x,y,w,h`; блок занимает `size+4`. Реальный
   `dospeh_kamen.iad` даёт блок type1 (12, 32x38, 60 crop) и type4
   (12, 36x37, 60 crop), всего ≥3 блока; synthetic + real tests passed.
+- Slot0 equipped outfit (2026-10-24, пользователь подтвердил): armor item
+  `318` Almaz (`puppet\Bronya\Almaz`), elbarms `397` Goluboy
+  (`puppet\ponozhi\Goluboi`), helmet `280` Cherny
+  (`puppet\shlemy\Cherny`). В `BT_HERO` slot0 записи: `0x6d14` (397),
+  `0x6e00` (280), `0x6ed8` (318) — хвост item-списка, не фиксированные
+  слоты. В `wear.pak` есть `dospeh_almaz` и `ponogi_goluboy`, но нет
+  `shlem_cherny` (только diadem_/shlem_ goluboy/krasny/platina/bio/derevo),
+  поэтому чёрный шлем пока без overlay. `glview --hero-armor` = Almaz +
+  Goluboy; смещения alpha-корреляцией: armor `(7,16)`, legs `(9,37)` row4.
 
 ## Ограничения
 
