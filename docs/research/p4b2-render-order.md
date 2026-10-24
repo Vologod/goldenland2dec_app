@@ -457,6 +457,13 @@ Live-снимок того же процесса (Renderer `0x12111360`): кам
   запись `int16 x,y,w,h`; блок занимает `size+4`. Реальный
   `dospeh_kamen.iad` даёт блок type1 (12, 32x38, 60 crop) и type4
   (12, 36x37, 60 crop), всего ≥3 блока; synthetic + real tests passed.
+- Live original slot0 (PID 19692, 2026-10-24): hero client entity
+  `0x3830E38`, name `Вертас` at `+0x44`; в памяти загружены пути
+  `wear\bows\animation\tb_stay.csx`, `wear\bows\armor\dospeh_almaz\...`,
+  `wear\bows\elbarms\ponogi_goluboy\...` (не `noweapon_thrw`). Значит
+  активный weapon-set — `bows`; `shlem_cherny` в памяти/путях отсутствует.
+  `glview --hero-armor` переключён на bows-базу (68x93), armor 33x36
+  (offset 21,14), legs 33x51 (offset 22,39); скриншот совпадает по силуэту.
 - Slot0 equipped outfit (2026-10-24, пользователь подтвердил): armor item
   `318` Almaz (`puppet\Bronya\Almaz`), elbarms `397` Goluboy
   (`puppet\ponozhi\Goluboi`), helmet `280` Cherny

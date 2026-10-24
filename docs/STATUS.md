@@ -21,15 +21,14 @@
   delay 80, 16-направленный `pad_person_row`); `hero_go_base_` грузится рядом
   с idle. Idle-скриншот с направлением из SEF показывает hero лицом/боком у
   двери. `run` пока не подключён.
-- **Slot0 outfit overlay:** пользователь подтвердил: алмазные латы + поножи
-  из голубого металла + шлем из чёрного металла. В `BT_HERO` slot0 это
-  item ID `318` (armor Almaz), `397` (elbarms Goluboy), `280` (helmet
-  Cherny); записи находятся в хвосте блока (`0x6d14`, `0x6e00`, `0x6ed8`
-  относительно `BT_HERO`). `hero_armor_` = `dospeh_almaz`,
-  `hero_legs_` = `ponogi_goluboy`; `glview --hero-armor` показывает
-  синие латы/поножи на hero. Офсеты empirical: armor `(7,16)`, legs
-  `(9,37)` (row4). Шлем `shlem_cherny` в `wear.pak` отсутствует — overlay
-  не рисуется.
+- **Slot0 outfit overlay:** live original PID 19692, hero entity `0x3830E38`;
+  в памяти загружены `wear\bows\animation\tb_stay.csx`,
+  `wear\bows\armor\dospeh_almaz\...`, `wear\bows\elbarms\ponogi_goluboy\...`.
+  Значит активный weapon-set — `bows`, не `noweapon_thrw`. Item ID:
+  `318` armor Almaz, `397` elbarms Goluboy, `280` helmet Cherny.
+  `hero_armor_`/`hero_legs_` переключены на bows: base 68x93, armor 33x36
+  offset `(21,14)`, legs 33x51 offset `(22,39)` (row4). Шлем
+  `shlem_cherny` отсутствует в `wear.pak`/live-путях — не рисуется.
 - IAD-блоки: заголовок 8×u32 (`type,size,frames,fw,fh,iw,ih,table_offset`);
   `dospeh_kamen` блок type4: 12 кадров, 36x37, таблица 60 записей по 8 байт
   (`x,y,anchor_x,anchor_y` гипотеза). Точная семантика/анкоры ещё не
