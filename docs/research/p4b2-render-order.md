@@ -507,6 +507,12 @@ Live-снимок того же процесса (Renderer `0x12111360`): кам
   `this+0xB468..0xB488` и 16-байтовых записей `iVar2 + n*0x10`
   (`x,y,w,h`); destination — `this+0xC360/0xC3E0`. Следующий шаг — связать
   массивы с IAD/CSX и вывести anchors.
+- **IAD parser в `GoldenLand.exe` `FUN_00423334`:** после magic `IAD `
+  читает блоки (`type,size,frames,fw,fh,...`), затем 16-байтовые записи
+  `(x1,y1,x2,y2)` — это **bounds**, не w/h. `FUN_0042279C` использует
+  `w=x2-x1`, `h=y2-y1` и blit-ит crop слоя в PAD; offsets — из массивов
+  `this+0xB468..0xB488`, seq-байт выбирает слой. Это точная engine-схема;
+  осталось перенести массивы/anchors в порт.
 - Ghidra `FUN_1202c424`: PAD из `render_item+0x48`/`+0x4c`, anchors
   `pad+0xa0..+0xb8`, draw `FUN_12017ae8`/`FUN_12008e00`.
   `0x12037e14/0x12037f8c` — не функции. Hero render_item/PAD не найден;
