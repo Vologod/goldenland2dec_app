@@ -469,6 +469,13 @@ Live-снимок того же процесса (Renderer `0x12111360`): кам
   Live slot0 hero стоит **спиной** при SEF direction 0; правильная строка
   `tb_stay` — row0=back, row4=front, **без инверсии**. Прежняя инверсия
   `4-row` давала бок/лицо и воспринималась как кривой overlay.
+- HAD base animation data (2026-10-24): `noweapon_thrw.had` и `bows.had`
+  — контейнер с header `type,size`; поля `+0x24/+0x28` (frame w/h?) и
+  `+0x2C/+0x30` (anchor?) дают noweapon `65x92 / 34,78`, bows
+  `70x92 / 37,78`; таблица с `+0x40`, 60 записей по 8 байт
+  (crop `x,y,w,h`). Это кандидат на замену empirical offset: body anchor
+  `(34,78)` / `(37,78)` вместо текущего центра-низа; семантику
+  `+0x2C/+0x30` ещё нужно подтвердить по draw-коду.
 - Slot0 equipped outfit (2026-10-24, пользователь подтвердил): armor item
   `318` Almaz (`puppet\Bronya\Almaz`), elbarms `397` Goluboy
   (`puppet\ponozhi\Goluboi`), helmet `280` — «Шлем из чёрного металла
