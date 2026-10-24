@@ -24,6 +24,7 @@ public:
     void spawn_at_tile(Tile tile);
     void set_hero_world(float x, float y);
     bool set_goal(Tile goal);
+    void clear_goal();
     void advance(double dt_seconds);
     bool can_interact(const PersonInstance& person, const PersonMovement& movement) const;
     const Hero& hero() const { return hero_; }

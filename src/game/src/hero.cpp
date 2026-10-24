@@ -140,8 +140,9 @@ bool HeroController::set_goal(Tile goal) {
         return reject();
     if (!tile_occupied_by_person(goal)) {
         std::vector<Tile> path = find_path(level_.walkable, hero_.tile, goal, blocked_for(goal));
-        if (!path.empty())
-            return commit(goal, std::move(path));
+        if (path.empty())
+            return reject();
+        return commit(goal, std::move(path));
     }
     for (std::int32_t radius = 1; radius <= kFallbackRadius; ++radius) {
         for (const auto& step : kStepDirs) {
@@ -155,6 +156,13 @@ bool HeroController::set_goal(Tile goal) {
         }
     }
     return reject();
+}
+
+void HeroController::clear_goal() {
+    hero_.has_goal = false;
+    hero_.path.clear();
+    hero_.path_index = 0;
+    hero_.goal = hero_.tile;
 }
 
 void HeroController::advance(double dt_seconds) {

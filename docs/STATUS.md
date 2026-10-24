@@ -9,15 +9,28 @@
   `ClickTarget`/`click_target` и hit-test по PAD-кадру; `dialog_script_path`;
   `DialogOverlay` поверх уровня; в `glgame` — `--click-npc`/`--click-world`,
   pending talk до подхода и `Esc` → возврат в уровень. D-038.
+- Whole-branch review fixes (D-039): клик по NPC целится в текущую клетку
+  `PersonMovement` (`tile_at`), а не в SEF spawn; при смещении NPC pending talk
+  пересчитывает цель и сбрасывается при отказе пути. ПКМ очищает hero
+  goal/path и pending talk; non-talkable NPC не ставит цель; недостижимая
+  свободная цель отклоняется без fallback-соседа (fallback — только для
+  клетки, занятой NPC). Пока активен dialog overlay или save slots, WASD/
+  стрелки и wheel не панорамируют/не зумят уровень.
 - Real `l1_1` automated: индекс `L1.P621_Svet_3CircusWorkerV` берётся из
   загруженного `Level::persons` (не из сырого SEF; фактически 13).
   `glgame --level l1_1 --click-npc 13 --screenshot` → exit 0, герой доходит,
   открывается `scripts/dialogs/l1_1/l1.p621_svet_3circusworkerv.d621.age.cs`,
-  в логе `speaker='L1.P621_Svet_3CircusWorkerV'`, `answers=2`; нижние 220 px
-  отличаются от кадра без клика больше чем на 10%.
-- Проверка: `cmake --build build` — успех; `glgame_screenshot_tests` — **18/18**,
-  343 assertions; полный `ctest` с `GL_GAME_DIR` — **17/17 passed**, 1006.47 s,
-  exit 0.
+  в логе `speaker='L1.P621_Svet_3CircusWorkerV'`, `answers=2`, непустой
+  `text_len`; нижние 220 px отличаются от кадра без клика больше чем на 10%.
+  Движущиеся talkable NPC `L0.P678_citizen4` (MOVED_FLIP) и
+  `L0.P7_Kolbasens_Rodstvennik1` (RANDOM_RADIUS) также открывают
+  `scripts/dialogs/l1_1_nap/l1_svet_malepeasant1.age.cs` с непустым текстом.
+  Non-talkable/невалидный индекс `--click-npc` не открывает overlay и не
+  меняет кадр; `--click-world` проверен на не-spawn клетке `(218,50)`.
+- Проверка: `cmake --build build` — успех; `glgame_screenshot_tests` — **20/20**,
+  391 assertion; `level_click_tests` — **22/22**, 71 assertion; `gl_game_tests`
+  — **82/82**, 67 211 assertions (8 skipped); полный `ctest` с `GL_GAME_DIR`
+  — **17/17 passed**, 865.27 s, exit 0.
 - **Manual desktop gate OPEN:** пользователь должен в `glgame` проверить клик по
   NPC → подход → диалог поверх уровня, `Esc` → уровень, клик по земле и NPC без
   диалога. Без этого **P4c не принят** (`[~]`). Известные ограничения: hero —
@@ -446,7 +459,7 @@ manual desktop gate пройден — **P4b принят**. P4b2 — колли
 завершены 2026-10-22, **automated acceptance passed** (15/15 ctest, 413 cases /
 466 027 assertions; правило сверено с live-сеткой: 0/51520), **manual desktop gate
 OPEN — не принят**. P4c — клик → диалог: Tasks 1–7 завершены 2026-10-23,
-**automated acceptance passed** (`glgame_screenshot_tests` 18/18; полный ctest
+**automated acceptance passed** (`glgame_screenshot_tests` 20/20; полный ctest
 17/17), **manual desktop gate OPEN — не принят**. Следующий — manual gate P4c;
 P1b (Android/touch) и P2 backfill отложены.
 
@@ -460,9 +473,13 @@ manual gate OPEN).**
 Real `l1_1`: `L1.P621_Svet_3CircusWorkerV` (индекс 13 из `Level::persons`,
 не сырой SEF) → exit 0, открывается
 `scripts/dialogs/l1_1/l1.p621_svet_3circusworkerv.d621.age.cs`,
-`speaker='L1.P621_Svet_3CircusWorkerV'`, `answers=2`, overlay поверх уровня.
-Проверка: `glgame_screenshot_tests` **18/18** (343 assertions); полный `ctest`
-с `GL_GAME_DIR` — **17/17 passed**, 1006.47 s, exit 0. **Manual desktop gate
+`speaker='L1.P621_Svet_3CircusWorkerV'`, `answers=2`, непустой текст, overlay
+поверх уровня; движущиеся `L0.P678_citizen4` и `L0.P7_Kolbasens_Rodstvennik1`
+также открывают диалог по текущей клетке. Семантика клика/ретаргета и
+приоритет ввода overlay — D-039.
+Проверка: `glgame_screenshot_tests` **20/20** (391 assertion);
+`level_click_tests` **22/22**; полный `ctest` с `GL_GAME_DIR` — **17/17
+passed**, 865.27 s, exit 0. **Manual desktop gate
 OPEN:** клик по NPC → подход → диалог, `Esc` → уровень, клик по земле, NPC без
 диалога; без этого P4c не принят (`[~]`). Ограничения: hero — маркер, а не PAD
 Вертаса; `CanInteract` — AABB вместо 6-осевой формулы; server `0x12` не

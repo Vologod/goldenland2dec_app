@@ -359,6 +359,12 @@ std::optional<std::size_t> first_talkable_person(const fs::path& game_dir) {
     return std::nullopt;
 }
 
+std::optional<std::size_t> level_person_count(const fs::path& game_dir) {
+    auto level = load_test_level(game_dir);
+    if (!level) return std::nullopt;
+    return level->persons.size();
+}
+
 void check_dialog_content(const fs::path& dialog_png, const fs::path& menu_png) {
     int dialog_width = 0;
     int dialog_height = 0;
@@ -702,6 +708,48 @@ TEST_CASE("glgame --click-npc opens the dialog overlay over the level" *
     CHECK(different > 1280u * 220u / 10u);
 }
 
+TEST_CASE("glgame --click-npc with a non-talkable index opens no overlay" *
+          doctest::skip(!font_available())) {
+    const char* game_dir = std::getenv("GL_GAME_DIR");
+    REQUIRE(game_dir != nullptr);
+    const std::optional<std::size_t> count = level_person_count(game_dir);
+    REQUIRE(count.has_value());
+
+    TempDir temp;
+    const fs::path config = write_test_config(temp.path);
+    const fs::path baseline_png = temp.path / "invalid_baseline.png";
+    const fs::path click_png = temp.path / "invalid_click.png";
+
+    const int baseline_code = run_glgame(
+        screenshot_arguments(game_dir, config, baseline_png, {"--level", "l1_1"}));
+    std::string output;
+    const int click_code = run_glgame_capture(
+        screenshot_arguments(game_dir, config, click_png,
+                             {"--level", "l1_1", "--click-npc", std::to_string(*count)}),
+        output);
+    CAPTURE(baseline_code);
+    CAPTURE(click_code);
+    CAPTURE(output);
+    REQUIRE(fs::exists(baseline_png));
+    REQUIRE(fs::exists(click_png));
+    CHECK(baseline_code == 0);
+    CHECK(click_code == 0);
+    CHECK(output.find("dialog: '") == std::string::npos);
+    CHECK(output.find("not talkable") == std::string::npos);
+    check_png(click_png, 1280, 720);
+
+    int baseline_width = 0;
+    int baseline_height = 0;
+    int click_width = 0;
+    int click_height = 0;
+    const std::vector<unsigned char> baseline =
+        read_png(baseline_png, baseline_width, baseline_height);
+    const std::vector<unsigned char> click = read_png(click_png, click_width, click_height);
+    REQUIRE(baseline_width == click_width);
+    REQUIRE(baseline_height == click_height);
+    CHECK(count_differences(baseline, click) == 0);
+}
+
 TEST_CASE("glgame clicks the real l1_1 P621 circus worker and opens its dialog" *
           doctest::skip(!font_available())) {
     const char* game_dir = std::getenv("GL_GAME_DIR");
@@ -734,6 +782,8 @@ TEST_CASE("glgame clicks the real l1_1 P621 circus worker and opens its dialog" 
                       "l1.p621_svet_3circusworkerv.d621.age.cs'") != std::string::npos);
     CHECK(output.find("speaker='L1.P621_Svet_3CircusWorkerV'") != std::string::npos);
     CHECK(output.find("answers=2") != std::string::npos);
+    CHECK(output.find(" text_len=") != std::string::npos);
+    CHECK(output.find(" text_len=0") == std::string::npos);
     check_png(baseline_png, 1280, 720);
     check_png(dialog_png, 1280, 720);
 
@@ -752,6 +802,40 @@ TEST_CASE("glgame clicks the real l1_1 P621 circus worker and opens its dialog" 
     CHECK(different > 1280u * 220u / 10u);
 }
 
+TEST_CASE("glgame clicks the real l1_1 moving NPCs and opens their dialogs" *
+          doctest::skip(!font_available())) {
+    const char* game_dir = std::getenv("GL_GAME_DIR");
+    REQUIRE(game_dir != nullptr);
+
+    TempDir temp;
+    const fs::path config = write_test_config(temp.path);
+    const std::vector<std::string> names = {
+        "L0.P678_citizen4",
+        "L0.P7_Kolbasens_Rodstvennik1",
+    };
+    for (std::size_t i = 0; i < names.size(); ++i) {
+        CAPTURE(names[i]);
+        const std::optional<std::size_t> person = level_person_index(game_dir, names[i]);
+        REQUIRE(person.has_value());
+        const fs::path png = temp.path / ("moving_" + std::to_string(i) + ".png");
+        std::string output;
+        const int code = run_glgame_capture(
+            screenshot_arguments(game_dir, config, png,
+                                 {"--level", "l1_1", "--click-npc", std::to_string(*person)}),
+            output);
+        CAPTURE(code);
+        CAPTURE(output);
+        REQUIRE(fs::exists(png));
+        CHECK(code == 0);
+        CHECK(output.find("speaker='" + names[i] + "'") != std::string::npos);
+        CHECK(output.find("dialog: 'scripts/dialogs/l1_1_nap/"
+                          "l1_svet_malepeasant1.age.cs'") != std::string::npos);
+        CHECK(output.find(" text_len=") != std::string::npos);
+        CHECK(output.find(" text_len=0") == std::string::npos);
+        check_png(png, 1280, 720);
+    }
+}
+
 TEST_CASE("glgame --click-world sets the hero goal without opening a dialog" *
           doctest::skip(!font_available())) {
     const char* game_dir = std::getenv("GL_GAME_DIR");
@@ -764,7 +848,7 @@ TEST_CASE("glgame --click-world sets the hero goal without opening a dialog" *
     std::string output;
     const int code = run_glgame_capture(
         screenshot_arguments(game_dir, config, png,
-                             {"--level", "l1_1", "--click-world", "180", "21"}),
+                             {"--level", "l1_1", "--click-world", "218", "50"}),
         output);
     CAPTURE(code);
     CAPTURE(output);
@@ -772,6 +856,7 @@ TEST_CASE("glgame --click-world sets the hero goal without opening a dialog" *
     CHECK(code == 0);
     check_png(png, 1280, 720);
     CHECK(output.find("dialog: '") == std::string::npos);
+    CHECK(output.find("cannot path to the clicked world tile") == std::string::npos);
 }
 
 TEST_CASE("glgame --no-persons hides NPC sprites") {

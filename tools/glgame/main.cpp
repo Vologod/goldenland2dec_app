@@ -1,4 +1,6 @@
+#include <gl/app/click_actions.hpp>
 #include <gl/app/dialog_overlay.hpp>
+#include <gl/app/input_gate.hpp>
 #include <gl/app/level_screen.hpp>
 #include <gl/app/pending_talk.hpp>
 #include <gl/assets/cs.hpp>
@@ -527,7 +529,9 @@ class Game {
             client_.on_snapshot(server_.snapshot());
             process_server_events();
 
-            if (state_.state() == gl::core::AppState::level && level_ && !console_visible_) {
+            if (state_.state() == gl::core::AppState::level && level_ &&
+                gl::app::level_input_enabled(dialog_ != nullptr || dialog_overlay_.active(),
+                                             save_slots_, console_visible_)) {
                 int move_x = 0;
                 int move_y = 0;
                 const Uint8* keys = SDL_GetKeyboardState(nullptr);
@@ -623,7 +627,8 @@ class Game {
         refresh_dialog_overlay();
         gl::log(gl::LogLevel::info,
                 "dialog: '" + dialog_->path + "' speaker='" + dialog_->speaker + "' answers=" +
-                    std::to_string(dialog_->session->answers().size()));
+                    std::to_string(dialog_->session->answers().size()) + " text_len=" +
+                    std::to_string(dialog_->session->npc_text().size()));
         return {};
     }
 
@@ -631,6 +636,7 @@ class Game {
         dialog_.reset();
         dialog_overlay_.clear();
         pending_talk_.reset();
+        pending_talk_tile_.reset();
     }
 
     void refresh_dialog_overlay() {
@@ -777,11 +783,27 @@ class Game {
     void handle_person_click(std::size_t index) {
         if (!level_) return;
         const std::vector<gl::game::PersonInstance>& persons = level_->level().persons;
-        if (index >= persons.size()) return;
+        const std::vector<gl::game::PersonMovement>& movements =
+            level_->simulation().persons();
+        if (index >= persons.size() || index >= movements.size()) {
+            gl::log(gl::LogLevel::warning,
+                    "click: invalid person index " + std::to_string(index));
+            return;
+        }
         const gl::game::PersonInstance& person = persons[index];
         const std::optional<std::string> script = talk_script_for(index);
-        if (script && can_interact_person(index)) {
+        const gl::app::PersonClickAction action =
+            gl::app::resolve_person_click(script.has_value(), can_interact_person(index));
+        if (action == gl::app::PersonClickAction::ignore) {
             pending_talk_.reset();
+            pending_talk_tile_.reset();
+            gl::log(gl::LogLevel::warning,
+                    "person '" + person.name + "': not talkable, click ignored");
+            return;
+        }
+        if (action == gl::app::PersonClickAction::open) {
+            pending_talk_.reset();
+            pending_talk_tile_.reset();
             const gl::Result<void> opened = open_dialog(*script, person.name);
             if (!opened) {
                 gl::log(gl::LogLevel::warning,
@@ -790,13 +812,16 @@ class Game {
             }
             return;
         }
-        const bool goal_set =
-            level_->hero().set_goal(gl::game::Tile{person.tile_x, person.tile_y});
-        pending_talk_ = script && goal_set ? std::optional<std::size_t>(index) : std::nullopt;
-        if (!goal_set) {
+        const gl::game::Tile target = gl::app::current_person_tile(movements[index]);
+        if (!level_->hero().set_goal(target)) {
+            pending_talk_.reset();
+            pending_talk_tile_.reset();
             gl::log(gl::LogLevel::warning,
-                    "person '" + person.name + "': cannot path to the NPC tile");
+                    "person '" + person.name + "': cannot path to the current NPC tile");
+            return;
         }
+        pending_talk_ = index;
+        pending_talk_tile_ = target;
     }
 
     void handle_level_click(int x, int y) {
@@ -807,6 +832,7 @@ class Game {
             return;
         }
         pending_talk_.reset();
+        pending_talk_tile_.reset();
         if (target.tile && !level_->hero().set_goal(*target.tile)) {
             gl::log(gl::LogLevel::warning, "cannot path to the clicked tile");
         }
@@ -816,19 +842,38 @@ class Game {
         if (!pending_talk_ || !level_) return;
         const std::size_t index = *pending_talk_;
         const std::vector<gl::game::PersonInstance>& persons = level_->level().persons;
-        if (index >= persons.size()) {
+        const std::vector<gl::game::PersonMovement>& movements =
+            level_->simulation().persons();
+        if (index >= persons.size() || index >= movements.size()) {
             pending_talk_.reset();
+            pending_talk_tile_.reset();
             return;
         }
+        const gl::game::Tile npc_tile = gl::app::current_person_tile(movements[index]);
+        const bool npc_moved = !pending_talk_tile_ || npc_tile != *pending_talk_tile_;
         const gl::app::PendingTalkDecision decision = gl::app::resolve_pending_talk(
-            can_interact_person(index), level_->hero().hero().has_goal);
+            can_interact_person(index), level_->hero().hero().has_goal, npc_moved);
         if (decision == gl::app::PendingTalkDecision::abandon) {
             pending_talk_.reset();
+            pending_talk_tile_.reset();
             return;
         }
         if (decision == gl::app::PendingTalkDecision::wait) return;
+        if (decision == gl::app::PendingTalkDecision::retarget) {
+            if (!level_->hero().set_goal(npc_tile)) {
+                gl::log(gl::LogLevel::warning,
+                        "person '" + persons[index].name +
+                            "': moved to an unreachable tile, pending talk cleared");
+                pending_talk_.reset();
+                pending_talk_tile_.reset();
+                return;
+            }
+            pending_talk_tile_ = npc_tile;
+            return;
+        }
         const std::optional<std::string> script = talk_script_for(index);
         pending_talk_.reset();
+        pending_talk_tile_.reset();
         if (!script) return;
         const gl::Result<void> opened = open_dialog(*script, persons[index].name);
         if (!opened) {
@@ -844,6 +889,7 @@ class Game {
             handle_person_click(static_cast<std::size_t>(options_.click_npc));
         } else if (options_.has_click_world) {
             pending_talk_.reset();
+            pending_talk_tile_.reset();
             if (!level_->hero().set_goal(
                     gl::game::Tile{options_.click_world_x, options_.click_world_y})) {
                 gl::log(gl::LogLevel::warning, "cannot path to the clicked world tile");
@@ -1111,6 +1157,7 @@ class Game {
         level_name_ = std::string(name);
         level_animation_ms_ = 0;
         pending_talk_.reset();
+        pending_talk_tile_.reset();
         update_viewport();
         return true;
     }
@@ -1195,7 +1242,17 @@ class Game {
                 }
                 return;
             case SDL_MOUSEBUTTONDOWN:
-                if (console_visible_ || event.button.button != SDL_BUTTON_LEFT) return;
+                if (console_visible_) return;
+                if (event.button.button == SDL_BUTTON_RIGHT) {
+                    if (!dialog_ && !save_slots_ &&
+                        state_.state() == gl::core::AppState::level && level_) {
+                        level_->hero().clear_goal();
+                        pending_talk_.reset();
+                        pending_talk_tile_.reset();
+                    }
+                    return;
+                }
+                if (event.button.button != SDL_BUTTON_LEFT) return;
                 if (dialog_) {
                     dialog_click(event.button.x, event.button.y);
                 } else if (save_slots_) {
@@ -1224,7 +1281,9 @@ class Game {
                 return;
             case SDL_MOUSEWHEEL:
                 if (console_visible_ || state_.state() != gl::core::AppState::level ||
-                    !level_ || event.wheel.y == 0) {
+                    !level_ || event.wheel.y == 0 ||
+                    !gl::app::level_input_enabled(dialog_ != nullptr || dialog_overlay_.active(),
+                                                  save_slots_, console_visible_)) {
                     return;
                 }
                 {
@@ -1772,6 +1831,7 @@ class Game {
     std::unique_ptr<DialogContext> dialog_;
     gl::app::DialogOverlay dialog_overlay_;
     std::optional<std::size_t> pending_talk_;
+    std::optional<gl::game::Tile> pending_talk_tile_;
     std::uint64_t level_animation_ms_ = 0;
     bool test_dialog_available_ = false;
     bool dialog_launched_from_cli_ = false;

@@ -597,13 +597,16 @@ Expected: unknown flag or no overlay.
 
 - Add `HeroController hero_` to `Game` or `LevelScreen`; update after `LevelSimulation::advance`.
 - Click handling: record `mouse_down`; on `MOUSEBUTTONUP` if distance <4 px call `screen.click_target`; if person:
-  - if `!person.dialog.empty()` and `can_interact` → open dialog;
-  - else set goal to person tile.
+  - non-talkable (`dialog_script_path` nullopt or missing) → warning, no goal;
+  - if `can_interact` → open dialog;
+  - else set goal to the NPC's **current** simulation tile (`tile_at(movement.x,y)`), not `PersonInstance.tile_x/y`; retarget pending talk when the NPC tile changes.
+- RMB: clear hero goal/path and `pending_talk_`.
+- Free click: `set_goal` rejects non-walkable/unreachable goals (no fallback neighbor); occupied NPC target uses nearest-free fallback.
 - `open_dialog` stays; after start fill `DialogOverlay`.
 - `render`: if `level_` exists, render level always; if `dialog_` active, render overlay.
-- Dialog input priority: `dialog_overlay.hit_test`, `handle_dialog_key`; `Esc` closes overlay and session, state remains `level`.
-- Add `--click-npc <index>` and `--click-world <x> <y>` test flags: apply after level load, run 2 s headless, then screenshot/exit.
-- `close_dialog` clears overlay; do not reset `level_`.
+- Dialog input priority: `dialog_overlay.hit_test`, `handle_dialog_key`; `Esc` closes overlay and session, state remains `level`. While dialog/save slots are active, disable WASD/arrow pan and wheel zoom.
+- Add `--click-npc <index>` and `--click-world <x> <y>` test flags: apply after level load, run until goal completes or a bounded timeout, then screenshot/exit.
+- `close_dialog` clears overlay and `pending_talk_`; do not reset `level_`.
 
 - [ ] **Step 4: Run targeted tests**
 

@@ -1,6 +1,8 @@
 #define SDL_MAIN_HANDLED
 #define DOCTEST_CONFIG_IMPLEMENT
 #include <doctest.h>
+#include <gl/app/click_actions.hpp>
+#include <gl/app/input_gate.hpp>
 #include <gl/app/level_screen.hpp>
 #include <gl/app/pending_talk.hpp>
 #include <gl/app/person_render.hpp>
@@ -64,6 +66,44 @@ TEST_CASE("pending talk opens when interaction range is reached") {
 TEST_CASE("pending talk is abandoned when the path ends out of range") {
     CHECK(gl::app::resolve_pending_talk(false, false) ==
           gl::app::PendingTalkDecision::abandon);
+}
+
+TEST_CASE("pending talk retargets when the npc leaves its clicked tile") {
+    CHECK(gl::app::resolve_pending_talk(false, true, true) ==
+          gl::app::PendingTalkDecision::retarget);
+    CHECK(gl::app::resolve_pending_talk(false, false, true) ==
+          gl::app::PendingTalkDecision::retarget);
+    CHECK(gl::app::resolve_pending_talk(true, false, true) ==
+          gl::app::PendingTalkDecision::open);
+}
+
+TEST_CASE("pending talk targets the current simulation tile") {
+    gl::game::PersonInstance person;
+    person.tile_x = 20;
+    person.tile_y = 20;
+    gl::game::PersonMovement movement;
+    movement.x = gl::game::tile_center_x(3);
+    movement.y = gl::game::tile_center_y(4);
+    CHECK(gl::app::current_person_tile(movement) == gl::game::Tile{3, 4});
+}
+
+TEST_CASE("non-talkable npc clicks are ignored instead of starting a path") {
+    CHECK(gl::app::resolve_person_click(false, false) ==
+          gl::app::PersonClickAction::ignore);
+    CHECK(gl::app::resolve_person_click(false, true) ==
+          gl::app::PersonClickAction::ignore);
+    CHECK(gl::app::resolve_person_click(true, true) ==
+          gl::app::PersonClickAction::open);
+    CHECK(gl::app::resolve_person_click(true, false) ==
+          gl::app::PersonClickAction::approach);
+}
+
+TEST_CASE("level input is disabled while a dialog or save overlay owns input") {
+    CHECK(gl::app::level_input_enabled(false, false, false));
+    CHECK_FALSE(gl::app::level_input_enabled(true, false, false));
+    CHECK_FALSE(gl::app::level_input_enabled(false, true, false));
+    CHECK_FALSE(gl::app::level_input_enabled(true, true, false));
+    CHECK_FALSE(gl::app::level_input_enabled(false, false, true));
 }
 
 TEST_CASE("screen_to_tile maps camera and zoom") {
