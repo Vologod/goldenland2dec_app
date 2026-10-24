@@ -590,3 +590,36 @@ TEST_CASE("glview foreground masks occlude a person behind the tower") {
     CAPTURE(differing);
     CHECK(differing > 500);
 }
+TEST_CASE("glview draws the wear armor overlay on the hero base") {
+    const char* game_dir = std::getenv("GL_GAME_DIR");
+    REQUIRE(game_dir != nullptr);
+    TempDir dir;
+    const fs::path base = dir.path / "hero_base.png";
+    const fs::path armor = dir.path / "hero_armor.png";
+    const std::vector<std::string> common = {
+        "--hero-base", "--no-persons", "--no-masks", "--camera-x", "1982",
+        "--camera-y", "94"};
+    REQUIRE(run_glview(glview_arguments(game_dir, base, common)) == 0);
+    std::vector<std::string> armor_args = common;
+    armor_args.push_back("--hero-armor");
+    REQUIRE(run_glview(glview_arguments(game_dir, armor, armor_args)) == 0);
+    int aw = 0, ah = 0, ac = 0, bw = 0, bh = 0, bc = 0;
+    const StbiImage a = load_png(base, aw, ah, ac);
+    const StbiImage b = load_png(armor, bw, bh, bc);
+    REQUIRE(a != nullptr);
+    REQUIRE(b != nullptr);
+    REQUIRE(aw == 1280);
+    REQUIRE(ah == 720);
+    REQUIRE(bw == 1280);
+    REQUIRE(bh == 720);
+    std::uint64_t differing = 0;
+    for (int y = 0; y < ah; ++y)
+        for (int x = 0; x < aw; ++x) {
+            const std::size_t i = (static_cast<std::size_t>(y) * aw + x) * 4;
+            if (a.get()[i] != b.get()[i] || a.get()[i + 1] != b.get()[i + 1] ||
+                a.get()[i + 2] != b.get()[i + 2])
+                ++differing;
+        }
+    CAPTURE(differing);
+    CHECK(differing > 100);
+}

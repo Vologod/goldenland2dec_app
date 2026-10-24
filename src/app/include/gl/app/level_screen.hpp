@@ -28,6 +28,7 @@ struct LevelScreenOptions {
     bool draw_masks = true;
     bool draw_hero = true;
     bool draw_hero_base = false;
+    bool draw_hero_armor = false;
 };
 
 struct Rect {
@@ -161,7 +162,8 @@ private:
     void draw_person(SDL_Renderer* renderer, const Person& person,
                      std::uint64_t elapsed_ms, PersonPass pass) const;
     void draw_hero_marker(SDL_Renderer* renderer) const;
-    void draw_hero_base(SDL_Renderer* renderer, std::uint64_t elapsed_ms) const;
+    void draw_hero_base(SDL_Renderer* renderer, std::uint64_t elapsed_ms,
+                        bool draw_armor) const;
     void draw_debug_overlay(SDL_Renderer* renderer, int screen_w, int screen_h,
                             std::uint64_t elapsed_ms) const;
     void draw_walkable_overlay(SDL_Renderer* renderer) const;
@@ -174,6 +176,7 @@ private:
     std::vector<MaskOverlay> masks_;
     std::optional<gl::render::Texture> hero_base_;
     std::optional<gl::render::Texture> hero_go_base_;
+    std::optional<gl::render::Texture> hero_armor_;
     std::vector<PersonDrawKey> person_keys_;
     std::vector<std::size_t> person_order_;
     std::vector<std::size_t> mask_order_;

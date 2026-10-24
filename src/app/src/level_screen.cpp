@@ -171,6 +171,7 @@ LevelScreen::LevelScreen(LevelScreen&& other) noexcept
       masks_(std::move(other.masks_)),
       hero_base_(std::move(other.hero_base_)),
       hero_go_base_(std::move(other.hero_go_base_)),
+      hero_armor_(std::move(other.hero_armor_)),
       person_keys_(std::move(other.person_keys_)),
       person_order_(std::move(other.person_order_)),
       mask_order_(std::move(other.mask_order_)),
@@ -489,6 +490,24 @@ Result<LevelScreen> LevelScreen::load(SDL_Renderer* renderer, gl::assets::GameVf
         gl::log(gl::LogLevel::warning,
                 "level '" + screen.level_.name + "': cannot decode hero walk base");
     }
+
+    gl::assets::Image hero_armor;
+    if (decode_person_image(
+            vfs,
+            "wear/noweapon_thrw/armor/dospeh_kamen/animation/tb_stay.csx",
+            hero_armor)) {
+        auto texture = gl::render::Texture::from_image(renderer, hero_armor);
+        if (texture) {
+            screen.hero_armor_.emplace(std::move(texture.value()));
+        } else {
+            gl::log(gl::LogLevel::warning,
+                    "level '" + screen.level_.name + "': cannot upload hero armor: " +
+                        texture.error().message);
+        }
+    } else {
+        gl::log(gl::LogLevel::warning,
+                "level '" + screen.level_.name + "': cannot decode hero armor");
+    }
     return screen;
 }
 
@@ -565,7 +584,8 @@ void LevelScreen::render(SDL_Renderer* renderer, const LevelScreenOptions& optio
                     if (hero_has_key && key_index == hero_sentinel) {
                         if (pass == PersonPass::body) {
                             if (options.draw_hero_base && hero_base_) {
-                                draw_hero_base(renderer, elapsed_ms);
+                                draw_hero_base(renderer, elapsed_ms,
+                                               options.draw_hero_armor);
                             } else {
                                 draw_hero_marker(renderer);
                             }
@@ -732,7 +752,8 @@ void LevelScreen::draw_hero_marker(SDL_Renderer* renderer) const {
     SDL_SetRenderDrawBlendMode(renderer, old_blend);
 }
 
-void LevelScreen::draw_hero_base(SDL_Renderer* renderer, std::uint64_t elapsed_ms) const {
+void LevelScreen::draw_hero_base(SDL_Renderer* renderer, std::uint64_t elapsed_ms,
+                                 bool draw_armor) const {
     if (!hero_ || !(camera_.zoom > 0.0f)) return;
     const gl::game::Hero& hero = hero_->controller.hero();
     const bool moving = hero.has_goal && !hero.path.empty() && hero_go_base_.has_value();
@@ -774,6 +795,22 @@ void LevelScreen::draw_hero_base(SDL_Renderer* renderer, std::uint64_t elapsed_m
                               static_cast<float>(frame_height));
     if (!rect_visible(destination, screen_w_, screen_h_)) return;
     draw_source(renderer, texture, source, destination,
+                direction.mirror ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE);
+
+    if (!draw_armor || moving || !hero_armor_) return;
+    constexpr int kArmorFrameWidth = 36;
+    constexpr int kArmorFrameHeight = 37;
+    constexpr int kArmorOffsetX = 7;
+    constexpr int kArmorOffsetY[5] = {16, 18, 27, 15, 16};
+    if (direction.row >= 5) return;
+    const SDL_Rect armor_source{static_cast<int>(column) * kArmorFrameWidth,
+                                static_cast<int>(direction.row) * kArmorFrameHeight,
+                                kArmorFrameWidth, kArmorFrameHeight};
+    const SDL_FRect armor_destination = gl::render::to_screen(
+        camera_, hero.x - frame_width * 0.5f + kArmorOffsetX,
+        hero.y - frame_height + kArmorOffsetY[direction.row],
+        static_cast<float>(kArmorFrameWidth), static_cast<float>(kArmorFrameHeight));
+    draw_source(renderer, *hero_armor_, armor_source, armor_destination,
                 direction.mirror ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE);
 }
 

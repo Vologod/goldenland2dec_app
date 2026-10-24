@@ -21,8 +21,17 @@
   delay 80, 16-направленный `pad_person_row`); `hero_go_base_` грузится рядом
   с idle. Idle-скриншот с направлением из SEF показывает hero лицом/боком у
   двери. `run` пока не подключён.
-- **Следующий шаг:** IAD overlay и точная геометрия/анкоры; row-мэппинг
-  `tb_stay`/`tb_go` — рабочая гипотеза, не parity-подтверждённая.
+- **IAD/overlay prototype:** `hero_armor_` грузит
+  `wear/noweapon_thrw/armor/dospeh_kamen/animation/tb_stay.csx`;
+  `LevelScreenOptions::draw_hero_armor`, `glview --hero-armor`. Смещение
+  подобрано alpha-корреляцией по 5 рядам: `(7,16),(7,18),(7,27),(7,15),
+  (7,16)`; overlay виден поверх torso. Это empirical prototype, не parity.
+- IAD-блоки: заголовок 8×u32 (`type,size,frames,fw,fh,iw,ih,table_offset`);
+  `dospeh_kamen` блок type4: 12 кадров, 36x37, таблица 60 записей по 8 байт
+  (`x,y,anchor_x,anchor_y` гипотеза). Точная семантика/анкоры ещё не
+  подтверждены.
+- **Следующий шаг:** разобрать IAD anchors/таблицу и заменить empirical
+  offset; затем source экипировки из save (слоты `BT_HERO`).
 
 ## P4c parity debt — визуал Вертаса и 6-осевая CanInteract (открыто, 2026-10-24)
 
