@@ -1080,11 +1080,10 @@ P0 закрыт 2026-10-19; далее выполнялись задачи P1 (�
 
 ## Следующие задачи
 
-1. **A7 (в работе):** Y-sort/анкоры/crops — `docs/research/p4b2-render-order.md`;
-   затем A8 (331 runtime-клетка) и idle-STAY cadence.
-2. P4c: клик → диалог (после P4-паритета).
-3. P1b: Android/touch — отложенный follow-up P1.
-4. P7-follow-up: свободный TTF для Android (P9), прокрутка длинных диалогов, layout-константы.
+1. P1b: Android/touch — отложенный follow-up P1 (следующий подпроект).
+2. P2 backfill: отложенные P2-задачи (меню/сейвы/конфиг/UI).
+3. P7-follow-up: свободный TTF для Android (P9), прокрутка длинных диалогов, layout-константы.
+4. Parity debt: точный PAD/визуал Вертаса; точная 6-осевая `CanInteract`; hero speed constants; SEF unknown direction hard error.
 
 ## Открытые вопросы
 
