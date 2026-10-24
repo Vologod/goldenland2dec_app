@@ -460,11 +460,12 @@ Live-снимок того же процесса (Renderer `0x12111360`): кам
 - Live original slot0 (PID 19692, 2026-10-24): hero client entity
   `0x3830E38`, name `Вертас` at `+0x44`; в памяти загружены пути
   `wear\bows\animation\tb_stay.csx`, `wear\bows\armor\dospeh_almaz\...`,
-  `wear\bows\elbarms\ponogi_goluboy\...` (не `noweapon_thrw`). Значит
-  активный weapon-set — `bows`. Item `280` — tech `HLM_1_12_1`, группа
-  `Shlem_goluboy`; в live-путях есть `wear\bows\helmet\shlem_goluboy\...`.
-  `glview --hero-armor` использует bows: base 68x93, armor 33x36 (21,14),
-  legs 33x51 (22,39), helmet 17x23 (32,6); скриншот совпадает.
+  `wear\bows\elbarms\ponogi_goluboy\...`. Но live-скриншот показывает
+  hero **без колчана**, значит активная база — `noweapon_thrw`, а `bows`
+  ресурсы загружены для другого оружия/кеша. Item `280` — tech `HLM_1_12_1`,
+  группа `Shlem_goluboy`; ассет `wear\noweapon_thrw\helmet\shlem_goluboy\...`.
+  `glview --hero-armor` использует noweapon: base 48x92, armor 36x37 (7,17),
+  legs 36x51 (9,36), helmet 17x23 (18,9).
   Live slot0 hero стоит **спиной** при SEF direction 0; правильная строка
   `tb_stay` — row0=back, row4=front, **без инверсии**. Прежняя инверсия
   `4-row` давала бок/лицо и воспринималась как кривой overlay.

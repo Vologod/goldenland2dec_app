@@ -22,16 +22,15 @@
   это и давало «криво». Walk `tb_go` 60x95/13 колонок/80 ms, 16-direction;
   `run` пока не подключён.
 - **Slot0 outfit overlay:** live original PID 19692, hero entity `0x3830E38`;
-  в памяти загружены `wear\bows\animation\tb_stay.csx`,
-  `wear\bows\armor\dospeh_almaz\...`, `wear\bows\elbarms\ponogi_goluboy\...`.
-  Значит активный weapon-set — `bows`, не `noweapon_thrw`. Item ID:
-  `318` armor Almaz, `397` elbarms Goluboy, `280` helmet
-  (tech `HLM_1_12_1`, группа `Shlem_goluboy`; полное имя «Шлем из чёрного
-  металла удара судьбы»).
-  `hero_armor_`/`hero_legs_`/`hero_helmet_` переключены на bows:
-  base 68x93, armor 33x36 offset `(21,14)`, legs 33x51 offset `(22,39)`,
-  helmet 17x23 offset `(32,6)` (row4). Шлем рисуется; `shlem_cherny` —
-  неверное имя ассета.
+  в памяти есть и `wear\bows\...`, и `wear\noweapon_thrw\...`, но на
+  live-скриншоте у hero **нет колчана**, значит активная база —
+  `noweapon_thrw`, не `bows`. Item ID: `318` armor Almaz, `397` elbarms
+  Goluboy, `280` helmet (tech `HLM_1_12_1`, группа `Shlem_goluboy`;
+  полное имя «Шлем из чёрного металла удара судьбы»).
+  `hero_armor_`/`hero_legs_`/`hero_helmet_` — noweapon: base 48x92,
+  armor 36x37 offset `(7,17)`, legs 36x51 offset `(9,36)`,
+  helmet 17x23 offset `(18,9)` (row0). Направление — row0=back без
+  инверсии. Осталось сверить точные anchors/offset с оригиналом.
 - IAD-блоки: заголовок 8×u32 (`type,size,frames,fw,fh,iw,ih,table_offset`);
   `dospeh_kamen` блок type4: 12 кадров, 36x37, таблица 60 записей по 8 байт
   (`x,y,anchor_x,anchor_y` гипотеза). Точная семантика/анкоры ещё не

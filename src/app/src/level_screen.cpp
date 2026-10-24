@@ -498,7 +498,7 @@ Result<LevelScreen> LevelScreen::load(SDL_Renderer* renderer, gl::assets::GameVf
     gl::assets::Image hero_armor;
     if (decode_person_image(
             vfs,
-            "wear/bows/armor/dospeh_almaz/animation/tb_stay.csx",
+            "wear/noweapon_thrw/armor/dospeh_almaz/animation/tb_stay.csx",
             hero_armor)) {
         auto texture = gl::render::Texture::from_image(renderer, hero_armor);
         if (texture) {
@@ -515,7 +515,7 @@ Result<LevelScreen> LevelScreen::load(SDL_Renderer* renderer, gl::assets::GameVf
 
     gl::assets::Image hero_legs;
     if (decode_person_image(
-            vfs, "wear/bows/elbarms/ponogi_goluboy/animation/tb_stay.csx",
+            vfs, "wear/noweapon_thrw/elbarms/ponogi_goluboy/animation/tb_stay.csx",
             hero_legs)) {
         auto texture = gl::render::Texture::from_image(renderer, hero_legs);
         if (texture) {
@@ -531,7 +531,7 @@ Result<LevelScreen> LevelScreen::load(SDL_Renderer* renderer, gl::assets::GameVf
     }
 
     gl::assets::Image hero_bow_base;
-    if (decode_person_image(vfs, "wear/bows/animation/tb_stay.csx", hero_bow_base)) {
+    if (decode_person_image(vfs, "wear/noweapon_thrw/animation/tb_stay.csx", hero_bow_base)) {
         auto texture = gl::render::Texture::from_image(renderer, hero_bow_base);
         if (texture) {
             screen.hero_bow_base_.emplace(std::move(texture.value()));
@@ -547,7 +547,7 @@ Result<LevelScreen> LevelScreen::load(SDL_Renderer* renderer, gl::assets::GameVf
 
     gl::assets::Image hero_helmet;
     if (decode_person_image(
-            vfs, "wear/bows/helmet/shlem_goluboy/animation/tb_stay.csx",
+            vfs, "wear/noweapon_thrw/helmet/shlem_goluboy/animation/tb_stay.csx",
             hero_helmet)) {
         auto texture = gl::render::Texture::from_image(renderer, hero_helmet);
         if (texture) {
@@ -829,8 +829,8 @@ void LevelScreen::draw_hero_base(SDL_Renderer* renderer, std::uint64_t elapsed_m
             gl::assets::PadAnimationType::tb_go,
             gl::game::direction8_to16(hero.direction));
     } else {
-        frame_width = bow_outfit ? 68 : 48;
-        frame_height = bow_outfit ? 93 : 92;
+        frame_width = 48;
+        frame_height = 92;
         columns = 12;
         delay_ms = 140;
         direction =
@@ -852,11 +852,10 @@ void LevelScreen::draw_hero_base(SDL_Renderer* renderer, std::uint64_t elapsed_m
                 direction.mirror ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE);
 
     if (!draw_armor || moving || !hero_armor_) return;
-    const int armor_frame_width = bow_outfit ? 33 : 36;
-    const int armor_frame_height = bow_outfit ? 36 : 37;
-    const int armor_offset_x = bow_outfit ? 21 : 7;
-    const std::array<int, 5> armor_offset_y = bow_outfit ? std::array<int, 5>{17, 23, 13, 15, 14}
-                                             : std::array<int, 5>{16, 18, 27, 15, 16};
+    const int armor_frame_width = 36;
+    const int armor_frame_height = 37;
+    const int armor_offset_x = 7;
+    const std::array<int, 5> armor_offset_y{17, 18, 27, 15, 16};
     if (direction.row >= 5) return;
     const SDL_Rect armor_source{static_cast<int>(column) * armor_frame_width,
                                 static_cast<int>(direction.row) * armor_frame_height,
@@ -869,12 +868,11 @@ void LevelScreen::draw_hero_base(SDL_Renderer* renderer, std::uint64_t elapsed_m
                 direction.mirror ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE);
 
     if (!hero_legs_) return;
-    const int legs_frame_width = bow_outfit ? 33 : 36;
-    const int legs_frame_height = bow_outfit ? 51 : 51;
-    const int legs_columns = bow_outfit ? 12 : 11;
-    const int legs_offset_x = bow_outfit ? 22 : 9;
-    const std::array<int, 5> legs_offset_y = bow_outfit ? std::array<int, 5>{37, 39, 39, 39, 39}
-                                            : std::array<int, 5>{36, 37, 38, 38, 37};
+    const int legs_frame_width = 36;
+    const int legs_frame_height = 51;
+    const int legs_columns = 11;
+    const int legs_offset_x = 9;
+    const std::array<int, 5> legs_offset_y{36, 37, 38, 38, 37};
     const std::size_t legs_column = column % legs_columns;
     const SDL_Rect legs_source{static_cast<int>(legs_column) * legs_frame_width,
                                static_cast<int>(direction.row) * legs_frame_height,
@@ -889,8 +887,8 @@ void LevelScreen::draw_hero_base(SDL_Renderer* renderer, std::uint64_t elapsed_m
     if (!bow_outfit || !hero_helmet_) return;
     constexpr int kHelmetFrameWidth = 17;
     constexpr int kHelmetFrameHeight = 23;
-    const std::array<int, 5> helmet_offset_x{31, 31, 33, 30, 32};
-    const std::array<int, 5> helmet_offset_y{10, 8, 16, 8, 6};
+    const std::array<int, 5> helmet_offset_x{18, 20, 20, 17, 18};
+    const std::array<int, 5> helmet_offset_y{9, 10, 30, 7, 6};
     const SDL_Rect helmet_source{static_cast<int>(column) * kHelmetFrameWidth,
                                  static_cast<int>(direction.row) * kHelmetFrameHeight,
                                  kHelmetFrameWidth, kHelmetFrameHeight};
