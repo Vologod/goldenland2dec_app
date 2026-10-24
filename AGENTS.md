@@ -75,6 +75,15 @@ cmake --build build
 ctest --test-dir build --output-on-failure
 build\bin\glpak.exe info "I:\Games\Златогорье-2"
 build\bin\glview.exe --game-dir "I:\Games\Златогорье-2" --level l1_1
+
+# Ghidra headless (static reverse; уже лежит в .local/toolchains)
+$env:JAVA_HOME="$PWD\.local\toolchains\jdk-21.0.12.1+1"
+$proj="$env:TEMP\ghidra_proj"
+& .local\toolchains\ghidra_12.1.4_PUBLIC\support\analyzeHeadless.bat `
+  $proj glclient -import "I:\Games\Златогорье-2\Client.dll" -overwrite
+& .local\toolchains\ghidra_12.1.4_PUBLIC\support\analyzeHeadless.bat `
+  $proj glclient -process Client.dll -noanalysis `
+  -scriptPath "$env:TEMP" -postScript "DecompileAt.java"
 ```
 
 ## Запрещено
