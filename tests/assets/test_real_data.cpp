@@ -146,3 +146,36 @@ TEST_CASE("real data: dospeh_kamen.iad parses into blocks" *
     CHECK(blocks->at(1).frame_width == 36);
     CHECK(blocks->at(1).crops.size() == 60);
 }
+
+TEST_CASE("real data: slot0 outfit item IDs map to wear assets" *
+          doctest::skip(!game_dir_available())) {
+    const char* dir = std::getenv("GL_GAME_DIR");
+    REQUIRE(dir != nullptr);
+    auto vfs = GameVfs::mount(dir);
+    REQUIRE(vfs.has_value());
+
+    struct Expected {
+        const char *id;
+        ItemType type;
+        const char *puppet_part;
+        const char *wear_path;
+    };
+    const Expected expected[] = {
+        {"318", ItemType::cuirass, "Almaz", "wear/noweapon_thrw/armor/dospeh_almaz/animation/tb_stay.csx"},
+        {"397", ItemType::leggings, "Goluboi", "wear/noweapon_thrw/elbarms/ponogi_goluboy/animation/tb_stay.csx"},
+        {"280", ItemType::helmet, "Cherny", "wear/noweapon_thrw/helmet/shlem_cherny/animation/tb_stay.csx"},
+    };
+    for (const Expected &entry : expected) {
+        auto raw = vfs->read(std::string("items/data/") + entry.id + ".itm");
+        REQUIRE(raw.has_value());
+        auto item = parse_item(raw.value());
+        REQUIRE(item.has_value());
+        CHECK(item->type == entry.type);
+        CHECK(item->puppet_name.find(entry.puppet_part) != std::string::npos);
+        if (std::string(entry.id) == "280") {
+            CHECK_FALSE(vfs->read(entry.wear_path).has_value());
+        } else {
+            CHECK(vfs->read(entry.wear_path).has_value());
+        }
+    }
+}
