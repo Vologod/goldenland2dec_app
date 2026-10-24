@@ -1,50 +1,29 @@
 # STATUS
 
 Обновлено: 2026-10-24
-## P4d — базовая модель hero из wear.pak (в работе, 2026-10-24)
+## P4d ? hero equipment/render (BLOCKED, 2026-10-24)
 
-- **Базовая модель найдена:** hero не имеет PAD; база — `wear.pak` →
-  `wear/noweapon_thrw/animation/tb_stay.csx` (idle, 576x460 = 12x5,
-  кадр 48x92). Слои экипировки — `armor/helmet/elbarms/shield` с `.iad`+CSX.
-  `scripts/herowear.scr` — карта item-групп на wear-каталоги.
-- `.hero` — статы/скиллы (первые 7 int32 = Mage 6/7/9/10/13/15/9), не внешность.
-  `hero_generator.scr` — только GUI; preview — концепт.
-- **Сделано:** `LevelScreenOptions::draw_hero_base`; `LevelScreen` загружает
-  `wear/noweapon_thrw/animation/tb_stay.csx` и рисует idle (front row 4,
-  48x92, low-center) под hero; `glgame` включает base, `glview --hero-base`.
-  Скриншот `glview --hero-base --no-persons --no-masks --camera-x 1982
-  --camera-y 94` показывает базового hero. Тесты: `glview_screenshot_tests`
-  10/10, `person_render_tests` 18/18, `level_click_tests` 22/22;
-  `glgame_screenshot_tests` 20/20.
-- **Направление:** live slot0 показал hero **спиной** (SEF direction 0);
-  правильно `pad_person_row(tb_stay)` без инверсии: row0 = back, row4 = front.
-  Раньше стояла инверсия `row = 4-row`, из-за неё hero был боком/лицом —
-  это и давало «криво». Walk `tb_go` 60x95/13 колонок/80 ms, 16-direction;
-  `run` пока не подключён.
-- **Slot0 outfit overlay:** live original PID 19692, hero entity `0x3830E38`;
-  в памяти есть и `wear\bows\...`, и `wear\noweapon_thrw\...`, но на
-  live-скриншоте у hero **нет колчана**, значит активная база —
-  `noweapon_thrw`, не `bows`. Item ID: `318` armor Almaz, `397` elbarms
-  Goluboy, `280` helmet (tech `HLM_1_12_1`, группа `Shlem_goluboy`;
-  полное имя «Шлем из чёрного металла удара судьбы»).
-  `hero_armor_`/`hero_legs_`/`hero_helmet_` — noweapon: base 48x92,
-  armor 36x37 offset `(7,17)`, legs 36x51 offset `(9,36)`,
-  helmet 17x23 offset `(18,9)` (row0). Направление — row0=back без
-  инверсии. Осталось сверить точные anchors/offset с оригиналом.
-- IAD-блоки: заголовок 8×u32 (`type,size,frames,fw,fh,iw,ih,table_offset`);
-  `dospeh_kamen` блок type4: 12 кадров, 36x37, таблица 60 записей по 8 байт
-  (`x,y,anchor_x,anchor_y` гипотеза). Точная семантика/анкоры ещё не
-  подтверждены.
-- **IAD parser:** `gl::assets::parse_iad` (`src/assets/.../iad.hpp/.cpp`)
-  читает контейнер блоков (`type,size,frames,fw,fh,iw,ih,table_size`) и
-  crop-таблицу `x,y,w,h`; synthetic + real `dospeh_kamen.iad` tests
-  (блоки 1/4, 12 кадров, 60 crop-записей). `gl_assets_tests` 158/158,
-  `gl_assets_real_tests --test-case=*dospeh_kamen*` 1/1.
-- **Сверка с оригиналом:** item ID `318/397/280` из slot0 → ITM type/icon
-  (`T_ARMOUR\Almaz`, `T_ELBARMS\Goluboi`, `T_HELM\Cherny`); `wear.pak`
-  содержит `dospeh_almaz`/`ponogi_goluboy`, но не `shlem_cherny`.
-- **Следующий шаг:** динамический разбор item-контейнеров `BT_HERO`
-  (`0x1404f4bc`) вместо хардкода slot0; затем IAD anchors.
+- **?????:** hero ?????????? ?? ???? PAD; live slot0 (PID 9640, entity
+  `0x3BFA400`) ?????????? item ID `318` Almaz armor, `397` Goluboy
+  elbarms, `280` helmet (tech `HLM_1_12_1`, ?????? `Shlem_goluboy`, ?????
+  `wear/noweapon_thrw/helmet/shlem_goluboy`). ??????? ???? ? `noweapon_thrw`,
+  direction 0 = back (row0, ??? ????????).
+- **???????:** base/armor/legs/helmet overlay ? `LevelScreen`
+  (`--hero-armor`), item?asset mapping ???????? real-??????; IAD parser
+  (`parse_iad`, crop `x,y,w,h`); direction fix; slot0 ????????? ?????????
+  ?? ???????.
+- **?? ??????? / BLOCKED ?? AGENTS ?12:** ?????? engine anchors ??
+  ?????????. Ghidra `FUN_1202c424` ? PAD-render path (`render_item+0x48`,
+  anchors `pad+0xa0..+0xb8`, draw `FUN_12017ae8`), ?? hero-render_item/PAD
+  ?? ??????; `0x37F2954+0x48 -> 0x3E67B28` ???????? config/string map.
+  `wear`-???? ? Client.dll ? ????????? ?????? ??? code refs. Debugger
+  ? ????????? ????????: ????-??????? ????????? ???????.
+- **??????? offsets ? empirical**, ?? parity; ? ??? ?? ???????? ??
+  ???????????? ??????. `glview_screenshot_tests` passed; ?????????
+  ?????????? ?????? `84eab7f`/`2a5c613`, Ghidra-rules `1db728d`.
+- **????????? ???:** ?????????? ????? wear/PAD compositor (Ghidra resource
+  refs/loader), ???? ????????????? ?? ?????? ?????????; ??? ????? P4d ??
+  ?????????.
 
 ## P4c parity debt — визуал Вертаса и 6-осевая CanInteract (открыто, 2026-10-24)
 
