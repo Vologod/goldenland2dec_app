@@ -36,8 +36,8 @@ struct Options {
     bool walkable_overlay = false;
     bool no_persons = false;
     bool no_masks = false;
-    bool hero_base = false;
-    bool hero_armor = false;
+    bool hero_wear = false;
+    gl::game::HeroOutfit hero_outfit;
     std::uint64_t sim_ms = 0;
     bool sim_ms_set = false;
     std::optional<int> camera_x;
@@ -64,8 +64,14 @@ void print_usage() {
               "  --frames <n>       Frames to render before screenshot (default: 1)\n"
               "  --background-only  Draw only the background (skip statics and animations)\n"
               "  --no-persons       Skip NPC sprites\n"
-              "  --hero-base        Draw the wear.pak hero base sprite\n"
-              "  --hero-armor       Overlay the dospeh_kamen armor sprite\n"
+              "  --hero-wear        Draw the hero from wear.pak (HAD/IAD/SEQ)\n"
+              "  --hero-set <name>  Wear set (default: noweapon_thrw)\n"
+              "  --hero-armor <dir> Armor layer dir (default: dospeh_almaz)\n"
+              "  --hero-elbarms <dir> Elbarms layer dir (default: ponogi_goluboy)\n"
+              "  --hero-helmet <dir> Helmet layer dir (default: shlem_goluboy)\n"
+              "  --hero-shield <dir> Shield layer dir (default: none)\n"
+              "  --hero-weapon <dir> Weapon layer dir (default: none)\n"
+              "  --hero-outfit none Disable equipment layers\n"
               "  --sim-ms <ms>      Simulation time for screenshots (ignored interactively)\n"
               "  --camera-x <px>    World X of the left viewport edge (screenshot mode)\n"
               "  --camera-y <px>    World Y of the top viewport edge (screenshot mode)\n"
@@ -181,11 +187,44 @@ ParseStatus parse_args(int argc, char** argv, Options& options) {
             options.background_only = true;
         } else if (arg == "--no-persons") {
             options.no_persons = true;
-        } else if (arg == "--hero-base") {
-            options.hero_base = true;
+        } else if (arg == "--hero-wear") {
+            options.hero_wear = true;
+        } else if (arg == "--hero-set") {
+            if (!next_value(arg, value)) return ParseStatus::error;
+            options.hero_outfit.wear_set = std::string(value);
+            options.hero_wear = true;
         } else if (arg == "--hero-armor") {
-            options.hero_base = true;
-            options.hero_armor = true;
+            if (!next_value(arg, value)) return ParseStatus::error;
+            options.hero_outfit.armor = std::string(value);
+            options.hero_wear = true;
+        } else if (arg == "--hero-elbarms") {
+            if (!next_value(arg, value)) return ParseStatus::error;
+            options.hero_outfit.elbarms = std::string(value);
+            options.hero_wear = true;
+        } else if (arg == "--hero-helmet") {
+            if (!next_value(arg, value)) return ParseStatus::error;
+            options.hero_outfit.helmet = std::string(value);
+            options.hero_wear = true;
+        } else if (arg == "--hero-shield") {
+            if (!next_value(arg, value)) return ParseStatus::error;
+            options.hero_outfit.shield = std::string(value);
+            options.hero_wear = true;
+        } else if (arg == "--hero-weapon") {
+            if (!next_value(arg, value)) return ParseStatus::error;
+            options.hero_outfit.weapon = std::string(value);
+            options.hero_wear = true;
+        } else if (arg == "--hero-outfit") {
+            if (!next_value(arg, value)) return ParseStatus::error;
+            if (value != "none") {
+                std::fprintf(stderr, "glview: --hero-outfit supports only 'none'\n");
+                return ParseStatus::error;
+            }
+            options.hero_outfit = gl::game::HeroOutfit{};
+            options.hero_outfit.wear_set = "noweapon_thrw";
+            options.hero_outfit.armor.clear();
+            options.hero_outfit.elbarms.clear();
+            options.hero_outfit.helmet.clear();
+            options.hero_wear = true;
         } else if (arg == "--sim-ms") {
             if (!next_value(arg, value)) return ParseStatus::error;
             if (!parse_milliseconds(value, options.sim_ms)) {
@@ -425,8 +464,9 @@ int main(int argc, char** argv) {
         gl::platform::SdlContext context;
         gl::platform::Window window("Goldenland 2 - Level Viewer", options.width, options.height);
 
-        auto screen = gl::app::LevelScreen::load(window.renderer(), vfs.value(), options.level,
-                                                 !options.no_persons);
+        auto screen = gl::app::LevelScreen::load(
+            window.renderer(), vfs.value(), options.level, !options.no_persons,
+            options.hero_wear ? &options.hero_outfit : nullptr);
         if (!screen) {
             std::fprintf(stderr, "glview: %s\n", screen.error().message.c_str());
             return exit_code_for(screen.error());
@@ -458,8 +498,7 @@ int main(int argc, char** argv) {
         screen_options.walkable_overlay = options.walkable_overlay;
         screen_options.draw_persons = !options.no_persons;
         screen_options.draw_masks = !options.no_masks;
-        screen_options.draw_hero_base = options.hero_base;
-        screen_options.draw_hero_armor = options.hero_armor;
+        screen_options.draw_hero_wear = options.hero_wear;
         if (!options.screenshot.empty()) {
             return save_screenshot(window.renderer(), options.screenshot, options.frames,
                                    options.sim_ms, options.sim_ms_set, screen.value(),

@@ -6,6 +6,7 @@
 #include <gl/assets/result.hpp>
 #include <gl/assets/vfs.hpp>
 #include <gl/game/hero.hpp>
+#include <gl/game/hero_wear.hpp>
 #include <gl/game/level.hpp>
 #include <gl/game/level_simulation.hpp>
 #include <gl/game/pathfinder.hpp>
@@ -13,6 +14,7 @@
 #include <gl/render/texture.hpp>
 
 #include <cstdint>
+#include <map>
 #include <optional>
 #include <span>
 #include <string_view>
@@ -27,8 +29,7 @@ struct LevelScreenOptions {
     bool draw_persons = true;
     bool draw_masks = true;
     bool draw_hero = true;
-    bool draw_hero_base = false;
-    bool draw_hero_armor = false;
+    bool draw_hero_wear = false;
 };
 
 struct Rect {
@@ -85,7 +86,8 @@ ClickTarget click_target(std::span<const PersonHitTarget> persons,
 class LevelScreen {
 public:
     static Result<LevelScreen> load(SDL_Renderer* renderer, gl::assets::GameVfs& vfs,
-                                    std::string_view level_name, bool load_persons = true);
+                                    std::string_view level_name, bool load_persons = true,
+                                    const gl::game::HeroOutfit* hero_outfit = nullptr);
 
     LevelScreen(LevelScreen&& other) noexcept;
 
@@ -140,6 +142,11 @@ private:
         float center_x = 0.0f;
     };
 
+    struct HeroTextures {
+        gl::render::Texture body;
+        std::optional<gl::render::Texture> shadow;
+    };
+
     enum class PersonPass { shadow, body };
 
     struct HeroBinding {
@@ -162,8 +169,8 @@ private:
     void draw_person(SDL_Renderer* renderer, const Person& person,
                      std::uint64_t elapsed_ms, PersonPass pass) const;
     void draw_hero_marker(SDL_Renderer* renderer) const;
-    void draw_hero_base(SDL_Renderer* renderer, std::uint64_t elapsed_ms,
-                        bool draw_armor) const;
+    void draw_hero_wear(SDL_Renderer* renderer, std::uint64_t elapsed_ms,
+                        PersonPass pass) const;
     void draw_debug_overlay(SDL_Renderer* renderer, int screen_w, int screen_h,
                             std::uint64_t elapsed_ms) const;
     void draw_walkable_overlay(SDL_Renderer* renderer) const;
@@ -174,12 +181,8 @@ private:
     std::vector<Animation> animations_;
     std::vector<Person> persons_;
     std::vector<MaskOverlay> masks_;
-    std::optional<gl::render::Texture> hero_base_;
-    std::optional<gl::render::Texture> hero_go_base_;
-    std::optional<gl::render::Texture> hero_armor_;
-    std::optional<gl::render::Texture> hero_legs_;
-    std::optional<gl::render::Texture> hero_bow_base_;
-    std::optional<gl::render::Texture> hero_helmet_;
+    std::map<std::uint32_t, HeroTextures> hero_textures_;
+    std::map<std::uint32_t, gl::assets::WearHadAnimation> hero_headers_;
     std::vector<PersonDrawKey> person_keys_;
     std::vector<std::size_t> person_order_;
     std::vector<std::size_t> mask_order_;

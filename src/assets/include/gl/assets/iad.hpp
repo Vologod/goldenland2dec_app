@@ -7,10 +7,10 @@
 namespace gl::assets {
 
 struct IadCrop {
-    std::int16_t x = 0;
-    std::int16_t y = 0;
-    std::int16_t w = 0;
-    std::int16_t h = 0;
+    std::int16_t x1 = 0;
+    std::int16_t y1 = 0;
+    std::int16_t x2 = 0;
+    std::int16_t y2 = 0;
 };
 
 struct IadBlock {
@@ -19,9 +19,14 @@ struct IadBlock {
     std::uint32_t frames = 0;
     std::uint32_t frame_width = 0;
     std::uint32_t frame_height = 0;
-    std::uint32_t image_width = 0;
-    std::uint32_t image_height = 0;
+    std::int32_t layer_offset_x = 0;
+    std::int32_t layer_offset_y = 0;
     std::vector<IadCrop> crops;
+    std::uint32_t shadow_frame_width = 0;
+    std::uint32_t shadow_frame_height = 0;
+    std::int32_t shadow_layer_offset_x = 0;
+    std::int32_t shadow_layer_offset_y = 0;
+    std::vector<IadCrop> shadow_crops;
 };
 
 Result<std::vector<IadBlock>> parse_iad(std::span<const std::uint8_t> data);

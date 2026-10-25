@@ -1,6 +1,7 @@
 add_library(gl_game STATIC
     src/dialog_path.cpp
     src/hero.cpp
+    src/hero_wear.cpp
     src/level_loader.cpp
     src/level_simulation.cpp
     src/msvc_random.cpp

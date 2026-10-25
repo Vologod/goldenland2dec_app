@@ -170,12 +170,8 @@ LevelScreen::LevelScreen(LevelScreen&& other) noexcept
       animations_(std::move(other.animations_)),
       persons_(std::move(other.persons_)),
       masks_(std::move(other.masks_)),
-      hero_base_(std::move(other.hero_base_)),
-      hero_go_base_(std::move(other.hero_go_base_)),
-      hero_armor_(std::move(other.hero_armor_)),
-      hero_legs_(std::move(other.hero_legs_)),
-      hero_bow_base_(std::move(other.hero_bow_base_)),
-      hero_helmet_(std::move(other.hero_helmet_)),
+      hero_textures_(std::move(other.hero_textures_)),
+      hero_headers_(std::move(other.hero_headers_)),
       person_keys_(std::move(other.person_keys_)),
       person_order_(std::move(other.person_order_)),
       mask_order_(std::move(other.mask_order_)),
@@ -196,7 +192,8 @@ float LevelScreen::world_width() const { return static_cast<float>(level_.width)
 float LevelScreen::world_height() const { return static_cast<float>(level_.height); }
 
 Result<LevelScreen> LevelScreen::load(SDL_Renderer* renderer, gl::assets::GameVfs& vfs,
-                                      std::string_view level_name, bool load_persons) {
+                                      std::string_view level_name, bool load_persons,
+                                      const gl::game::HeroOutfit* hero_outfit) {
     auto level = gl::game::load_level(vfs, level_name);
     if (!level) {
         return Error{level.error().code, "cannot load level: " + level.error().message};
@@ -464,102 +461,26 @@ Result<LevelScreen> LevelScreen::load(SDL_Renderer* renderer, gl::assets::GameVf
 
     screen.ensure_hero();
 
-    gl::assets::Image hero_base;
-    if (decode_person_image(vfs, "wear/noweapon_thrw/animation/tb_stay.csx", hero_base)) {
-        auto texture = gl::render::Texture::from_image(renderer, hero_base);
-        if (texture) {
-            screen.hero_base_.emplace(std::move(texture.value()));
-        } else {
+    if (hero_outfit != nullptr) {
+        auto visual = gl::game::load_hero_visual(vfs, *hero_outfit);
+        if (!visual) {
             gl::log(gl::LogLevel::warning,
-                    "level '" + screen.level_.name + "': cannot upload hero base: " +
-                        texture.error().message);
-        }
-    } else {
-        gl::log(gl::LogLevel::warning,
-                "level '" + screen.level_.name + "': cannot decode hero base");
-    }
-
-    gl::assets::Image hero_go_base;
-    if (decode_person_image(vfs, "wear/noweapon_thrw/animation/tb_go.csx",
-                            hero_go_base)) {
-        auto texture = gl::render::Texture::from_image(renderer, hero_go_base);
-        if (texture) {
-            screen.hero_go_base_.emplace(std::move(texture.value()));
+                    "level '" + screen.level_.name + "': hero wear: " +
+                        visual.error().message);
         } else {
-            gl::log(gl::LogLevel::warning,
-                    "level '" + screen.level_.name + "': cannot upload hero walk base: " +
-                        texture.error().message);
+            for (const auto& [mask, anim] : visual->animations()) {
+                auto body = gl::render::Texture::from_image(renderer, anim.body);
+                auto shadow = gl::render::Texture::from_image(renderer, anim.shadow);
+                if (!body || !shadow) {
+                    gl::log(gl::LogLevel::warning,
+                            "level '" + screen.level_.name + "': cannot upload hero wear sheet");
+                    continue;
+                }
+                screen.hero_headers_[mask] = anim.header;
+                screen.hero_textures_.emplace(
+                    mask, HeroTextures{std::move(body.value()), std::move(shadow.value())});
+            }
         }
-    } else {
-        gl::log(gl::LogLevel::warning,
-                "level '" + screen.level_.name + "': cannot decode hero walk base");
-    }
-
-    gl::assets::Image hero_armor;
-    if (decode_person_image(
-            vfs,
-            "wear/noweapon_thrw/armor/dospeh_almaz/animation/tb_stay.csx",
-            hero_armor)) {
-        auto texture = gl::render::Texture::from_image(renderer, hero_armor);
-        if (texture) {
-            screen.hero_armor_.emplace(std::move(texture.value()));
-        } else {
-            gl::log(gl::LogLevel::warning,
-                    "level '" + screen.level_.name + "': cannot upload hero armor: " +
-                        texture.error().message);
-        }
-    } else {
-        gl::log(gl::LogLevel::warning,
-                "level '" + screen.level_.name + "': cannot decode hero armor");
-    }
-
-    gl::assets::Image hero_legs;
-    if (decode_person_image(
-            vfs, "wear/noweapon_thrw/elbarms/ponogi_goluboy/animation/tb_stay.csx",
-            hero_legs)) {
-        auto texture = gl::render::Texture::from_image(renderer, hero_legs);
-        if (texture) {
-            screen.hero_legs_.emplace(std::move(texture.value()));
-        } else {
-            gl::log(gl::LogLevel::warning,
-                    "level '" + screen.level_.name + "': cannot upload hero legs: " +
-                        texture.error().message);
-        }
-    } else {
-        gl::log(gl::LogLevel::warning,
-                "level '" + screen.level_.name + "': cannot decode hero legs");
-    }
-
-    gl::assets::Image hero_bow_base;
-    if (decode_person_image(vfs, "wear/noweapon_thrw/animation/tb_stay.csx", hero_bow_base)) {
-        auto texture = gl::render::Texture::from_image(renderer, hero_bow_base);
-        if (texture) {
-            screen.hero_bow_base_.emplace(std::move(texture.value()));
-        } else {
-            gl::log(gl::LogLevel::warning,
-                    "level '" + screen.level_.name + "': cannot upload bow base: " +
-                        texture.error().message);
-        }
-    } else {
-        gl::log(gl::LogLevel::warning,
-                "level '" + screen.level_.name + "': cannot decode bow base");
-    }
-
-    gl::assets::Image hero_helmet;
-    if (decode_person_image(
-            vfs, "wear/noweapon_thrw/helmet/shlem_goluboy/animation/tb_stay.csx",
-            hero_helmet)) {
-        auto texture = gl::render::Texture::from_image(renderer, hero_helmet);
-        if (texture) {
-            screen.hero_helmet_.emplace(std::move(texture.value()));
-        } else {
-            gl::log(gl::LogLevel::warning,
-                    "level '" + screen.level_.name + "': cannot upload hero helmet: " +
-                        texture.error().message);
-        }
-    } else {
-        gl::log(gl::LogLevel::warning,
-                "level '" + screen.level_.name + "': cannot decode hero helmet");
     }
     return screen;
 }
@@ -635,13 +556,10 @@ void LevelScreen::render(SDL_Renderer* renderer, const LevelScreenOptions& optio
                 if (draw_person_next) {
                     const std::size_t key_index = person_order_[person_index];
                     if (hero_has_key && key_index == hero_sentinel) {
-                        if (pass == PersonPass::body) {
-                            if (options.draw_hero_base && hero_base_) {
-                                draw_hero_base(renderer, elapsed_ms,
-                                               options.draw_hero_armor);
-                            } else {
-                                draw_hero_marker(renderer);
-                            }
+                        if (options.draw_hero_wear && !hero_textures_.empty()) {
+                            draw_hero_wear(renderer, elapsed_ms, pass);
+                        } else if (pass == PersonPass::body) {
+                            draw_hero_marker(renderer);
                         }
                     } else if (options.draw_persons) {
                         draw_person(renderer, persons_[key_index], simulated_ms_, pass);
@@ -657,7 +575,7 @@ void LevelScreen::render(SDL_Renderer* renderer, const LevelScreenOptions& optio
                 }
             }
         };
-        if (options.draw_persons) draw_pass(PersonPass::shadow);
+        if (options.draw_persons || options.draw_hero_wear) draw_pass(PersonPass::shadow);
         draw_pass(PersonPass::body);
     }
 
@@ -805,99 +723,56 @@ void LevelScreen::draw_hero_marker(SDL_Renderer* renderer) const {
     SDL_SetRenderDrawBlendMode(renderer, old_blend);
 }
 
-void LevelScreen::draw_hero_base(SDL_Renderer* renderer, std::uint64_t elapsed_ms,
-                                 bool draw_armor) const {
+void LevelScreen::draw_hero_wear(SDL_Renderer* renderer, std::uint64_t elapsed_ms,
+                                 PersonPass pass) const {
     if (!hero_ || !(camera_.zoom > 0.0f)) return;
     const gl::game::Hero& hero = hero_->controller.hero();
-    const bool moving = hero.has_goal && !hero.path.empty() && hero_go_base_.has_value();
-    const bool bow_outfit = draw_armor && !moving && hero_bow_base_.has_value();
-    if (!moving && !hero_base_ && !bow_outfit) return;
-    const gl::render::Texture& texture =
-        moving ? *hero_go_base_ : (bow_outfit ? *hero_bow_base_ : *hero_base_);
+    const bool moving = hero.has_goal && !hero.path.empty();
+    const std::uint32_t mask = moving ? 0x10u : 0x4u;
+    auto tex = hero_textures_.find(mask);
+    auto hdr = hero_headers_.find(mask);
+    if (tex == hero_textures_.end() || hdr == hero_headers_.end()) return;
+    const auto& header = hdr->second;
+    const std::uint8_t direction =
+        moving ? gl::game::direction8_to16(hero.direction) : hero.direction;
+    const auto type = moving ? gl::assets::PadAnimationType::tb_go
+                             : gl::assets::PadAnimationType::tb_stay;
+    const std::size_t column = person_frame_index(
+        elapsed_ms, static_cast<std::int32_t>(header.delay_ms),
+        static_cast<std::int32_t>(header.columns));
 
-    int frame_width = 0;
-    int frame_height = 0;
-    int columns = 0;
-    int delay_ms = 0;
-    gl::assets::PadDirectionRow direction{};
-    if (moving) {
-        frame_width = 60;
-        frame_height = 95;
-        columns = 13;
-        delay_ms = 80;
-        direction = gl::assets::pad_person_row(
-            gl::assets::PadAnimationType::tb_go,
-            gl::game::direction8_to16(hero.direction));
-    } else {
-        frame_width = 48;
-        frame_height = 92;
-        columns = 12;
-        delay_ms = 140;
-        direction =
-            gl::assets::pad_person_row(gl::assets::PadAnimationType::tb_stay,
-                                       hero.direction);
+    if (pass == PersonPass::shadow) {
+        if (!tex->second.shadow) return;
+        const auto row = gl::assets::pad_shadow_row(type, direction);
+        const SDL_Rect source{static_cast<int>(column * header.shadow_width),
+                              static_cast<int>(row.row * header.shadow_height),
+                              static_cast<int>(header.shadow_width),
+                              static_cast<int>(header.shadow_height)};
+        const SDL_FRect dest = gl::render::to_screen(
+            camera_, hero.x - static_cast<float>(header.shadow_anchor_x),
+            hero.y - static_cast<float>(header.shadow_anchor_y),
+            static_cast<float>(header.shadow_width),
+            static_cast<float>(header.shadow_height));
+        if (!rect_visible(dest, screen_w_, screen_h_)) return;
+        SDL_SetTextureAlphaMod(tex->second.shadow->get(), 128);
+        draw_source(renderer, *tex->second.shadow, source, dest);
+        SDL_SetTextureAlphaMod(tex->second.shadow->get(), 255);
+        return;
     }
 
-    const std::size_t column =
-        static_cast<std::size_t>((elapsed_ms / delay_ms) % columns);
-    const SDL_Rect source{static_cast<int>(column) * frame_width,
-                          static_cast<int>(direction.row) * frame_height,
-                          frame_width, frame_height};
-    const SDL_FRect destination =
-        gl::render::to_screen(camera_, hero.x - frame_width * 0.5f,
-                              hero.y - frame_height, static_cast<float>(frame_width),
-                              static_cast<float>(frame_height));
-    if (!rect_visible(destination, screen_w_, screen_h_)) return;
-    draw_source(renderer, texture, source, destination,
-                direction.mirror ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE);
-
-    if (!draw_armor || moving || !hero_armor_) return;
-    const int armor_frame_width = 36;
-    const int armor_frame_height = 37;
-    const int armor_offset_x = 7;
-    const std::array<int, 5> armor_offset_y{17, 18, 27, 15, 16};
-    if (direction.row >= 5) return;
-    const SDL_Rect armor_source{static_cast<int>(column) * armor_frame_width,
-                                static_cast<int>(direction.row) * armor_frame_height,
-                                armor_frame_width, armor_frame_height};
-    const SDL_FRect armor_destination = gl::render::to_screen(
-        camera_, hero.x - frame_width * 0.5f + armor_offset_x,
-        hero.y - frame_height + armor_offset_y[direction.row],
-        static_cast<float>(armor_frame_width), static_cast<float>(armor_frame_height));
-    draw_source(renderer, *hero_armor_, armor_source, armor_destination,
-                direction.mirror ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE);
-
-    if (!hero_legs_) return;
-    const int legs_frame_width = 36;
-    const int legs_frame_height = 51;
-    const int legs_columns = 11;
-    const int legs_offset_x = 9;
-    const std::array<int, 5> legs_offset_y{36, 37, 38, 38, 37};
-    const std::size_t legs_column = column % legs_columns;
-    const SDL_Rect legs_source{static_cast<int>(legs_column) * legs_frame_width,
-                               static_cast<int>(direction.row) * legs_frame_height,
-                               legs_frame_width, legs_frame_height};
-    const SDL_FRect legs_destination = gl::render::to_screen(
-        camera_, hero.x - frame_width * 0.5f + legs_offset_x,
-        hero.y - frame_height + legs_offset_y[direction.row],
-        static_cast<float>(legs_frame_width), static_cast<float>(legs_frame_height));
-    draw_source(renderer, *hero_legs_, legs_source, legs_destination,
-                direction.mirror ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE);
-
-    if (!bow_outfit || !hero_helmet_) return;
-    constexpr int kHelmetFrameWidth = 17;
-    constexpr int kHelmetFrameHeight = 23;
-    const std::array<int, 5> helmet_offset_x{18, 20, 20, 17, 18};
-    const std::array<int, 5> helmet_offset_y{9, 10, 30, 7, 6};
-    const SDL_Rect helmet_source{static_cast<int>(column) * kHelmetFrameWidth,
-                                 static_cast<int>(direction.row) * kHelmetFrameHeight,
-                                 kHelmetFrameWidth, kHelmetFrameHeight};
-    const SDL_FRect helmet_destination = gl::render::to_screen(
-        camera_, hero.x - frame_width * 0.5f + helmet_offset_x[direction.row],
-        hero.y - frame_height + helmet_offset_y[direction.row],
-        static_cast<float>(kHelmetFrameWidth), static_cast<float>(kHelmetFrameHeight));
-    draw_source(renderer, *hero_helmet_, helmet_source, helmet_destination,
-                direction.mirror ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE);
+    const auto row = gl::assets::pad_person_row(type, direction);
+    const SDL_Rect source{static_cast<int>(column * header.frame_width),
+                          static_cast<int>(row.row * header.frame_height),
+                          static_cast<int>(header.frame_width),
+                          static_cast<int>(header.frame_height)};
+    const SDL_FRect dest = gl::render::to_screen(
+        camera_, hero.x - static_cast<float>(header.anchor_x),
+        hero.y - static_cast<float>(header.anchor_y),
+        static_cast<float>(header.frame_width),
+        static_cast<float>(header.frame_height));
+    if (!rect_visible(dest, screen_w_, screen_h_)) return;
+    draw_source(renderer, tex->second.body, source, dest,
+                row.mirror ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE);
 }
 
 void LevelScreen::draw_debug_overlay(SDL_Renderer* renderer, int screen_w, int screen_h,

@@ -1146,8 +1146,9 @@ class Game {
     }
 
     bool load_level(std::string_view name) {
+        gl::game::HeroOutfit hero_outfit;
         auto screen = gl::app::LevelScreen::load(window_.renderer(), vfs_, name,
-                                                 !options_.no_persons);
+                                                 !options_.no_persons, &hero_outfit);
         if (!screen) {
             gl::log(gl::LogLevel::error, screen.error().message);
             console_print("cannot load level: " + screen.error().message);
@@ -1599,7 +1600,7 @@ class Game {
             options.debug_overlay = debug_overlay_;
             options.walkable_overlay = options_.walkable_overlay;
             options.draw_persons = !options_.no_persons;
-            options.draw_hero_base = true;
+            options.draw_hero_wear = true;
             level_->render(window_.renderer(), options, animation_ms);
             scene_drawn = true;
             if (client_.snapshot().paused && !dialog_overlay_.active()) {

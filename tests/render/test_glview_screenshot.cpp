@@ -590,36 +590,60 @@ TEST_CASE("glview foreground masks occlude a person behind the tower") {
     CAPTURE(differing);
     CHECK(differing > 500);
 }
-TEST_CASE("glview draws the wear armor overlay on the hero base") {
+TEST_CASE("glview renders the wear hero for slot0") {
     const char* game_dir = std::getenv("GL_GAME_DIR");
     REQUIRE(game_dir != nullptr);
-    TempDir dir;
-    const fs::path base = dir.path / "hero_base.png";
-    const fs::path armor = dir.path / "hero_armor.png";
-    const std::vector<std::string> common = {
-        "--hero-base", "--no-persons", "--no-masks", "--camera-x", "1982",
-        "--camera-y", "94"};
-    REQUIRE(run_glview(glview_arguments(game_dir, base, common)) == 0);
-    std::vector<std::string> armor_args = common;
-    armor_args.push_back("--hero-armor");
-    REQUIRE(run_glview(glview_arguments(game_dir, armor, armor_args)) == 0);
-    int aw = 0, ah = 0, ac = 0, bw = 0, bh = 0, bc = 0;
-    const StbiImage a = load_png(base, aw, ah, ac);
-    const StbiImage b = load_png(armor, bw, bh, bc);
-    REQUIRE(a != nullptr);
-    REQUIRE(b != nullptr);
+    TempDir temp;
+    const fs::path a = temp.path / "hero_wear_a.png";
+    const fs::path b = temp.path / "hero_wear_b.png";
+    const fs::path plain = temp.path / "hero_plain.png";
+    const fs::path later = temp.path / "hero_wear_later.png";
+    const std::vector<std::string> common = {"--no-persons", "--no-masks",
+                                             "--camera-x", "1982", "--camera-y", "94",
+                                             "--sim-ms", "0"};
+    auto with = common;
+    with.push_back("--hero-wear");
+    REQUIRE(run_glview(glview_arguments(game_dir, a, with)) == 0);
+    REQUIRE(run_glview(glview_arguments(game_dir, b, with)) == 0);
+    REQUIRE(run_glview(glview_arguments(game_dir, plain, common)) == 0);
+    auto later_args = with;
+    for (auto& arg : later_args)
+        if (arg == "0") arg = "1000";
+    REQUIRE(run_glview(glview_arguments(game_dir, later, later_args)) == 0);
+    REQUIRE(fs::exists(a));
+    REQUIRE(fs::exists(b));
+    REQUIRE(fs::exists(plain));
+    REQUIRE(fs::exists(later));
+
+    int aw = 0, ah = 0, ac = 0;
+    const StbiImage a_pixels = load_png(a, aw, ah, ac);
+    const StbiImage b_pixels = load_png(b, aw, ah, ac);
+    const StbiImage p_pixels = load_png(plain, aw, ah, ac);
+    const StbiImage l_pixels = load_png(later, aw, ah, ac);
+    REQUIRE(a_pixels != nullptr);
+    REQUIRE(b_pixels != nullptr);
+    REQUIRE(p_pixels != nullptr);
+    REQUIRE(l_pixels != nullptr);
     REQUIRE(aw == 1280);
     REQUIRE(ah == 720);
-    REQUIRE(bw == 1280);
-    REQUIRE(bh == 720);
-    std::uint64_t differing = 0;
-    for (int y = 0; y < ah; ++y)
-        for (int x = 0; x < aw; ++x) {
-            const std::size_t i = (static_cast<std::size_t>(y) * aw + x) * 4;
-            if (a.get()[i] != b.get()[i] || a.get()[i + 1] != b.get()[i + 1] ||
-                a.get()[i + 2] != b.get()[i + 2])
-                ++differing;
-        }
-    CAPTURE(differing);
-    CHECK(differing > 100);
+    std::uint64_t diff = 0;
+    std::uint64_t anim_diff = 0;
+    for (int i = 0; i < aw * ah; ++i) {
+        const unsigned char* pa = a_pixels.get() + i * 4;
+        const unsigned char* pb = b_pixels.get() + i * 4;
+        const unsigned char* pp = p_pixels.get() + i * 4;
+        const unsigned char* pl = l_pixels.get() + i * 4;
+        CHECK(pa[0] == pb[0]);
+        CHECK(pa[1] == pb[1]);
+        CHECK(pa[2] == pb[2]);
+        CHECK(pa[3] == pb[3]);
+        if (pa[0] != pp[0] || pa[1] != pp[1] || pa[2] != pp[2] || pa[3] != pp[3])
+            ++diff;
+        if (pa[0] != pl[0] || pa[1] != pl[1] || pa[2] != pl[2] || pa[3] != pl[3])
+            ++anim_diff;
+    }
+    CAPTURE(diff);
+    CAPTURE(anim_diff);
+    CHECK(diff > 500);
+    CHECK(anim_diff > 0);
 }

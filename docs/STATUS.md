@@ -1,7 +1,38 @@
 # STATUS
 
-Обновлено: 2026-10-24
-## P4d — hero equipment/render (BLOCKED, 2026-10-24)
+Обновлено: 2026-10-25
+## P4d — hero equipment/render (implemented 2026-10-25; manual gate OPEN)
+
+- **Реализовано:** `gl::assets::parse_wear_had` (HAD), `parse_wear_seq` (SEQ),
+  `parse_iad` расширен (layer offsets, shadow frame/offset/crops);
+  `gl::game::load_hero_visual` + `compose_wear_body/shadow` (engine-формула
+  `FUN_0042279C`, порядок слоёв `weapon,shield,elbarms,helmet,armor`);
+  `LevelScreen` рисует hero из готовых листов (`position - anchor`, тень
+  проходом 2); `glview --hero-wear/--hero-set/--hero-{armor,elbarms,helmet,
+  shield,weapon}/--hero-outfit none`; `glgame` — slot0 outfit.
+- **Паритет:** golden FNV-1a композита slot0 idle = `0x1A0C2E25C84A1174`
+  (совпал); реальные значения HAD (`tb_stay` 88/12/48×92/anchor 24,77;
+  `tb_go` 82/65×95/movement 5.8333,5.0), IAD type4 (off 165,154; shadow
+  40×20/152,205) и SEQ проверены.
+- **Проверка:** `cmake --build build` — успех; `gl_assets_tests` 164/164
+  (1 skip), `gl_assets_real_tests` 20/20 (real wear 5/5), `gl_game_tests`
+  85/85 (8 skip), `glview_screenshot_tests` 11/11, `glgame_screenshot_tests`
+  20/20, `level_click_tests` 22/22; полный `ctest` с `GL_GAME_DIR` —
+  **17/17 passed**, 1036.25 s, exit 0.
+- **Скриншот (агент):** `glview l1_1 --no-persons --no-masks --camera-x 1982
+  --camera-y 94 --hero-wear` — hero в синем slot0-наборе (Almaz + Goluboy +
+  Shlem_goluboy) с тенью; отличие от кадра без hero 1833 px.
+- **Manual desktop gate OPEN:** пользователь должен запустить
+  `glgame --game-dir "I:\Games\Златогорье-2" --level l1_1` и/или `glview`
+  с `--hero-wear`, проверить внешний вид/анимацию idle+walk, тень, края
+  слоёв и отсутствие «плавающих» offset; агент manual pass не подтверждает.
+- **Ограничения:** экипировка из save не подключена (outfit задаётся
+  явно; item→tech/`herowear.scr` — P5); рендерятся только `tb_stay`/`tb_go`
+  (hits/die/attack загружаются, но не выбираются); точная shadow-пара
+  `shadow_anchor`/порядок не сверена пиксельно; `run` не подключён.
+- **Следующее:** manual gate P4d; затем P5 (item→herowear) или P1b.
+
+## P4d — research (closed 2026-10-25)
 
 - **Базовая модель найдена:** отдельного файлового PAD у hero нет; база — `wear.pak` →
   `wear/noweapon_thrw/animation/tb_stay.csx` (idle, 576x460 = 12x5,
@@ -44,14 +75,20 @@
   (`T_ARMOUR\Almaz`, `T_ELBARMS\Goluboi`, `T_HELM\Cherny`); `wear.pak`
   содержит `dospeh_almaz`/`ponogi_goluboy`/`shlem_goluboy`; `shlem_cherny` —
   неверное имя ассета.
-- **BLOCKED по AGENTS §12:** точные engine anchors не извлечены. Ghidra:
-  `FUN_1202c424` — PAD-render path, но hero render_item/PAD не найден;
-  `0x37F2954+0x48 -> 0x3E67B28` — config/string map. **Wear-loader найден
-  в `GoldenLand.exe`** (`0x423A6C/0x424532`, base `0x400000`): 5 слоёв,
-  CSX/shadows + `wear/<set>/seq/<anim>_<layer>.seq` (61 байт: 0x0C +
-  60 индексов 2/3). Debugger запрещён — анти-отладка завершает процесс.
-- **Текущие offsets empirical**, не parity. Следующий шаг — декомпилировать
-  exe wear-loader/compositor и вывести anchors; без этого P4d не принимать.
+- **UNBLOCKED 2026-10-25:** engine-схема извлечена полностью, см.
+  `docs/research/p4d-hero-wear.md`. `FUN_004239C0` (wear loader) →
+  `FUN_00423334` (IAD) → `FUN_0042279C` (композитор) → PersonVisual;
+  `Client.dll 0x1202C424` рисует его как PAD. HAD даёт кадр/колонки/ряды,
+  **anchor** (`tb_stay` 24,77), speed (`movement`), layer offsets; IAD даёт
+  crop-таблицы и смещения слоя; `.seq` — порядок слоёв по кадрам.
+- Точная формула слоя: `dest = col*fw + layer_off + crop.x1/y1 - aoff`;
+  crop из IAD (u16 x1,y1,x2,y2). Проверено на `tb_stay` row0/4 +
+  `dospeh_almaz/ponogi_goluboy/shlem_goluboy`: смещения `(8,17)`, `(9,46)`,
+  `(18,3)`; композит совпал с оригиналом.
+- Осталось для принятия: spec+plan, реализация HAD/IAD/SEQ + композитора и
+  hero-рендера (draw = `position - anchor`), выбор набора/экипировки,
+  тени, parity-тесты и manual gate. Item→tech (`herowear.scr`) — открытый
+  вопрос P5, геометрию P4d не блокирует.
 
 ## P4c parity debt — визуал Вертаса и 6-осевая CanInteract (открыто, 2026-10-24)
 

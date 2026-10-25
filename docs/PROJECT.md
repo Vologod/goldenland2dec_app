@@ -54,7 +54,7 @@
 | P9 | Android | APK, упаковка ассетов, тач-управление, жизненный цикл | P1–P8 | `[ ]` |
 | P10 | Паритет и полировка | прохождение кампании, баланс, багфиксы | всё | `[ ]` |
 
-**P4d (hero equipment/render) — BLOCKED:** slot0 overlay есть, но точные engine anchors не извлечены. Wear-loader найден в `GoldenLand.exe` (`0x423A6C/0x424532`), `.seq` 61 байт; нужен decompile compositor. Детали — `STATUS.md`, `research/p4b2-render-order.md`.
+**P4d (hero equipment/render) — implemented, manual gate OPEN:** HAD/IAD/SEQ-парсеры, engine-композитор (`FUN_0042279C`), `HeroVisual`, hero-рендер в `LevelScreen`/`glview`/`glgame`; golden slot0 idle совпал, полный `ctest` 17/17. Экипировка из save (item→`herowear.scr`) — P5. Детали — `docs/research/p4d-hero-wear.md`, `STATUS.md`.
 
 ## Архитектура (кратко)
 

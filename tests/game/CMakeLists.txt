@@ -2,6 +2,7 @@ add_executable(gl_game_tests
     test_main.cpp
     test_dialog_path.cpp
     test_hero.cpp
+    test_hero_wear.cpp
     test_level_simulation.cpp
     test_msvc_random.cpp
     test_pathfinder.cpp

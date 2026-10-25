@@ -44,6 +44,8 @@ add_library(gl_assets STATIC
     src/assets/src/cs.cpp
     src/assets/src/pad.cpp
     src/assets/src/iad.cpp
+    src/assets/src/wear_had.cpp
+    src/assets/src/wear_seq.cpp
     src/assets/src/person_script.cpp
     src/assets/src/image.cpp
     src/assets/src/stb_impl.cpp
