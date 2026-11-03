@@ -22,9 +22,14 @@
   `+0x5C/+0x44`), `tile.mask` = индекс BLK_MDSC. **Live gate pending:**
   нужен запущенный оригинал на `l1_1`, чтобы прочитать `renderer+0x8344`
   для hero `(180,24)` и стража, подтвердить биты flags и mask_id.
-- **Следующее:** пользователь запускает `GoldenLand.exe`, грузит `l1_1`
-  (slot0); агент читает память (`ReadProcessMemory`, не debugger) и
-  фиксирует дамп; затем Tasks 2–5.
+- **Live dump 2026-11-03:** grid прочитан (PID 1980, renderer 0x12111360,
+  grid 0x4037188, 115x112). Hero `(90,12)` ids `[6,-1,40,-1]`, вниз
+  `(90,13)` = `id=-1` → mask 8 не применяется (baseline A8 был неверен).
+  Район башни: ids 17/42/41 имеют `flags&2`; mask 8/id6 — не имеет.
+  **Gate BLOCKED:** не извлечено, как builder заполняет `flags&1/&2` и
+  почему mask 8 фоновая. Нужен decompile host-builder в `GoldenLand.exe`
+  (vtable `+0x5C`) или полный live-dump классификации 62 масок; без этого
+  `select_cell_mask` не кодировать.
 
 ## P4d — hero equipment/render (implemented 2026-10-25; manual gate OPEN)
 
