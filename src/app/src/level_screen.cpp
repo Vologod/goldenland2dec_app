@@ -29,6 +29,7 @@ constexpr float kMaxZoom = 4.0f;
 constexpr float kPanSpeed = 600.0f;
 constexpr float kTileWidth = 12.0f;
 constexpr float kTileHeight = 9.0f;
+constexpr Uint8 kShadowAlpha = 128;
 
 bool rect_visible(const SDL_FRect& rect, int width, int height) {
     return rect.x + rect.w > 0.0f && rect.y + rect.h > 0.0f &&
@@ -619,7 +620,9 @@ void LevelScreen::draw_person(SDL_Renderer* renderer, const Person& person,
                                   static_cast<float>(animation.shadow_width),
                                   static_cast<float>(animation.shadow_height));
         if (rect_visible(destination, screen_w_, screen_h_)) {
+            SDL_SetTextureAlphaMod(shadow_texture->get(), kShadowAlpha);
             draw_source(renderer, *shadow_texture, source, destination);
+            SDL_SetTextureAlphaMod(shadow_texture->get(), 255);
         }
         return;
     }
@@ -754,7 +757,7 @@ void LevelScreen::draw_hero_wear(SDL_Renderer* renderer, std::uint64_t elapsed_m
             static_cast<float>(header.shadow_width),
             static_cast<float>(header.shadow_height));
         if (!rect_visible(dest, screen_w_, screen_h_)) return;
-        SDL_SetTextureAlphaMod(tex->second.shadow->get(), 128);
+        SDL_SetTextureAlphaMod(tex->second.shadow->get(), kShadowAlpha);
         draw_source(renderer, *tex->second.shadow, source, dest);
         SDL_SetTextureAlphaMod(tex->second.shadow->get(), 255);
         return;

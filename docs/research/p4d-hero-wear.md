@@ -205,8 +205,10 @@ IAD (индекс `shadow_row*12 + col`), шаг `F/G`, смещение `H/I` �
 `shadow_off` из HAD:
 
 ```
-dest_x = col*F + H + crop2.x1 - sox
-dest_y = shadow_row*G + I + crop2.y1 - soy
+dest_x = col*shadow_w + H + crop2.x1 - sox
+dest_y = shadow_row*shadow_h + I + crop2.y1 - soy
+src_x  = col*F + crop2.x1
+src_y  = shadow_row*G + crop2.y1
 ```
 
 Порядок: сначала слои 0..4, затем базовый shadow-кадр. `shadow_row`
@@ -309,3 +311,34 @@ ELB_1_11_*`). Точная функция построения tech-строки
 `0x1A0C2E25C84A1174` совпал; HAD/IAD/SEQ проверены на реальных данных.
 Открыто: manual gate, точные shadow anchors/порядок, item→tech
 (`herowear.scr`) и состояния `run`/`hits`/`die`.
+
+## Z-order hero за зданием (2026-11-03)
+
+- Воспроизведение: `glgame --level l1_1 --click-world 180 32 --sim-ms 300`
+  (hero в двери, `(2166,216)`, dir=4). Верхняя половина hero перекрыта
+  маской здания; при `sim-ms 900` (`y=263`) hero полностью виден.
+- Перекрывающая маска: `number=8`, `x=2054`, `y=-17`, baseline `218`,
+  center `2276`; A8 рисует её по baseline `mask.y+height`. Hero с `y=216`
+  попадает под baseline и перекрывается.
+- LVL `tile.mask` в той же области: значения `6/40/60/...`, в точке
+  `(180,24)` — `6`. Это **0-based индекс в списке `BLK_MDSC`**, а не номер
+  маски: проверено по origin-тайлам (`mask 40`→1, `5`→3, `6`→4, `48`→13;
+  `lvl.masks[6].number == 8`). `0xFFFF` = нет маски. Значит точная A8-схема
+  реализуема: индекс клетки → маска, плюс continuation-биты `ApplyCellMask`.
+- `Client.dll FUN_1202bc54` (`ApplyCellMask`): для персонажа берёт
+  subcell-запись из `renderer+0x8344` (2×2 subcell, 0x28 байт/клетка),
+  `mask_id` из `+0x10+sub*4`; проверяет непрерывность `mask_id` вправо и
+  вниз по битам записи и применяет маску только если найдены оба
+  направления. То есть A8-baseline — приближение; точное правило —
+  per-cell mask id + continuation flags.
+- Вывод: z-order hero — дефект **A8/mask-модели**, не P4d. Для parity нужен
+  новый подпроект: расшифровать `tile.mask`/биты `+0x8344`, перенести
+  `ApplyCellMask`, покрыть тестами и заменить baseline-merge. До этого
+  P4d manual gate остаётся OPEN.
+
+- NPC-тени: `Client.dll 0x1202C424` рисует shadow pass с alpha `0.5`;
+  порт до 2026-11-03 рисовал их без alpha-мода (непрозрачный чёрный).
+  Исправлено общим `kShadowAlpha=128` для hero и NPC.
+- «Кривая» тень стражника и частичная тень hero у двери — следствие того же
+  A8 baseline-clip: маска режет тело и тень; в открытом поле тень hero
+  полная. Это не отдельный баг shadow-композита.

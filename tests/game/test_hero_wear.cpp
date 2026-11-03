@@ -73,6 +73,29 @@ TEST_CASE("compose_wear_body draws order 0/1 layers behind the base") {
     CHECK(out.rgba[1].r == 1);
 }
 
+TEST_CASE("compose_wear_shadow uses base shadow stride for destination columns") {
+    assets::WearHadAnimation a;
+    a.rows = 2;
+    a.columns = 2;
+    a.shadow_width = 2;
+    a.shadow_height = 2;
+    auto base = make_image(4, 4, assets::Rgba{0, 0, 0, 0});
+    assets::IadBlock block;
+    block.frames = 2;
+    block.shadow_frame_width = 1;
+    block.shadow_frame_height = 1;
+    block.shadow_crops = {{0, 0, 1, 1}, {0, 0, 1, 1},
+                          {0, 0, 1, 1}, {0, 0, 1, 1}};
+    auto layer_img = make_image(2, 2, assets::Rgba{7, 0, 0, 255});
+    WearLayerImages layer{&block, nullptr, &layer_img, nullptr};
+    WearLayerImages layers[1] = {layer};
+    auto out = compose_wear_shadow(a, base, layers);
+    CHECK(out.rgba[0].r == 7);
+    CHECK(out.rgba[1].a == 0);
+    CHECK(out.rgba[2].r == 7);
+    CHECK(out.rgba[3].a == 0);
+}
+
 TEST_CASE("compose_wear_shadow clips to the sheet") {
     assets::WearHadAnimation a;
     a.rows = 2;

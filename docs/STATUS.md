@@ -1,6 +1,6 @@
 # STATUS
 
-Обновлено: 2026-10-25
+Обновлено: 2026-11-03
 ## P4d — hero equipment/render (implemented 2026-10-25; manual gate OPEN)
 
 - **Реализовано:** `gl::assets::parse_wear_had` (HAD), `parse_wear_seq` (SEQ),
@@ -16,9 +16,9 @@
   40×20/152,205) и SEQ проверены.
 - **Проверка:** `cmake --build build` — успех; `gl_assets_tests` 164/164
   (1 skip), `gl_assets_real_tests` 20/20 (real wear 5/5), `gl_game_tests`
-  85/85 (8 skip), `glview_screenshot_tests` 11/11, `glgame_screenshot_tests`
+  86/86 (8 skip), `glview_screenshot_tests` 11/11, `glgame_screenshot_tests`
   20/20, `level_click_tests` 22/22; полный `ctest` с `GL_GAME_DIR` —
-  **17/17 passed**, 1036.25 s, exit 0.
+  **17/17 passed**, 1036.25 s (до shadow fix).
 - **Скриншот (агент):** `glview l1_1 --no-persons --no-masks --camera-x 1982
   --camera-y 94 --hero-wear` — hero в синем slot0-наборе (Almaz + Goluboy +
   Shlem_goluboy) с тенью; отличие от кадра без hero 1833 px.
@@ -26,21 +26,30 @@
   `glgame --game-dir "I:\Games\Златогорье-2" --level l1_1` и/или `glview`
   с `--hero-wear`, проверить внешний вид/анимацию idle+walk, тень, края
   слоёв и отсутствие «плавающих» offset; агент manual pass не подтверждает.
-- **Manual findings 2026-10-25 (gate NOT passed):**
-  - **Z-order:** hero рисуется за зданием/перекрывается неверно. Подозрение:
-    `hero_draw_key` (baseline `hero.y`) не соответствует новой геометрии
-    кадра/анкора и порядку статиков/масок (A7/A8); нужно воспроизвести на
-    кадре, сравнить baseline с оригиналом и завести отдельную fix-задачу.
-  - **Чёрные точки при анимации:** возможно баг композита тени (чёрные
-    пиксели/alpha) или базы shadow-листа. Нужен debug-флаг отключения
-    тени/слоёв, поиск первого кадра с точками и сверка с shadow CSX/IAD.
-  - P4d остаётся `automated passed, manual OPEN`; обе проблемы — до
-    принятия P4d.
+- **Manual findings 2026-10-25/26 (gate NOT passed):**
+  - **Z-order:** hero перекрывается зданием — это дефект A8 mask-модели
+    (baseline-приближение), не P4d. Воспроизведено: `click-world 180 32`,
+    `sim-ms 300`; hero `(2166,216)` под baseline маски 8 (`y=-17`, bottom
+    218), при `y=263` виден. `Client.dll FUN_1202bc54` использует per-cell
+    `mask_id` + continuity bits; LVL `tile.mask` (в точке `(180,24)` = 6) —
+    это 0-based индекс в списке `BLK_MDSC` (`lvl.masks[6].number == 8`).
+    Нужен отдельный подпроект A8-parity (`ApplyCellMask`, `tile.mask`,
+    `+0x8344`). До него P4d manual OPEN.
+  - **Чёрные точки при анимации — исправлено 2026-11-03.** Причина:
+    shadow-композит брал destination-шаг из IAD `F/G`
+    (`shadow_frame_width/height`), а engine берёт destination из HAD
+    `shadow_width/height`; source — из `F/G`. Из-за сдвига слои тени
+    рассыпались в точки. Фикс в `compose_wear_shadow` + regression-тест
+    `compose_wear_shadow uses base shadow stride for destination columns`;
+    формулы исправлены в research/spec/plan. Скриншот walking-hero
+    показывает чистую тень. После shadow/NPC-alpha фиксов: gl_game_tests 86/86 (67 226 assertions), полный ctest 17/17, 1914.40 s.
+  - P4d остаётся `automated passed, manual OPEN` только из-за z-order —
+    до реализации A8-parity.
 - **Ограничения:** экипировка из save не подключена (outfit задаётся
   явно; item→tech/`herowear.scr` — P5); рендерятся только `tb_stay`/`tb_go`
   (hits/die/attack загружаются, но не выбираются); точная shadow-пара
   `shadow_anchor`/порядок не сверена пиксельно; `run` не подключён.
-- **Следующее:** manual gate P4d; затем P5 (item→herowear) или P1b.
+- **Следующее:** A8 mask parity (ApplyCellMask/	ile.mask) для z-order, затем manual gate P4d; далее P5 (item→herowear) или P1b.
 
 ## P4d — research (closed 2026-10-25)
 

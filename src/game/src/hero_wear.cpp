@@ -60,10 +60,10 @@ void draw_shadow_layer(const gl::assets::WearHadAnimation &a, std::uint32_t col,
     if (index >= b.shadow_crops.size())
         return;
     const auto crop = b.shadow_crops[index];
-    const int dx = static_cast<int>(col * b.shadow_frame_width) + b.shadow_layer_offset_x +
+    const int dx = static_cast<int>(col * a.shadow_width) + b.shadow_layer_offset_x +
                    crop.x1 - a.shadow_offset_x;
-    const int dy = static_cast<int>(shadow_row * b.shadow_frame_height) + b.shadow_layer_offset_y +
-                   crop.y1 - a.shadow_offset_y;
+    const int dy = static_cast<int>(shadow_row * a.shadow_height) +
+                   b.shadow_layer_offset_y + crop.y1 - a.shadow_offset_y;
     const int sx = static_cast<int>(col * b.shadow_frame_width) + crop.x1;
     const int sy = static_cast<int>(shadow_row * b.shadow_frame_height) + crop.y1;
     blit(*layer.shadow, dst, dx, dy, sx, sy, crop.x2 - crop.x1, crop.y2 - crop.y1);

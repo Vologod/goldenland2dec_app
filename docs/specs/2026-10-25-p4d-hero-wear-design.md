@@ -223,13 +223,14 @@ w = crop.x2 - crop.x1; h = crop.y2 - crop.y1
 
 ```
 crop2  = b.shadow_crops[shadow_row*b.frames + col]
-dest_x = col*F + H + crop2.x1 - shoff.x
-dest_y = shadow_row*G + I + crop2.y1 - shoff.y
+dest_x = col*shadow_w + H + crop2.x1 - shoff.x
+dest_y = shadow_row*shadow_h + I + crop2.y1 - shoff.y
 src_x  = col*F + crop2.x1; src_y = shadow_row*G + crop2.y1
 w = crop2.x2-crop2.x1; h = crop2.y2-crop2.y1
 ```
 
-где `F/G/H/I` — IAD shadow frame/offset, `shoff` — HAD shadow_offset.
+где `shadow_w/h` — HAD shadow cell (destination stride), `F/G/H/I` — IAD
+shadow source step/layer offsets, `shoff` — HAD shadow_offset.
 Порядок: слои 0..4, затем базовый shadow-кадр
 `(col*shadow_w, shadow_row*shadow_h)`. Лист тени:
 `columns*sw × (2*rows-2)*sh`.
