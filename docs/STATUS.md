@@ -16,8 +16,15 @@
 - **Gate:** Task 1 плана — до кода извлечь точную семантику
   flags/колонок/builder из `Client.dll`/`GoldenLand.exe` и подтвердить live
   для hero и стража. До gate код не менять.
-- **Следующее:** выполнить Task 1 (research), затем Tasks 2–5. P4d manual
-  gate закрывается после A8 parity.
+- **2026-11-03 static done:** `docs/research/a8-mask-parity.md` —
+  `FUN_1202BC54` (0x28 grid, 4 subcell, flags/id, скан вправо/вниз,
+  `+0x838C/+0x839C`), grid строится host (`DAT_12110F3C` vtable
+  `+0x5C/+0x44`), `tile.mask` = индекс BLK_MDSC. **Live gate pending:**
+  нужен запущенный оригинал на `l1_1`, чтобы прочитать `renderer+0x8344`
+  для hero `(180,24)` и стража, подтвердить биты flags и mask_id.
+- **Следующее:** пользователь запускает `GoldenLand.exe`, грузит `l1_1`
+  (slot0); агент читает память (`ReadProcessMemory`, не debugger) и
+  фиксирует дамп; затем Tasks 2–5.
 
 ## P4d — hero equipment/render (implemented 2026-10-25; manual gate OPEN)
 
