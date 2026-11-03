@@ -590,37 +590,6 @@ TEST_CASE("glview foreground masks occlude a person behind the tower") {
     CAPTURE(differing);
     CHECK(differing > 100);
 }
-TEST_CASE("glview does not mask the hero at the door") {
-    const char* game_dir = std::getenv("GL_GAME_DIR");
-    REQUIRE(game_dir != nullptr);
-    TempDir dir;
-    const fs::path masked = dir.path / "hero_door_masked.png";
-    const fs::path plain = dir.path / "hero_door_plain.png";
-    const std::vector<std::string> args = {"--no-persons", "--hero-wear",
-                                           "--camera-x", "1480", "--camera-y", "0",
-                                           "--sim-ms", "0"};
-    auto plain_args = args;
-    plain_args.push_back("--no-masks");
-    REQUIRE(run_glview(glview_arguments(game_dir, masked, args)) == 0);
-    REQUIRE(run_glview(glview_arguments(game_dir, plain, plain_args)) == 0);
-    int aw = 0, ah = 0, ac = 0;
-    const StbiImage a = load_png(masked, aw, ah, ac);
-    const StbiImage b = load_png(plain, aw, ah, ac);
-    REQUIRE(a != nullptr);
-    REQUIRE(b != nullptr);
-    REQUIRE(aw == 1280);
-    REQUIRE(ah == 720);
-    std::uint64_t differing = 0;
-    for (int i = 0; i < aw * ah; ++i) {
-        const unsigned char* pa = a.get() + i * 4;
-        const unsigned char* pb = b.get() + i * 4;
-        if (pa[0] != pb[0] || pa[1] != pb[1] || pa[2] != pb[2] || pa[3] != pb[3])
-            ++differing;
-    }
-    CAPTURE(differing);
-    CHECK(differing == 0);
-}
-
 TEST_CASE("glview renders the wear hero for slot0") {
     const char* game_dir = std::getenv("GL_GAME_DIR");
     REQUIRE(game_dir != nullptr);

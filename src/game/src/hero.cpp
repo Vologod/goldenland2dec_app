@@ -60,6 +60,7 @@ void HeroController::spawn_at_first_entrance() {
     }
     spawn_at_tile({chosen->x, chosen->y});
     hero_.direction = chosen->direction;
+    hero_.direction16 = direction8_to16(chosen->direction);
 }
 
 void HeroController::spawn_at_tile(Tile tile) {
@@ -190,8 +191,10 @@ void HeroController::advance(double dt_seconds) {
         if (arrives) {
             hero_.x = target_x;
             hero_.y = target_y;
-            if (distance > 0.0f)
-                hero_.direction = direction16_to8(direction16_from_velocity(dx, dy));
+            if (distance > 0.0f) {
+                hero_.direction16 = direction16_from_velocity(dx, dy);
+                hero_.direction = direction16_to8(hero_.direction16);
+            }
             ++hero_.path_index;
             if (speed > 0.0f)
                 remaining -= static_cast<double>(distance / speed);
@@ -200,7 +203,8 @@ void HeroController::advance(double dt_seconds) {
         } else {
             hero_.x += dx / distance * step;
             hero_.y += dy / distance * step;
-            hero_.direction = direction16_to8(direction16_from_velocity(dx, dy));
+            hero_.direction16 = direction16_from_velocity(dx, dy);
+            hero_.direction = direction16_to8(hero_.direction16);
             remaining = 0.0;
         }
     }

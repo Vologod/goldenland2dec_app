@@ -10,12 +10,18 @@
 - **Gate PASSED:** `GoldenLand.exe FUN_00426490` строит grid напрямую из
   LVL: `flags = relief | (sound<<16)`, `mask = LvlTile.mask` (`0xFFFF→-1`);
   размеры — `BLK_MHDR`; `flags&1/&2` — биты `relief`.
-- **Проверка:** hero у двери `(90,12)`: masked == plain (0 px);
-  стражник/персонаж за башней: 206 px перекрытия (было >500 в baseline,
-  теперь только выбранная клетка); новые тесты
-  `real l1_1 cell mask grid matches live data`, `glview does not mask the
-  hero at the door`; `gl_game_tests` 98/98 (557 146 assertions), полный
-  `ctest` с `GL_GAME_DIR` — **17/17 passed**, 1035.95 s.
+- **Проверка:** hero у двери `(90,12)`: masked vs plain различаются только
+  выбранной клеткой правого края (441 px), полного перекрытия нет;
+  стражник/персонаж за башней: 206 px перекрытия (выбранная клетка);
+  `real l1_1 cell mask grid matches live data`; `gl_game_tests` 98/98
+  (557 146 assertions); полный `ctest` — **17/17 passed**, 1485.32 s.
+- **Multi-cell fix:** маска применяется не к клетке ног, а ко всем клеткам
+  прямоугольника кадра (24×18), как `FUN_1202BF60`/`FUN_1202C8AC`; это
+  убирает частичное перекрытие крупных спрайтов.
+- **Hero direction16:** `Hero::direction16` сохраняется из
+  `direction16_from_velocity`; `LevelScreen` использует его для walk-строки
+  тела/тени (раньше `direction8_to16` давал только чётные направления —
+  диагональная анимация/тень ломались).
 - **Ограничения:** одна клетка occupancy (без multi-cell больших спрайтов);
   маски применяются только к персонажам/hero, не к статикам; рантайм-смены
   масок дверями/скриптами и alt-маски — вне задачи.

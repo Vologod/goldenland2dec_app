@@ -15,6 +15,7 @@ struct Hero {
     std::vector<Tile> path;
     std::size_t path_index = 0;
     std::uint8_t direction = 0;
+    std::uint8_t direction16 = 0;
 };
 
 class HeroController {
