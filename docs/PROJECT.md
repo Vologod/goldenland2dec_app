@@ -56,6 +56,8 @@
 
 **P4d (hero equipment/render) — implemented, manual gate OPEN:** HAD/IAD/SEQ-парсеры, engine-композитор (`FUN_0042279C`), `HeroVisual`, hero-рендер в `LevelScreen`/`glview`/`glgame`; golden slot0 idle совпал, полный `ctest` 17/17. Экипировка из save (item→`herowear.scr`) — P5. Детали — `docs/research/p4d-hero-wear.md`, `STATUS.md`.
 
+**A8 parity (cell masks) — spec/plan prepared:** baseline-перекрытие заменяется engine-моделью `ApplyCellMask` (`LVL tile.mask` → `BLK_MDSC`, per-cell/column). Research gate: точные биты/колонки из `Client.dll`/live до кода. Детали — `docs/specs/2026-11-03-a8-mask-parity-design.md`, `docs/plans/2026-11-03-a8-mask-parity.md`.
+
 ## Архитектура (кратко)
 
 ```

@@ -1,6 +1,24 @@
 # STATUS
 
 Обновлено: 2026-11-03
+## A8 parity — cell mask `ApplyCellMask` (spec/plan prepared 2026-11-03)
+
+- **Проблема:** A8 рисует маску по baseline `mask.y+height`; из-за этого hero
+  у двери перекрывается зданием, а тени/тела у стен обрезаются. Это
+  блокирует manual gate P4d.
+- **Найдено:** `tile.mask` — 0-based индекс в `BLK_MDSC` (`0xFFFF` = нет);
+  клетка hero `(180,24)` = индекс 6 → mask 8. `Client.dll FUN_1202BC54`
+  (`ApplyCellMask`) использует per-cell/subcell `mask_id` + continuity-биты,
+  grid `renderer+0x8344`; host строит grid через `DAT_12110F3C`
+  (vtable `+0x5C/+0x44`). Рендер — `FUN_1202F17C` (`+0x839C/+0x838C`).
+- **Подготовлено:** `docs/specs/2026-11-03-a8-mask-parity-design.md`,
+  `docs/plans/2026-11-03-a8-mask-parity.md`.
+- **Gate:** Task 1 плана — до кода извлечь точную семантику
+  flags/колонок/builder из `Client.dll`/`GoldenLand.exe` и подтвердить live
+  для hero и стража. До gate код не менять.
+- **Следующее:** выполнить Task 1 (research), затем Tasks 2–5. P4d manual
+  gate закрывается после A8 parity.
+
 ## P4d — hero equipment/render (implemented 2026-10-25; manual gate OPEN)
 
 - **Реализовано:** `gl::assets::parse_wear_had` (HAD), `parse_wear_seq` (SEQ),
