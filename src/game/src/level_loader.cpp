@@ -92,6 +92,27 @@ Result<Level> load_level(GameVfs &vfs, std::string_view level_name) {
             return contextual(lvl.error(), "cannot parse level LVL", lvl_file);
         level.walkable = build_walk_grid(lvl.value());
 
+        level.mask_cells.width = static_cast<int>(lvl->chunk_width);
+        level.mask_cells.height = static_cast<int>(lvl->chunk_height);
+        level.mask_cells.cells.resize(
+            static_cast<std::size_t>(level.mask_cells.width) * level.mask_cells.height);
+        for (std::uint32_t cx = 0; cx < lvl->chunk_width; ++cx) {
+            for (std::uint32_t cy = 0; cy < lvl->chunk_height; ++cy) {
+                const auto& chunk =
+                    lvl->chunks[static_cast<std::size_t>(cx) * lvl->chunk_height + cy];
+                auto& cell =
+                    level.mask_cells.cells[static_cast<std::size_t>(cy) * level.mask_cells.width +
+                                           cx];
+                for (std::size_t s = 0; s < 4; ++s) {
+                    cell[s].flags = static_cast<std::uint32_t>(chunk[s].relief) |
+                                    (static_cast<std::uint32_t>(chunk[s].sound) << 16);
+                    cell[s].mask = chunk[s].mask;
+                }
+            }
+        }
+        level.mask_numbers.reserve(lvl->masks.size());
+        for (const LvlMask& mask : lvl->masks) level.mask_numbers.push_back(mask.number);
+
         const std::string background_file = pack_path(level.pack, "bitmaps/layer.jpg");
         auto background_data = vfs.read(background_file);
         if (!background_data)

@@ -7,6 +7,7 @@
 #include <gl/assets/image.hpp>
 #include <gl/assets/log.hpp>
 #include <gl/assets/pad.hpp>
+#include <gl/game/mask_selection.hpp>
 #include <gl/game/person_movement.hpp>
 #include <gl/render/animation.hpp>
 
@@ -175,7 +176,6 @@ LevelScreen::LevelScreen(LevelScreen&& other) noexcept
       hero_headers_(std::move(other.hero_headers_)),
       person_keys_(std::move(other.person_keys_)),
       person_order_(std::move(other.person_order_)),
-      mask_order_(std::move(other.mask_order_)),
       simulation_(std::move(other.simulation_)),
       simulated_ms_(other.simulated_ms_),
       last_simulation_ms_(other.last_simulation_ms_),
@@ -262,20 +262,9 @@ Result<LevelScreen> LevelScreen::load(SDL_Renderer* renderer, gl::assets::GameVf
                         std::to_string(mask.number) + ": " + created.error().message);
             continue;
         }
-        screen.masks_.push_back(MaskOverlay{
-            std::move(created.value()), mask.x, mask.y,
-            static_cast<float>(mask.y + static_cast<std::int32_t>(mask.image.height)),
-            static_cast<float>(mask.x) + static_cast<float>(mask.image.width) / 2.0f});
+        screen.masks_.push_back(
+            MaskOverlay{std::move(created.value()), mask.x, mask.y, mask.number});
     }
-    screen.mask_order_.resize(screen.masks_.size());
-    for (std::size_t i = 0; i < screen.mask_order_.size(); ++i) screen.mask_order_[i] = i;
-    std::stable_sort(screen.mask_order_.begin(), screen.mask_order_.end(),
-                     [&screen](std::size_t a, std::size_t b) {
-                         const MaskOverlay& ma = screen.masks_[a];
-                         const MaskOverlay& mb = screen.masks_[b];
-                         if (ma.baseline != mb.baseline) return ma.baseline < mb.baseline;
-                         return ma.center_x < mb.center_x;
-                     });
 
     if (load_persons) {
         screen.persons_.reserve(screen.level_.persons.size());
@@ -537,42 +526,25 @@ void LevelScreen::render(SDL_Renderer* renderer, const LevelScreenOptions& optio
         person_order_ = sort_body_keys(person_keys_, hero_key);
         const std::size_t hero_sentinel = person_keys_.size();
         const bool hero_has_key = hero_key.has_value();
-        const std::size_t mask_count = options.draw_masks ? mask_order_.size() : 0;
         const auto draw_pass = [&](PersonPass pass) {
-            std::size_t person_index = 0;
-            std::size_t mask_index = 0;
-            while (person_index < person_order_.size() || mask_index < mask_count) {
-                bool draw_person_next = mask_index >= mask_count;
-                if (!draw_person_next && person_index < person_order_.size()) {
-                    const std::size_t candidate = person_order_[person_index];
-                    const PersonDrawKey key =
-                        (hero_has_key && candidate == hero_sentinel)
-                            ? *hero_key
-                            : person_keys_[candidate];
-                    const MaskOverlay& mask = masks_[mask_order_[mask_index]];
-                    draw_person_next =
-                        key.y < mask.baseline ||
-                        (key.y == mask.baseline && key.x <= mask.center_x);
-                }
-                if (draw_person_next) {
-                    const std::size_t key_index = person_order_[person_index];
-                    if (hero_has_key && key_index == hero_sentinel) {
-                        if (options.draw_hero_wear && !hero_textures_.empty()) {
-                            draw_hero_wear(renderer, elapsed_ms, pass);
-                        } else if (pass == PersonPass::body) {
-                            draw_hero_marker(renderer);
+            for (const std::size_t key_index : person_order_) {
+                if (hero_has_key && key_index == hero_sentinel) {
+                    if (options.draw_hero_wear && !hero_textures_.empty()) {
+                        draw_hero_wear(renderer, elapsed_ms, pass);
+                        if (options.draw_masks) {
+                            const gl::game::Hero& h = hero_->controller.hero();
+                            draw_cell_masks(renderer, h.x, h.y);
                         }
-                    } else if (options.draw_persons) {
-                        draw_person(renderer, persons_[key_index], simulated_ms_, pass);
+                    } else if (pass == PersonPass::body) {
+                        draw_hero_marker(renderer);
                     }
-                    ++person_index;
-                } else {
-                    const MaskOverlay& mask = masks_[mask_order_[mask_index]];
-                    gl::render::draw_texture(renderer, mask.texture, camera_,
-                                             static_cast<float>(mask.x),
-                                             static_cast<float>(mask.y), screen_w_,
-                                             screen_h_);
-                    ++mask_index;
+                } else if (options.draw_persons) {
+                    draw_person(renderer, persons_[key_index], simulated_ms_, pass);
+                    if (options.draw_masks) {
+                        const gl::game::PersonMovement& movement =
+                            simulation_.persons()[persons_[key_index].instance];
+                        draw_cell_masks(renderer, movement.x, movement.y);
+                    }
                 }
             }
         };
@@ -693,6 +665,50 @@ gl::game::HeroController& LevelScreen::hero() {
 const gl::game::HeroController& LevelScreen::hero() const {
     ensure_hero();
     return hero_->controller;
+}
+
+void LevelScreen::draw_cell_masks(SDL_Renderer* renderer, float world_x,
+                                   float world_y) const {
+    const int cell_x = static_cast<int>(world_x) / 24;
+    const int cell_y = static_cast<int>(world_y) / 18;
+    const gl::game::CellMaskSelection selection =
+        gl::game::select_cell_mask(level_.mask_cells, cell_x, cell_y);
+    const int left_cell = cell_x * 24;
+    const int top_cell = cell_y * 18;
+    for (std::size_t sub = 0; sub < 4; ++sub) {
+        if (selection.applies[sub] == 0) continue;
+        const std::uint16_t index = selection.mask_index[sub];
+        if (index >= level_.mask_numbers.size()) continue;
+        bool duplicate = false;
+        for (std::size_t prev = 0; prev < sub; ++prev) {
+            if (selection.applies[prev] != 0 && selection.mask_index[prev] == index)
+                duplicate = true;
+        }
+        if (duplicate) continue;
+        const std::uint32_t number = level_.mask_numbers[index];
+        const MaskOverlay* mask = nullptr;
+        for (const MaskOverlay& candidate : masks_) {
+            if (candidate.number == number) {
+                mask = &candidate;
+                break;
+            }
+        }
+        if (mask == nullptr) continue;
+        const int left = std::max(left_cell, mask->x);
+        const int top = std::max(top_cell, mask->y);
+        const int right =
+            std::min(left_cell + 24, mask->x + mask->texture.width());
+        const int bottom =
+            std::min(top_cell + 18, mask->y + mask->texture.height());
+        if (left >= right || top >= bottom) continue;
+        const SDL_Rect source{left - mask->x, top - mask->y, right - left,
+                              bottom - top};
+        const SDL_FRect destination = gl::render::to_screen(
+            camera_, static_cast<float>(left), static_cast<float>(top),
+            static_cast<float>(right - left), static_cast<float>(bottom - top));
+        if (!rect_visible(destination, screen_w_, screen_h_)) continue;
+        draw_source(renderer, mask->texture, source, destination);
+    }
 }
 
 void LevelScreen::draw_hero_marker(SDL_Renderer* renderer) const {

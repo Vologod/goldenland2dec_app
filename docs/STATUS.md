@@ -1,35 +1,29 @@
 # STATUS
 
 Обновлено: 2026-11-03
-## A8 parity — cell mask `ApplyCellMask` (spec/plan prepared 2026-11-03)
+## A8 parity — cell mask `ApplyCellMask` (implemented 2026-11-03)
 
-- **Проблема:** A8 рисует маску по baseline `mask.y+height`; из-за этого hero
-  у двери перекрывается зданием, а тени/тела у стен обрезаются. Это
-  блокирует manual gate P4d.
-- **Найдено:** `tile.mask` — 0-based индекс в `BLK_MDSC` (`0xFFFF` = нет);
-  клетка hero `(180,24)` = индекс 6 → mask 8. `Client.dll FUN_1202BC54`
-  (`ApplyCellMask`) использует per-cell/subcell `mask_id` + continuity-биты,
-  grid `renderer+0x8344`; host строит grid через `DAT_12110F3C`
-  (vtable `+0x5C/+0x44`). Рендер — `FUN_1202F17C` (`+0x839C/+0x838C`).
-- **Подготовлено:** `docs/specs/2026-11-03-a8-mask-parity-design.md`,
+- **Реализовано:** `Level::MaskCellGrid`/`mask_numbers` из LVL;
+  `gl::game::select_cell_mask` (точная модель `FUN_1202BC54`);
+  `LevelScreen` рисует маску только для клетки персонажа/hero, тело и тень;
+  baseline-merge удалён.
+- **Gate PASSED:** `GoldenLand.exe FUN_00426490` строит grid напрямую из
+  LVL: `flags = relief | (sound<<16)`, `mask = LvlTile.mask` (`0xFFFF→-1`);
+  размеры — `BLK_MHDR`; `flags&1/&2` — биты `relief`.
+- **Проверка:** hero у двери `(90,12)`: masked == plain (0 px);
+  стражник/персонаж за башней: 206 px перекрытия (было >500 в baseline,
+  теперь только выбранная клетка); новые тесты
+  `real l1_1 cell mask grid matches live data`, `glview does not mask the
+  hero at the door`; `gl_game_tests` 98/98 (557 146 assertions), полный
+  `ctest` с `GL_GAME_DIR` — **17/17 passed**, 1035.95 s.
+- **Ограничения:** одна клетка occupancy (без multi-cell больших спрайтов);
+  маски применяются только к персонажам/hero, не к статикам; рантайм-смены
+  масок дверями/скриптами и alt-маски — вне задачи.
+- Spec/plan: `docs/specs/2026-11-03-a8-mask-parity-design.md`,
   `docs/plans/2026-11-03-a8-mask-parity.md`.
-- **Gate:** Task 1 плана — до кода извлечь точную семантику
-  flags/колонок/builder из `Client.dll`/`GoldenLand.exe` и подтвердить live
-  для hero и стража. До gate код не менять.
-- **2026-11-03 static done:** `docs/research/a8-mask-parity.md` —
-  `FUN_1202BC54` (0x28 grid, 4 subcell, flags/id, скан вправо/вниз,
-  `+0x838C/+0x839C`), grid строится host (`DAT_12110F3C` vtable
-  `+0x5C/+0x44`), `tile.mask` = индекс BLK_MDSC. **Live gate pending:**
-  нужен запущенный оригинал на `l1_1`, чтобы прочитать `renderer+0x8344`
-  для hero `(180,24)` и стража, подтвердить биты flags и mask_id.
-- **Live dump 2026-11-03:** grid прочитан (PID 1980, renderer 0x12111360,
-  grid 0x4037188, 115x112). Hero `(90,12)` ids `[6,-1,40,-1]`, вниз
-  `(90,13)` = `id=-1` → mask 8 не применяется (baseline A8 был неверен).
-  Район башни: ids 17/42/41 имеют `flags&2`; mask 8/id6 — не имеет.
-  **Gate BLOCKED:** не извлечено, как builder заполняет `flags&1/&2` и
-  почему mask 8 фоновая. Нужен decompile host-builder в `GoldenLand.exe`
-  (vtable `+0x5C`) или полный live-dump классификации 62 масок; без этого
-  `select_cell_mask` не кодировать.
+- **Manual gate:** пользователь должен перепроверить P4d/A8 в `glgame`
+  (hero у двери/стен, стражник у ворот, тени); до подтверждения P4d
+  остаётся manual OPEN.
 
 ## P4d — hero equipment/render (implemented 2026-10-25; manual gate OPEN)
 

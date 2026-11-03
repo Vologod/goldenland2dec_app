@@ -108,3 +108,36 @@ renderer `0x12111360`, grid `0x4037188`, размер `115x112` клеток
 подгонка под два кейса. Нужен деcompile host-builder в `GoldenLand.exe`
 (функция, отдаваемая vtable `+0x5C`) или дальнейший live-дамп с
 классификацией всех 62 масок.
+
+## Host builder найден (2026-11-03)
+
+`GoldenLand.exe FUN_00426490` (class `PTR_LAB_00484A00`) строит grid
+`object+0x330`; размеры `object+0x320/+0x324` берутся из `BLK_MHDR`
+(chunk_width/chunk_height; для `l1_1` 115×112). Для каждого chunk `(x,y)` и
+subcell `s=0..3` builder читает из LVL:
+
+- `u32 flags = LvlTile.relief | (LvlTile.sound << 16)` → grid
+  `+s*4` (ровно 4 байта);
+- `u16 mask = LvlTile.mask` → grid `+0x10+s*4`; `0xFFFF` превращается в
+  `-1`.
+
+То есть `flags & 1`/`flags & 2` — это младшие биты `relief`, а не
+производные от CSX. Дополнительные поля `+0x20/+0x24` обнуляются.
+
+## Точная модель для порта
+
+- `Level` хранит `MaskCellGrid` (chunk_width × chunk_height), в клетке —
+  4×(u32 flags, u16 mask) из LVL.
+- Для персонажа: `cell_x = pixel_x / 24`, `cell_y = pixel_y / 18`
+  (`FUN_1202BF60`).
+- Для каждого subcell:
+  - `id = mask`; `0xFFFF` → пропуск;
+  - вправо от `cell_x` до границы: пока `flags&1` и `mask==id`; если
+    встретился `flags&2` — найдено;
+  - вниз аналогично;
+  - маска применяется к subcell только если найдено **и вправо, и вниз**.
+- Renderer (`FUN_1202F17C`) для применённого subcell рисует foreground
+  mask image, обрезанный прямоугольником клетки 24×18; позиция маски —
+  `mask.x/y` из BLK_MDSC.
+- Mask id — индекс в массиве масок (`LvlMask` order); `BLK_MDSC.number`
+  даёт имя CSX.

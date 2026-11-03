@@ -138,8 +138,7 @@ private:
         gl::render::Texture texture;
         std::int32_t x = 0;
         std::int32_t y = 0;
-        float baseline = 0.0f;
-        float center_x = 0.0f;
+        std::uint32_t number = 0;
     };
 
     struct HeroTextures {
@@ -171,6 +170,7 @@ private:
     void draw_hero_marker(SDL_Renderer* renderer) const;
     void draw_hero_wear(SDL_Renderer* renderer, std::uint64_t elapsed_ms,
                         PersonPass pass) const;
+    void draw_cell_masks(SDL_Renderer* renderer, float world_x, float world_y) const;
     void draw_debug_overlay(SDL_Renderer* renderer, int screen_w, int screen_h,
                             std::uint64_t elapsed_ms) const;
     void draw_walkable_overlay(SDL_Renderer* renderer) const;
@@ -185,7 +185,6 @@ private:
     std::map<std::uint32_t, gl::assets::WearHadAnimation> hero_headers_;
     std::vector<PersonDrawKey> person_keys_;
     std::vector<std::size_t> person_order_;
-    std::vector<std::size_t> mask_order_;
     gl::game::LevelSimulation simulation_;
     mutable std::optional<HeroBinding> hero_;
     std::uint64_t simulated_ms_ = 0;

@@ -1,6 +1,6 @@
 # A8-parity — cell mask occlusion (design)
 
-Дата: 2026-11-03. Статус: draft на утверждение; реализация не начата.
+Дата: 2026-11-03. Статус: реализовано; automated acceptance passed, manual gate OPEN.
 
 ## 1. Цель
 

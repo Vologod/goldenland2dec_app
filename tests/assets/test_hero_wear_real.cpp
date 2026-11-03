@@ -3,6 +3,7 @@
 #include "gl/assets/wear_had.hpp"
 #include "gl/assets/wear_seq.hpp"
 #include "gl/game/hero_wear.hpp"
+#include "gl/game/mask_selection.hpp"
 
 #include <doctest/doctest.h>
 
@@ -172,4 +173,19 @@ TEST_CASE("real wear: all sets parse HAD/IAD/SEQ" * doctest::skip(!game_dir_avai
             }
         }
     }
+}
+
+TEST_CASE("real l1_1 cell mask grid matches live data" * doctest::skip(!game_dir_available())) {
+    auto vfs = gl::assets::GameVfs::mount(std::getenv("GL_GAME_DIR"));
+    REQUIRE(vfs.has_value());
+    auto level = gl::game::load_level(vfs.value(), "l1_1");
+    REQUIRE(level.has_value());
+    const auto* cell = level->mask_cells.at(90, 12);
+    REQUIRE(cell != nullptr);
+    CHECK((*cell)[0].flags == 1);
+    CHECK((*cell)[0].mask == 6);
+    REQUIRE(level->mask_numbers.size() > 6);
+    CHECK(level->mask_numbers[6] == 8);
+    const auto selection = gl::game::select_cell_mask(level->mask_cells, 90, 12);
+    CHECK(selection.applies[0] == 0);
 }
