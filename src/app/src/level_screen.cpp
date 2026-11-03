@@ -755,15 +755,15 @@ void LevelScreen::draw_hero_wear(SDL_Renderer* renderer, std::uint64_t elapsed_m
     if (!hero_ || !(camera_.zoom > 0.0f)) return;
     const gl::game::Hero& hero = hero_->controller.hero();
     const bool moving = hero.has_goal && !hero.path.empty();
-    const std::uint32_t mask = moving ? 0x10u : 0x4u;
+    const std::uint32_t mask = moving ? 0x20u : 0x1u;
     auto tex = hero_textures_.find(mask);
     auto hdr = hero_headers_.find(mask);
     if (tex == hero_textures_.end() || hdr == hero_headers_.end()) return;
     const auto& header = hdr->second;
     const std::uint8_t direction =
         moving ? hero.direction16 : hero.direction;
-    const auto type = moving ? gl::assets::PadAnimationType::tb_go
-                             : gl::assets::PadAnimationType::tb_stay;
+    const auto type = moving ? gl::assets::PadAnimationType::rt_go
+                             : gl::assets::PadAnimationType::rt_stay;
     const std::size_t column = person_frame_index(
         elapsed_ms, static_cast<std::int32_t>(header.delay_ms),
         static_cast<std::int32_t>(header.columns));

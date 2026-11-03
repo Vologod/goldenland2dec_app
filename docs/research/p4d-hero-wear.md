@@ -342,3 +342,20 @@ ELB_1_11_*`). Точная функция построения tech-строки
 - «Кривая» тень стражника и частичная тень hero у двери — следствие того же
   A8 baseline-clip: маска режет тело и тень; в открытом поле тень hero
   полная. Это не отдельный баг shadow-композита.
+
+## Live hero animation = rt_stay/rt_go (2026-11-03)
+
+Оригинал PID 17788, `l1_1`: Client renderer list 5 entities. Hero entity
+`0x1A9E5E00`, pos `(475,570)`; render item:
+body surface `780x460`, rect `(325,92)-(390,181)`, draw `(444,492)`;
+shadow surface `864x304`, shadow draw `(429,548)`.
+
+- `780x460` = `rt_stay` sheet (12×65 × 5×92), `864x304` = `rt_stay`
+  shadow (12×72 × 8×38). Значит idle героя — **`rt_stay`**, не `tb_stay`.
+- Body anchor из draw: `pos - draw ≈ (31,78)`; HAD `rt_stay` anchor
+  `(34,78)`, shadow anchor `pos - shadow_draw ≈ (46,22)`; HAD shadow
+  anchor `(45,22)` — совпадает с точностью до 1–3 px (позиция entity
+  читается по сетке/интерполяции).
+- Вывод: порт должен рисовать hero idle из `rt_stay`, walk из `rt_go`
+  (а не `tb_stay`/`tb_go`); это меняет размер кадра, теневой лист и
+  анкоры. Исправлено в `LevelScreen::draw_hero_wear`.
