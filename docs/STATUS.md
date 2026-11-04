@@ -1,6 +1,20 @@
 # STATUS
 
 Обновлено: 2026-11-04
+## P5a — save → hero outfit (design 2026-11-04)
+
+- **Задача:** выбор save-слота в существующем меню применяет
+  экипировку из `BT_HERO` к hero (только outfit, без загрузки мира).
+- **Scope:** все equipped-записи читаются/хранятся; 5 визуальных
+  категорий (`weapon/shield/elbarms/helmet/armor`) → `HeroOutfit`.
+- **Fallback:** ошибка/неизвестный item → naked hero
+  (`noweapon_thrw`, пустые слои) + warning.
+- **Acceptance:** `slot0` + второй слот; real parser/mapping; screenshot
+  naked vs slot0; visual gate против оригинала; полный `ctest`.
+- **Spec:** `docs/specs/2026-11-04-p5-save-outfit-design.md`.
+- **Статус:** design approved; следующий шаг — research gate
+  (`BT_HERO` equipped offsets, item→tech), затем plan.
+
 ## A8 exact cell-mask research (resolved 2026-11-04)
 
 - **Задача:** понять точную семантику `FUN_1202BF60`/`FUN_1202BC54` для
