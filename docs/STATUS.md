@@ -36,8 +36,8 @@
   `GL_GAME_DIR` — **3/3 passed**, 314.38 s. `gl_assets_tests` 185/185
   (1237 assertions), `glgame_screenshot_tests` 21/21 (включая
   `--equip-save`/`--equip-save-pending` pending-load case),
-  `gl_game_tests` passed. Ранее полный `ctest` — **17/17 passed**,
-  917.36 s, exit 0.
+  `gl_game_tests` passed. Финальный полный `ctest` на `adc3ba2` —
+  **17/17 passed**, 1016.00 s, exit 0.
 - **Manual gate OPEN:** агент не подтверждает визуальный pass; пользователь
   должен сравнить hero в `glgame` для slot0 и slot2 с оригиналом на тех же
   save. Известный риск: выбран только активный set A; переключение A/B
