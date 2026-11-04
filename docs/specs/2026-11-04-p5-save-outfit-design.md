@@ -62,22 +62,28 @@ Saves/slot<N>.sav
 ```cpp
 struct EquippedItem {
     std::uint32_t item_id = 0;
-    std::uint16_t type = 0;
-    std::uint16_t slot = 0;
-    std::array<std::uint8_t, 16> raw{}; // поля, нужные для item→tech
+    std::uint32_t type = 0;
+    std::uint32_t flags = 0; // raw +0x0C; маска set A — & 0xFFF000
+    std::uint32_t style = 0;
 };
 
 struct HeroEquipment {
     std::vector<EquippedItem> items; // все equipped-записи BT_HERO
 };
 
-Result<HeroEquipment> parse_hero_equipment(std::span<const std::uint8_t> save_body);
+Result<std::vector<std::uint8_t>> decode_save_body(std::span<const std::uint8_t> file);
+Result<HeroEquipment> parse_hero_equipment(std::span<const std::uint8_t> body);
 ```
 
-Точные offsets/размер item-записи и equipped-слотов извлекаются на
-research-этапе (writer `0x1401e690`, item writer `0x1404f4bc`) и
-фиксируются в `docs/research/p5-save-equipment.md` с RVA/offset.
-Парсер не привязывается к UI и не читает `wear.pak`.
+`decode_save_body` проверяет 112-байтовый save header, распаковывает zlib с
+offset 112 и возвращает тело первого блока `BT_HERO `. `parse_hero_equipment`
+пропускает fixed-префикс `0x734`, читает три контейнера (`u32 id`, при
+`0xFFFFFFFF` — пустой; иначе `u32 count`), третьй контейнер — equipped;
+запись продвигается на `0xC0 + u32 subcount + subcount*0x14`, поля
+`+0x08 type`, `+0x0C flags`, `+0x20 style`, `+0xA8 item_id`. `flags`
+хранится raw; маску выбирает resolver. Точные offsets/RVA — в
+`docs/research/p5-save-equipment.md`. Парсер не привязан к UI и не читает
+`wear.pak`.
 
 ### 5.2 `gl::game`
 

@@ -1,21 +1,49 @@
 # STATUS
 
 Обновлено: 2026-11-04
-## P5a — save → hero outfit (design 2026-11-04)
+## P5a — save → hero outfit (implemented 2026-11-04; manual gate OPEN)
 
 - **Задача:** выбор save-слота в существующем меню применяет
   экипировку из `BT_HERO` к hero (только outfit, без загрузки мира).
-- **Scope:** все equipped-записи читаются/хранятся; 5 визуальных
-  категорий (`weapon/shield/elbarms/helmet/armor`) → `HeroOutfit`.
-- **Fallback:** ошибка/неизвестный item → naked hero
-  (`noweapon_thrw`, пустые слои) + warning.
-- **Acceptance:** `slot0` + второй слот; real parser/mapping; screenshot
-  naked vs slot0; visual gate против оригинала; полный `ctest`.
+- **Реализовано:** Tasks 1–4.
+  - `gl::assets::decode_save_body(file)` — header + zlib, возвращает тело
+    `BT_HERO`; `gl::assets::parse_hero_equipment(body)` — fixed prefix
+    `0x734`, 3 контейнера, equipped — третий; запись
+    `0xC0 + u32 subcount + subcount*0x14`; `EquippedItem { item_id, type,
+    flags, style }` (`+0xA8`, `+0x08`, `+0x0C` raw, `+0x20`).
+  - `gl::assets::parse_herowear` (`scripts/herowear.scr`) +
+    `gl::game::resolve_hero_outfit(equipment, tech_names, wear)`:
+    item id → TECH (`sdb/items/tech_names.sdb`) → group; активен set A,
+    base set — из weapon либо `noweapon_thrw`.
+  - `LevelScreen::apply_hero_outfit` перезагружает wear без reload уровня;
+    `glgame --equip-save <slot>` и пункт меню применяют outfit из
+    `Saves/slot<N>.sav`.
+- **Fallback:** ошибка чтения/декодирования/parse/asset-load → naked hero
+  (`noweapon_thrw`, пустые слои) + warning; неизвестный отдельный item
+  сбрасывает только свою категорию. Меню/уровень не блокируются.
+- **Real-data:** slot0 → `486,318,280,397,554,353,72,80,233,245,141`;
+  slot2 → `486,317,278,396,554,359,66,99,236,243,108` (sorted).
+  Оба разрешаются в `wear_set=two_axes_maces`, `weapon=axe_goluboy2`,
+  `helmet=shlem_goluboy`, `elbarms=ponogi_goluboy`; armor —
+  `dospeh_almaz` (slot0) / `dospeh_cherny` (slot2). Все 18 A+B asset
+  путей slot0/slot2 есть в `wear.pak` (18/18); `shlem_cherny` не
+  используется (отсутствует в `herowear.scr`/`wear.pak`).
+- **Проверка:** `cmake --build build` — успех; полный `ctest` с
+  `GL_GAME_DIR` — **17/17 passed**, 917.36 s, exit 0. Targeted:
+  `gl_assets_tests` 178/178, `gl_assets_real_tests` 23/23,
+  `gl_game_tests` (Task 2 gate) passed, `level_click_tests` 23/23,
+  `person_render_tests` 19/19, `glgame_screenshot_tests` 20/20 + новый
+  `--equip-save` case 44/44 assertions.
+- **Manual gate OPEN:** агент не подтверждает визуальный pass; пользователь
+  должен сравнить hero в `glgame` для slot0 и slot2 с оригиналом на тех же
+  save. Известный риск: выбран только активный set A; переключение A/B
+  после загрузки не доказано.
 - **Spec:** `docs/specs/2026-11-04-p5-save-outfit-design.md`.
-- **Research DONE:** `docs/research/p5-save-equipment.md` — BT_HERO layout,
+- **Research:** `docs/research/p5-save-equipment.md` — BT_HERO layout,
   0/N на 28 save, item→TECH (`tech_names.sdb`), herowear groups, slot0/slot2.
 - **Plan:** `docs/plans/2026-11-04-p5a-save-outfit-implementation.md`.
-- **Статус:** research gate passed; implementation pending.
+- **Статус:** implementation automated passed; **P5a не принят** до
+  пользовательского visual gate.
 
 ## A8 exact cell-mask research (resolved 2026-11-04)
 

@@ -42,7 +42,7 @@ Result<std::vector<std::uint8_t>> decode_save_body(std::span<const std::uint8_t>
 Result<HeroEquipment> parse_hero_equipment(std::span<const std::uint8_t> body);
 ```
 
-- [ ] **Step 1: Write failing synthetic parser test**
+- [x] **Step 1: Write failing synthetic parser test**
 
 ```cpp
 TEST_CASE("parse_hero_equipment reads third BT_HERO container") {
@@ -69,12 +69,12 @@ TEST_CASE("parse_hero_equipment reads third BT_HERO container") {
 }
 ```
 
-- [ ] **Step 2: Run test, expect fail**
+- [x] **Step 2: Run test, expect fail**
 
 Run: `cmake --build build --target gl_assets_tests && build\bin\gl_assets_tests.exe --test-case="*hero_equipment*"`
 Expected: compile/`not found` failure.
 
-- [ ] **Step 3: Implement parser**
+- [x] **Step 3: Implement parser**
 
 Implement in `hero_equipment.cpp` using `ByteReader`/span bounds checks:
 find tag `BT_HERO `, read u32 size, body slice; skip `0x734`; read 3 containers
@@ -83,7 +83,7 @@ find tag `BT_HERO `, read u32 size, body slice; skip `0x734`; read 3 containers
 return `format` errors on truncation. `decode_save_body`: validate
 `parse_save_header`, `mz_uncompress` from offset 112 into a growing 32 MiB buffer.
 
-- [ ] **Step 4: Add real test slot0/slot2**
+- [x] **Step 4: Add real test slot0/slot2**
 
 ```cpp
 TEST_CASE("real save equipped layout slot0/slot2" * doctest::skip(!getenv("GL_GAME_DIR"))) {
@@ -105,12 +105,12 @@ TEST_CASE("real save equipped layout slot0/slot2" * doctest::skip(!getenv("GL_GA
 }
 ```
 
-- [ ] **Step 5: Build and run**
+- [x] **Step 5: Build and run**
 
 Run: `cmake --build build --target gl_assets_tests gl_assets_real_tests && build\bin\gl_assets_tests.exe --test-case="*hero_equipment*" && build\bin\gl_assets_real_tests.exe --test-case="*equipped layout*"`
 Expected: PASS; real test skipped only without `GL_GAME_DIR`.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 `git add src/assets/... tests/assets/... && git commit -m "feat(assets): parse BT_HERO equipped items"`
 
@@ -134,7 +134,7 @@ Result<HeroOutfit> resolve_hero_outfit(const HeroEquipment&, const Sdb& tech_nam
                                        const HeroWearCatalog&);
 ```
 
-- [ ] **Step 1: Write failing catalog/resolver tests**
+- [x] **Step 1: Write failing catalog/resolver tests**
 
 Use real `sdb/items/tech_names.sdb` and `scripts/herowear.scr`; assert
 `tech_names.find(318)=="ARM_1_13_1"`, `parse_herowear(...).find("ARM_1_13_1").group=="Dospeh_almaz"`.
@@ -142,11 +142,11 @@ Resolver test: build `HeroEquipment` from slot0 IDs/masks; expect
 `wear_set=="two_axes_maces"`, `armor=="dospeh_almaz"`, `elbarms=="ponogi_goluboy"`,
 `helmet=="shlem_goluboy"`, `weapon=="axe_goluboy2"`.
 
-- [ ] **Step 2: Run, expect fail**
+- [x] **Step 2: Run, expect fail**
 
 `cmake --build build --target gl_assets_tests gl_game_tests && build\bin\gl_game_tests.exe --test-case="*outfit*"`
 
-- [ ] **Step 3: Implement herowear parser + resolver**
+- [x] **Step 3: Implement herowear parser + resolver**
 
 Parse `herowear.scr` lines `category <c>`, `group "<Group>" ["<base>"]`,
 `item "<TECH>"`; assign group id as file order, reuse duplicate names;
@@ -155,13 +155,13 @@ map TECH→entry. Resolver: choose set A by mask bits (`0x001000` weapon,
 TECH→entry; set fields; base set is weapon's `base_set` else `noweapon_thrw`.
 Missing item/tech/group → empty optional for category.
 
-- [ ] **Step 4: Real verify slot0/slot2**
+- [x] **Step 4: Real verify slot0/slot2**
 
 Extend tests to check slot2: `wear_set=="two_axes_maces"`, armor
 `dospeh_cherny`, elbarms `ponogi_goluboy`, helmet `shlem_goluboy`,
 weapon `axe_goluboy2`; both sets' assets exist in `wear.pak` (18/18).
 
-- [ ] **Step 5: Run tests + commit**
+- [x] **Step 5: Run tests + commit**
 
 `ctest --test-dir build -R "gl_assets_tests|gl_game_tests" --output-on-failure`
 then `git commit -m "feat(game): resolve equipped items to hero outfit"`.
@@ -179,21 +179,22 @@ then `git commit -m "feat(game): resolve equipped items to hero outfit"`.
   and `const gl::assets::WearHadAnimation* LevelScreen::hero_header(std::uint32_t mask) const;`
 - Consumes: `load_hero_visual`, existing `hero_textures_/hero_headers_`.
 
-- [ ] **Step 1: Write failing test**
+- [x] **Step 1: Write failing test**
 
 In `tests/app/test_level_click.cpp`, load `l1_1` with outfit none, call
 `apply_hero_outfit(slot0)`, and assert
 `screen.hero_header(0x20)->frame_width == 75`; call naked outfit and assert
 `screen.hero_header(0x1)->frame_width == 65`.
 
-- [ ] **Step 2: Implement**
+- [x] **Step 2: Implement**
 
 `apply_hero_outfit`: call `load_hero_visual(vfs_, outfit)`; on error log warning
-and call `load_hero_visual(vfs_, HeroOutfit{})`; clear/replace
-`hero_textures_`/`hero_headers_`; no level reload. Store `hero_outfit_` for
-reapply after reload if needed.
+and retry with an explicitly cleared naked outfit (`noweapon_thrw`, empty layers;
+`HeroOutfit{}` defaults are non-empty); clear/replace `hero_textures_`/
+`hero_headers_`; no level reload. Store `hero_outfit_` for reapply after reload
+if needed.
 
-- [ ] **Step 3: Run targeted + commit**
+- [x] **Step 3: Run targeted + commit**
 
 `cmake --build build --target person_render_tests && build\bin\person_render_tests.exe`
 then `git commit -m "feat(app): reapply hero outfit without level reload"`.
@@ -210,33 +211,33 @@ then `git commit -m "feat(app): reapply hero outfit without level reload"`.
 **Interfaces:**
 - Consumes: `SaveManager`, `decode_save_body`, `parse_hero_equipment`,
   `resolve_hero_outfit`, `LevelScreen::apply_hero_outfit`.
-- Produces: `Game::pending_equipment_`; save-slot selection applies outfit.
+- Produces: `Game::pending_outfit_`; save-slot selection applies outfit.
 
-- [ ] **Step 1: Add headless option `--equip-save <slot>`**
+- [x] **Step 1: Add headless option `--equip-save <slot>`**
 
 Parse slot; on boot after level load: read `Saves/slot<N>.sav`, decode/parse,
 resolve outfit, apply. This is the automated-test hook; menu uses same helper.
 
-- [ ] **Step 2: Wire menu `save_activate`**
+- [x] **Step 2: Wire menu `save_activate`**
 
 If `display_saves_` empty return; take selected slot; read/parse; on success
-store `pending_equipment_`, apply to open level or mark for next `load_level`,
+store `pending_outfit_`, apply to open level or mark for next `load_level`,
 message `outfit: slot N`; on error store naked, message warning, never block.
 
-- [ ] **Step 3: Apply in `load_level`**
+- [x] **Step 3: Apply in `load_level`**
 
-Resolve `pending_equipment_` to `HeroOutfit` and pass to
-`LevelScreen::load`; if empty/error use naked. Keep `pending_equipment_`
+Resolve `pending_outfit_` to `HeroOutfit` and pass to
+`LevelScreen::load`; if empty/error use naked. Keep `pending_outfit_`
 for subsequent level loads until another save slot is selected.
 
-- [ ] **Step 4: Screenshot test**
+- [x] **Step 4: Screenshot test**
 
 Run glgame twice with `--level l1_1 --equip-save 0 --screenshot ...` and
 `--equip-save 2`; assert acceptance against slot0/slot2 outfit (hash or
 non-empty equipment textures). Also run malformed/invalid slot → naked and
 exit 0.
 
-- [ ] **Step 5: Run + commit**
+- [x] **Step 5: Run + commit**
 
 `ctest --test-dir build -R glgame_screenshot_tests --output-on-failure` then
 `git commit -m "feat(glgame): apply outfit from selected save"`.
@@ -249,13 +250,13 @@ exit 0.
 - Modify: `docs/STATUS.md`, `docs/PROJECT.md`, `docs/DECISIONS.md` (if new
   decision), spec/plan status.
 
-- [ ] **Step 1: Update docs**
+- [x] **Step 1: Update docs**
 
 Record: parser/resolver APIs, slot0/slot2 verification, fallback naked,
 known A/B risk, `shlem_cherny` not used. Update P5 status `[~]`/`[x]` as
 appropriate.
 
-- [ ] **Step 2: Full ctest**
+- [x] **Step 2: Full ctest**
 
 `$env:GL_GAME_DIR="I:\Games\Златогорье-2"; ctest --test-dir build --output-on-failure`
 Expected: 17/17 (or current count) passed; record time.
@@ -265,7 +266,7 @@ Expected: 17/17 (or current count) passed; record time.
 User compares glgame with slot0 and slot2 against original. If visually
 different, write findings to STATUS and do not claim P5a accepted.
 
-- [ ] **Step 4: Commit docs**
+- [x] **Step 4: Commit docs**
 
 `git add docs && git commit -m "docs(p5): record save outfit slice"`
 
