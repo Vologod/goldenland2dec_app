@@ -1,8 +1,8 @@
 # P5a: equipped-записи `BT_HERO` в save-файлах
 
-Дата: 2026-11-04. Статус: **research DONE** (layout извлечён и проверен на 28 save).
-Задача: `docs/plans/2026-11-04-p5a-save-outfit-research.md`, Task 1.
-Игровой код не менялся; коммитится только этот документ.
+Дата: 2026-11-04. Статус: **research DONE** (layout + item→tech/group;
+проверено на 28 save). Задача: `docs/plans/2026-11-04-p5a-save-outfit-research.md`,
+Task 1-2. Игровой код не менялся; коммитится только этот документ.
 
 ## 1. Источники истины
 
@@ -218,28 +218,18 @@ Item-id offsets: `397` @ body `0x6D08` (decomp `902575`), `280` @ `0x6DF4`
 записей; sequential parse от них не зависит. Во всех 28 файлах count/id/концы
 контейнеров сходятся без остатка.
 
-## 10. Что ещё нужно для item → tech/group
+## 10. Item → tech/group — решено (детали в §13)
 
-Уже подтверждено:
+Task 2 закрыт. Коротко:
 
-- `+0x08` type → категория (`11` helmet, `12` armor, `13` shield, `14` elbarms;
-  `15/16/17` bracelets/amulet/ring; `0/1/…` оружие).
-- `+0x20` = ITM `unknown_b[1]` (style-номер): `318→13`, `280→12`, `397→11`.
-- `+0xA8` = id файла `items/data/<id>.itm`; ITM даёт `puppet_name` (например,
-  `puppet\Bronya\Almaz\00.bmp` для 318) и `material`.
-- `+0x30` = ITM `material`.
-
-Не извлечено (следующий шаг):
-
-1. Точная сборка tech-строки (`ARM_1_13_1`, `HLM_1_12_1`, `ELB_1_11_*`): какой
-   компонент даёт последнее число/вариант и как выбирается группа.
-2. Функция, превращающая item id из `FUN_140499ac` в PersonVisual. В reader
-   после `FUN_140499ac` вызывается vtable-метод
-   `DAT_140891bc+0x98 → +0x0C(local_48, hero+8)`; это наиболее вероятная точка
-   item→tech/group, но её реализация не декомпилирована.
-3. Сопоставление tech/group с `scripts/herowear.scr` (и/или `puppet_name`) для
-   5 визуальных категорий.
-4. Выбор активного набора A/B (`param_2`/`param_3`), если он не всегда первый.
+- tech-строка (`ARM_1_13_1`, `HLM_1_12_1`, `ELB_1_11_2`, …) берётся из
+  `sdb/items/tech_names.sdb` по item id; она не собирается из
+  `type`/`style`/`material`.
+- группа и wear-набор — из `scripts/herowear.scr`;
+  `+0x20 style` коррелирует со 2-м числом tech, но движок его для выбора
+  группы не читает.
+- активный при чтении save набор — A; packed-формула, id групп и проверка
+  0/N — в §13.
 
 ## 11. Рецепт парсера для P5a
 
@@ -252,13 +242,221 @@ Item-id offsets: `397` @ body `0x6D08` (decomp `902575`), `280` @ `0x6DF4`
 6. Для каждой записи: `item_id = u32(+0xA8)`, `type = u32(+0x08)`,
    `style = u32(+0x20)`, `mask = u32(+0x0C) & 0xFFF000`.
 7. Категория для outfit — по `type` (и `mask` для набора A/B); item→tech/group —
-   по §10.
+   по §13.
 
-## 12. Открытые вопросы
+## 12. Открытые вопросы / residual risk
 
-- Семантика `+0xAC` (константа на слот) и subrecord (5×u32).
-- Активный weapon/shield set A/B и момент переключения.
-- Точная функция item id → tech/group и tech → wear set.
-- Являются ли mask-биты аксессуаров (`0x008000/0x010000/0x020000/0x040000/0x080000`)
-  именно слотами: в `FUN_140499ac` они не обрабатываются (визуальных слоёв нет),
-  связь установлена только по совпадению с type 15/16/17.
+- Переключение активного набора A/B в live-игре после загрузки save не
+  прослежено: reader использует только A (§13.6). Это residual risk для P5a.
+- Семантика `+0xAC` (константа на слот) и subrecord (5×u32) не разобрана
+  (к outfit не относится).
+- Групповые id зависят от порядка `group` в `herowear.scr`; их нельзя
+  хардкодить — парсить из данных (§13.3).
+- Item id вне `tech_names.sdb` или TECH вне `herowear.scr` для визуальной
+  категории → naked-fallback по spec; в 28 save таких записей нет.
+- Mask-биты аксессуаров (`0x008000/0x010000/0x020000/0x040000/0x080000`)
+  по-прежнему не обрабатываются `FUN_140499ac` (визуальных слоёв нет);
+  связь с type 15/16/17 подтверждена только по совпадению.
+- `shlem_cherny` из spec в данных отсутствует; см. §13.8.
+
+## 13. Item → tech/group → wear set (Task 2)
+
+Источник: `Server.dll` SHA-256
+`418E256063748F2E90DB35AE7C6ABE6EAC401FB86908CB5F27EBF565A21CC837`,
+`GoldenLand.exe` SHA-256
+`7854019E6C0A6C2BFDE6425C5799AFCA654D174A31CDAA7A624C3E17842109FF`.
+Проекты Ghidra: `%TEMP%\ghidra_server`, `%TEMP%\ghidra_glexe`.
+
+### 13.1 Цепочка вызовов
+
+| VA | RVA | Модуль | Роль |
+|---|---|---|---|
+| `0x1401e424` | `0x1e424` | Server.dll | reader hero: `FUN_140499ac` → vtable `+0x98` → `+0x0C` |
+| `0x140499ac` | `0x499ac` | Server.dll | разбор equipped в наборы A (`param_2`) и B (`param_3`) |
+| `0x1405cbf0` | `0x5cbf0` | Server.dll | `GetServerAPI`: `DAT_140891bc = arg1` |
+| `0x0042c624` | `0x2c624` | GoldenLand.exe | загрузчик DLL; вызов `GetServerAPI(0x46c200, 0x46d820)` @ `0x42c6bd` |
+| `0x0042c350` | `0x2c350` | GoldenLand.exe | init объекта `0x46c200`: `+0x88→DAT_00469d58` @ `0x42c604`, `+0x98→DAT_0046c1e8` @ `0x42c497` |
+| `0x0042ca7c` | `0x2ca7c` | GoldenLand.exe | создаёт оба singleton-объекта |
+| `0x0042c098` | `0x2c098` | GoldenLand.exe | ctor visual factory (size `0x54`; vtable `0x4852d8`/`0x4852fc`) |
+| `0x004255bc` | `0x255bc` | GoldenLand.exe | ctor wear manager (size `0xC460`; vtable `0x484400`) |
+| `0x004253ac` | `0x253ac` | GoldenLand.exe | создаёт 5 пустых SDB + карты, затем парсит herowear |
+| `0x00422eec` | `0x22eec` | GoldenLand.exe | парсер `scripts\herowear.scr` |
+| `0x00422e70` | `0x22e70` | GoldenLand.exe | vtable `0x484400[0]`: weapon id → group id → base set idx |
+| `0x00423888` | `0x23888` | GoldenLand.exe | vtable `0x484400[2]`: сборка packed visual-кода |
+| `0x00423244` | `0x23244` | GoldenLand.exe | обратная распаковка packed → массив item id |
+| `0x0042bd34` | `0x2bd34` | GoldenLand.exe | vtable `0x4852d8[3]`: вызывает `0x423888`, пишет packed в `hero+8`, возвращает visual-объект |
+
+`DAT_140891bc` — 32-битный указатель на объект `GoldenLand.exe`
+`0x46c200`. `[0x46c298] = DAT_0046c1e8`; у этого объекта vtable
+`0x4852d8`, метод `[3]` = `FUN_0042bd34`. `[0x46c288] = DAT_00469d58`
+(wear manager, vtable `0x484400`). Поэтому `FUN_140499ac` в хвосте
+вызывает `FUN_00422e70`, а reader — `FUN_0042bd34`.
+
+### 13.2 Tech-строка: источник данных, не формула
+
+`FUN_00422eec` на строке `item "<TECH>"` ищет TECH в
+`DAT_0046c358` — SDB `sdb\items\tech_names.sdb` (загружается в
+`FUN_0042ca7c`; строка пути @ `0x485cd4`), получает u32 item id и
+кладёт `map[item_id] = group_id` (`FUN_004027e0`).
+
+Значит `item id → TECH` — это та же таблица в обратном направлении
+(`glpak decode-sdb` печатает `<id>\t<TECH>`), а не сборка из
+`+0x08 type`, `+0x20 style`, `+0x30 material`:
+
+| item id | TECH | группа | gid |
+|---|---|---|---|
+| 318 | `ARM_1_13_1` | Dospeh_almaz | 1 |
+| 397 | `ELB_1_11_2` | Ponogi_goluboy | 3 |
+| 280 | `HLM_1_12_1` | Shlem_goluboy | 6 |
+| 317 | `ARM_1_12_2` | Dospeh_cherny | 5 |
+| 278 | `HLM_1_11_1` | Shlem_goluboy | 6 |
+| 396 | `ELB_1_11_1` | Ponogi_goluboy | 3 |
+| 486 | `AXE_1_13_2` | Axe_goluboy2 | 31 |
+| 554 | `SWR_1_08_1` | Sword_platina | 69 |
+| 353 | `SHL_1_10_1` | Shit_bio | 2 |
+| 359 | `SHL_1_12_2` | Shit_cherny | 5 |
+
+`+0x20 style` совпадает со 2-м числом TECH: `318→13`, `397→11`,
+`280→12`, `486→13`, `554→8`, `353→10`, `359→12`. Это проверено
+на всех 22 equipped-записях slot0+slot2 (0 расхождений) и на 113
+визуальных записях 28 save (0). Но движок `style` при выборе группы
+не читает: `FUN_00423888` использует только item id. Исключение —
+ammo `AMO_1_0_1` (type 8): у него TECH не следует шаблону и нет
+wear-слоя.
+
+### 13.3 Group id и wear group
+
+`FUN_004253ac` создаёт по категории пустую SDB (без загрузки файла)
+и карту. Порядок категорий — массив `0x445260`:
+`weapon(0)`, `armor(1)`, `shield(2)`, `helmet(3)`, `elbarms(4)`.
+
+`FUN_00422eec` при первом вхождении `group "<G>"` выдаёт
+`id = число_записей_SDB + 1`, повторное имя переиспользует id.
+Карта `item id → group id` лежит в wear manager по
+`+0x18 + 4*category_index`.
+
+Число групп в текущем `herowear.scr`: weapon 88, armor 15,
+shield 15, helmet 8, elbarms 5. id 0 = категория отсутствует
+(в packed остаются нули).
+
+### 13.4 Base wear set
+
+Только у `category weapon` у группы есть второй аргумент. Массив
+`0x4452ac` (порядок проверен по бинарнику):
+
+```
+0 noweapon_thrw   1 onehand_wpn   2 two_swords   3 two_axes_maces
+4 two_spears_staffs   5 bows   6 xbows_guns
+```
+
+Индекс base set сохраняется в карту `+0x2c` по group id;
+`FUN_00422e70` возвращает его для оружия, иначе 0. Порядок в
+p4d (§herowear) был указан неверно.
+
+### 13.5 Packed visual-код
+
+`FUN_00423888` собирает u32 (bit 31 — флаг packed):
+
+```
+packed = 0x80000000
+       | (armor_gid   & 0x0F)
+       | (shield_gid  & 0x0F) << 4
+       | (helmet_gid  & 0x0F) << 8
+       | (elbarms_gid & 0x0F) << 12
+       | (weapon_gid  & 0xFF) << 16
+       | (base_idx    & 0x0F) << 24
+```
+
+Нет предмета → gid 0; нет оружия → `base_idx = 0`. Обратная
+распаковка — `FUN_00423244` (для чтения save не нужна: item id уже
+есть в записи).
+
+### 13.6 Активный набор A/B
+
+`FUN_140499ac`:
+
+| mask | набор | категория |
+|---|---|---|
+| `0x001000` | A (`param_2`/`local_48`) | weapon |
+| `0x002000` | B (`param_3`/`local_60`) | weapon |
+| `0x004000` | A и B | helmet |
+| `0x100000` | A и B | armor |
+| `0x200000` | A и B | elbarms |
+| `0x400000` + type 13 | A | shield |
+| `0x800000` + type 13 | B | shield |
+
+`FUN_1401e424` передаёт в `FUN_0042bd34` только `local_48`; `local_60`
+не используется. `FUN_0042bd34` пишет packed в `hero+8` и кладёт
+возвращённый visual-объект в `hero+0x5E0`. Следствие: при чтении save
+активен набор A. Переключение A/B в live-игре после загрузки не
+прослежено — residual risk (§12).
+
+Для slot0/slot2 packed: A `0x831f3601`/`0x831f3605`,
+B `0x81453621`/`0x81453655` (порядок: armor, shield, helmet,
+elbarms, weapon, base_idx).
+
+### 13.7 Проверка slot0 + slot2
+
+Все визуальные слои (A и B, 18 путей) существуют в `wear.pak`:
+
+| slot | set | cat | id | TECH | group | gid | base | asset |
+|---|---|---|---|---|---|---|---|---|
+| 0 | A | weapon | 486 | AXE_1_13_2 | Axe_goluboy2 | 31 | two_axes_maces | `wear/two_axes_maces/weapon/axe_goluboy2/axe_goluboy2.iad` |
+| 0 | A | armor | 318 | ARM_1_13_1 | Dospeh_almaz | 1 | two_axes_maces | `wear/two_axes_maces/armor/dospeh_almaz/dospeh_almaz.iad` |
+| 0 | A | helmet | 280 | HLM_1_12_1 | Shlem_goluboy | 6 | two_axes_maces | `wear/two_axes_maces/helmet/shlem_goluboy/shlem_goluboy.iad` |
+| 0 | A | elbarms | 397 | ELB_1_11_2 | Ponogi_goluboy | 3 | two_axes_maces | `wear/two_axes_maces/elbarms/ponogi_goluboy/ponogi_goluboy.iad` |
+| 0 | B | weapon | 554 | SWR_1_08_1 | Sword_platina | 69 | onehand_wpn | `wear/onehand_wpn/weapon/sword_platina/sword_platina.iad` |
+| 0 | B | armor | 318 | ARM_1_13_1 | Dospeh_almaz | 1 | onehand_wpn | `wear/onehand_wpn/armor/dospeh_almaz/dospeh_almaz.iad` |
+| 0 | B | shield | 353 | SHL_1_10_1 | Shit_bio | 2 | onehand_wpn | `wear/onehand_wpn/shield/shit_bio/shit_bio.iad` |
+| 0 | B | helmet | 280 | HLM_1_12_1 | Shlem_goluboy | 6 | onehand_wpn | `wear/onehand_wpn/helmet/shlem_goluboy/shlem_goluboy.iad` |
+| 0 | B | elbarms | 397 | ELB_1_11_2 | Ponogi_goluboy | 3 | onehand_wpn | `wear/onehand_wpn/elbarms/ponogi_goluboy/ponogi_goluboy.iad` |
+| 2 | A | weapon | 486 | AXE_1_13_2 | Axe_goluboy2 | 31 | two_axes_maces | `wear/two_axes_maces/weapon/axe_goluboy2/axe_goluboy2.iad` |
+| 2 | A | armor | 317 | ARM_1_12_2 | Dospeh_cherny | 5 | two_axes_maces | `wear/two_axes_maces/armor/dospeh_cherny/dospeh_cherny.iad` |
+| 2 | A | helmet | 278 | HLM_1_11_1 | Shlem_goluboy | 6 | two_axes_maces | `wear/two_axes_maces/helmet/shlem_goluboy/shlem_goluboy.iad` |
+| 2 | A | elbarms | 396 | ELB_1_11_1 | Ponogi_goluboy | 3 | two_axes_maces | `wear/two_axes_maces/elbarms/ponogi_goluboy/ponogi_goluboy.iad` |
+| 2 | B | weapon | 554 | SWR_1_08_1 | Sword_platina | 69 | onehand_wpn | `wear/onehand_wpn/weapon/sword_platina/sword_platina.iad` |
+| 2 | B | armor | 317 | ARM_1_12_2 | Dospeh_cherny | 5 | onehand_wpn | `wear/onehand_wpn/armor/dospeh_cherny/dospeh_cherny.iad` |
+| 2 | B | shield | 359 | SHL_1_12_2 | Shit_cherny | 5 | onehand_wpn | `wear/onehand_wpn/shield/shit_cherny/shit_cherny.iad` |
+| 2 | B | helmet | 278 | HLM_1_11_1 | Shlem_goluboy | 6 | onehand_wpn | `wear/onehand_wpn/helmet/shlem_goluboy/shlem_goluboy.iad` |
+| 2 | B | elbarms | 396 | ELB_1_11_1 | Ponogi_goluboy | 3 | onehand_wpn | `wear/onehand_wpn/elbarms/ponogi_goluboy/ponogi_goluboy.iad` |
+
+0/N:
+
+| Проверка | N | Расхождений |
+|---|---|---|
+| slot0+slot2: item id → TECH | 22 | **0** |
+| slot0+slot2: TECH prefix category == save `type` | 22 | **0** |
+| slot0+slot2: `style == TECH[2]` | 22 | **0** |
+| slot0+slot2: визуальный TECH найден в herowear | 12 | **0** |
+| slot0+slot2: gid влезает в 4/8-битные поля (4 набора × 5) | 20 | **0** |
+| slot0+slot2: asset существует (A+B) | 18 | **0** |
+| все 28 save: визуальные item → TECH/herowear | 113 | **0** |
+| все 28 save: asset визуальных слоёв (A+B) | 193 | **0** |
+
+### 13.8 Отсутствующие ассеты
+
+- В slot0/slot2 отсутствующих ассетов нет: 18/18 путей существуют.
+- В 28 save — 0 отсутствующих среди 193 проверенных визуальных слоёв.
+- Структурно в `wear.pak` каталог `shield/` есть только у base set
+  `noweapon_thrw` и `onehand_wpn` (по 15 групп); у `two_swords`,
+  `two_axes_maces`, `two_spears_staffs`, `bows`, `xbows_guns` его
+  нет вовсе. Это согласуется с тем, что щит носится с одноручным
+  оружием; в slot0/slot2 щиты лежат в наборе B при `onehand_wpn`.
+  Если встретится щит при двуручном base set — слой считать
+  отсутствующим, а не ошибкой парсера.
+- `shlem_cherny` нет ни в `wear.pak`, ни в `herowear.scr`;
+  `HLM_1_12_1`/`HLM_1_11_1` → `Shlem_goluboy` (ассет есть). Пример
+  из spec не воспроизводится на этих save.
+
+### 13.9 Рецепт для P5a
+
+1. Из equipped-записи взять `id=+0xA8`, `type=+0x08`,
+   `mask=+0x0C & 0xFFF000`.
+2. Собрать набор A (§6, §13.6).
+3. `TECH = reverse(tech_names.sdb)[id]` (id → строка).
+4. `(category, group, gid, base_idx) = herowear[TECH]`.
+5. `base = weapon ? base_idx : 0` (`noweapon_thrw`).
+6. `asset = wear/<base>/<category>/<lower(group)>/<lower(group)>.iad`.
+7. Нет TECH/group/asset → naked для категории + warning (spec §8).
+8. `BRL`/`AML`/`RNG` и ammo (`AMO`, type 8) читать/хранить, но
+   wear-слой не создавать.

@@ -106,8 +106,76 @@ Expected: commit created; implementation plan is written only after
 
 ---
 
+### Task 2: Item → tech/group → wear set
+
+**Files:**
+- Modify: `docs/research/p5-save-equipment.md` (section item→tech)
+- Read: `docs/research/p4d-hero-wear.md:254-305`,
+  `docs/research/p5-save-equipment.md:221-264`
+
+**Interfaces:**
+- Consumes: equipped item fields `+0x08 type`, `+0x0C mask`, `+0x20 style`,
+  `+0xA8 item_id`, slot0/slot2 tables from Task 1.
+- Produces: exact formula/table item id → tech string + wear group/set
+  for the 5 visual categories; active weapon/shield set selection.
+
+- [x] **Step 1: Decompile the reader's visual conversion**
+
+In Ghidra `Server.dll` (`%TEMP%\ghidra_server`, base `0x14000000`),
+decompile `FUN_1401e424` around the call after `FUN_140499ac`:
+`DAT_140891bc+0x98` vtable method; find its implementation and the
+`+0x0C(local_48, hero+8)` callee. Record VAs/RVAs.
+
+Expected: function that builds PersonVisual/tech strings from item data.
+
+- [x] **Step 2: Trace tech string construction**
+
+Follow the vtable callee and record exactly which item fields are used:
+type, style/`unknown_b[1]`, material, id, group/name, and how the numeric
+suffix (`ARM_1_13_1`, `HLM_1_12_1`, `ELB_1_11_*`) is formed. Verify
+against known slot0 items `318→armor Almaz`, `397→elbarms Goluboy`,
+`280→helmet Cherny`.
+
+Expected: formula + constants, not a guessed mapping.
+
+- [x] **Step 3: Verify wear group/set resolution**
+
+Use `scripts/herowear.scr` parsing rules and `wear.pak` directory list;
+map each derived tech string to `wear/<base_set>/<category>/<group>`.
+Verify slot0 + slot2 equipped items for armor/helmet/elbarms/weapon/shield.
+Record missing assets (e.g. `shlem_cherny`) explicitly.
+
+Expected: table with item id → tech → group/set → asset exists/skip.
+
+- [x] **Step 4: Resolve active weapon/shield set A/B**
+
+Trace how `param_2`/`param_3` from `FUN_140499ac` reach `hero+0x5E0`
+and whether A/B selection depends on save/live state. If not provable,
+record rule used by reader (first set) and mark as residual risk.
+
+Expected: active set rule or explicit unverified note.
+
+- [x] **Step 5: Update research + verify 0/N**
+
+Append the item→tech section to `docs/research/p5-save-equipment.md`;
+verify the derived mapping on slot0 + slot2 equipped records (0
+mismatches for the 5 visual categories), listing any missing wear assets.
+
+- [x] **Step 6: Commit**
+
+```powershell
+git add docs/research/p5-save-equipment.md docs/plans/2026-11-04-p5a-save-outfit-research.md
+git commit -m "docs(p5): record item-to-wear mapping"
+```
+
+Expected: implementation plan can name exact parser/outfit mapping
+without open item→tech steps.
+
+---
+
 ## Next phase
 
-After Task 1 passes, create `docs/plans/2026-11-04-p5a-save-outfit-implementation.md`
-with concrete parser/menu/render tasks from the verified layout and the
-approved spec (`docs/specs/2026-11-04-p5-save-outfit-design.md`).
+After Tasks 1-2 pass, create
+`docs/plans/2026-11-04-p5a-save-outfit-implementation.md` with concrete
+parser/menu/render tasks from the verified layout and the approved spec
+(`docs/specs/2026-11-04-p5-save-outfit-design.md`).
