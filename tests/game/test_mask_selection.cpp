@@ -41,6 +41,12 @@ TEST_CASE("select_cell_mask applies an interior masked subcell") {
     }
 }
 
+TEST_CASE("select_row_mask_ids collects ids across the person row") {
+    auto grid = make_grid(3, 2, 3, 7);
+    const std::vector<std::uint16_t> ids = select_row_mask_ids(grid, 0, 2, 0);
+    CHECK(ids == std::vector<std::uint16_t>{7});
+}
+
 TEST_CASE("select_cell_mask handles invalid coordinates") {
     auto grid = make_grid(2, 2, 3, 0);
     auto selection = select_cell_mask(grid, 5, 5);

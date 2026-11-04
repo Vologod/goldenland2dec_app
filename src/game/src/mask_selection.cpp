@@ -1,4 +1,5 @@
 #include "gl/game/mask_selection.hpp"
+#include <algorithm>
 
 namespace gl::game {
 
@@ -47,6 +48,22 @@ CellMaskSelection select_cell_mask(const MaskCellGrid &grid, int cell_x, int cel
         }
     }
     return result;
+}
+
+std::vector<std::uint16_t> select_row_mask_ids(const MaskCellGrid &grid, int cell_x0,
+                                              int cell_x1, int cell_y) {
+    std::vector<std::uint16_t> selected;
+    for (int cx = cell_x0; cx <= cell_x1; ++cx) {
+        const CellMaskSelection selection = select_cell_mask(grid, cx, cell_y);
+        for (std::size_t sub = 0; sub < 4; ++sub) {
+            if (selection.applies[sub] == 0 || selection.mask_index[sub] == 0xFFFF)
+                continue;
+            const std::uint16_t id = selection.mask_index[sub];
+            if (std::find(selected.begin(), selected.end(), id) == selected.end())
+                selected.push_back(id);
+        }
+    }
+    return selected;
 }
 
 } // namespace gl::game

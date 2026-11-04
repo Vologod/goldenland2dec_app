@@ -1,7 +1,7 @@
 # A8-parity: `ApplyCellMask` и `tile.mask`
 
-Дата: 2026-11-03. Статус: **static analysis done; live gate pending**
-(см. Task 1 плана). Код не менялся.
+Дата: 2026-11-03 (resolved 2026-11-04). Статус: **parity PASSED**
+(hook + manual gate). См. раздел RESOLVED.
 
 Источники: `Client.dll` SHA-256
 `FBF213B4B820E767A529556D0F7E4D29EE2202E7E39C3E49043F49D55DAB5C16`
@@ -152,3 +152,35 @@ subcell `s=0..3` builder читает из LVL:
   использует его вместо `direction8_to16(direction8)` (последний давал
   только чётные 16-направления, из-за чего диагональные тело/тень брали
   неверную строку). После правки полный `ctest` — 17/17 (1485.32 s).
+
+## RESOLVED: exact cell-id selection via hook (2026-11-04)
+
+Внешний read-only tracer (x86, Windows Debug API): hardware
+execute-breakpoints на `FUN_1202BC54`/`FUN_1202F17C`, после срабатывания
+выставляется `EFlags.RF` (иначе CPU повторяет первый вызов), процесс не
+патчится, перед detach очищаются `Dr0..Dr7`. Требует 32-битной сборки
+(`i686-w64-mingw32-clang++ -static`, `-lpsapi`).
+
+Факты (PID 10672, `l1_1`; `Client.dll` SHA-256 `FBF213B4…5C16`):
+
+- `ApplyCellMask` вызывается **для одной строки — `cell_y` персонажа**
+  (`renderer+0x958c`), по x-диапазону кадра. Примеры: person `(74,18)`
+  → Apply `(72..75,18)`; person `(66,6)` → Apply `(65..67,6)`.
+- `FUN_1202F17C` (`MaskRenderer`) после этого рисует foreground **для
+  всех клеток кадра, у которых grid `mask_id` совпадает с выбранным в
+  строке персонажа**: person `(74,18)` → renderer `x=72..75`,
+  `y=12..19`.
+- Поэтому маска не «все клетки кадра» и не «только низ кадра»: выбор
+  id — по строке `floor(person_y/18)`, отрисовка — по всем клеткам
+  кадра с этим id.
+- RVA: `FUN_1202BC54 = 0x2BC54`, `FUN_1202F17C = 0x2F17C` (при base
+  `0x12000000`); person cell — `renderer+0x9588/+0x958C`; grid —
+  `renderer+0x8344`.
+- Реализация в порте: `LevelScreen::draw_rect_masks` собирает mask id
+  в строке `person_y/18`, затем рисует foreground для клеток кадра с
+  тем же id. Пользовательский gate: угол дома, место правее, полное
+  перекрытие и дерево — **PASSED 2026-11-04**.
+
+- **Проверка:** regression select_row_mask_ids collects ids across the person
+  row; полный ctest — **17/17 passed**, 1155.42 s; пользовательский gate
+  2026-11-04 — PASSED.

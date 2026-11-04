@@ -1,6 +1,44 @@
 # STATUS
 
-Обновлено: 2026-11-03
+Обновлено: 2026-11-04
+## A8 exact cell-mask research (resolved 2026-11-04)
+
+- **Задача:** понять точную семантику `FUN_1202BF60`/`FUN_1202BC54` для
+  выбора клеток и `mask_id`.
+- **Результат:** внешний x86 hook-tracer (hardware breakpoints,
+  `EFlags.RF`, read-only) показал: `ApplyCellMask` — одна строка
+  `cell_y` персонажа по x-диапазону кадра; `MaskRenderer` рисует
+  foreground для всех клеток кадра с тем же `mask_id`.
+- **Проверка:** hook-лог `person(74,18) → Apply(72..75,18) →
+  Renderer(72..75,12..19)`; реализация в `LevelScreen::draw_rect_masks`.
+- **Статус:** **PASSED**, пользователь проверил угол/полное
+  перекрытие/дерево; research — `docs/research/a8-mask-parity.md`
+  (RESOLVED).
+
+## P4d — shadow/mirror draw origin (fixed 2026-11-04)
+
+- **Live-факт:** в оригинале (PID 22800, `l1_1`) source-rect тела и тени
+  (`render item +0x0C` и `+0x1C`) имеют **одинаковую колонку**; ряд тени —
+  identity-направление, ряд тела — PAD-таблица (8/16). Поэтому «отставание»
+  тени было не фазой анимации, а **сдвигом draw-origin**.
+- **Root cause:** для mirrored-строк оригинала body anchor = `frame_width -
+  anchor_x`, а не `anchor_x`. Live: `rt_stay` 65−34=31 (вместо 34),
+  `rt_go` 75−34=41; тень при этом остаётся на static shadow anchor
+  (`rt_stay` 45/46, `rt_go` 50/51, ±1 px). Порт рисовал body на
+  `x−anchor` и делал `SDL_FLIP_HORIZONTAL` вокруг центра — тень
+  оказывалась на ~6 px (≈1 кадр хода) позади тела.
+- **Fix:** `gl::app::person_body_draw_x(x, frame_width, anchor_x, mirror)`;
+  используется в `place_person[_px]` и `draw_hero_wear`. Тень не зеркалится
+  (identity-ряд, static anchor) — как в live.
+- **Проверка:** новый regression-тест `mirrored placement flips the draw
+  origin around the anchor`; targeted `person_render_tests` 18/18,
+  `level_click_tests` 22/22, `glview_screenshot_tests` и
+  `glgame_screenshot_tests` passed; полный `ctest` — **17/17 passed**,
+  1039.94 s.
+- **Open:** пользовательский visual gate (тень при движении вниз-вправо,
+  страж, голова у угла дома). Live shadow-anchor отличается от HAD на
+  +1 px для mirrored-направлений — ниже порога кадра, не правилось.
+
 ## A8 parity — cell mask `ApplyCellMask` (implemented 2026-11-03)
 
 - **Реализовано:** `Level::MaskCellGrid`/`mask_numbers` из LVL;
@@ -15,9 +53,9 @@
   стражник/персонаж за башней: 206 px перекрытия (выбранная клетка);
   `real l1_1 cell mask grid matches live data`; `gl_game_tests` 98/98
   (557 146 assertions); полный `ctest` — **17/17 passed**, 1485.32 s.
-- **Multi-cell fix:** маска применяется не к клетке ног, а ко всем клеткам
-  прямоугольника кадра (24×18), как `FUN_1202BF60`/`FUN_1202C8AC`; это
-  убирает частичное перекрытие крупных спрайтов.
+- **Mask row by hook:** маска выбирается в строке `person_y/18` по
+  x-диапазону кадра, затем foreground рисуется для всех клеток кадра с
+  тем же `mask_id` (см. RESOLVED ниже); не «все клетки» и не только низ.
 - **Hero direction16:** `Hero::direction16` сохраняется из
   `direction16_from_velocity`; `LevelScreen` использует его для walk-строки
   тела/тени (раньше `direction8_to16` давал только чётные направления —
@@ -27,6 +65,18 @@
   на `rt_stay`/`rt_go` (65×92 / 75×96, shadow 72×38 / 84×42); HAD anchors
   `(34,78)`/`(45,22)` совпали с live draw. После правки полный `ctest` —
   **17/17 passed**, 2002.77 s.
+- **RESOLVED (2026-11-04):** A8-маски. Внешний x86 hook-tracer
+  (hardware breakpoints `FUN_1202BC54`/`FUN_1202F17C`, RF, read-only)
+  показал: `ApplyCellMask` идёт по **одной строке `cell_y` персонажа**
+  (`renderer+0x958C`) и x-диапазону кадра, а `MaskRenderer` рисует
+  foreground для **всех клеток кадра с тем же `mask_id`**. Порт:
+  `LevelScreen::draw_rect_masks` собирает id в строке `person_y/18`,
+  затем рисует только клетки кадра с этим id. Формула не эвристика —
+  снята hook'ом. Детали — `docs/research/a8-mask-parity.md` (RESOLVED).
+- **Manual gate PASSED:** пользователь проверил угол дома, место правее,
+  полное перекрытие и дерево — ок. Regression
+  select_row_mask_ids collects ids across the person row; полный ctest
+  — **17/17 passed**, 1155.42 s.
 - **Открыто:** проверить у пользователя диагональную тень и стража; при
   необходимости сверить draw/shadow anchors NPC с live.
 - **Ограничения:** одна клетка occupancy (без multi-cell больших спрайтов);
@@ -34,9 +84,9 @@
   масок дверями/скриптами и alt-маски — вне задачи.
 - Spec/plan: `docs/specs/2026-11-03-a8-mask-parity-design.md`,
   `docs/plans/2026-11-03-a8-mask-parity.md`.
-- **Manual gate:** пользователь должен перепроверить P4d/A8 в `glgame`
-  (hero у двери/стен, стражник у ворот, тени); до подтверждения P4d
-  остаётся manual OPEN.
+- **Manual gate:** P4d тень подтверждена; A8 подтверждён пользователем
+  (угол, место правее, полное перекрытие, дерево). P4d/A8 manual gate —
+  **PASSED 2026-11-04**.
 
 ## P4d — hero equipment/render (implemented 2026-10-25; manual gate OPEN)
 

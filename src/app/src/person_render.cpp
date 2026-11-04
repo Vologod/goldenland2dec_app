@@ -41,13 +41,19 @@ FrameRect frame_rect(std::size_t column, std::size_t row, int frame_width,
     };
 }
 
+float person_body_draw_x(float x, int frame_width, int anchor_x, bool mirror) {
+    const int effective_anchor = mirror ? frame_width - anchor_x : anchor_x;
+    return x - static_cast<float>(effective_anchor);
+}
+
 PersonPlacement place_person(const gl::assets::PadAnimation& animation,
                              std::uint8_t direction, std::int32_t tile_x,
                              std::int32_t tile_y) {
     const gl::assets::PadDirectionRow row =
         gl::assets::pad_person_row(animation.type, direction);
     return PersonPlacement{
-        static_cast<float>(tile_x) * kTileWidth - static_cast<float>(animation.anchor_x),
+        person_body_draw_x(static_cast<float>(tile_x) * kTileWidth, animation.frame_width,
+                           animation.anchor_x, row.mirror),
         static_cast<float>(tile_y) * kTileHeight - static_cast<float>(animation.anchor_y),
         row.row,
         row.mirror,
@@ -71,7 +77,7 @@ PersonPlacement place_person_px(const gl::assets::PadAnimation& animation,
     const gl::assets::PadDirectionRow row =
         gl::assets::pad_person_row(animation.type, direction);
     return PersonPlacement{
-        x - static_cast<float>(animation.anchor_x),
+        person_body_draw_x(x, animation.frame_width, animation.anchor_x, row.mirror),
         y - static_cast<float>(animation.anchor_y),
         row.row,
         row.mirror,

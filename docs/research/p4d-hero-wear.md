@@ -359,3 +359,29 @@ shadow surface `864x304`, shadow draw `(429,548)`.
 - Вывод: порт должен рисовать hero idle из `rt_stay`, walk из `rt_go`
   (а не `tb_stay`/`tb_go`); это меняет размер кадра, теневой лист и
   анкоры. Исправлено в `LevelScreen::draw_hero_wear`.
+
+## Live body/shadow rects and mirrored anchor (2026-11-04)
+
+Оригинал PID 22800, `l1_1`; `Client.dll` SHA-256
+`FBF213B4B820E767A529556D0F7E4D29EE2202E7E39C3E49043F49D55DAB5C16`. Сэмплер читал
+render item героя: `+0x0C` body rect, `+0x1C` shadow rect, `+0x2C/0x30`
+body draw, `+0x34/0x38` shadow draw; 50 ms, ходьба по 8 направлениям.
+
+- **Колонки совпадают:** для всех 425 hero-сэмплов
+  `shadow_col == body_col` (и у NPC тоже); «отставание» — не колонка.
+- **Ряды:** body row — PAD-таблица; shadow row = identity направления
+  (`rt_stay` 0..7, `rt_go` 0..15). Примеры: body 5→shadow 11,
+  6→10, 7→9 при движении вниз-вправо; body 6→shadow 6 при вниз-влево.
+- **Mirrored body:** когда `kPadPersonRows*` даёт `mirror`, live draw x
+  = `pos.x − (frame_width − anchor_x)`:
+  - `rt_stay` frame 65, HAD anchor 34 → mirrored 31 (live 31);
+  - `rt_go` frame 75, HAD anchor 34 → mirrored 41 (live 41);
+  - non-mirrored: 34 (совпадает с HAD).
+  Тень при этом **не зеркалится**: shadow anchor live `45/46` (`stay`)
+  и `50/51` (`go`) — static HAD ±1 px, shadow row identity.
+- **Следствие:** порт до фикса рисовал body на `x−anchor` и флипал
+  вокруг центра; в mirrored-направлениях body оказывался на
+  `frame_width − 2*anchor` (6–7 px ≈ один кадр хода) позади тени.
+  Исправлено `person_body_draw_x`; тень оставлена identity/static.
+- **Проверка:** full `ctest` 17/17, 1039.94 s; regression
+  `mirrored placement flips the draw origin around the anchor`.

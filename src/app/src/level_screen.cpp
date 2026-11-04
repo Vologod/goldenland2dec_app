@@ -588,7 +588,7 @@ void LevelScreen::draw_person(SDL_Renderer* renderer, const Person& person,
             SDL_SetTextureAlphaMod(shadow_texture->get(), kShadowAlpha);
             draw_source(renderer, *shadow_texture, source, destination);
             SDL_SetTextureAlphaMod(shadow_texture->get(), 255);
-            draw_rect_masks(renderer, shadow.draw_x, shadow.draw_y,
+            draw_rect_masks(renderer, movement.y, shadow.draw_x, shadow.draw_y,
                             static_cast<float>(animation.shadow_width),
                             static_cast<float>(animation.shadow_height));
         }
@@ -610,7 +610,7 @@ void LevelScreen::draw_person(SDL_Renderer* renderer, const Person& person,
 
     draw_source(renderer, texture, source, destination,
                 placement.mirror ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE);
-    draw_rect_masks(renderer, placement.draw_x, placement.draw_y,
+    draw_rect_masks(renderer, movement.y, placement.draw_x, placement.draw_y,
                     static_cast<float>(animation.frame_width),
                     static_cast<float>(animation.frame_height));
 }
@@ -666,28 +666,34 @@ const gl::game::HeroController& LevelScreen::hero() const {
     return hero_->controller;
 }
 
-void LevelScreen::draw_rect_masks(SDL_Renderer* renderer, float world_x,
-                                  float world_y, float world_w,
+void LevelScreen::draw_rect_masks(SDL_Renderer* renderer, float person_y,
+                                  float world_x, float world_y, float world_w,
                                   float world_h) const {
     if (!masks_enabled_ || !(world_w > 0.0f) || !(world_h > 0.0f)) return;
+    (void)world_y;
     const int cell_x0 = static_cast<int>(std::floor(world_x / 24.0f));
-    const int cell_y0 = static_cast<int>(std::floor(world_y / 18.0f));
     const int cell_x1 = static_cast<int>(std::floor((world_x + world_w - 1.0f) / 24.0f));
+    const int person_cy = static_cast<int>(std::floor(person_y / 18.0f));
+    const std::vector<std::uint16_t> selected =
+        gl::game::select_row_mask_ids(level_.mask_cells, cell_x0, cell_x1, person_cy);
+    if (selected.empty()) return;
+
+    const int cell_y0 = static_cast<int>(std::floor(world_y / 18.0f));
     const int cell_y1 = static_cast<int>(std::floor((world_y + world_h - 1.0f) / 18.0f));
     for (int cy = cell_y0; cy <= cell_y1; ++cy) {
         for (int cx = cell_x0; cx <= cell_x1; ++cx) {
-            const gl::game::CellMaskSelection selection =
-                gl::game::select_cell_mask(level_.mask_cells, cx, cy);
+            const auto *cell = level_.mask_cells.at(cx, cy);
+            if (cell == nullptr) continue;
             const int left_cell = cx * 24;
             const int top_cell = cy * 18;
             for (std::size_t sub = 0; sub < 4; ++sub) {
-                if (selection.applies[sub] == 0) continue;
-                const std::uint16_t index = selection.mask_index[sub];
-                if (index >= level_.mask_numbers.size()) continue;
+                const std::uint16_t index = (*cell)[sub].mask;
+                if (index == 0xFFFF || index >= level_.mask_numbers.size() ||
+                    std::find(selected.begin(), selected.end(), index) == selected.end())
+                    continue;
                 bool duplicate = false;
                 for (std::size_t prev = 0; prev < sub; ++prev)
-                    if (selection.applies[prev] != 0 &&
-                        selection.mask_index[prev] == index)
+                    if ((*cell)[prev].mask == index)
                         duplicate = true;
                 if (duplicate) continue;
                 const std::uint32_t number = level_.mask_numbers[index];
@@ -784,7 +790,8 @@ void LevelScreen::draw_hero_wear(SDL_Renderer* renderer, std::uint64_t elapsed_m
         SDL_SetTextureAlphaMod(tex->second.shadow->get(), kShadowAlpha);
         draw_source(renderer, *tex->second.shadow, source, dest);
         SDL_SetTextureAlphaMod(tex->second.shadow->get(), 255);
-        draw_rect_masks(renderer, hero.x - static_cast<float>(header.shadow_anchor_x),
+        draw_rect_masks(renderer, hero.y,
+                        hero.x - static_cast<float>(header.shadow_anchor_x),
                         hero.y - static_cast<float>(header.shadow_anchor_y),
                         static_cast<float>(header.shadow_width),
                         static_cast<float>(header.shadow_height));
@@ -796,15 +803,16 @@ void LevelScreen::draw_hero_wear(SDL_Renderer* renderer, std::uint64_t elapsed_m
                           static_cast<int>(row.row * header.frame_height),
                           static_cast<int>(header.frame_width),
                           static_cast<int>(header.frame_height)};
+    const float body_x = gl::app::person_body_draw_x(
+        hero.x, static_cast<int>(header.frame_width), header.anchor_x, row.mirror);
     const SDL_FRect dest = gl::render::to_screen(
-        camera_, hero.x - static_cast<float>(header.anchor_x),
-        hero.y - static_cast<float>(header.anchor_y),
+        camera_, body_x, hero.y - static_cast<float>(header.anchor_y),
         static_cast<float>(header.frame_width),
         static_cast<float>(header.frame_height));
     if (!rect_visible(dest, screen_w_, screen_h_)) return;
     draw_source(renderer, tex->second.body, source, dest,
                 row.mirror ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE);
-    draw_rect_masks(renderer, hero.x - static_cast<float>(header.anchor_x),
+    draw_rect_masks(renderer, hero.y, body_x,
                     hero.y - static_cast<float>(header.anchor_y),
                     static_cast<float>(header.frame_width),
                     static_cast<float>(header.frame_height));

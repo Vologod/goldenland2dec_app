@@ -83,6 +83,7 @@ struct Options {
     bool font_set = false;
     bool no_font = false;
     bool no_persons = false;
+    bool hero_outfit_none = false;
     bool walkable_overlay = false;
     std::uint64_t sim_ms = 0;
     std::string dialog;
@@ -255,6 +256,13 @@ ParseStatus parse_args(int argc, char** argv, Options& options) {
             options.no_font = true;
         } else if (arg == "--no-persons") {
             options.no_persons = true;
+        } else if (arg == "--hero-outfit") {
+            if (!next_value(arg, value)) return ParseStatus::error;
+            if (value != "none") {
+                std::fprintf(stderr, "glgame: --hero-outfit supports only 'none'\n");
+                return ParseStatus::error;
+            }
+            options.hero_outfit_none = true;
         } else if (arg == "--walkable-overlay") {
             options.walkable_overlay = true;
         } else if (arg == "--sim-ms") {
@@ -1147,6 +1155,13 @@ class Game {
 
     bool load_level(std::string_view name) {
         gl::game::HeroOutfit hero_outfit;
+        if (options_.hero_outfit_none) {
+            hero_outfit.armor.clear();
+            hero_outfit.elbarms.clear();
+            hero_outfit.helmet.clear();
+            hero_outfit.shield.clear();
+            hero_outfit.weapon.clear();
+        }
         auto screen = gl::app::LevelScreen::load(window_.renderer(), vfs_, name,
                                                  !options_.no_persons, &hero_outfit);
         if (!screen) {

@@ -42,6 +42,8 @@ std::vector<std::size_t> sort_person_indices(std::span<const PersonDrawKey> keys
 FrameRect frame_rect(std::size_t column, std::size_t row, int frame_width,
                      int frame_height);
 
+float person_body_draw_x(float x, int frame_width, int anchor_x, bool mirror);
+
 PersonPlacement place_person(const gl::assets::PadAnimation& animation,
                              std::uint8_t direction, std::int32_t tile_x,
                              std::int32_t tile_y);

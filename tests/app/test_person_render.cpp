@@ -33,12 +33,26 @@ gl::assets::PadAnimation make_animation(gl::assets::PadAnimationType type,
 TEST_CASE("px placement uses float position") {
     gl::assets::PadAnimation animation;
     animation.type = gl::assets::PadAnimationType::rt_go;
+    animation.frame_width = 40;
     animation.anchor_x = 20;
     animation.anchor_y = 77;
     auto placement = gl::app::place_person_px(animation, 12, 1610.0f, 1147.0f);
     CHECK(placement.draw_x == doctest::Approx(1590.0f));
     CHECK(placement.draw_y == doctest::Approx(1070.0f));
     CHECK(placement.row == 4);
+    CHECK(placement.mirror);
+}
+
+TEST_CASE("mirrored placement flips the draw origin around the anchor") {
+    gl::assets::PadAnimation animation;
+    animation.type = gl::assets::PadAnimationType::rt_go;
+    animation.frame_width = 45;
+    animation.anchor_x = 20;
+    animation.anchor_y = 77;
+    const gl::app::PersonPlacement placement =
+        gl::app::place_person_px(animation, 12, 100.0f, 200.0f);
+    CHECK(placement.draw_x == doctest::Approx(100.0f - (45.0f - 20.0f)));
+    CHECK(placement.draw_y == doctest::Approx(200.0f - 77.0f));
     CHECK(placement.mirror);
 }
 
