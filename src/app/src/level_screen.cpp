@@ -168,6 +168,9 @@ LevelScreen::LevelScreen(gl::game::Level level, gl::render::Texture background)
 LevelScreen::LevelScreen(LevelScreen&& other) noexcept
     : level_(std::move(other.level_)),
       background_(std::move(other.background_)),
+      renderer_(other.renderer_),
+      vfs_(other.vfs_),
+      hero_outfit_(std::move(other.hero_outfit_)),
       statics_(std::move(other.statics_)),
       animations_(std::move(other.animations_)),
       persons_(std::move(other.persons_)),
@@ -215,6 +218,8 @@ Result<LevelScreen> LevelScreen::load(SDL_Renderer* renderer, gl::assets::GameVf
     }
 
     LevelScreen screen(std::move(level.value()), std::move(background.value()));
+    screen.renderer_ = renderer;
+    screen.vfs_ = &vfs;
 
     screen.statics_.reserve(screen.level_.statics.size());
     for (const auto& object : screen.level_.statics) {
@@ -453,25 +458,7 @@ Result<LevelScreen> LevelScreen::load(SDL_Renderer* renderer, gl::assets::GameVf
     screen.ensure_hero();
 
     if (hero_outfit != nullptr) {
-        auto visual = gl::game::load_hero_visual(vfs, *hero_outfit);
-        if (!visual) {
-            gl::log(gl::LogLevel::warning,
-                    "level '" + screen.level_.name + "': hero wear: " +
-                        visual.error().message);
-        } else {
-            for (const auto& [mask, anim] : visual->animations()) {
-                auto body = gl::render::Texture::from_image(renderer, anim.body);
-                auto shadow = gl::render::Texture::from_image(renderer, anim.shadow);
-                if (!body || !shadow) {
-                    gl::log(gl::LogLevel::warning,
-                            "level '" + screen.level_.name + "': cannot upload hero wear sheet");
-                    continue;
-                }
-                screen.hero_headers_[mask] = anim.header;
-                screen.hero_textures_.emplace(
-                    mask, HeroTextures{std::move(body.value()), std::move(shadow.value())});
-            }
-        }
+        screen.apply_hero_outfit(*hero_outfit);
     }
     return screen;
 }
@@ -664,6 +651,63 @@ gl::game::HeroController& LevelScreen::hero() {
 const gl::game::HeroController& LevelScreen::hero() const {
     ensure_hero();
     return hero_->controller;
+}
+
+const gl::assets::WearHadAnimation* LevelScreen::hero_header(std::uint32_t mask) const {
+    const auto it = hero_headers_.find(mask);
+    return it == hero_headers_.end() ? nullptr : &it->second;
+}
+
+bool LevelScreen::upload_hero_outfit(const gl::game::HeroOutfit& outfit) {
+    if (renderer_ == nullptr || vfs_ == nullptr) return false;
+    auto visual = gl::game::load_hero_visual(*vfs_, outfit);
+    if (!visual) {
+        gl::log(gl::LogLevel::warning,
+                "level '" + level_.name + "': hero wear: " + visual.error().message);
+        return false;
+    }
+    std::map<std::uint32_t, HeroTextures> textures;
+    std::map<std::uint32_t, gl::assets::WearHadAnimation> headers;
+    for (const auto& [mask, anim] : visual->animations()) {
+        auto body = gl::render::Texture::from_image(renderer_, anim.body);
+        auto shadow = gl::render::Texture::from_image(renderer_, anim.shadow);
+        if (!body || !shadow) {
+            gl::log(gl::LogLevel::warning,
+                    "level '" + level_.name + "': cannot upload hero wear sheet");
+            continue;
+        }
+        headers[mask] = anim.header;
+        textures.emplace(mask,
+                         HeroTextures{std::move(body.value()), std::move(shadow.value())});
+    }
+    if (textures.empty()) {
+        gl::log(gl::LogLevel::warning,
+                "level '" + level_.name + "': hero wear has no usable sheets");
+        return false;
+    }
+    hero_textures_ = std::move(textures);
+    hero_headers_ = std::move(headers);
+    return true;
+}
+
+void LevelScreen::apply_hero_outfit(const gl::game::HeroOutfit& outfit) {
+    if (upload_hero_outfit(outfit)) {
+        hero_outfit_ = outfit;
+        return;
+    }
+    gl::game::HeroOutfit naked;
+    naked.wear_set = "noweapon_thrw";
+    naked.weapon.clear();
+    naked.shield.clear();
+    naked.elbarms.clear();
+    naked.helmet.clear();
+    naked.armor.clear();
+    if (!upload_hero_outfit(naked)) {
+        gl::log(gl::LogLevel::warning,
+                "level '" + level_.name + "': cannot apply naked hero wear");
+        return;
+    }
+    hero_outfit_ = std::move(naked);
 }
 
 void LevelScreen::draw_rect_masks(SDL_Renderer* renderer, float person_y,

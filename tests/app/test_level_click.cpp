@@ -11,7 +11,9 @@
 #include <gl/render/camera.hpp>
 
 #include <array>
+#include <cstdlib>
 #include <optional>
+#include <utility>
 #include <vector>
 
 int main(int argc, char** argv) {
@@ -306,6 +308,64 @@ TEST_CASE("world_to_tile rejects tiles outside the walk grid") {
     const gl::game::WalkGrid empty;
     CHECK(gl::app::world_to_tile(camera, empty, 6, 4, tile));
     CHECK(tile == gl::game::Tile{0, 0});
+}
+
+TEST_CASE("level screen reapplies hero outfit without reloading" *
+          doctest::skip(std::getenv("GL_GAME_DIR") == nullptr)) {
+    auto vfs = gl::assets::GameVfs::mount(std::getenv("GL_GAME_DIR"));
+    REQUIRE(vfs.has_value());
+    SDL_Surface* surface =
+        SDL_CreateRGBSurfaceWithFormat(0, 320, 200, 32, SDL_PIXELFORMAT_ARGB8888);
+    REQUIRE(surface != nullptr);
+    SDL_Renderer* renderer = SDL_CreateSoftwareRenderer(surface);
+    REQUIRE(renderer != nullptr);
+
+    {
+        auto loaded = gl::app::LevelScreen::load(renderer, vfs.value(), "l1_1");
+        REQUIRE(loaded.has_value());
+        gl::app::LevelScreen screen = std::move(loaded.value());
+
+        gl::game::HeroOutfit slot0;
+        slot0.wear_set = "noweapon_thrw";
+        slot0.armor = "dospeh_almaz";
+        slot0.elbarms = "ponogi_goluboy";
+        slot0.helmet = "shlem_goluboy";
+        screen.apply_hero_outfit(slot0);
+
+        auto visual = gl::game::load_hero_visual(vfs.value(), slot0);
+        REQUIRE(visual.has_value());
+        const auto* stay_header = screen.hero_header(0x1);
+        const auto* go_header = screen.hero_header(0x20);
+        REQUIRE(stay_header != nullptr);
+        REQUIRE(go_header != nullptr);
+        REQUIRE(visual->find(0x1) != nullptr);
+        REQUIRE(visual->find(0x20) != nullptr);
+        CHECK(stay_header->frame_width == visual->find(0x1)->header.frame_width);
+        CHECK(go_header->frame_width == visual->find(0x20)->header.frame_width);
+
+        gl::game::HeroOutfit naked;
+        naked.wear_set = "noweapon_thrw";
+        naked.weapon.clear();
+        naked.shield.clear();
+        naked.elbarms.clear();
+        naked.helmet.clear();
+        naked.armor.clear();
+        screen.apply_hero_outfit(naked);
+        REQUIRE(screen.hero_header(0x1) != nullptr);
+        CHECK(screen.hero_header(0x1)->frame_width == 65);
+        REQUIRE(screen.hero_header(0x20) != nullptr);
+        CHECK(screen.hero_header(0x20)->frame_width == 75);
+
+        gl::game::HeroOutfit invalid = slot0;
+        invalid.wear_set = "no_such_wear_set";
+        screen.apply_hero_outfit(invalid);
+        REQUIRE(screen.hero_header(0x1) != nullptr);
+        CHECK(screen.hero_header(0x1)->frame_width == 65);
+        REQUIRE(screen.hero_header(0x20) != nullptr);
+        CHECK(screen.hero_header(0x20)->frame_width == 75);
+    }
+    SDL_DestroyRenderer(renderer);
+    SDL_FreeSurface(surface);
 }
 
 TEST_CASE("click_target combines a person hit with the underlying tile") {

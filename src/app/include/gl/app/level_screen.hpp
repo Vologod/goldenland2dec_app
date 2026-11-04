@@ -110,6 +110,9 @@ public:
     gl::game::HeroController& hero();
     const gl::game::HeroController& hero() const;
 
+    void apply_hero_outfit(const gl::game::HeroOutfit& outfit);
+    const gl::assets::WearHadAnimation* hero_header(std::uint32_t mask) const;
+
 private:
     struct Sprite {
         gl::render::Texture texture;
@@ -161,6 +164,7 @@ private:
 
     LevelScreen(gl::game::Level level, gl::render::Texture background);
 
+    bool upload_hero_outfit(const gl::game::HeroOutfit& outfit);
     void ensure_hero() const;
     std::vector<PersonHitTarget> person_hit_targets() const;
     float world_width() const;
@@ -178,6 +182,9 @@ private:
 
     gl::game::Level level_;
     gl::render::Texture background_;
+    SDL_Renderer* renderer_ = nullptr;
+    gl::assets::GameVfs* vfs_ = nullptr;
+    std::optional<gl::game::HeroOutfit> hero_outfit_;
     std::vector<Sprite> statics_;
     std::vector<Animation> animations_;
     std::vector<Person> persons_;
