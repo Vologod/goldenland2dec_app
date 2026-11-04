@@ -12,8 +12,10 @@
 - **Acceptance:** `slot0` + второй слот; real parser/mapping; screenshot
   naked vs slot0; visual gate против оригинала; полный `ctest`.
 - **Spec:** `docs/specs/2026-11-04-p5-save-outfit-design.md`.
-- **Статус:** design approved; следующий шаг — research gate
-  (`BT_HERO` equipped offsets, item→tech), затем plan.
+- **Research DONE:** `docs/research/p5-save-equipment.md` — BT_HERO layout,
+  0/N на 28 save, item→TECH (`tech_names.sdb`), herowear groups, slot0/slot2.
+- **Plan:** `docs/plans/2026-11-04-p5a-save-outfit-implementation.md`.
+- **Статус:** research gate passed; implementation pending.
 
 ## A8 exact cell-mask research (resolved 2026-11-04)
 
@@ -191,10 +193,10 @@
   crop-таблицу `x,y,w,h`; synthetic + real `dospeh_kamen.iad` tests
   (блоки 1/4, 12 кадров, 60 crop-записей). `gl_assets_tests` 158/158,
   `gl_assets_real_tests --test-case=*dospeh_kamen*` 1/1.
-- **Сверка с оригиналом:** item ID `318/397/280` из slot0 → ITM type/icon
-  (`T_ARMOUR\Almaz`, `T_ELBARMS\Goluboi`, `T_HELM\Cherny`); `wear.pak`
-  содержит `dospeh_almaz`/`ponogi_goluboy`/`shlem_goluboy`; `shlem_cherny` —
-  неверное имя ассета.
+- **Сверка с оригиналом:** item ID `318/397/280` из slot0 →
+  `ARM_1_13_1`/`ELB_1_11_2`/`HLM_1_12_1` → `Dospeh_almaz`/
+  `Ponogi_goluboy`/`Shlem_goluboy`; `wear.pak` содержит эти каталоги.
+  `T_HELM\Cherny`/`shlem_cherny` — старое неверное предположение.
 - **UNBLOCKED 2026-10-25:** engine-схема извлечена полностью, см.
   `docs/research/p4d-hero-wear.md`. `FUN_004239C0` (wear loader) →
   `FUN_00423334` (IAD) → `FUN_0042279C` (композитор) → PersonVisual;

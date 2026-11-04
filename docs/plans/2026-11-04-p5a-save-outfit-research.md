@@ -91,8 +91,8 @@ Create `docs/research/p5-save-equipment.md` with:
 - record layout table (offset/size/type/meaning);
 - slot0 and second-slot equipped IDs;
 - 0/N verification table;
-- open item→tech mapping (ITM `unknown_b` + `herowear.scr`) and exact
-  fields needed.
+- item→tech mapping (resolved later in Task 2: reverse
+  `sdb/items/tech_names.sdb` + `herowear.scr`).
 
 - [x] **Step 7: Commit**
 
@@ -134,7 +134,7 @@ Follow the vtable callee and record exactly which item fields are used:
 type, style/`unknown_b[1]`, material, id, group/name, and how the numeric
 suffix (`ARM_1_13_1`, `HLM_1_12_1`, `ELB_1_11_*`) is formed. Verify
 against known slot0 items `318→armor Almaz`, `397→elbarms Goluboy`,
-`280→helmet Cherny`.
+`280→helmet Goluboy` (`HLM_1_12_1`; Cherny в этих save не используется).
 
 Expected: formula + constants, not a guessed mapping.
 
