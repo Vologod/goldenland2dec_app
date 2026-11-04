@@ -21,6 +21,7 @@
     test_wear_had.cpp
     test_wear_seq.cpp
     test_person_script.cpp
+    test_hero_equipment.cpp
 )
 target_include_directories(gl_assets_tests PRIVATE ${CMAKE_SOURCE_DIR}/third_party)
 target_link_libraries(gl_assets_tests PRIVATE gl_assets)
@@ -36,6 +37,7 @@ add_executable(gl_assets_real_tests
     test_real_cs.cpp
     test_real_persons.cpp
     test_hero_wear_real.cpp
+    test_hero_equipment_real.cpp
 )
 target_include_directories(gl_assets_real_tests PRIVATE ${CMAKE_SOURCE_DIR}/third_party)
 target_link_libraries(gl_assets_real_tests PRIVATE gl_assets gl_game)
