@@ -691,6 +691,15 @@ bool LevelScreen::upload_hero_outfit(const gl::game::HeroOutfit& outfit) {
 }
 
 void LevelScreen::apply_hero_outfit(const gl::game::HeroOutfit& outfit) {
+    if (renderer_ == nullptr || vfs_ == nullptr) {
+        hero_textures_.clear();
+        hero_headers_.clear();
+        hero_outfit_.reset();
+        gl::log(gl::LogLevel::warning,
+                "level '" + level_.name +
+                    "': cannot apply hero outfit: renderer or vfs is not available");
+        return;
+    }
     if (upload_hero_outfit(outfit)) {
         hero_outfit_ = outfit;
         return;
@@ -703,8 +712,12 @@ void LevelScreen::apply_hero_outfit(const gl::game::HeroOutfit& outfit) {
     naked.helmet.clear();
     naked.armor.clear();
     if (!upload_hero_outfit(naked)) {
+        hero_textures_.clear();
+        hero_headers_.clear();
+        hero_outfit_.reset();
         gl::log(gl::LogLevel::warning,
-                "level '" + level_.name + "': cannot apply naked hero wear");
+                "level '" + level_.name +
+                    "': cannot apply naked hero wear; falling back to hero marker");
         return;
     }
     hero_outfit_ = std::move(naked);

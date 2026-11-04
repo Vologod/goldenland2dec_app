@@ -51,6 +51,24 @@ gl::game::WalkGrid make_grid(std::int32_t width, std::int32_t height) {
     return grid;
 }
 
+struct SoftwareRenderer {
+    SoftwareRenderer() {
+        surface = SDL_CreateRGBSurfaceWithFormat(0, 320, 200, 32, SDL_PIXELFORMAT_ARGB8888);
+        if (surface != nullptr) renderer = SDL_CreateSoftwareRenderer(surface);
+    }
+
+    ~SoftwareRenderer() {
+        if (renderer != nullptr) SDL_DestroyRenderer(renderer);
+        if (surface != nullptr) SDL_FreeSurface(surface);
+    }
+
+    SoftwareRenderer(const SoftwareRenderer&) = delete;
+    SoftwareRenderer& operator=(const SoftwareRenderer&) = delete;
+
+    SDL_Surface* surface = nullptr;
+    SDL_Renderer* renderer = nullptr;
+};
+
 }
 
 TEST_CASE("pending talk waits while the hero is still pathing") {
@@ -314,34 +332,13 @@ TEST_CASE("level screen reapplies hero outfit without reloading" *
           doctest::skip(std::getenv("GL_GAME_DIR") == nullptr)) {
     auto vfs = gl::assets::GameVfs::mount(std::getenv("GL_GAME_DIR"));
     REQUIRE(vfs.has_value());
-    SDL_Surface* surface =
-        SDL_CreateRGBSurfaceWithFormat(0, 320, 200, 32, SDL_PIXELFORMAT_ARGB8888);
-    REQUIRE(surface != nullptr);
-    SDL_Renderer* renderer = SDL_CreateSoftwareRenderer(surface);
-    REQUIRE(renderer != nullptr);
+    SoftwareRenderer canvas;
+    REQUIRE(canvas.renderer != nullptr);
 
     {
-        auto loaded = gl::app::LevelScreen::load(renderer, vfs.value(), "l1_1");
+        auto loaded = gl::app::LevelScreen::load(canvas.renderer, vfs.value(), "l1_1");
         REQUIRE(loaded.has_value());
         gl::app::LevelScreen screen = std::move(loaded.value());
-
-        gl::game::HeroOutfit slot0;
-        slot0.wear_set = "noweapon_thrw";
-        slot0.armor = "dospeh_almaz";
-        slot0.elbarms = "ponogi_goluboy";
-        slot0.helmet = "shlem_goluboy";
-        screen.apply_hero_outfit(slot0);
-
-        auto visual = gl::game::load_hero_visual(vfs.value(), slot0);
-        REQUIRE(visual.has_value());
-        const auto* stay_header = screen.hero_header(0x1);
-        const auto* go_header = screen.hero_header(0x20);
-        REQUIRE(stay_header != nullptr);
-        REQUIRE(go_header != nullptr);
-        REQUIRE(visual->find(0x1) != nullptr);
-        REQUIRE(visual->find(0x20) != nullptr);
-        CHECK(stay_header->frame_width == visual->find(0x1)->header.frame_width);
-        CHECK(go_header->frame_width == visual->find(0x20)->header.frame_width);
 
         gl::game::HeroOutfit naked;
         naked.wear_set = "noweapon_thrw";
@@ -352,9 +349,36 @@ TEST_CASE("level screen reapplies hero outfit without reloading" *
         naked.armor.clear();
         screen.apply_hero_outfit(naked);
         REQUIRE(screen.hero_header(0x1) != nullptr);
-        CHECK(screen.hero_header(0x1)->frame_width == 65);
         REQUIRE(screen.hero_header(0x20) != nullptr);
-        CHECK(screen.hero_header(0x20)->frame_width == 75);
+        const std::uint32_t naked_stay_width = screen.hero_header(0x1)->frame_width;
+        const std::uint32_t naked_go_width = screen.hero_header(0x20)->frame_width;
+        CHECK(naked_stay_width == 65);
+        CHECK(naked_go_width == 75);
+
+        gl::game::HeroOutfit slot0;
+        slot0.wear_set = "two_axes_maces";
+        slot0.weapon = "axe_goluboy2";
+        slot0.armor = "dospeh_almaz";
+        slot0.elbarms = "ponogi_goluboy";
+        slot0.helmet = "shlem_goluboy";
+        screen.apply_hero_outfit(slot0);
+
+        auto visual = gl::game::load_hero_visual(vfs.value(), slot0);
+        REQUIRE(visual.has_value());
+        REQUIRE(visual->find(0x1) != nullptr);
+        REQUIRE(visual->find(0x20) != nullptr);
+        const auto* stay_header = screen.hero_header(0x1);
+        const auto* go_header = screen.hero_header(0x20);
+        REQUIRE(stay_header != nullptr);
+        REQUIRE(go_header != nullptr);
+        CHECK(stay_header->frame_width == visual->find(0x1)->header.frame_width);
+        CHECK(stay_header->frame_height == visual->find(0x1)->header.frame_height);
+        CHECK(go_header->frame_width == visual->find(0x20)->header.frame_width);
+        CHECK(go_header->frame_height == visual->find(0x20)->header.frame_height);
+        const bool differs_from_naked =
+            stay_header->frame_width != naked_stay_width ||
+            go_header->frame_width != naked_go_width;
+        CHECK(differs_from_naked);
 
         gl::game::HeroOutfit invalid = slot0;
         invalid.wear_set = "no_such_wear_set";
@@ -364,8 +388,6 @@ TEST_CASE("level screen reapplies hero outfit without reloading" *
         REQUIRE(screen.hero_header(0x20) != nullptr);
         CHECK(screen.hero_header(0x20)->frame_width == 75);
     }
-    SDL_DestroyRenderer(renderer);
-    SDL_FreeSurface(surface);
 }
 
 TEST_CASE("click_target combines a person hit with the underlying tile") {
