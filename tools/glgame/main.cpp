@@ -90,6 +90,7 @@ struct Options {
     bool no_persons = false;
     bool hero_outfit_none = false;
     std::optional<int> equip_save;
+    bool equip_save_pending = false;
     std::optional<int> camera_x;
     std::optional<int> camera_y;
     bool walkable_overlay = false;
@@ -122,6 +123,7 @@ void print_usage() {
         "  --no-font            Force ASCII bitmap text (dev/debug, overrides --font)\n"
         "  --no-persons         Skip NPC sprites on the level\n"
         "  --equip-save <slot>  Apply hero equipment from save slot <slot>\n"
+        "  --equip-save-pending Apply --equip-save on the next level load only\n"
         "  --camera-x <px>      World X of the left viewport edge (screenshot mode)\n"
         "  --camera-y <px>      World Y of the top viewport edge (screenshot mode)\n"
         "  --walkable-overlay   Draw blocked tiles in red on the level\n"
@@ -283,6 +285,8 @@ ParseStatus parse_args(int argc, char** argv, Options& options) {
                 return ParseStatus::error;
             }
             options.equip_save = slot;
+        } else if (arg == "--equip-save-pending") {
+            options.equip_save_pending = true;
         } else if (arg == "--camera-x") {
             if (!next_value(arg, value)) return ParseStatus::error;
             int camera = 0;
@@ -495,6 +499,9 @@ class Game {
             gl::log(gl::LogLevel::info, "dialog: console disabled for --dialog");
         }
 
+        if (options_.equip_save && options_.equip_save_pending)
+            apply_equip_save(*options_.equip_save, false);
+
         if (options_.has_dialog) {
             const gl::Result<void> opened = open_dialog(options_.dialog);
             if (!opened) return exit_code_for(opened.error());
@@ -505,7 +512,8 @@ class Game {
             apply_cli_click();
         }
 
-        if (options_.equip_save) apply_equip_save(*options_.equip_save);
+        if (options_.equip_save && !options_.equip_save_pending)
+            apply_equip_save(*options_.equip_save, true);
 
         update_viewport();
         if (level_ && options_.camera_x && options_.camera_y) {
@@ -1209,59 +1217,69 @@ class Game {
         console_print(result.value());
     }
 
-    gl::game::HeroOutfit load_outfit_from_save(const gl::core::SaveSlotInfo& slot,
-                                               std::string& error) {
+    std::optional<gl::assets::HeroEquipment> load_equipment_from_save(
+        const gl::core::SaveSlotInfo& slot, std::string& error) {
         error.clear();
         std::ifstream in(slot.path, std::ios::binary);
         if (!in) {
             error = "cannot open '" + slot.path.string() + "'";
-            return make_naked_outfit();
+            return std::nullopt;
         }
         std::vector<std::uint8_t> bytes((std::istreambuf_iterator<char>(in)),
                                         std::istreambuf_iterator<char>());
         auto body = gl::assets::decode_save_body(bytes);
         if (!body) {
             error = body.error().message;
-            return make_naked_outfit();
+            return std::nullopt;
         }
         auto equipment = gl::assets::parse_hero_equipment(body.value());
         if (!equipment) {
             error = equipment.error().message;
-            return make_naked_outfit();
+            return std::nullopt;
         }
+        return equipment.value();
+    }
 
+    std::optional<gl::game::HeroOutfit> resolve_outfit_from_equipment(
+        const gl::assets::HeroEquipment& equipment, std::string& error) {
+        error.clear();
         auto sdb_data = vfs_.read("sdb/items/tech_names.sdb");
         if (!sdb_data) {
             error = sdb_data.error().message;
-            return make_naked_outfit();
+            return std::nullopt;
         }
         auto tech_names = gl::assets::Sdb::parse(sdb_data.value());
         if (!tech_names) {
             error = tech_names.error().message;
-            return make_naked_outfit();
+            return std::nullopt;
         }
 
         auto wear_data = vfs_.read("scripts/herowear.scr");
         if (!wear_data) {
             error = wear_data.error().message;
-            return make_naked_outfit();
+            return std::nullopt;
         }
         auto wear = gl::assets::parse_herowear(wear_data.value());
         if (!wear) {
             error = wear.error().message;
-            return make_naked_outfit();
+            return std::nullopt;
         }
 
-        auto outfit =
-            gl::game::resolve_hero_outfit(equipment.value(), tech_names.value(), wear.value());
+        auto outfit = gl::game::resolve_hero_outfit(equipment, tech_names.value(), wear.value());
         if (!outfit) {
             error = outfit.error().message;
-            return make_naked_outfit();
+            return std::nullopt;
         }
         return outfit.value();
     }
 
-    void apply_equip_save(int slot) {
+    void report_outfit_message(const std::string& message, bool info) {
+        save_message_ = message;
+        console_print(message);
+        gl::log(info ? gl::LogLevel::info : gl::LogLevel::warning, message);
+    }
+
+    void apply_equip_save(int slot, bool apply_to_level) {
         const gl::core::SaveSlotInfo* info = saves_.find(slot);
         gl::core::SaveSlotInfo synthetic;
         if (info == nullptr) {
@@ -1271,28 +1289,63 @@ class Game {
             info = &synthetic;
         }
 
-        std::string error;
-        const gl::game::HeroOutfit outfit = load_outfit_from_save(*info, error);
-        pending_outfit_ = outfit;
-        if (error.empty()) {
-            const std::string message = "outfit: slot " + std::to_string(slot);
-            console_print(message);
-            gl::log(gl::LogLevel::info, message);
-        } else {
-            const std::string message =
-                "outfit: naked (slot " + std::to_string(slot) + "): " + error;
-            console_print(message);
-            gl::log(gl::LogLevel::warning, message);
+        std::error_code path_error;
+        if (!fs::exists(info->path, path_error)) {
+            pending_equipment_ = gl::assets::HeroEquipment{};
+            report_outfit_message(
+                "outfit: naked (invalid save slot " + std::to_string(slot) + ")", false);
+            if (apply_to_level && level_ && !options_.hero_outfit_none)
+                level_->apply_hero_outfit(make_naked_outfit());
+            return;
         }
-        if (level_ && !options_.hero_outfit_none) level_->apply_hero_outfit(outfit);
+
+        std::string error;
+        auto equipment = load_equipment_from_save(*info, error);
+        if (!equipment) {
+            pending_equipment_ = gl::assets::HeroEquipment{};
+            report_outfit_message(
+                "outfit: naked (slot " + std::to_string(slot) + "): " + error, false);
+            if (apply_to_level && level_ && !options_.hero_outfit_none)
+                level_->apply_hero_outfit(make_naked_outfit());
+            return;
+        }
+        pending_equipment_ = std::move(*equipment);
+
+        if (options_.hero_outfit_none) {
+            report_outfit_message("outfit: slot " + std::to_string(slot) +
+                                      " ignored (--hero-outfit none)",
+                                  true);
+            return;
+        }
+
+        std::string resolve_error;
+        auto outfit = resolve_outfit_from_equipment(*pending_equipment_, resolve_error);
+        if (!outfit) {
+            report_outfit_message(
+                "outfit: naked (slot " + std::to_string(slot) + "): " + resolve_error, false);
+            if (apply_to_level && level_) level_->apply_hero_outfit(make_naked_outfit());
+            return;
+        }
+
+        report_outfit_message("outfit: slot " + std::to_string(slot), true);
+        if (apply_to_level && level_) level_->apply_hero_outfit(*outfit);
     }
 
     bool load_level(std::string_view name) {
         gl::game::HeroOutfit hero_outfit;
         if (options_.hero_outfit_none) {
             hero_outfit = make_naked_outfit();
-        } else if (pending_outfit_) {
-            hero_outfit = *pending_outfit_;
+        } else if (pending_equipment_) {
+            std::string error;
+            auto resolved = resolve_outfit_from_equipment(*pending_equipment_, error);
+            if (resolved) {
+                hero_outfit = *resolved;
+            } else {
+                const std::string message = "outfit: naked: " + error;
+                gl::log(gl::LogLevel::warning, message);
+                console_print(message);
+                hero_outfit = make_naked_outfit();
+            }
         }
         auto screen = gl::app::LevelScreen::load(window_.renderer(), vfs_, name,
                                                  !options_.no_persons, &hero_outfit);
@@ -1738,19 +1791,7 @@ class Game {
         save_selected_ = std::clamp(save_selected_, 0, last);
         const gl::core::SaveSlotInfo& slot =
             *display_saves_[static_cast<std::size_t>(save_selected_)];
-        std::string error;
-        const gl::game::HeroOutfit outfit = load_outfit_from_save(slot, error);
-        pending_outfit_ = outfit;
-        if (error.empty()) {
-            save_message_ = "outfit: slot " + std::to_string(slot.slot);
-            console_print(save_message_);
-            gl::log(gl::LogLevel::info, save_message_);
-        } else {
-            save_message_ = "outfit: naked (slot " + std::to_string(slot.slot) + "): " + error;
-            console_print(save_message_);
-            gl::log(gl::LogLevel::warning, save_message_);
-        }
-        if (level_ && !options_.hero_outfit_none) level_->apply_hero_outfit(outfit);
+        apply_equip_save(slot.slot, true);
     }
 
     void render(std::uint64_t now_ms, std::uint64_t animation_ms) {
@@ -1975,7 +2016,7 @@ class Game {
     gl::core::CommandRegistry registry_;
     gl::core::ConsoleBuffer console_lines_;
     std::optional<gl::app::LevelScreen> level_;
-    std::optional<gl::game::HeroOutfit> pending_outfit_;
+    std::optional<gl::assets::HeroEquipment> pending_equipment_;
     std::string level_name_;
     std::string input_;
     bool console_visible_ = false;

@@ -78,7 +78,7 @@ Expected: compile/`not found` failure.
 
 Implement in `hero_equipment.cpp` using `ByteReader`/span bounds checks:
 find tag `BT_HERO `, read u32 size, body slice; skip `0x734`; read 3 containers
-(`u32 id; if id==0xFFFFFFFF break; u32 count;`); parse records
+(`u32 id; if id==0xFFFFFFFF continue; u32 count;`); parse records
 `0xC0 + 4 + subcount*0x14`; collect third container item_id/type/flags/style;
 return `format` errors on truncation. `decode_save_body`: validate
 `parse_save_header`, `mz_uncompress` from offset 112 into a growing 32 MiB buffer.
@@ -211,31 +211,35 @@ then `git commit -m "feat(app): reapply hero outfit without level reload"`.
 **Interfaces:**
 - Consumes: `SaveManager`, `decode_save_body`, `parse_hero_equipment`,
   `resolve_hero_outfit`, `LevelScreen::apply_hero_outfit`.
-- Produces: `Game::pending_outfit_`; save-slot selection applies outfit.
+- Produces: `Game::pending_equipment_` (`HeroEquipment`); save-slot selection
+  stores all equipped records and resolves to `HeroOutfit` only on apply/load.
 
-- [x] **Step 1: Add headless option `--equip-save <slot>`**
+- [x] **Step 1: Add headless options `--equip-save <slot>` / `--equip-save-pending`**
 
-Parse slot; on boot after level load: read `Saves/slot<N>.sav`, decode/parse,
-resolve outfit, apply. This is the automated-test hook; menu uses same helper.
+Parse slot; on boot read `Saves/slot<N>.sav`, decode/parse all equipped
+records into `pending_equipment_`. With `--equip-save-pending`, store before
+the next `load_level`; otherwise resolve and apply to the open level. This is
+the automated-test hook; menu uses the same helper.
 
 - [x] **Step 2: Wire menu `save_activate`**
 
-If `display_saves_` empty return; take selected slot; read/parse; on success
-store `pending_outfit_`, apply to open level or mark for next `load_level`,
-message `outfit: slot N`; on error store naked, message warning, never block.
+If `display_saves_` empty return; take selected slot; read/parse/store
+`pending_equipment_`; resolve to `HeroOutfit` and apply to the open level or
+mark for next `load_level`, message `outfit: slot N`; on error store empty
+equipment (naked on next load), message warning, never block.
 
 - [x] **Step 3: Apply in `load_level`**
 
-Resolve `pending_outfit_` to `HeroOutfit` and pass to
-`LevelScreen::load`; if empty/error use naked. Keep `pending_outfit_`
+Resolve `pending_equipment_` to `HeroOutfit` and pass to
+`LevelScreen::load`; if empty/error use naked. Keep `pending_equipment_`
 for subsequent level loads until another save slot is selected.
 
 - [x] **Step 4: Screenshot test**
 
-Run glgame twice with `--level l1_1 --equip-save 0 --screenshot ...` and
-`--equip-save 2`; assert acceptance against slot0/slot2 outfit (hash or
-non-empty equipment textures). Also run malformed/invalid slot → naked and
-exit 0.
+Run glgame with `--level l1_1 --equip-save 0/2 --screenshot ...`; assert
+acceptance against slot0/slot2 outfit (hash or non-empty equipment textures).
+Also run `--equip-save <slot> --equip-save-pending` and compare the result to
+the direct slot image, and malformed/invalid slot → naked with exit 0.
 
 - [x] **Step 5: Run + commit**
 

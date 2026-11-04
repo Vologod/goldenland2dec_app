@@ -136,7 +136,8 @@ TEST_CASE("resolve_hero_outfit falls back to naked per missing category") {
 }
 
 TEST_CASE("resolve_hero_outfit leaves a category empty when its TECH has no group") {
-    auto sdb = assets::Sdb::parse(make_sdb({{123, "ARM_MISSING_1"}}));
+    auto sdb = assets::Sdb::parse(
+        make_sdb({{123, "ARM_MISSING_1"}, {124, "AXE_1_13_2"}}));
     REQUIRE(sdb.has_value());
 
     auto outfit = resolve_hero_outfit(equipment({{123, 12, 0x100000, 0}}), sdb.value(),
@@ -144,6 +145,13 @@ TEST_CASE("resolve_hero_outfit leaves a category empty when its TECH has no grou
     REQUIRE(outfit.has_value());
     CHECK(outfit->wear_set == "noweapon_thrw");
     CHECK(outfit->armor.empty());
+
+    auto mismatched = resolve_hero_outfit(equipment({{124, 12, 0x100000, 0}}), sdb.value(),
+                                          slot_catalog());
+    REQUIRE(mismatched.has_value());
+    CHECK(mismatched->wear_set == "noweapon_thrw");
+    CHECK(mismatched->armor.empty());
+    CHECK(mismatched->weapon.empty());
 }
 
 TEST_CASE("resolve_hero_outfit ignores accessories and set B armor duplicates") {

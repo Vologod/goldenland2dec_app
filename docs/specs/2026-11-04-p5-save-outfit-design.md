@@ -88,19 +88,25 @@ offset 112 и возвращает тело первого блока `BT_HERO `
 ### 5.2 `gl::game`
 
 ```cpp
-struct HeroEquipmentVisual {
+struct HeroOutfit {
     std::string wear_set = "noweapon_thrw";
-    std::optional<std::string> weapon, shield, elbarms, helmet, armor;
-    std::vector<EquippedItem> other_equipped; // bracelet/amulet/rings и т.п.
+    std::string weapon;
+    std::string shield;
+    std::string elbarms = "ponogi_goluboy";
+    std::string helmet = "shlem_goluboy";
+    std::string armor = "dospeh_almaz";
 };
 
 Result<HeroOutfit> resolve_hero_outfit(const HeroEquipment& equipment,
-                                       const ItemCatalog& items,
+                                       const Sdb& tech_names,
                                        const HeroWearCatalog& wear);
 ```
 
-`HeroOutfit` остаётся текущим типом P4d. Naked outfit — `HeroOutfit{}` с
-пустыми слоями и `wear_set = "noweapon_thrw"`.
+`HeroOutfit` остаётся текущим типом P4d. Resolver заполняет только 5
+визуальных категорий; полный `HeroEquipment` (включая аксессуары
+bracelet/amulet/rings) хранится в `Game::pending_equipment_` и не
+отбрасывается. Naked outfit — `HeroOutfit` с явно пустыми слоями и
+`wear_set = "noweapon_thrw"` (`glgame::make_naked_outfit()`).
 
 ### 5.3 `gl::app`
 
@@ -116,13 +122,20 @@ void LevelScreen::apply_hero_outfit(const HeroOutfit& outfit);
 1. Меню `Load Game` показывает существующие save slots (`SaveManager`).
 2. Выбор валидного слота: читается файл, парсится header/body и
    equipped-список.
-3. `HeroEquipment` сохраняется в `Game` (`pending_equipment_`).
-4. Если уровень уже открыт — сразу `apply_hero_outfit`.
-5. Если уровня нет — outfit применяется при следующем `load_level`
+3. `HeroEquipment` (все equipped item instances, включая аксессуары)
+   сохраняется в `Game` (`pending_equipment_`); `HeroOutfit` не
+   кэшируется.
+4. Если уровень уже открыт — resolver строит `HeroOutfit` из
+   `pending_equipment_` и вызывает `apply_hero_outfit`.
+5. Если уровня нет — `load_level` разрешает `pending_equipment_` в
+   `HeroOutfit` и передаёт его в `LevelScreen::load`
    (`New Game`/`--level`).
 6. Сообщение в меню/console: применён слот, либо naked-fallback.
 7. Ошибка чтения/парсинга не блокирует меню и не меняет текущий уровень;
-   outfit сбрасывается в naked согласно выбранному поведению слота.
+   `pending_equipment_` становится пустым, outfit сбрасывается в naked.
+
+Headless test hook: `--equip-save <slot> --equip-save-pending` сохраняет
+`HeroEquipment` до следующего `load_level` и проверяет именно этот путь.
 
 ## 7. Research gate (до реализации)
 

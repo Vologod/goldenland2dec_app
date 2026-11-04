@@ -8,6 +8,7 @@
 #include <new>
 #include <span>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <miniz.h>

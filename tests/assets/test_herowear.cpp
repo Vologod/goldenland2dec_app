@@ -63,16 +63,28 @@ TEST_CASE("parse_herowear keeps file order and reuses duplicate group names") {
                              "group \"Shlem_platina\"\n"
                              "item \"HLM_1_04_1\"\n"
                              "group \"Shlem_goluboy\"\n"
-                             "item \"HLM_1_13_1\"\n";
+                             "item \"HLM_1_13_1\"\n"
+                             "category weapon\n"
+                             "group \"Axe_goluboy2\" \"two_axes_maces\"\n"
+                             "item \"AXE_1_13_2\"\n"
+                             "group \"Axe_other\" \"bows\"\n"
+                             "item \"AXE_1_13_3\"\n"
+                             "group \"Axe_goluboy2\" \"bows\"\n"
+                             "item \"AXE_1_13_4\"\n";
 
     auto catalog = parse_herowear(text_bytes(text));
     REQUIRE(catalog.has_value());
-    REQUIRE(catalog->entries.size() == 4);
+    REQUIRE(catalog->entries.size() == 7);
     CHECK(catalog->entries[0].tech == "HLM_1_11_1");
     CHECK(catalog->entries[0].group == "Shlem_goluboy");
     CHECK(catalog->entries[1].tech == "HLM_1_12_1");
     CHECK(catalog->entries[2].group == "Shlem_platina");
     CHECK(catalog->entries[3].group == "Shlem_goluboy");
+    CHECK(catalog->entries[4].base_set == "two_axes_maces");
+    CHECK(catalog->entries[5].group == "Axe_other");
+    CHECK(catalog->entries[5].base_set == "bows");
+    CHECK(catalog->entries[6].group == "Axe_goluboy2");
+    CHECK(catalog->entries[6].base_set == "two_axes_maces");
 }
 
 TEST_CASE("parse_herowear ignores comments and whitespace") {
