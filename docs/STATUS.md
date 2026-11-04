@@ -1,7 +1,7 @@
 # STATUS
 
 Обновлено: 2026-11-04
-## P5a — save → hero outfit (implemented 2026-11-04; manual gate OPEN)
+## P5a — save → hero outfit (accepted 2026-11-04)
 
 - **Задача:** выбор save-слота в существующем меню применяет
   экипировку из `BT_HERO` к hero (только outfit, без загрузки мира).
@@ -38,10 +38,10 @@
   `--equip-save`/`--equip-save-pending` pending-load case),
   `gl_game_tests` passed. Финальный полный `ctest` на `adc3ba2` —
   **17/17 passed**, 1016.00 s, exit 0.
-- **Manual gate OPEN:** агент не подтверждает визуальный pass; пользователь
-  должен сравнить hero в `glgame` для slot0 и slot2 с оригиналом на тех же
-  save. Известный риск: выбран только активный set A; переключение A/B
-  после загрузки не доказано.
+- **Manual gate PASSED 2026-11-04:** пользователь сравнил hero в `glgame`
+  для slot0 и slot2 с оригиналом на тех же save — визуально совпало.
+  Остаточный риск: выбран активный set A; переключение A/B после загрузки
+  не доказано (вне P5a).
 - **Spec:** `docs/specs/2026-11-04-p5-save-outfit-design.md`.
 - **Research:** `docs/research/p5-save-equipment.md` — BT_HERO layout,
   0/N на 28 save, item→TECH (`tech_names.sdb`), herowear groups, slot0/slot2.

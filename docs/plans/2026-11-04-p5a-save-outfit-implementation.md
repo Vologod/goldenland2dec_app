@@ -265,7 +265,7 @@ appropriate.
 `$env:GL_GAME_DIR="I:\Games\Златогорье-2"; ctest --test-dir build --output-on-failure`
 Expected: 17/17 (or current count) passed; record time.
 
-- [ ] **Step 3: Manual gate**
+- [x] **Step 3: Manual gate**
 
 User compares glgame with slot0 and slot2 against original. If visually
 different, write findings to STATUS and do not claim P5a accepted.
