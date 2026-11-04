@@ -663,6 +663,94 @@ TEST_CASE("glgame renders a preloaded level into a 1280x720 PNG") {
     check_png(png, 1280, 720);
 }
 
+TEST_CASE("glgame --equip-save applies the slot outfit and falls back to naked") {
+    const char* game_dir = std::getenv("GL_GAME_DIR");
+    REQUIRE(game_dir != nullptr);
+
+    TempDir temp;
+    const fs::path config = write_test_config(temp.path);
+    const fs::path naked_png = temp.path / "outfit_naked.png";
+    const fs::path slot0_png = temp.path / "outfit_slot0.png";
+    const fs::path slot2_png = temp.path / "outfit_slot2.png";
+    const fs::path invalid_png = temp.path / "outfit_invalid.png";
+
+    std::string slot0_log;
+    std::string invalid_log;
+    const std::vector<std::string> camera = {"--camera-x", "1480", "--camera-y", "0"};
+    const auto with_camera = [&](std::vector<std::string> extra) {
+        extra.insert(extra.end(), camera.begin(), camera.end());
+        return extra;
+    };
+    const int naked_code = run_glgame(screenshot_arguments(
+        game_dir, config, naked_png,
+        with_camera({"--level", "l1_1", "--hero-outfit", "none"})));
+    const int slot0_code = run_glgame_capture(
+        screenshot_arguments(game_dir, config, slot0_png,
+                             with_camera({"--level", "l1_1", "--equip-save", "0"})),
+        slot0_log);
+    const int slot2_code = run_glgame(screenshot_arguments(
+        game_dir, config, slot2_png,
+        with_camera({"--level", "l1_1", "--equip-save", "2"})));
+    const int invalid_code = run_glgame_capture(
+        screenshot_arguments(game_dir, config, invalid_png,
+                             with_camera({"--level", "l1_1", "--equip-save", "9999"})),
+        invalid_log);
+
+    CAPTURE(naked_code);
+    CAPTURE(slot0_code);
+    CAPTURE(slot2_code);
+    CAPTURE(invalid_code);
+    CAPTURE(slot0_log);
+    CAPTURE(invalid_log);
+    REQUIRE(fs::exists(naked_png));
+    REQUIRE(fs::exists(slot0_png));
+    REQUIRE(fs::exists(slot2_png));
+    REQUIRE(fs::exists(invalid_png));
+    CHECK(naked_code == 0);
+    CHECK(slot0_code == 0);
+    CHECK(slot2_code == 0);
+    CHECK(invalid_code == 0);
+    check_png(naked_png, 1280, 720);
+    check_png(slot0_png, 1280, 720);
+    check_png(slot2_png, 1280, 720);
+    check_png(invalid_png, 1280, 720);
+
+    int naked_width = 0;
+    int naked_height = 0;
+    int slot0_width = 0;
+    int slot0_height = 0;
+    int slot2_width = 0;
+    int slot2_height = 0;
+    int invalid_width = 0;
+    int invalid_height = 0;
+    const std::vector<unsigned char> naked =
+        read_png(naked_png, naked_width, naked_height);
+    const std::vector<unsigned char> slot0 =
+        read_png(slot0_png, slot0_width, slot0_height);
+    const std::vector<unsigned char> slot2 =
+        read_png(slot2_png, slot2_width, slot2_height);
+    const std::vector<unsigned char> invalid =
+        read_png(invalid_png, invalid_width, invalid_height);
+    REQUIRE(naked.size() == slot0.size());
+    REQUIRE(naked.size() == slot2.size());
+    REQUIRE(naked.size() == invalid.size());
+
+    const std::size_t naked_vs_slot0 = count_differences(naked, slot0);
+    const std::size_t naked_vs_slot2 = count_differences(naked, slot2);
+    const std::size_t slot0_vs_slot2 = count_differences(slot0, slot2);
+    const std::size_t naked_vs_invalid = count_differences(naked, invalid);
+    CAPTURE(naked_vs_slot0);
+    CAPTURE(naked_vs_slot2);
+    CAPTURE(slot0_vs_slot2);
+    CAPTURE(naked_vs_invalid);
+    CHECK(naked_vs_slot0 > 1000);
+    CHECK(naked_vs_slot2 > 1000);
+    CHECK(slot0_vs_slot2 > 1000);
+    CHECK(naked_vs_invalid == 0);
+    CHECK(slot0_log.find("outfit: slot 0") != std::string::npos);
+    CHECK(invalid_log.find("outfit:") != std::string::npos);
+}
+
 TEST_CASE("glgame --click-npc opens the dialog overlay over the level" *
           doctest::skip(!font_available())) {
     const char* game_dir = std::getenv("GL_GAME_DIR");
