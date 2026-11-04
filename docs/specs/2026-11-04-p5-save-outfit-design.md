@@ -18,9 +18,10 @@
   **все equipped item instances**, не только визуальные.
 - Хранить их в модели героя; для рендера использовать 5 визуальных
   категорий: `weapon`, `shield`, `elbarms`, `helmet`, `armor`.
-- Маппинг item instance → tech/group → `HeroOutfit` через ITM,
-  `items.pak`, `scripts/herowear.scr`; источник истины — оригинальный
-  save/движок.
+- Маппинг item instance → TECH → group → `HeroOutfit`: item id →
+  `sdb/items/tech_names.sdb` (обратный lookup id→TECH), затем
+  `scripts/herowear.scr`; TECH не собирается из type/style/material.
+  Источник истины — оригинальный save/движок.
 - Меню save slots: выбор валидного слота запоминает `HeroEquipment` и
   применяет его к текущему уровню, если уровень открыт; иначе — при
   следующем `load_level` (`New Game`/`--level`). Мир не загружается.
@@ -121,10 +122,12 @@ void LevelScreen::apply_hero_outfit(const HeroOutfit& outfit);
 
 1. Найти точное начало/размер equipped item records в `BT_HERO`
    (`GoldenLand.exe` writer/reader + live save).
-2. Подтвердить на `slot0` IDs `318/397/280` (Almaz/Goluboy/Cherny) и
-   найти второй слот с другим набором.
-3. Извлечь item→tech/group (ITM `unknown_b`, `herowear.scr`, каталоги
-   `wear.pak`) и проверить 5 визуальных категорий.
+2. Подтвердить на `slot0` IDs `318/397/280`
+   (Dospeh_almaz/Ponogi_goluboy/Shlem_goluboy) и найти второй слот
+   с другим набором.
+3. Извлечь item id→TECH (`tech_names.sdb`)→group (`herowear.scr`,
+   каталоги `wear.pak`); type/style/material для TECH не используются.
+   Проверить 5 визуальных категорий.
 4. Записать offsets/RVA/наблюдения в `docs/research/p5-save-equipment.md`.
    Только после 0/N совпадений на двух слотах — реализация.
 
@@ -143,8 +146,10 @@ void LevelScreen::apply_hero_outfit(const HeroOutfit& outfit);
 
 - Unit: synthetic save-body parser; item→tech/group mapping; naked
   fallback; выбор слотов.
-- Real: `slot0` даёт `318/397/280` → Almaz/Goluboy/Cherny; второй слот —
-  другой набор; несовпадения — ошибка теста.
+- Real: `slot0` даёт `318/397/280` →
+  Dospeh_almaz/Ponogi_goluboy/Shlem_goluboy
+  (`ARM_1_13_1`/`ELB_1_11_2`/`HLM_1_12_1`); второй слот — другой набор;
+  несовпадения — ошибка теста.
 - App: выбор слота в меню запоминает outfit; `apply_hero_outfit`
   перестраивает текстуры без reload уровня; screenshot naked vs slot0.
 - Manual gate: пользователь сравнивает hero в порте с оригиналом на

@@ -433,17 +433,22 @@ elbarms, weapon, base_idx).
 | все 28 save: визуальные item → TECH/herowear | 113 | **0** |
 | все 28 save: asset визуальных слоёв (A+B) | 193 | **0** |
 
+Сырые выводы: slot0+slot2 — `verify_slots_out.txt`; gid-fit
+(4/8-битные поля) и прогон 28 save — `check_all_out.txt`
+(в `verify_slots_out` gid-fit не считается).
+
 ### 13.8 Отсутствующие ассеты
 
 - В slot0/slot2 отсутствующих ассетов нет: 18/18 путей существуют.
 - В 28 save — 0 отсутствующих среди 193 проверенных визуальных слоёв.
-- Структурно в `wear.pak` каталог `shield/` есть только у base set
-  `noweapon_thrw` и `onehand_wpn` (по 15 групп); у `two_swords`,
+- Наблюдаемый факт: в `wear.pak` каталог `shield/` есть только у base
+  set `noweapon_thrw` и `onehand_wpn` (по 15 групп); у `two_swords`,
   `two_axes_maces`, `two_spears_staffs`, `bows`, `xbows_guns` его
-  нет вовсе. Это согласуется с тем, что щит носится с одноручным
-  оружием; в slot0/slot2 щиты лежат в наборе B при `onehand_wpn`.
-  Если встретится щит при двуручном base set — слой считать
-  отсутствующим, а не ошибкой парсера.
+  нет вовсе. В slot0/slot2 щиты лежат в наборе B при `onehand_wpn`.
+  Правило «щит бывает только с одноручным оружием» — **непроверенная
+  интерпретация**: в 28 save не встретилось щита при двуручном base
+  set. Если такая комбинация встретится — слой считать отсутствующим,
+  а не ошибкой парсера.
 - `shlem_cherny` нет ни в `wear.pak`, ни в `herowear.scr`;
   `HLM_1_12_1`/`HLM_1_11_1` → `Shlem_goluboy` (ассет есть). Пример
   из spec не воспроизводится на этих save.
@@ -455,7 +460,10 @@ elbarms, weapon, base_idx).
 2. Собрать набор A (§6, §13.6).
 3. `TECH = reverse(tech_names.sdb)[id]` (id → строка).
 4. `(category, group, gid, base_idx) = herowear[TECH]`.
-5. `base = weapon ? base_idx : 0` (`noweapon_thrw`).
+5. `base` = `base_idx` оружия этого набора; если оружия нет — 0
+   (`noweapon_thrw`). Для armor/helmet/elbarms/shield используется
+   base того же набора; при наличии оружия `noweapon_thrw` не
+   подставляется.
 6. `asset = wear/<base>/<category>/<lower(group)>/<lower(group)>.iad`.
 7. Нет TECH/group/asset → naked для категории + warning (spec §8).
 8. `BRL`/`AML`/`RNG` и ammo (`AMO`, type 8) читать/хранить, но

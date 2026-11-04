@@ -32,7 +32,7 @@
   size, field offsets для `item_id/type/subcount`, начало/конец
   equipped-списка; список RVA writer/reader.
 
-- [ ] **Step 1: Re-import GoldenLand.exe in Ghidra with real base**
+- [x] **Step 1: Re-import GoldenLand.exe in Ghidra with real base**
 
 Run:
 
@@ -45,7 +45,7 @@ $proj="$env:TEMP\ghidra_glexe"
 
 Expected: `.text 00401000..00440fff`, image base `00400000`.
 
-- [ ] **Step 2: Find save writer by the save magic**
+- [x] **Step 2: Find save writer by the save magic**
 
 Run a Ghidra script that searches references to the string
 `"Goldenland II save"` at file offset `0x50308` and prints containing
@@ -53,7 +53,7 @@ functions. Record function VAs and caller chain in the research doc.
 
 Expected: writer/caller addresses, one of which writes `BT_HERO`.
 
-- [ ] **Step 3: Decompile the hero save writer**
+- [x] **Step 3: Decompile the hero save writer**
 
 Decompile the function(s) that write `BT_HERO` using `DecompFuncs.java`.
 Record:
@@ -64,7 +64,7 @@ Record:
 
 Expected: exact byte offsets and counts for slot0.
 
-- [ ] **Step 4: Verify against slot0 decompressed body**
+- [x] **Step 4: Verify against slot0 decompressed body**
 
 Run:
 
@@ -76,13 +76,13 @@ Expected: `BT_HERO` block found (slot0 currently at decompressed offset
 `874651`; size `30388`); IDs `318/397/280` at block-relative offsets
 around `0x6d14/0x6e00/0x6ed8`.
 
-- [ ] **Step 5: Verify a second slot**
+- [x] **Step 5: Verify a second slot**
 
 Repeat Step 4 for one other valid slot (title not `Quick save`).
 Record its equipped IDs and confirm the same record layout. If layout
 differs — record BLOCKED and stop.
 
-- [ ] **Step 6: Write research doc**
+- [x] **Step 6: Write research doc**
 
 Create `docs/research/p5-save-equipment.md` with:
 
@@ -94,7 +94,7 @@ Create `docs/research/p5-save-equipment.md` with:
 - open item→tech mapping (ITM `unknown_b` + `herowear.scr`) and exact
   fields needed.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```powershell
 git add docs/research/p5-save-equipment.md
