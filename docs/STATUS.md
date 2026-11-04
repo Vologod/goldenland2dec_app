@@ -1,6 +1,17 @@
 # STATUS
 
 Обновлено: 2026-11-04
+## Состояние на 2026-11-04 (handoff)
+
+- **Принято:** P4d (shadow draw-origin), A8 (cell masks: строка
+  `person_y/18` + клетки кадра с тем же mask id), P5a (save → outfit).
+- **Проверка:** финальный полный `ctest` — 17/17, 1016.00 s; P5a manual
+  visual gate PASSED (slot0/slot2).
+- **Следующая задача:** P5b inventory UI (сетка/выбор/use/drop); нужен
+  новый spec/plan. P5a-pending: set A/B switching, P5a parser deferrals
+  (32 MiB, first `BT_HERO`, BOM).
+- **Не запушено:** коммиты только локально.
+
 ## P5a — save → hero outfit (accepted 2026-11-04)
 
 - **Задача:** выбор save-слота в существующем меню применяет
