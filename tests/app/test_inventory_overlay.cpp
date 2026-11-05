@@ -11,6 +11,8 @@
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
+#include <fstream>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -42,6 +44,46 @@ gl::assets::HeroInventory make_inventory() {
     inventory.equipped.push_back(make_item(72, 15, 1, 0x0004016C));
     inventory.equipped.push_back(make_item(318, 12, 1, 0xC0100204));
     return inventory;
+}
+
+std::optional<gl::render::Font> load_game_font(SDL_Renderer *renderer,
+                                               const gl::assets::GameVfs &vfs) {
+    auto bytes = vfs.read("engineres/fonts/ttf/arial.ttf");
+    if (!bytes)
+        return std::nullopt;
+    const auto stamp = std::chrono::steady_clock::now().time_since_epoch().count();
+    const std::filesystem::path path =
+        std::filesystem::temp_directory_path() /
+        ("gl_inventory_font_" + std::to_string(stamp) + ".ttf");
+    {
+        std::ofstream out(path, std::ios::binary);
+        if (!out)
+            return std::nullopt;
+        out.write(reinterpret_cast<const char *>(bytes->data()),
+                  static_cast<std::streamsize>(bytes->size()));
+    }
+    auto font = gl::render::Font::load_from_file(renderer, path, 24.0f);
+    std::error_code ignored;
+    std::filesystem::remove(path, ignored);
+    if (!font)
+        return std::nullopt;
+    return std::move(font.value());
+}
+
+std::size_t region_difference(const std::vector<std::uint8_t> &a,
+                              const std::vector<std::uint8_t> &b, int x, int y, int w,
+                              int h) {
+    std::size_t different = 0;
+    for (int py = y; py < y + h; ++py) {
+        for (int px = x; px < x + w; ++px) {
+            const std::size_t offset =
+                (static_cast<std::size_t>(py) * 1024 + static_cast<std::size_t>(px)) * 4;
+            if (a[offset] != b[offset] || a[offset + 1] != b[offset + 1] ||
+                a[offset + 2] != b[offset + 2])
+                ++different;
+        }
+    }
+    return different;
 }
 
 struct SoftwareRenderer {
@@ -146,9 +188,10 @@ TEST_CASE("inventory overlay hit-tests hot and puppet slot masks") {
     gl::app::InventoryOverlay overlay;
     REQUIRE(overlay.open(vfs, catalog, make_inventory()));
 
-    const int hot_x[] = {17, 14, 43, 72, 101, 130, 159, 188, 217, 246};
+    const int hot_x[] = {14, 43, 72, 101, 130, 159, 188, 217, 246};
     for (const int x : hot_x)
         CHECK(overlay.hit_test(x + 13, 637) == gl::app::InventoryRegion::hot_slot);
+    CHECK(overlay.hit_test(42, 637) == gl::app::InventoryRegion::none);
 
     const int puppet_x[] = {67, 168, 0, 233, 4, 229, 22, 216, 16, 211, 16, 216};
     const int puppet_y[] = {307, 308, 354, 354, 402, 402, 472, 472, 466, 466, 547, 547};
@@ -163,6 +206,40 @@ TEST_CASE("inventory overlay hit-tests hot and puppet slot masks") {
     CHECK(overlay.handle_mouse(464, 24, true));
     CHECK(overlay.visible());
     CHECK_FALSE(overlay.view().selected.has_value());
+}
+
+TEST_CASE("inventory overlay selects hot and puppet records") {
+    gl::assets::GameVfs vfs;
+    gl::assets::ItemCatalog catalog;
+    gl::app::InventoryOverlay overlay;
+    REQUIRE(overlay.open(vfs, catalog, make_inventory()));
+
+    CHECK(overlay.handle_mouse(27, 637, true));
+    CHECK(overlay.selection() == gl::app::InventorySelection::hot);
+    CHECK(overlay.selected_name() == "item 1554");
+    REQUIRE(overlay.view().selected.has_value());
+    CHECK(*overlay.view().selected == 0);
+
+    CHECK(overlay.handle_mouse(31, 429, true));
+    CHECK(overlay.selection() == gl::app::InventorySelection::equipped);
+    CHECK(overlay.selected_name() == "item 72");
+    REQUIRE(overlay.view().selected.has_value());
+    CHECK(*overlay.view().selected == 0);
+
+    CHECK(overlay.handle_mouse(167, 730, true));
+    CHECK(overlay.selection() == gl::app::InventorySelection::item);
+    CHECK(overlay.selected_name() == "item 1000");
+}
+
+TEST_CASE("inventory overlay centers native icon sizes") {
+    CHECK(gl::app::InventoryOverlay::native_icon_offset(55.0f, 22.0f) ==
+          doctest::Approx(16.5f));
+    CHECK(gl::app::InventoryOverlay::native_icon_offset(55.0f, 55.0f) ==
+          doctest::Approx(0.0f));
+    CHECK(gl::app::InventoryOverlay::native_icon_offset(27.0f, 55.0f) ==
+          doctest::Approx(0.0f));
+    CHECK(gl::app::InventoryOverlay::native_icon_offset(27.0f, 22.0f) ==
+          doctest::Approx(2.5f));
 }
 
 TEST_CASE("inventory overlay scales and offsets hit-testing for letterboxed screens") {
@@ -196,6 +273,77 @@ TEST_CASE("inventory overlay wheel scrolls three items and clamps") {
     CHECK(overlay.view().page == 0);
     CHECK(overlay.handle_wheel(-1));
     CHECK(overlay.view().page == 0);
+
+    for (int i = 0; i < 100; ++i)
+        CHECK(overlay.handle_wheel(1));
+    CHECK(overlay.view().page == 8);
+    CHECK(overlay.handle_wheel(1));
+    CHECK(overlay.view().page == 8);
+}
+
+TEST_CASE("inventory overlay panel scrolls text with wheel, keys and clipping" *
+          doctest::skip(!game_dir_available())) {
+    const char *dir = std::getenv("GL_GAME_DIR");
+    REQUIRE(dir != nullptr);
+    auto vfs = gl::assets::GameVfs::mount(dir);
+    REQUIRE(vfs.has_value());
+    auto catalog = gl::assets::ItemCatalog::load(vfs.value());
+    REQUIRE(catalog.has_value());
+
+    SoftwareRenderer canvas(1024, 768);
+    REQUIRE(canvas.renderer != nullptr);
+    auto font = load_game_font(canvas.renderer, vfs.value());
+    REQUIRE(font.has_value());
+
+    gl::assets::HeroInventory inventory;
+    inventory.items.push_back(make_item(1083, 22, 1));
+    gl::app::InventoryOverlay overlay;
+    REQUIRE(overlay.open(vfs.value(), catalog.value(), inventory));
+    REQUIRE(overlay.handle_mouse(167, 730, true));
+    CHECK(overlay.selected_name() != "item 1083");
+
+    SDL_SetRenderDrawColor(canvas.renderer, 0, 0, 0, 255);
+    SDL_RenderClear(canvas.renderer);
+    overlay.render(canvas.renderer, 1024, 768, &font.value());
+
+    const std::size_t maximum = overlay.panel_max_scroll(font.value());
+    REQUIRE(maximum > 0);
+    CHECK(overlay.panel_scroll() == 0);
+
+    std::vector<std::uint8_t> top(1024 * 768 * 4);
+    REQUIRE(SDL_RenderReadPixels(canvas.renderer, nullptr, SDL_PIXELFORMAT_RGBA32,
+                                 top.data(), 1024 * 4) == 0);
+
+    CHECK(overlay.handle_wheel(1, 700, 200));
+    CHECK(overlay.panel_scroll() > 0);
+    const std::size_t first = overlay.panel_scroll();
+    CHECK(overlay.handle_wheel(-1, 700, 200));
+    CHECK(overlay.panel_scroll() < first);
+
+    for (int i = 0; i < 100; ++i)
+        CHECK(overlay.handle_wheel(1, 700, 200));
+    CHECK(overlay.panel_scroll() == maximum);
+    CHECK(overlay.handle_wheel(1, 700, 200));
+    CHECK(overlay.panel_scroll() == maximum);
+
+    for (int i = 0; i < 100; ++i)
+        CHECK(overlay.handle_wheel(-1, 700, 200));
+    CHECK(overlay.panel_scroll() == 0);
+
+    CHECK(overlay.handle_key(SDLK_PAGEDOWN));
+    CHECK(overlay.panel_scroll() > 0);
+    CHECK(overlay.handle_key(SDLK_PAGEUP));
+    CHECK(overlay.panel_scroll() == 0);
+
+    CHECK(overlay.handle_key(SDLK_PAGEDOWN));
+    SDL_SetRenderDrawColor(canvas.renderer, 0, 0, 0, 255);
+    SDL_RenderClear(canvas.renderer);
+    overlay.render(canvas.renderer, 1024, 768, &font.value());
+    std::vector<std::uint8_t> scrolled(1024 * 768 * 4);
+    REQUIRE(SDL_RenderReadPixels(canvas.renderer, nullptr, SDL_PIXELFORMAT_RGBA32,
+                                 scrolled.data(), 1024 * 4) == 0);
+    CHECK(region_difference(top, scrolled, 664, 54, 340, 500) > 100);
+    CHECK(region_difference(top, scrolled, 0, 0, 640, 768) == 0);
 }
 
 TEST_CASE("inventory overlay renders a background and icons" *

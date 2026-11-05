@@ -36,6 +36,13 @@ enum class InventoryRegion {
     panel,
 };
 
+enum class InventorySelection {
+    none,
+    item,
+    hot,
+    equipped,
+};
+
 class InventoryOverlay {
   public:
     bool open(const gl::assets::GameVfs &vfs, const gl::assets::ItemCatalog &catalog,
@@ -48,10 +55,15 @@ class InventoryOverlay {
     bool handle_mouse(int x, int y, bool click);
     bool handle_key(SDL_Keycode key);
     bool handle_wheel(int delta);
+    bool handle_wheel(int delta, int x, int y);
 
     const gl::game::InventoryViewState &view() const { return view_; }
     std::size_t visible_count() const { return visible_indices_.size(); }
     std::string selected_name() const;
+    InventorySelection selection() const { return selection_; }
+    std::size_t panel_scroll() const { return panel_scroll_; }
+    std::size_t panel_max_scroll(const gl::render::Font &font) const;
+    static float native_icon_offset(float target, float texture_size);
 
     InventoryRegion hit_test(int x, int y) const;
 
@@ -64,6 +76,7 @@ class InventoryOverlay {
     };
 
     void rebuild_visible();
+    void select(InventorySelection source, std::size_t index);
     void update_transform(int screen_w, int screen_h);
     void reset_texture_cache(SDL_Renderer *renderer);
     gl::render::Texture *load_texture(std::string_view path);
@@ -77,13 +90,16 @@ class InventoryOverlay {
                      float y, float target_w, float target_h) const;
     void draw_rect(SDL_Renderer *renderer, const gl::render::Texture &texture,
                    const Rect &rect) const;
-    void draw_panel(SDL_Renderer *renderer, const gl::render::Font *font) const;
+    void draw_panel(SDL_Renderer *renderer, const gl::render::Font *font);
 
     const gl::assets::GameVfs *vfs_ = nullptr;
     const gl::assets::ItemCatalog *catalog_ = nullptr;
     gl::assets::HeroInventory inventory_;
     gl::game::InventoryViewState view_;
     std::vector<std::size_t> visible_indices_;
+    InventorySelection selection_ = InventorySelection::none;
+    std::size_t panel_scroll_ = 0;
+    std::size_t panel_scroll_max_ = 0;
     bool visible_ = false;
 
     float scale_ = 1.0f;

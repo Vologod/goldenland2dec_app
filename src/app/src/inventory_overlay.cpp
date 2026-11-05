@@ -77,6 +77,70 @@ bool lower_suffix(std::string_view path, std::string_view suffix) {
     return true;
 }
 
+struct PanelLines {
+    std::vector<std::string> name;
+    std::array<std::string, 3> stats;
+    std::vector<std::string> description;
+    float content_height = 0.0f;
+    bool show_scroll = false;
+};
+
+std::string format_weight(std::uint32_t weight_x10) {
+    return std::to_string(weight_x10 / 10) + "." + std::to_string(weight_x10 % 10);
+}
+
+void erase_last_codepoint(std::string &text) {
+    if (text.empty())
+        return;
+    std::size_t index = text.size() - 1;
+    while (index > 0 && (static_cast<unsigned char>(text[index]) & 0xC0u) == 0x80u)
+        --index;
+    text.erase(index);
+}
+
+std::string ellipsize(const gl::render::Font &font, std::string text, float width) {
+    constexpr std::string_view kDots = "...";
+    while (!text.empty() && font.measure(text + std::string(kDots)).x > width)
+        erase_last_codepoint(text);
+    text.append(kDots);
+    return text;
+}
+
+PanelLines build_panel_lines(const gl::assets::ItemCatalogEntry &entry,
+                             const gl::render::Font &font) {
+    constexpr float kContentWidth = 340.0f;
+    constexpr float kScrollWidth = 332.0f;
+    constexpr float kContentHeight = 500.0f;
+    constexpr float kNameLine = 18.0f;
+    constexpr float kStatLine = 18.0f;
+    constexpr float kDescLine = 16.0f;
+
+    PanelLines lines;
+    lines.name = font.wrap(entry.name, kContentWidth);
+    if (lines.name.size() > 2) {
+        lines.name.resize(2);
+        lines.name[1] = ellipsize(font, lines.name[1], kContentWidth);
+    }
+    lines.stats = {
+        "Type: " + std::to_string(static_cast<std::uint32_t>(entry.item.type)),
+        "Price: " + std::to_string(entry.item.price),
+        "Weight: " + format_weight(entry.item.weight_x10),
+    };
+    lines.description = font.wrap(entry.description, kContentWidth);
+
+    const auto content_height = [&]() {
+        return static_cast<float>(lines.name.size()) * kNameLine + 3.0f * kStatLine +
+               static_cast<float>(lines.description.size()) * kDescLine;
+    };
+    lines.content_height = content_height();
+    lines.show_scroll = lines.content_height > kContentHeight;
+    if (lines.show_scroll) {
+        lines.description = font.wrap(entry.description, kScrollWidth);
+        lines.content_height = content_height();
+    }
+    return lines;
+}
+
 std::vector<std::string> wrap_fallback(std::string_view text, float max_width, float scale) {
     std::vector<std::string> lines;
     std::size_t start = 0;
@@ -123,15 +187,23 @@ bool InventoryOverlay::open(const gl::assets::GameVfs &vfs,
     inventory_ = inventory;
     view_ = {};
     visible_indices_.clear();
+    selection_ = InventorySelection::none;
+    panel_scroll_ = 0;
+    panel_scroll_max_ = 0;
     visible_ = true;
     screen_w_ = 1024;
     screen_h_ = 768;
-    scale_ = 1.0f;
-    offset_x_ = 0.0f;
-    offset_y_ = 0.0f;
+    update_transform(screen_w_, screen_h_);
     reset_texture_cache(nullptr);
     rebuild_visible();
     return true;
+}
+
+void InventoryOverlay::select(InventorySelection source, std::size_t index) {
+    selection_ = source;
+    view_.selected = index;
+    panel_scroll_ = 0;
+    panel_scroll_max_ = 0;
 }
 
 void InventoryOverlay::close() { visible_ = false; }
@@ -232,9 +304,20 @@ gl::render::Texture *InventoryOverlay::icon_texture(const gl::assets::ItemCatalo
 gl::render::Texture *InventoryOverlay::background_texture() { return load_texture(kBackground); }
 
 const gl::assets::InventoryItem *InventoryOverlay::selected_item() const {
-    if (!view_.selected.has_value() || *view_.selected >= inventory_.items.size())
+    if (!view_.selected.has_value())
         return nullptr;
-    return &inventory_.items[*view_.selected];
+    const std::size_t index = *view_.selected;
+    switch (selection_) {
+    case InventorySelection::item:
+        return index < inventory_.items.size() ? &inventory_.items[index] : nullptr;
+    case InventorySelection::hot:
+        return index < inventory_.hot.size() ? &inventory_.hot[index] : nullptr;
+    case InventorySelection::equipped:
+        return index < inventory_.equipped.size() ? &inventory_.equipped[index] : nullptr;
+    case InventorySelection::none:
+        break;
+    }
+    return nullptr;
 }
 
 const gl::assets::ItemCatalogEntry *InventoryOverlay::selected_entry() const {
@@ -260,8 +343,8 @@ void InventoryOverlay::draw_native(SDL_Renderer *renderer, const gl::render::Tex
                                    float x, float y, float target_w, float target_h) const {
     const float texture_w = static_cast<float>(texture.width());
     const float texture_h = static_cast<float>(texture.height());
-    const float off_x = std::max(0.0f, (target_w - texture_w) * 0.5f);
-    const float off_y = std::max(0.0f, (target_h - texture_h) * 0.5f);
+    const float off_x = native_icon_offset(target_w, texture_w);
+    const float off_y = native_icon_offset(target_h, texture_h);
     const SDL_FRect destination{x + off_x, y + off_y, texture_w, texture_h};
     SDL_RenderCopyF(renderer, texture.get(), nullptr, &destination);
 }
@@ -272,8 +355,9 @@ void InventoryOverlay::draw_rect(SDL_Renderer *renderer, const gl::render::Textu
     SDL_RenderCopyF(renderer, texture.get(), nullptr, &destination);
 }
 
-void InventoryOverlay::draw_panel(SDL_Renderer *renderer, const gl::render::Font *font) const {
+void InventoryOverlay::draw_panel(SDL_Renderer *renderer, const gl::render::Font *font) {
     const gl::assets::ItemCatalogEntry *entry = selected_entry();
+    panel_scroll_max_ = 0;
     if (entry == nullptr)
         return;
 
@@ -289,62 +373,75 @@ void InventoryOverlay::draw_panel(SDL_Renderer *renderer, const gl::render::Font
     if (font == nullptr)
         return;
 
-    float width = content.w;
-    std::vector<std::string> name_lines = wrap_text(entry->name, width, font);
-    if (name_lines.size() > 2)
-        name_lines.resize(2);
-    std::vector<std::string> description_lines =
-        wrap_text(entry->description, width, font);
-
-    const float base_height = static_cast<float>(name_lines.size()) * kPanelNameLine +
-                              3.0f * kPanelStatLine +
-                              static_cast<float>(description_lines.size()) * kPanelDescLine;
-    const bool show_scroll = base_height > content.h;
-    if (show_scroll) {
-        width -= 8.0f;
-        description_lines = wrap_text(entry->description, width, font);
+    const PanelLines lines = build_panel_lines(*entry, *font);
+    if (lines.content_height > content.h) {
+        const float max_scroll = lines.content_height - content.h;
+        panel_scroll_max_ = static_cast<std::size_t>(std::ceil(max_scroll));
     }
+    if (panel_scroll_ > panel_scroll_max_)
+        panel_scroll_ = panel_scroll_max_;
 
-    const std::array<std::string, 3> stats{
-        "Type: " + std::to_string(static_cast<std::uint32_t>(entry->item.type)),
-        "Price: " + std::to_string(entry->item.price),
-        "Weight: " + std::to_string(entry->item.weight_x10),
+    SDL_Rect old_clip{};
+    SDL_RenderGetClipRect(renderer, &old_clip);
+    const bool had_clip = SDL_RenderIsClipEnabled(renderer) == SDL_TRUE;
+    const SDL_Rect clip{
+        static_cast<int>(std::lround(content.x)),
+        static_cast<int>(std::lround(content.y)),
+        static_cast<int>(std::lround(content.w)),
+        static_cast<int>(std::lround(content.h)),
     };
+    SDL_RenderSetClipRect(renderer, &clip);
 
-    float y = content.y;
     const gl::render::Color name_color{255, 232, 160, 255};
     const gl::render::Color stat_color{200, 205, 215, 255};
     const gl::render::Color desc_color{214, 214, 222, 255};
+    float y = content.y - static_cast<float>(panel_scroll_);
 
-    for (const std::string &line : name_lines) {
-        font->draw_text(renderer, line, content.x, y, name_color);
-        y += kPanelNameLine;
-    }
-    for (const std::string &line : stats) {
-        font->draw_text(renderer, line, content.x, y, stat_color);
-        y += kPanelStatLine;
-    }
-    for (const std::string &line : description_lines) {
-        font->draw_text(renderer, line, content.x, y, desc_color);
-        y += kPanelDescLine;
-    }
+    const auto draw_lines = [&](const auto &text_lines, float line_height,
+                                gl::render::Color color) {
+        for (const std::string &line : text_lines) {
+            if (y + line_height > content.y && y < content.y + content.h)
+                font->draw_text(renderer, line, content.x, y, color);
+            y += line_height;
+        }
+    };
+    draw_lines(lines.name, kPanelNameLine, name_color);
+    draw_lines(lines.stats, kPanelStatLine, stat_color);
+    draw_lines(lines.description, kPanelDescLine, desc_color);
 
-    if (show_scroll) {
+    SDL_RenderSetClipRect(renderer, had_clip ? &old_clip : nullptr);
+
+    if (lines.show_scroll) {
         const float track_x = content.x + content.w - 8.0f;
         SDL_SetRenderDrawColor(renderer, 54, 56, 66, 255);
         const SDL_FRect track{track_x, content.y, 8.0f, content.h};
         SDL_RenderFillRectF(renderer, &track);
 
-        float visible_ratio = content.h / base_height;
-        if (visible_ratio > 1.0f)
-            visible_ratio = 1.0f;
-        float thumb_height = content.h * visible_ratio;
+        float thumb_height = content.h * (content.h / lines.content_height);
         if (thumb_height < 20.0f)
             thumb_height = 20.0f;
+        const float travel = content.h - thumb_height;
+        const float ratio =
+            panel_scroll_max_ > 0
+                ? static_cast<float>(panel_scroll_) / static_cast<float>(panel_scroll_max_)
+                : 0.0f;
         SDL_SetRenderDrawColor(renderer, 150, 130, 80, 255);
-        const SDL_FRect thumb{track_x, content.y, 8.0f, thumb_height};
+        const SDL_FRect thumb{track_x, content.y + travel * ratio, 8.0f, thumb_height};
         SDL_RenderFillRectF(renderer, &thumb);
     }
+}
+
+std::size_t InventoryOverlay::panel_max_scroll(const gl::render::Font &font) const {
+    const gl::assets::ItemCatalogEntry *entry = selected_entry();
+    if (entry == nullptr)
+        return 0;
+    const PanelLines lines = build_panel_lines(*entry, font);
+    const float max_scroll = lines.content_height - 500.0f;
+    return max_scroll > 0.0f ? static_cast<std::size_t>(std::ceil(max_scroll)) : 0;
+}
+
+float InventoryOverlay::native_icon_offset(float target, float texture_size) {
+    return std::max(0.0f, (target - texture_size) * 0.5f);
 }
 
 void InventoryOverlay::render(SDL_Renderer *renderer, int screen_w, int screen_h,
@@ -399,12 +496,14 @@ void InventoryOverlay::render(SDL_Renderer *renderer, int screen_w, int screen_h
 
         const float x = static_cast<float>(kBottomX[slot]);
         const float y = static_cast<float>(kBottomY);
-        if (icon != nullptr) {
-            draw_native(renderer, *icon, x, y, 55.0f, 55.0f);
-        } else {
-            SDL_SetRenderDrawColor(renderer, 22, 24, 30, 200);
-            const SDL_FRect fill{x, y, 55.0f, 55.0f};
-            SDL_RenderFillRectF(renderer, &fill);
+        if (item != nullptr) {
+            if (icon != nullptr) {
+                draw_native(renderer, *icon, x, y, 55.0f, 55.0f);
+            } else {
+                SDL_SetRenderDrawColor(renderer, 22, 24, 30, 200);
+                const SDL_FRect fill{x, y, 55.0f, 55.0f};
+                SDL_RenderFillRectF(renderer, &fill);
+            }
         }
 
         if (font != nullptr && item != nullptr && item->count > 1) {
@@ -548,16 +647,46 @@ bool InventoryOverlay::handle_mouse(int x, int y, bool click) {
                           55.0f, logical_x, logical_y))
                 continue;
             const std::size_t index = view_.page + slot;
-            if (index < visible_indices_.size())
-                view_.selected = visible_indices_[index];
-            else
+            if (index < visible_indices_.size()) {
+                select(InventorySelection::item, visible_indices_[index]);
+            } else {
+                selection_ = InventorySelection::none;
                 view_.selected.reset();
+                panel_scroll_ = 0;
+                panel_scroll_max_ = 0;
+            }
+            break;
+        }
+        break;
+    case InventoryRegion::hot_slot:
+        for (std::size_t slot = 1; slot < kHotX.size(); ++slot) {
+            if (!contains(static_cast<float>(kHotX[slot]), static_cast<float>(kHotY), 27.0f, 27.0f,
+                          logical_x, logical_y))
+                continue;
+            for (std::size_t index = 0; index < inventory_.hot.size(); ++index) {
+                if (((inventory_.hot[index].flags & 0x0000F000u) >> 12) == slot) {
+                    select(InventorySelection::hot, index);
+                    break;
+                }
+            }
+            break;
+        }
+        break;
+    case InventoryRegion::puppet_slot:
+        for (const PuppetSpec &puppet : kPuppetSlots) {
+            if (!contains(static_cast<float>(puppet.x), static_cast<float>(puppet.y), 55.0f, 55.0f,
+                          logical_x, logical_y))
+                continue;
+            for (std::size_t index = 0; index < inventory_.equipped.size(); ++index) {
+                if ((inventory_.equipped[index].flags & 0x00FFF000u) == puppet.mask) {
+                    select(InventorySelection::equipped, index);
+                    break;
+                }
+            }
             break;
         }
         break;
     case InventoryRegion::none:
-    case InventoryRegion::hot_slot:
-    case InventoryRegion::puppet_slot:
     case InventoryRegion::skills_tab:
     case InventoryRegion::drop:
     case InventoryRegion::panel:
@@ -579,6 +708,17 @@ bool InventoryOverlay::handle_key(SDL_Keycode key) {
         visible_ = !visible_;
         return true;
     }
+    if (key == SDLK_PAGEDOWN || key == SDLK_PAGEUP) {
+        if (!visible_ || panel_scroll_max_ == 0)
+            return false;
+        constexpr std::size_t kPageStep = 90;
+        if (key == SDLK_PAGEDOWN) {
+            panel_scroll_ = std::min(panel_scroll_ + kPageStep, panel_scroll_max_);
+        } else {
+            panel_scroll_ = panel_scroll_ > kPageStep ? panel_scroll_ - kPageStep : 0;
+        }
+        return true;
+    }
     return false;
 }
 
@@ -589,6 +729,21 @@ bool InventoryOverlay::handle_wheel(int delta) {
     const long long next = static_cast<long long>(view_.page) + step;
     view_.page = gl::game::clamp_page(next < 0 ? 0 : static_cast<std::size_t>(next),
                                      visible_indices_.size());
+    return true;
+}
+
+bool InventoryOverlay::handle_wheel(int delta, int x, int y) {
+    if (!visible_ || delta == 0)
+        return false;
+    if (hit_test(x, y) != InventoryRegion::panel)
+        return handle_wheel(delta);
+    if (panel_scroll_max_ == 0)
+        return true;
+    constexpr std::size_t kWheelStep = 54;
+    if (delta > 0)
+        panel_scroll_ = std::min(panel_scroll_ + kWheelStep, panel_scroll_max_);
+    else
+        panel_scroll_ = panel_scroll_ > kWheelStep ? panel_scroll_ - kWheelStep : 0;
     return true;
 }
 
@@ -620,8 +775,8 @@ InventoryRegion InventoryOverlay::hit_test(int x, int y) const {
             return InventoryRegion::bottom_slot;
     }
 
-    for (const int slot_x : kHotX) {
-        if (contains(static_cast<float>(slot_x), static_cast<float>(kHotY), 27.0f, 27.0f,
+    for (std::size_t i = 1; i < kHotX.size(); ++i) {
+        if (contains(static_cast<float>(kHotX[i]), static_cast<float>(kHotY), 27.0f, 27.0f,
                      logical_x, logical_y))
             return InventoryRegion::hot_slot;
     }
