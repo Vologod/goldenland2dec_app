@@ -22,6 +22,41 @@
   **paper-doll overlays** поверх фигуры (ITM `puppet_name` + layer masks).
 - **Не запушено:** коммиты только локально.
 
+## Parity matrix & decomp reference — Phase 0 (2026-11-05)
+
+- **Задача:** зафиксировать измеримую основу полной реконструкции логики в
+  современный C++20: матрицу покрытия и локальный декомпил-корпус
+  `Server.dll`. Код порта не меняется.
+- **Критерии приёмки:** все строки аудитов P0–P4b2 + P4c/P4d/A8/P5a/P5b1
+  имеют статус и evidence; есть сводка counts и приоритетные пробелы;
+  `decomp-index.md` содержит SHA-256 и число функций; корпус непуст;
+  документы UTF-8 без BOM/NUL; `ctest` не требуется.
+- **Сделано:**
+  - `docs/research/parity-matrix.md` — 157 строк: `verified` 44,
+    `partial` 57, `unverified` 25, `missing` 16, `contradicted` 2,
+    `superseded` 13. `contradicted`: `P1-3` (ADSC `number/name`) и
+    `P2-9` (60 Гц vs `sv_fps=35`).
+  - `docs/specs/2026-11-05-parity-matrix-design.md`,
+    `docs/plans/2026-11-05-parity-matrix-phase0.md`.
+  - D-048: результат — современный C++20; matching/VC6 не используется;
+    корпус локален, в git только индекс и скрипт.
+  - `tools/ghidra/ExportDecomp.java` + `docs/research/decomp-index.md`.
+- **Проверка (фактический вывод):**
+  - `parity-matrix.md`: 157 строк; `verified` 44, `partial` 57,
+    `unverified` 25, `missing` 16, `contradicted` 2, `superseded` 13.
+  - Ghidra: `Server.dll` SHA-256
+    `418E256063748F2E90DB35AE7C6ABE6EAC401FB86908CB5F27EBF565A21CC837`;
+    импорт и анализ — 109 s; `done functions=1108 ok=1107 failed=0 thunks=1`.
+  - Корпус: `.local/decomp/server/decompiled.c` 2 473 000 B,
+    `functions.csv` 31 476 B (1108 строк), `meta.txt`.
+  - Sanity корпуса: `_rand` найден по RVA `0x6c09f` (строка 896
+    `functions.csv`, size 34), Ghidra опознала его как library function.
+  - Документы: BOM=false, NUL=0; литеральный `\n` встречается только в
+    правилах и путях (`wear\...`, `\r`/`\n`), не как артефакт.
+  - Код порта не менялся; `ctest` для Phase 0 не требуется.
+- **Следующее:** Phase 1 — `P3-4`–`P3-9` (VM и нативы из `Server.dll`),
+  затем `P2-15` (save payload) и `P2-9`/`P4b-16` (35 Гц).
+
 ## P5b1 final review fixes (2026-11-05)
 
 - **Android/no-font panel:** добавлен `gl::render::Font::load_from_memory`;
