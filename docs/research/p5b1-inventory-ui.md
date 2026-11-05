@@ -1,8 +1,9 @@
 # P5b1: inventory UI layout, filters, item presentation
 
 Дата: 2026-11-05. Статус: **research DONE** (layout/filter/item catalog);
-часть исходной геометрии — **BLOCKED** (см. §10). Игровой код не менялся;
-в этом коммите — только этот документ.
+часть исходной геометрии — **BLOCKED** (см. §10). Реализация P5b1 — §14
+(port behavior: magenta color-key иконок). В research-коммите менялся только
+этот документ.
 
 Задача: `docs/plans/2026-11-04-p5b1-inventory-ui-research.md`, Task 1.
 Источник истины: `Client.dll` SHA-256
@@ -713,3 +714,22 @@ $proj="$env:TEMP\ghidra_glclient"
 - `%TEMP%\inv_overlay.png` — наложение rect'ов на фон (не коммитить:
   содержит оригинальный арт).
 - Ghidra project: `%TEMP%\ghidra_glclient`.
+
+## 14. Implementation note (P5b1 port, 2026-11-05)
+
+- **Magenta color-key:** item BMP icons (8bpp indexed) use `(255,0,255)`
+  as a transparent background key. `InventoryOverlay` converts pixels
+  exactly equal to `(255,0,255)` to `alpha=0` before SDL texture upload.
+  This is a **port behavior** required to show BMP icons without their
+  magenta field; no engine disassembly evidence for an explicit color-key
+  routine was recorded, so it is not claimed as parity.
+- Keying applies only to icon textures (`items/res/<icon_name>` and the
+  `engineres/interface/bag` BMP fallback attempt). Backgrounds
+  (`inventory_secondary`/`inventory_skills`), filter/scroll/exit buttons
+  and other UI textures are uploaded unchanged (`magenta_key=false`).
+  CSX icons keep their palette transparency.
+- Regression coverage: `inventory_overlay_tests` decodes the real slot0
+  item 318 icon (`items/res/t_armour/almaz/00.bmp`), checks that magenta
+  pixels exist before keying and that no opaque magenta remains after
+  keying; the screenshot test asserts zero pure-magenta pixels inside
+  bottom slot 0, hot slot 1 and puppet bracer A.

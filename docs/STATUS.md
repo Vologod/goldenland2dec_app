@@ -1,19 +1,75 @@
 # STATUS
 
-Обновлено: 2026-11-04
-## Состояние на 2026-11-04 (handoff)
+Обновлено: 2026-11-05
+## Состояние на 2026-11-05 (handoff)
 
 - **Принято:** P4d (shadow draw-origin), A8 (cell masks: строка
   `person_y/18` + клетки кадра с тем же mask id), P5a (save → outfit).
-- **Проверка:** финальный полный `ctest` — 17/17, 1016.00 s; P5a manual
-  visual gate PASSED (slot0/slot2).
-- **P5b1 research DONE:** `docs/research/p5b1-inventory-ui.md` —
-  167/167 UI objects, container→panel mapping, filter masks, icons/text
-  296/296, right panel D-045; plan
-  `docs/plans/2026-11-04-p5b1-inventory-ui-implementation.md`.
+- **P5b1 реализован:** read-only inventory UI (Tasks 1–5); полный
+  `ctest` — **18/18 passed**, 928.30 s, exit 0; **manual gate OPEN**.
+- **Проверка P5b1:** `inventory_overlay_tests` 12/12 (455 assertions),
+  `glgame_screenshot_tests` 23/23, `gl_assets_real_tests` 28/28,
+  `gl_game_tests` 118/118, `level_click_tests` 23/23; полный `ctest` с
+  `GL_GAME_DIR` — 18/18, 928.30 s.
 - **P5a-pending:** set A/B switching, parser deferrals (32 MiB, first
   `BT_HERO`, BOM).
+- **P5b1 manual gate:** пользователь сравнивает overlay с
+  `inventory_secondary`/`inventory_skills` и slot0/slot2; агент pass не
+  подтверждает.
 - **Не запушено:** коммиты только локально.
+
+## P5b1 — read-only inventory UI (implemented 2026-11-05; manual gate OPEN)
+
+- **Задача:** показать read-only инвентарь выбранного save в оригинальном
+  UI 1024×768: нижняя полоса (container 1), hot slots (container 0),
+  paper-doll (container 2), фильтры/скролл/правая панель.
+- **Реализовано:** Tasks 1–5.
+  - `gl::assets::parse_hero_inventory(body)` — все три контейнера `BT_HERO`
+    (`0x734`, `0xC0 + 4 + subcount*0x14`): `hot`/`items`/`equipped`,
+    `InventoryItem { item_id, count, flags, type, style }`;
+    `parse_hero_equipment` сохранён для P5a. Контейнер 0=hot, 1=items,
+    2=equipped; equipped count = 1.
+  - `gl::assets::ItemCatalog::load/find` — `sdb/items/lit_names.sdb`,
+    `descriptions.sdb`, lazy `items/data/<id>.itm`, icon
+    `items/res/<icon_name>` (нормализация `\`→`/`, lower-case), fallback
+    `engineres/interface/bag`.
+  - `gl::game::visible_inventory`/`clamp_page` — эксклюзивные фильтры
+    id9..15 (`1,2,4,8,0x10,0x20,0`), type 18 (money) видим всегда,
+    offset-пагинация 12 слотов, clamp `0..max(0,count−12)`.
+  - `gl::app::InventoryOverlay` — letterbox 1024×768; фон
+    `inventory_secondary`; bottom 12 слотов 55×55 `x=140…811,y=703`; hot slots
+    1..9 27×27 (`y=624`, назначение по `(flags&0xF000)>>12`); puppet
+    55×55 по `flags&0x00FFF000`; фильтры/скролл ±1/±3/exit; правая
+    панель D-045 `(654,44,360,520)`; иконки native-size 55/45/30/22 без
+    scale, центрирование `off=max(0,(target−tex)/2)`; стек-счётчик при
+    count>1.
+  - `glgame --inventory`/`I`/Esc/консоль `inventory`; inventory и outfit
+    читаются из одного выбранного save (P5a); без save/невалидный слот —
+    пустой overlay, exit 0; ввод уровня при открытом overlay блокируется.
+- **Иконки (port behavior):** BMP-иконки предметов 8bpp indexed
+  используют color-key **magenta `(255,0,255)`**: ровно эти пиксели
+  переводятся в `alpha=0` перед upload. Keying применяется только к
+  icon-текстурам; фон/кнопки (`inventory_secondary`, `filter*`, `exit` и
+  т.п.) не keyed; CSX сохраняют палитровую прозрачность.
+- **Проверка:** полный `ctest` с `GL_GAME_DIR` — **18/18 passed**,
+  928.30 s, exit 0. `inventory_overlay_tests` 12/12 (455 assertions;
+  включая magenta-key regression на реальной иконке 318 и нулевые
+  magenta-пиксели в слотах), `glgame_screenshot_tests` 23/23 (580
+  assertions; `--inventory`, `--equip-save 0`, invalid slot, `--exec
+  inventory`), `gl_assets_real_tests` 28/28, `gl_game_tests` 118/118,
+  `level_click_tests` 23/23.
+- **Commits:** `5e9156f`, `827e357`, `ee9610a`, `d7d854a`, `e813f4d`,
+  `4c44324`, `0b9347a`.
+- **Manual gate OPEN:** пользователь запускает
+  `glgame --game-dir "I:\Games\Златогорье-2" --level l1_1 --equip-save 0
+  --inventory` (и `--equip-save 2`) и сравнивает фон/слоты/иконки/
+  фильтры/правую панель с оригиналом. Агент manual pass не подтверждает.
+- **Не входит:** use/drop/equip и изменение save; skills/parameters
+  (P5c); оригинальный tooltip (заменён D-045); overlay — снимок
+  inventory на момент открытия; touch-кнопка (P1b).
+- **Spec/plan/research:** `docs/specs/2026-11-04-p5b1-inventory-ui-design.md`,
+  `docs/plans/2026-11-04-p5b1-inventory-ui-implementation.md`,
+  `docs/research/p5b1-inventory-ui.md`.
 
 ## P5a — save → hero outfit (accepted 2026-11-04)
 

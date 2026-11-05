@@ -46,7 +46,7 @@ Result<HeroInventory> parse_hero_inventory(std::span<const std::uint8_t> body);
 ```
 - Preserve `parse_hero_equipment` (derive equipped) for P5a.
 
-- [ ] **Step 1: Failing test counts/IDs**
+- [x] **Step 1: Failing test counts/IDs**
 ```cpp
 auto body = gl::assets::decode_save_body(file_bytes);
 auto inv = gl::assets::parse_hero_inventory(*body);
@@ -57,12 +57,12 @@ CHECK(inv->equipped.size() == 11);
 ```
 Real slot0/slot2 counts `8/117/11` and `9/140/11`.
 
-- [ ] **Step 2: Run, expect fail** `cmake --build build --target gl_assets_tests gl_assets_real_tests`.
+- [x] **Step 2: Run, expect fail** `cmake --build build --target gl_assets_tests gl_assets_real_tests`.
 
-- [ ] **Step 3: Implement** parse all 3 containers with existing record formula; count
+- [x] **Step 3: Implement** parse all 3 containers with existing record formula; count
   from `+0xB0`; clamp to 1 for equipped; fill item fields.
 
-- [ ] **Step 4: Run + commit** `gl_assets_tests`/`gl_assets_real_tests`; commit
+- [x] **Step 4: Run + commit** `gl_assets_tests`/`gl_assets_real_tests`; commit
   `feat(assets): parse all BT_HERO containers`.
 
 ---
@@ -87,12 +87,12 @@ class ItemCatalog {
 };
 ```
 
-- [ ] **Step 1: Failing real test** slot0 item 318: name `Алмазные латы`,
+- [x] **Step 1: Failing real test** slot0 item 318: name `Алмазные латы`,
   icon `items/res/t_armour/almaz/00.bmp`, price 22294, weight 98.
-- [ ] **Step 2: Implement** load `lit_names.sdb`/`descriptions.sdb`; lazy ITM
+- [x] **Step 2: Implement** load `lit_names.sdb`/`descriptions.sdb`; lazy ITM
   `items/data/<id>.itm`; icon path normalize `\`→`/` lower-case; fallback
   `engineres/interface/bag`.
-- [ ] **Step 3: Run + commit** `feat(assets): add item catalog with names/icons`.
+- [x] **Step 3: Run + commit** `feat(assets): add item catalog with names/icons`.
 
 ---
 
@@ -114,12 +114,12 @@ std::vector<std::size_t> visible_inventory(const HeroInventory&, std::uint32_t m
 std::size_t clamp_page(std::size_t page, std::size_t count);
 ```
 
-- [ ] **Step 1: Failing filter tests** type 18 always visible; mask 1 → types
+- [x] **Step 1: Failing filter tests** type 18 always visible; mask 1 → types
   0..7/28; mask 2 → 11..14; mask 4 → 15..17; mask 8 → 21/22; mask 0x10 →
   8/9/10/19/20/23/24/26/27; mask 0x20 → 25; mask 0 → all.
-- [ ] **Step 2: Implement** exact groups; page clamp `0..max(0,count-12)`;
+- [x] **Step 2: Implement** exact groups; page clamp `0..max(0,count-12)`;
   filter change resets page 0.
-- [ ] **Step 3: Run + commit** `feat(game): add inventory filter/page view`.
+- [x] **Step 3: Run + commit** `feat(game): add inventory filter/page view`.
 
 ---
 
@@ -143,15 +143,15 @@ class InventoryOverlay {
 };
 ```
 
-- [ ] **Step 1: Failing render/hit tests**
+- [x] **Step 1: Failing render/hit tests**
   - background 1024×768 letterboxed into 800×600 → scale 0.5859, offset y=0;
   - click slot 0 at logical `(140,703)` selects item; right panel shows name;
   - filter click object9 sets mask 1; scroll next page; exit closes.
-- [ ] **Step 2: Implement** load `inventory_secondary`/`inventory_skills`,
+- [x] **Step 2: Implement** load `inventory_secondary`/`inventory_skills`,
   filters/exit/scroll/drop textures; draw bottom strip slots/icons, hot slots,
   puppet slots, filters, right panel (D-045); native-size icons centered; stack
   count `>1` bottom-right font; skills tab disabled.
-- [ ] **Step 3: Run + commit** `feat(app): add read-only inventory overlay`.
+- [x] **Step 3: Run + commit** `feat(app): add read-only inventory overlay`.
 
 ---
 
@@ -166,21 +166,21 @@ class InventoryOverlay {
   overlay owns textures and view state.
 - Add `--inventory` / key `I` toggle; touch button hook later.
 
-- [ ] **Step 1: Failing screenshot test** run `--equip-save 0 --inventory --screenshot`;
+- [x] **Step 1: Failing screenshot test** run `--equip-save 0 --inventory --screenshot`;
   assert non-empty, slot0 name visible; `--inventory` with invalid save → empty overlay.
-- [ ] **Step 2: Implement** load inventory from selected save (same path as P5a),
+- [x] **Step 2: Implement** load inventory from selected save (same path as P5a),
   open overlay, route mouse/key, pause level input while overlay active.
-- [ ] **Step 3: Run + commit** `feat(glgame): open inventory from selected save`.
+- [x] **Step 3: Run + commit** `feat(glgame): open inventory from selected save`.
 
 ---
 
 ### Task 6: docs, full ctest, manual gate
 
-- [ ] **Step 1: Update STATUS/PROJECT/DECISIONS** with implementation, tests, D-045.
-- [ ] **Step 2: Full ctest** with `GL_GAME_DIR`; record count/time.
+- [x] **Step 1: Update STATUS/PROJECT/DECISIONS** with implementation, tests, D-045.
+- [x] **Step 2: Full ctest** with `GL_GAME_DIR`; record count/time.
 - [ ] **Step 3: Manual gate** — user compares overlay with original UI resources
   (inventory_secondary/skills) and slot0/slot2 contents; agent does not claim pass.
-- [ ] **Step 4: Commit docs.**
+- [x] **Step 4: Commit docs.**
 
 ## Self-review notes
 
