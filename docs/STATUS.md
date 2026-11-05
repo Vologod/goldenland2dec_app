@@ -8,7 +8,8 @@
 - **P5b1 реализован:** read-only inventory UI (Tasks 1–5); полный
   `ctest` — **18/18 passed**, 928.30 s, exit 0; **manual gate OPEN**.
 - **Проверка P5b1 (final-fix):** `inventory_overlay_tests` 18/18
-  (523 assertions), `glgame_screenshot_tests` 25 cases, `font_tests` 9/9,
+  (526 assertions, финальный перезапуск после AC_BACK-assertion),
+  `glgame_screenshot_tests` 25 cases, `font_tests` 9/9,
   `gl_assets_real_tests` passed, `gl_assets_tests` passed; targeted `ctest`
   с `GL_GAME_DIR` — 5/5, 876.64 s. Предыдущий полный прогон — 18/18,
   928.30 s (до final-fix правок).
@@ -44,8 +45,9 @@
   `bad_alloc`; unit fallback `ItemCatalog` на пустом VFS.
 - **Проверка:** targeted `ctest -R
   "inventory_overlay_tests|glgame_screenshot_tests|font_tests|gl_assets_real_tests|gl_assets_tests"`
-  с `GL_GAME_DIR` — **5/5 passed**, 876.64 s. `inventory_overlay_tests`
-  18/18 (523 assertions), `glgame_screenshot_tests` 25 cases,
+  с `GL_GAME_DIR` — **5/5 passed**, 876.64 s; после последней
+  test-only правки `inventory_overlay_tests` перезапущен — 18/18
+  (526 assertions). `glgame_screenshot_tests` 25 cases,
   `font_tests` 9/9, `gl_assets_real_tests` passed (452.90 s),
   `gl_assets_tests` passed.
 - **Manual gate OPEN:** агент pass не подтверждает; см. раздел P5b1.
@@ -85,7 +87,7 @@
   icon-текстурам; фон/кнопки (`inventory_secondary`, `filter*`, `exit` и
   т.п.) не keyed; CSX сохраняют палитровую прозрачность.
 - **Проверка:** targeted `ctest` с `GL_GAME_DIR` — **5/5 passed**,
-  876.64 s. `inventory_overlay_tests` 18/18 (523 assertions; magenta-key
+  876.64 s. `inventory_overlay_tests` 18/18 (526 assertions; magenta-key
   regression на реальной иконке 318, нулевые magenta-пиксели в слотах,
   active A/B, фильтр/пустой слот, panel scroll без render, active filter),
   `glgame_screenshot_tests` 25 cases (`--inventory`, `--equip-save 0`,
