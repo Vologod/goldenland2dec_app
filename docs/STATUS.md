@@ -5,18 +5,21 @@
 
 - **Принято:** P4d (shadow draw-origin), A8 (cell masks: строка
   `person_y/18` + клетки кадра с тем же mask id), P5a (save → outfit).
-- **P5b1 реализован:** read-only inventory UI (Tasks 1–5); финальный
-  полный `ctest` после всех fix waves — **18/18 passed**, 1278.27 s,
-  exit 0; **manual gate OPEN**.
+- **P5b1 принят 2026-11-05:** read-only inventory UI (Tasks 1–5);
+  финальный полный `ctest` после всех fix waves — **18/18 passed**,
+  1278.27 s, exit 0; **manual gate PASSED** с одним отложенным
+  пунктом (paper-doll overlays → P5b2).
 - **Проверка P5b1 (final-fix + re-review):** `inventory_overlay_tests`
   19/19 (537 assertions), `glgame_screenshot_tests` 25 cases,
   `font_tests` 9/9, `gl_assets_real_tests` passed, `gl_assets_tests` passed;
   B-only puppet fix `7f13d89`; полный прогон — 18/18, 1278.27 s.
 - **P5a-pending:** set A/B switching, parser deferrals (32 MiB, first
   `BT_HERO`, BOM).
-- **P5b1 manual gate:** пользователь сравнивает overlay с
-  `inventory_secondary` и slot0/slot2; вкладка `inventory_skills` в P5b1
-  disabled и не рендерится; агент pass не подтверждает.
+- **P5b2 backlog:** inventory paper-doll overlays (ITM `puppet_name` +
+  layer masks) на фигуре; отдельный spec/plan.
+- **P5b1 manual gate PASSED:** overlay проверен на slot0/slot2;
+  вкладка `inventory_skills` в P5b1 disabled. Отложено в P5b2:
+  **paper-doll overlays** поверх фигуры (ITM `puppet_name` + layer masks).
 - **Не запушено:** коммиты только локально.
 
 ## P5b1 final review fixes (2026-11-05)
@@ -58,7 +61,7 @@
 - **Manual gate OPEN:** агент pass не подтверждает; см. раздел P5b1.
 - **Commits:** `8f5259d` (fix+tests), docs-коммит этой записи.
 
-## P5b1 — read-only inventory UI (implemented 2026-11-05; manual gate OPEN)
+## P5b1 — read-only inventory UI (accepted 2026-11-05)
 
 - **Задача:** показать read-only инвентарь выбранного save в оригинальном
   UI 1024×768: нижняя полоса (container 1), hot slots (container 0),
@@ -103,12 +106,9 @@
   Финальный полный прогон после всех fix waves — 18/18, 1278.27 s.
 - **Commits:** `5e9156f`, `827e357`, `ee9610a`, `d7d854a`, `e813f4d`,
   `4c44324`, `0b9347a`, `f2c4d2c`, `8f5259d`, `7f13d89` (+ docs commits).
-- **Manual gate OPEN:** пользователь запускает
-  `glgame --game-dir "I:\Games\Златогорье-2" --level l1_1 --equip-save 0
-  --inventory` (и `--equip-save 2`) и сравнивает фон/слоты/иконки/
-  фильтры/правую панель с оригиналом. Вкладка `inventory_skills` в P5b1
-  disabled (`--no-font` использует bundled game TTF для панели). Агент
-  manual pass не подтверждает.
+- **Manual gate PASSED 2026-11-05:** overlay проверен на slot0/slot2.
+  Paper-doll overlays поверх фигуры (ITM `puppet_name` + layer masks)
+  отложены в отдельную задачу **P5b2**.
 - **Не входит:** use/drop/equip и изменение save; skills/parameters
   (P5c); оригинальный tooltip (заменён D-045); overlay — снимок
   inventory на момент открытия; on-screen touch inventory button (P1b).
