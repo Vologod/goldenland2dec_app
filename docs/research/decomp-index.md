@@ -15,6 +15,16 @@ C++20. Это **не** matching-decompilation: псевдокод не соби�
   - `meta.txt` — SHA-256, версии, счётчики
 - Размер `decompiled.c`: ~2.47 МБ; `functions.csv`: ~31 КБ.
 
+## Server.dll — native handlers
+
+- Регистрация нативов: `FUN_14042464` (RVA `0x42464`), 65 вызовов
+  `FUN_14004d00(registry, id, handler)`.
+- Вызов по ID: `FUN_14039888` (RVA `0x39888`) → `FUN_14004f14`.
+- Корпус (gitignored): `.local/decomp/server/natives/`
+  - `natives.csv` — `id,rva,name,created` (65 строк + заголовок)
+  - `natives.c` — псевдокод каждого handler'а с ID/RVA/именем
+- Экспорт 2026-11-05: `done natives=65 created=33 ok=65 failed=0`.
+
 ## Воспроизведение
 
 ```powershell
@@ -27,6 +37,19 @@ New-Item -ItemType Directory -Force -Path $proj | Out-Null
   -postScript ExportDecomp.java "I:\goldenland2dec\.local\decomp\server"
 ```
 
+Native handlers выгружаются вторым проходом по тому же проекту:
+
+```powershell
+& "$PWD\.local\toolchains\ghidra_12.1.4_PUBLIC\support\analyzeHeadless.bat" `
+  $proj glserver -process Server.dll -noanalysis `
+  -scriptPath "$PWD\tools\ghidra" `
+  -postScript ExportNativeHandlers.java "$env:TEMP\native_handlers.csv" `
+  "$PWD\.local\decomp\server\natives"
+```
+
+`native_handlers.csv` строится из блока `FUN_14042464`: пары
+`FUN_14005e78(..., s_NAME_..., 0xID)` и `FUN_14004d00(..., 0xID, handler)`.
+
 Каталог проекта Ghidra должен существовать заранее (`New-Item`), иначе
 `analyzeHeadless` падает с `Directory not found`.
 
@@ -37,4 +60,5 @@ New-Item -ItemType Directory -Force -Path $proj | Out-Null
 - В корпусе нет `Client.dll` и `GoldenLand.exe`; они выгружаются в следующих
   фазах по той же команде (заменить путь и имя проекта).
 - Корпус не коммитится (`.local/` в `.gitignore`); в репозиторий попадают
-  только этот индекс и `tools/ghidra/ExportDecomp.java`.
+  только этот индекс, `tools/ghidra/ExportDecomp.java` и
+  `tools/ghidra/ExportNativeHandlers.java`.
