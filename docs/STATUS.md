@@ -1,6 +1,32 @@
 # STATUS
 
 Обновлено: 2026-11-05
+## Phase 1a — Server.dll VM parity & native dispatch (in progress)
+
+- **Задача:** снять `P3-4`–`P3-9`: сверить VM-семантику с `Server.dll` и
+  ввести `NativeRegistry` (65 ID) + `GameScriptHost`; реально работают
+  только нативы на существующем состоянии, остальные — типизированные
+  `unsupported` с одной info-записью на ID.
+- **Spec:** `docs/specs/2026-11-05-p3-vm-natives-design.md`.
+- **Plan:** `docs/plans/2026-11-05-p3-vm-natives.md`.
+- **Task 1 done 2026-11-05:** `tools/ghidra/ExportNativeHandlers.java`;
+  экспорт всех 65 handler'ов — `done natives=65 created=33 ok=65 failed=0`;
+  корпус `.local/decomp/server/natives/{natives.csv,natives.c}`;
+  `decomp-index.md` обновлён.
+- **Критерии приёмки:** research 65/65 `ID → RVA handler` + семантика VM;
+  реестр 65/65, имена совпадают с `cs_function_name`; каждое изменение VM
+  имеет evidence и тест; `glgame`/`glscript` на `GameScriptHost`;
+  targeted + полный `ctest` с `GL_GAME_DIR` pass; `STATUS`/`PROJECT`/
+  `parity-matrix` обновлены.
+- **Команды проверки:**
+  ```powershell
+  cmake --build build
+  ctest --test-dir build --output-on-failure -R "gl_script_tests|gl_game_tests|glgame_screenshot_tests|glscript_tests"
+  ctest --test-dir build --output-on-failure
+  ```
+  с `$env:GL_GAME_DIR="I:\Games\Златогорье-2"`.
+- **Статус:** spec approved 2026-11-05; implementation plan pending.
+
 ## Состояние на 2026-11-05 (handoff)
 
 - **Принято:** P4d (shadow draw-origin), A8 (cell masks: строка
