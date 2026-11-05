@@ -24,6 +24,7 @@ constexpr std::size_t kItemTypeOffset = 0x08;
 constexpr std::size_t kItemFlagsOffset = 0x0C;
 constexpr std::size_t kItemStyleOffset = 0x20;
 constexpr std::size_t kItemIdOffset = 0xA8;
+constexpr std::size_t kItemCountOffset = 0xB0;
 constexpr std::size_t kItemSubcountOffset = 0xC0;
 constexpr std::uint32_t kAbsentContainer = 0xFFFFFFFFu;
 constexpr std::array<std::uint8_t, 8> kHeroTag = {'B', 'T', '_', 'H', 'E', 'R', 'O', ' '};
@@ -76,7 +77,7 @@ Result<std::vector<std::uint8_t>> decode_save_body(std::span<const std::uint8_t>
     }
 }
 
-Result<HeroEquipment> parse_hero_equipment(std::span<const std::uint8_t> body) {
+Result<HeroInventory> parse_hero_inventory(std::span<const std::uint8_t> body) {
     try {
         if (body.size() < kHeroFixedPrefix)
             return format_error("BT_HERO body is shorter than its fixed prefix");
@@ -85,7 +86,7 @@ Result<HeroEquipment> parse_hero_equipment(std::span<const std::uint8_t> body) {
         if (!reader.skip(kHeroFixedPrefix))
             return format_error("truncated BT_HERO fixed prefix");
 
-        HeroEquipment equipment;
+        HeroInventory inventory;
         for (int container = 0; container < 3; ++container) {
             std::uint32_t id = 0;
             if (!reader.read_u32le(id))
@@ -96,6 +97,12 @@ Result<HeroEquipment> parse_hero_equipment(std::span<const std::uint8_t> body) {
             std::uint32_t count = 0;
             if (!reader.read_u32le(count))
                 return format_error("truncated BT_HERO container count");
+
+            std::vector<InventoryItem> *target = &inventory.hot;
+            if (container == 1)
+                target = &inventory.items;
+            else if (container == 2)
+                target = &inventory.equipped;
 
             for (std::uint32_t index = 0; index < count; ++index) {
                 const auto remaining = reader.remaining();
@@ -110,22 +117,33 @@ Result<HeroEquipment> parse_hero_equipment(std::span<const std::uint8_t> body) {
                     return format_error("truncated BT_HERO item subrecords");
                 const std::size_t record_size = static_cast<std::size_t>(record_size64);
 
-                if (container == 2) {
-                    EquippedItem item;
-                    item.item_id = read_u32(remaining, kItemIdOffset);
-                    item.type = read_u32(remaining, kItemTypeOffset);
-                    item.flags = read_u32(remaining, kItemFlagsOffset);
-                    item.style = read_u32(remaining, kItemStyleOffset);
-                    equipment.items.push_back(item);
-                }
+                InventoryItem item;
+                item.item_id = read_u32(remaining, kItemIdOffset);
+                item.type = read_u32(remaining, kItemTypeOffset);
+                item.flags = read_u32(remaining, kItemFlagsOffset);
+                item.style = read_u32(remaining, kItemStyleOffset);
+                item.count = container == 2 ? 1u : read_u32(remaining, kItemCountOffset);
+                target->push_back(item);
 
                 if (!reader.skip(record_size))
                     return format_error("truncated BT_HERO item record");
             }
         }
-        return equipment;
+        return inventory;
     } catch (const std::bad_alloc &) {
-        return format_error("BT_HERO equipment allocation failed");
+        return format_error("BT_HERO inventory allocation failed");
     }
+}
+
+Result<HeroEquipment> parse_hero_equipment(std::span<const std::uint8_t> body) {
+    auto inventory = parse_hero_inventory(body);
+    if (!inventory.has_value())
+        return inventory.error();
+
+    HeroEquipment equipment;
+    equipment.items.reserve(inventory->equipped.size());
+    for (const auto &item : inventory->equipped)
+        equipment.items.push_back(EquippedItem{item.item_id, item.type, item.flags, item.style});
+    return equipment;
 }
 } // namespace gl::assets

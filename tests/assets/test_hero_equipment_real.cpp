@@ -60,6 +60,59 @@ TEST_CASE("real save equipped layout slot0/slot2" * doctest::skip(!game_dir_avai
     }
 }
 
+TEST_CASE("real save inventory container counts" * doctest::skip(!game_dir_available())) {
+    struct Expected {
+        int slot;
+        std::size_t hot;
+        std::size_t items;
+        std::size_t equipped;
+    };
+    const Expected slots[] = {{0, 8, 117, 11}, {2, 9, 140, 11}};
+
+    for (const auto &expected : slots) {
+        auto body = gl::assets::decode_save_body(read_save(expected.slot));
+        REQUIRE(body.has_value());
+        auto inventory = gl::assets::parse_hero_inventory(body.value());
+        REQUIRE(inventory.has_value());
+        CHECK(inventory->hot.size() == expected.hot);
+        CHECK(inventory->items.size() == expected.items);
+        CHECK(inventory->equipped.size() == expected.equipped);
+    }
+}
+
+TEST_CASE("real save inventory hot slots match research" * doctest::skip(!game_dir_available())) {
+    const std::pair<int, std::vector<std::uint32_t>> slots[] = {
+        {0, {1554, 1554, 1521, 953, 1575, 1579, 953, 953}},
+        {2, {953, 953, 1532, 1532, 953, 1575, 953, 953, 953}},
+    };
+
+    for (const auto &[slot, expected] : slots) {
+        auto body = gl::assets::decode_save_body(read_save(slot));
+        REQUIRE(body.has_value());
+        auto inventory = gl::assets::parse_hero_inventory(body.value());
+        REQUIRE(inventory.has_value());
+        REQUIRE(inventory->hot.size() == expected.size());
+        std::vector<std::uint32_t> ids;
+        ids.reserve(inventory->hot.size());
+        for (const auto &item : inventory->hot) {
+            ids.push_back(item.item_id);
+            CHECK(item.count >= 1);
+        }
+        CHECK(ids == expected);
+    }
+}
+
+TEST_CASE("real save equipped items are not stacked" * doctest::skip(!game_dir_available())) {
+    for (int slot : {0, 2}) {
+        auto body = gl::assets::decode_save_body(read_save(slot));
+        REQUIRE(body.has_value());
+        auto inventory = gl::assets::parse_hero_inventory(body.value());
+        REQUIRE(inventory.has_value());
+        for (const auto &item : inventory->equipped)
+            CHECK(item.count == 1);
+    }
+}
+
 TEST_CASE("real save equipped fields match research" * doctest::skip(!game_dir_available())) {
     const std::pair<int, std::uint32_t> armor[] = {{0, 318}, {2, 317}};
     const std::pair<int, std::uint32_t> elbarms[] = {{0, 397}, {2, 396}};

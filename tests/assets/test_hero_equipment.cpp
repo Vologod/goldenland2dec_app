@@ -28,12 +28,13 @@ void add_u32(Bytes &bytes, std::uint32_t value) {
 }
 
 Bytes make_record(std::uint32_t item_id, std::uint32_t type, std::uint32_t flags,
-                  std::uint32_t style, std::uint32_t subcount) {
+                  std::uint32_t style, std::uint32_t subcount, std::uint32_t count = 1) {
     Bytes record(kRecordFixed + subcount * 0x14, 0);
     put_u32(record, 0x08, type);
     put_u32(record, 0x0C, flags);
     put_u32(record, 0x20, style);
     put_u32(record, 0xA8, item_id);
+    put_u32(record, 0xB0, count);
     put_u32(record, 0xC0, subcount);
     return record;
 }
@@ -176,6 +177,66 @@ TEST_CASE("parse_hero_equipment rejects truncated subrecords") {
     auto parsed = parse_hero_equipment(body);
     REQUIRE_FALSE(parsed.has_value());
     CHECK(parsed.error().code == gl::ErrorCode::format);
+}
+
+TEST_CASE("parse_hero_inventory reads all three BT_HERO containers") {
+    const Bytes body = make_body({make_record(1554, 22, 0x00001008, 4, 0, 2)},
+                                 {make_record(318, 12, 0x100000, 13, 1, 5)},
+                                 {make_record(72, 15, 0x040000, 11, 0, 7)});
+
+    auto inventory = parse_hero_inventory(body);
+    REQUIRE(inventory.has_value());
+    REQUIRE(inventory->hot.size() == 1);
+    REQUIRE(inventory->items.size() == 1);
+    REQUIRE(inventory->equipped.size() == 1);
+
+    CHECK(inventory->hot[0].item_id == 1554);
+    CHECK(inventory->hot[0].type == 22);
+    CHECK(inventory->hot[0].flags == 0x00001008);
+    CHECK(inventory->hot[0].style == 4);
+    CHECK(inventory->hot[0].count == 2);
+
+    CHECK(inventory->items[0].item_id == 318);
+    CHECK(inventory->items[0].type == 12);
+    CHECK(inventory->items[0].flags == 0x100000);
+    CHECK(inventory->items[0].style == 13);
+    CHECK(inventory->items[0].count == 5);
+
+    CHECK(inventory->equipped[0].item_id == 72);
+    CHECK(inventory->equipped[0].type == 15);
+    CHECK(inventory->equipped[0].flags == 0x040000);
+    CHECK(inventory->equipped[0].style == 11);
+    CHECK(inventory->equipped[0].count == 1);
+}
+
+TEST_CASE("parse_hero_inventory leaves an absent container empty") {
+    Bytes body(kFixedPrefix, 0);
+    append_container(body, kAbsent, {});
+    append_container(body, 1, {make_record(486, 1, 0x00001025, 3, 0, 9)});
+    append_container(body, kAbsent, {});
+
+    auto inventory = parse_hero_inventory(body);
+    REQUIRE(inventory.has_value());
+    CHECK(inventory->hot.empty());
+    REQUIRE(inventory->items.size() == 1);
+    CHECK(inventory->items[0].item_id == 486);
+    CHECK(inventory->items[0].count == 9);
+    CHECK(inventory->equipped.empty());
+}
+
+TEST_CASE("parse_hero_inventory rejects truncated item subrecords") {
+    Bytes body(kFixedPrefix, 0);
+    append_container(body, 1, {});
+    append_container(body, 1, {});
+    add_u32(body, 1);
+    add_u32(body, 1);
+    Bytes record = make_record(318, 12, 0x100000, 13, 3);
+    record.resize(record.size() - 1);
+    body.insert(body.end(), record.begin(), record.end());
+
+    auto inventory = parse_hero_inventory(body);
+    REQUIRE_FALSE(inventory.has_value());
+    CHECK(inventory.error().code == gl::ErrorCode::format);
 }
 
 TEST_CASE("decode_save_body inflates zlib and returns the BT_HERO body") {
