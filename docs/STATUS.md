@@ -5,13 +5,13 @@
 
 - **Принято:** P4d (shadow draw-origin), A8 (cell masks: строка
   `person_y/18` + клетки кадра с тем же mask id), P5a (save → outfit).
-- **P5b1 реализован:** read-only inventory UI (Tasks 1–5); полный
-  `ctest` — **18/18 passed**, 928.30 s, exit 0; **manual gate OPEN**.
+- **P5b1 реализован:** read-only inventory UI (Tasks 1–5); финальный
+  полный `ctest` после всех fix waves — **18/18 passed**, 1278.27 s,
+  exit 0; **manual gate OPEN**.
 - **Проверка P5b1 (final-fix + re-review):** `inventory_overlay_tests`
   19/19 (537 assertions), `glgame_screenshot_tests` 25 cases,
   `font_tests` 9/9, `gl_assets_real_tests` passed, `gl_assets_tests` passed;
-  re-review targeted `ctest` с `GL_GAME_DIR` — 2/2, 395.37 s (предыдущий
-  final-fix прогон — 5/5, 876.64 s; полный — 18/18, 928.30 s до правок).
+  B-only puppet fix `7f13d89`; полный прогон — 18/18, 1278.27 s.
 - **P5a-pending:** set A/B switching, parser deferrals (32 MiB, first
   `BT_HERO`, BOM).
 - **P5b1 manual gate:** пользователь сравнивает overlay с
@@ -100,9 +100,9 @@
   invalid slot, `--exec inventory`, `--inventory-select` на 1024×768/
   1280×720/600×800, `--no-font` panel), `gl_assets_real_tests` passed
   (452.90 s в этом прогоне), `font_tests` 9/9, `gl_assets_tests` passed.
-  Предыдущий полный прогон 18/18 (928.30 s) — до final-fix правок.
+  Финальный полный прогон после всех fix waves — 18/18, 1278.27 s.
 - **Commits:** `5e9156f`, `827e357`, `ee9610a`, `d7d854a`, `e813f4d`,
-  `4c44324`, `0b9347a`, `f2c4d2c`, `8f5259d` (+ docs final-fix commit).
+  `4c44324`, `0b9347a`, `f2c4d2c`, `8f5259d`, `7f13d89` (+ docs commits).
 - **Manual gate OPEN:** пользователь запускает
   `glgame --game-dir "I:\Games\Златогорье-2" --level l1_1 --equip-save 0
   --inventory` (и `--equip-save 2`) и сравнивает фон/слоты/иконки/
