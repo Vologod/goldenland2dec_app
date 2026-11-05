@@ -144,7 +144,7 @@ class InventoryOverlay {
 ```
 
 - [x] **Step 1: Failing render/hit tests**
-  - background 1024×768 letterboxed into 800×600 → scale 0.5859, offset y=0;
+  - background 1024×768 letterboxed into 800×600 → scale 0.78125, offset 0;
   - click slot 0 at logical `(140,703)` selects item; right panel shows name;
   - filter click object9 sets mask 1; scroll next page; exit closes.
 - [x] **Step 2: Implement** load `inventory_secondary`/`inventory_skills`,

@@ -168,12 +168,21 @@ View-логика (фильтр, страницы, выбор) без SDL, те�
 ## 7. Input и Android
 
 - Desktop: `I` toggle, Esc/exit close, mouse click/scroll; фильтры click.
-- Touch: tap = click; drag по сетке = scroll; on-screen inventory button
-  (заглушка до P1b); Android back = close.
+- Touch (реализовано в `glgame`): `SDL_FINGERDOWN`+`FINGERUP` = tap/click;
+  вертикальный `SDL_FINGERMOTION` (шаг 24 px) = scroll: над панелью —
+  panel scroll, над сеткой — page scroll; синтезированные touch-mouse
+  события в overlay игнорируются, чтобы не было двойного клика.
+  On-screen inventory button — заглушка до P1b.
+- Android back: `SDLK_AC_BACK` обрабатывается как Esc (закрывает overlay,
+  диалог/слоты или возвращает из уровня в меню).
 - Hit-тесты по per-slot логическим rect (55×55 / 27×27), не по
   puppet-контейнеру и не с clip по object 2; минимальный touch-таргет
   не уменьшать ниже оригинального (letterbox только масштабирует).
 - Никакого hover-зависимого поведения: выбор сразу показывает панель.
+- Пустой выбор показывает в панели `(пусто)`; пустые имя/описание
+  предмета также заменяются на `(пусто)` (port-поведение D-045).
+- Puppet рисует active set A; B-слот пары скрывается при наличии A
+  (D-046). Hit-test и выбор идут только по отрисованным слотам.
 
 ## 8. Research gate (до реализации)
 

@@ -7,16 +7,49 @@
   `person_y/18` + клетки кадра с тем же mask id), P5a (save → outfit).
 - **P5b1 реализован:** read-only inventory UI (Tasks 1–5); полный
   `ctest` — **18/18 passed**, 928.30 s, exit 0; **manual gate OPEN**.
-- **Проверка P5b1:** `inventory_overlay_tests` 12/12 (455 assertions),
-  `glgame_screenshot_tests` 23/23, `gl_assets_real_tests` 28/28,
-  `gl_game_tests` 118/118, `level_click_tests` 23/23; полный `ctest` с
-  `GL_GAME_DIR` — 18/18, 928.30 s.
+- **Проверка P5b1 (final-fix):** `inventory_overlay_tests` 18/18
+  (523 assertions), `glgame_screenshot_tests` 25 cases, `font_tests` 9/9,
+  `gl_assets_real_tests` passed, `gl_assets_tests` passed; targeted `ctest`
+  с `GL_GAME_DIR` — 5/5, 876.64 s. Предыдущий полный прогон — 18/18,
+  928.30 s (до final-fix правок).
 - **P5a-pending:** set A/B switching, parser deferrals (32 MiB, first
   `BT_HERO`, BOM).
 - **P5b1 manual gate:** пользователь сравнивает overlay с
-  `inventory_secondary`/`inventory_skills` и slot0/slot2; агент pass не
-  подтверждает.
+  `inventory_secondary` и slot0/slot2; вкладка `inventory_skills` в P5b1
+  disabled и не рендерится; агент pass не подтверждает.
 - **Не запушено:** коммиты только локально.
+
+## P5b1 final review fixes (2026-11-05)
+
+- **Android/no-font panel:** добавлен `gl::render::Font::load_from_memory`;
+  `glgame` при отсутствии системного шрифта (Android) или `--no-font`
+  читает VFS `engineres/fonts/ttf/arial.ttf` в отдельный `inventory_font_`.
+  `--no-font` по-прежнему даёт ASCII для меню/диалогов/уровня, но правая
+  панель инвентаря получает TTF (D-047).
+- **Puppet A/B overlap:** D-046 — показывается active set A (как P5a);
+  B-слот пары (`weapon 0x002000`, `shield 0x800000`) скрывается при наличии
+  A и учитывается в hit-test только когда A нет. Real slot0: клик в
+  перекрытие `(30,480)` выбирает A=486 (топор), а не невидимый B=554.
+- **E2E selected panel:** `glgame --inventory-select <n>`; screenshot-тесты
+  сравнивают пустую панель и выбранные слоты 0/1 на 1024×768, 1280×720 и
+  600×800 (портрет), плюс `--no-font` panel-тест.
+- **Android input:** `SDL_FINGERDOWN/UP` = tap, вертикальный
+  `SDL_FINGERMOTION` (шаг 24 px) = page/panel scroll; синтезированные
+  touch-mouse события в overlay игнорируются; `SDLK_AC_BACK` = Esc.
+- **Minor:** selection очищается при фильтре, скрывшем предмет, и при клике
+  в пустой hot/puppet; панель показывает `(пусто)` для пустого выбора/строк;
+  stack count — маленький bitmap-шрифт с fit/clamp; активный фильтр имеет
+  pressed-подсветку; panel scroll не требует предварительного render
+  (`set_font` + `ensure_panel_scroll_max`); `parse_hero_equipment` ловит
+  `bad_alloc`; unit fallback `ItemCatalog` на пустом VFS.
+- **Проверка:** targeted `ctest -R
+  "inventory_overlay_tests|glgame_screenshot_tests|font_tests|gl_assets_real_tests|gl_assets_tests"`
+  с `GL_GAME_DIR` — **5/5 passed**, 876.64 s. `inventory_overlay_tests`
+  18/18 (523 assertions), `glgame_screenshot_tests` 25 cases,
+  `font_tests` 9/9, `gl_assets_real_tests` passed (452.90 s),
+  `gl_assets_tests` passed.
+- **Manual gate OPEN:** агент pass не подтверждает; см. раздел P5b1.
+- **Commits:** `8f5259d` (fix+tests), docs-коммит этой записи.
 
 ## P5b1 — read-only inventory UI (implemented 2026-11-05; manual gate OPEN)
 
@@ -51,22 +84,26 @@
   переводятся в `alpha=0` перед upload. Keying применяется только к
   icon-текстурам; фон/кнопки (`inventory_secondary`, `filter*`, `exit` и
   т.п.) не keyed; CSX сохраняют палитровую прозрачность.
-- **Проверка:** полный `ctest` с `GL_GAME_DIR` — **18/18 passed**,
-  928.30 s, exit 0. `inventory_overlay_tests` 12/12 (455 assertions;
-  включая magenta-key regression на реальной иконке 318 и нулевые
-  magenta-пиксели в слотах), `glgame_screenshot_tests` 23/23 (580
-  assertions; `--inventory`, `--equip-save 0`, invalid slot, `--exec
-  inventory`), `gl_assets_real_tests` 28/28, `gl_game_tests` 118/118,
-  `level_click_tests` 23/23.
+- **Проверка:** targeted `ctest` с `GL_GAME_DIR` — **5/5 passed**,
+  876.64 s. `inventory_overlay_tests` 18/18 (523 assertions; magenta-key
+  regression на реальной иконке 318, нулевые magenta-пиксели в слотах,
+  active A/B, фильтр/пустой слот, panel scroll без render, active filter),
+  `glgame_screenshot_tests` 25 cases (`--inventory`, `--equip-save 0`,
+  invalid slot, `--exec inventory`, `--inventory-select` на 1024×768/
+  1280×720/600×800, `--no-font` panel), `gl_assets_real_tests` passed
+  (452.90 s в этом прогоне), `font_tests` 9/9, `gl_assets_tests` passed.
+  Предыдущий полный прогон 18/18 (928.30 s) — до final-fix правок.
 - **Commits:** `5e9156f`, `827e357`, `ee9610a`, `d7d854a`, `e813f4d`,
-  `4c44324`, `0b9347a`.
+  `4c44324`, `0b9347a`, `f2c4d2c`, `8f5259d` (+ docs final-fix commit).
 - **Manual gate OPEN:** пользователь запускает
   `glgame --game-dir "I:\Games\Златогорье-2" --level l1_1 --equip-save 0
   --inventory` (и `--equip-save 2`) и сравнивает фон/слоты/иконки/
-  фильтры/правую панель с оригиналом. Агент manual pass не подтверждает.
+  фильтры/правую панель с оригиналом. Вкладка `inventory_skills` в P5b1
+  disabled (`--no-font` использует bundled game TTF для панели). Агент
+  manual pass не подтверждает.
 - **Не входит:** use/drop/equip и изменение save; skills/parameters
   (P5c); оригинальный tooltip (заменён D-045); overlay — снимок
-  inventory на момент открытия; touch-кнопка (P1b).
+  inventory на момент открытия; on-screen touch inventory button (P1b).
 - **Spec/plan/research:** `docs/specs/2026-11-04-p5b1-inventory-ui-design.md`,
   `docs/plans/2026-11-04-p5b1-inventory-ui-implementation.md`,
   `docs/research/p5b1-inventory-ui.md`.
