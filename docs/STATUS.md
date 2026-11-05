@@ -7,9 +7,10 @@
   `person_y/18` + клетки кадра с тем же mask id), P5a (save → outfit).
 - **Проверка:** финальный полный `ctest` — 17/17, 1016.00 s; P5a manual
   visual gate PASSED (slot0/slot2).
-- **Следующая задача:** P5b inventory UI (сетка/выбор/use/drop); нужен
-  новый spec/plan. P5a-pending: set A/B switching, P5a parser deferrals
-  (32 MiB, first `BT_HERO`, BOM).
+- **Следующая задача:** P5b1 read-only inventory UI (3 контейнера
+  `BT_HERO`, оригинальный фон, фильтры/скролл/правая панель); spec
+  `docs/specs/2026-11-04-p5b1-inventory-ui-design.md`, research gate →
+  plan. P5a-pending: set A/B switching, parser deferrals.
 - **Не запушено:** коммиты только локально.
 
 ## P5a — save → hero outfit (accepted 2026-11-04)
