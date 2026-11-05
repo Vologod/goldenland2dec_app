@@ -3,8 +3,10 @@
 
 #include <doctest/doctest.h>
 
+#include <chrono>
 #include <cstdint>
 #include <cstdlib>
+#include <filesystem>
 #include <string>
 
 using namespace gl::assets;
@@ -12,6 +14,27 @@ using namespace gl::assets;
 namespace {
 bool game_dir_available() { return std::getenv("GL_GAME_DIR") != nullptr; }
 } // namespace
+
+TEST_CASE("item catalog falls back on an empty virtual filesystem") {
+    const auto stamp = std::chrono::steady_clock::now().time_since_epoch().count();
+    const std::filesystem::path dir =
+        std::filesystem::temp_directory_path() / ("gl_item_catalog_" + std::to_string(stamp));
+    std::filesystem::create_directories(dir);
+    auto vfs = GameVfs::mount(dir);
+    REQUIRE(vfs.has_value());
+    auto catalog = ItemCatalog::load(vfs.value());
+    REQUIRE(catalog.has_value());
+
+    const ItemCatalogEntry *missing = catalog->find(424242);
+    REQUIRE(missing != nullptr);
+    CHECK(missing->name == "item 424242");
+    CHECK(missing->description.empty());
+    CHECK(missing->icon_path == "engineres/interface/bag");
+    CHECK(catalog->find(424242) == missing);
+
+    std::error_code ignored;
+    std::filesystem::remove_all(dir, ignored);
+}
 
 TEST_CASE("real item catalog resolves equipment names, stats and icons" *
           doctest::skip(!game_dir_available())) {

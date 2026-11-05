@@ -55,9 +55,51 @@ constexpr float kFilterHeight = 23.0f;
 
 constexpr std::string_view kBackground = "engineres/newinv/inventory_secondary.bmp";
 constexpr std::string_view kFallbackIcon = "engineres/interface/bag.csx";
+constexpr std::string_view kEmptyText = "(пусто)";
+constexpr std::uint32_t kWeaponAMask = 0x001000u;
+constexpr std::uint32_t kWeaponBMask = 0x002000u;
+constexpr std::uint32_t kShieldAMask = 0x400000u;
+constexpr std::uint32_t kShieldBMask = 0x800000u;
 constexpr float kPanelNameLine = 18.0f;
 constexpr float kPanelStatLine = 18.0f;
 constexpr float kPanelDescLine = 16.0f;
+
+const gl::assets::InventoryItem *find_equipped(const gl::assets::HeroInventory &inventory,
+                                               std::uint32_t mask) {
+    for (const gl::assets::InventoryItem &candidate : inventory.equipped) {
+        if ((candidate.flags & 0x00FFF000u) == mask)
+            return &candidate;
+    }
+    return nullptr;
+}
+
+bool puppet_slot_visible(const gl::assets::HeroInventory &inventory, const PuppetSpec &slot) {
+    if (slot.mask == kWeaponBMask)
+        return find_equipped(inventory, kWeaponAMask) == nullptr;
+    if (slot.mask == kShieldBMask)
+        return find_equipped(inventory, kShieldAMask) == nullptr;
+    return true;
+}
+
+void draw_stack_count(SDL_Renderer *renderer, std::uint32_t count, float x, float y, float w,
+                      float h) {
+    if (count <= 1)
+        return;
+    const std::string text = std::to_string(count);
+    float scale = w >= 55.0f ? 1.5f : 1.0f;
+    const float max_width = w - 4.0f;
+    const float max_height = h - 4.0f;
+    const float natural_width = gl::render::text_width(text, scale);
+    if (natural_width > max_width && natural_width > 0.0f)
+        scale *= max_width / natural_width;
+    const float natural_height = gl::render::text_height(scale);
+    if (natural_height > max_height && natural_height > 0.0f)
+        scale *= max_height / natural_height;
+    const float width = gl::render::text_width(text, scale);
+    const float height = gl::render::text_height(scale);
+    gl::render::draw_text(renderer, text, x + w - 2.0f - width, y + h - 2.0f - height, scale,
+                          gl::render::Color{255, 255, 255, 255});
+}
 
 bool contains(float rx, float ry, float rw, float rh, float x, float y) {
     return x >= rx && y >= ry && x < rx + rw && y < ry + rh;
@@ -116,7 +158,10 @@ PanelLines build_panel_lines(const gl::assets::ItemCatalogEntry &entry,
     constexpr float kDescLine = 16.0f;
 
     PanelLines lines;
-    lines.name = font.wrap(entry.name, kContentWidth);
+    const std::string_view name = entry.name.empty() ? kEmptyText : std::string_view(entry.name);
+    const std::string_view description =
+        entry.description.empty() ? kEmptyText : std::string_view(entry.description);
+    lines.name = font.wrap(name, kContentWidth);
     if (lines.name.size() > 2) {
         lines.name.resize(2);
         lines.name[1] = ellipsize(font, lines.name[1], kContentWidth);
@@ -126,7 +171,7 @@ PanelLines build_panel_lines(const gl::assets::ItemCatalogEntry &entry,
         "Price: " + std::to_string(entry.item.price),
         "Weight: " + format_weight(entry.item.weight_x10),
     };
-    lines.description = font.wrap(entry.description, kContentWidth);
+    lines.description = font.wrap(description, kContentWidth);
 
     const auto content_height = [&]() {
         return static_cast<float>(lines.name.size()) * kNameLine + 3.0f * kStatLine +
@@ -135,7 +180,7 @@ PanelLines build_panel_lines(const gl::assets::ItemCatalogEntry &entry,
     lines.content_height = content_height();
     lines.show_scroll = lines.content_height > kContentHeight;
     if (lines.show_scroll) {
-        lines.description = font.wrap(entry.description, kScrollWidth);
+        lines.description = font.wrap(description, kScrollWidth);
         lines.content_height = content_height();
     }
     return lines;
@@ -206,13 +251,55 @@ void InventoryOverlay::select(InventorySelection source, std::size_t index) {
     panel_scroll_max_ = 0;
 }
 
+void InventoryOverlay::clear_selection() {
+    selection_ = InventorySelection::none;
+    view_.selected.reset();
+    panel_scroll_ = 0;
+    panel_scroll_max_ = 0;
+}
+
+bool InventoryOverlay::select_visible_slot(std::size_t slot) {
+    if (!visible_)
+        return false;
+    const std::size_t index = view_.page + slot;
+    if (slot >= kBottomX.size() || index >= visible_indices_.size())
+        return false;
+    select(InventorySelection::item, visible_indices_[index]);
+    return true;
+}
+
 void InventoryOverlay::close() { visible_ = false; }
 
 void InventoryOverlay::rebuild_visible() {
     visible_indices_ = gl::game::visible_inventory(inventory_, view_.filter_mask);
     view_.page = gl::game::clamp_page(view_.page, visible_indices_.size());
-    if (view_.selected.has_value() && *view_.selected >= inventory_.items.size())
-        view_.selected.reset();
+    if (!view_.selected.has_value())
+        return;
+    const std::size_t index = *view_.selected;
+    bool valid = false;
+    switch (selection_) {
+    case InventorySelection::item:
+        valid = index < inventory_.items.size() &&
+                std::find(visible_indices_.begin(), visible_indices_.end(), index) !=
+                    visible_indices_.end();
+        break;
+    case InventorySelection::hot:
+        valid = index < inventory_.hot.size();
+        break;
+    case InventorySelection::equipped:
+        valid = index < inventory_.equipped.size();
+        break;
+    case InventorySelection::none:
+        break;
+    }
+    if (!valid)
+        clear_selection();
+}
+
+void InventoryOverlay::ensure_panel_scroll_max() {
+    if (panel_scroll_max_ != 0 || font_ == nullptr)
+        return;
+    panel_scroll_max_ = panel_max_scroll(*font_);
 }
 
 void InventoryOverlay::update_transform(int screen_w, int screen_h) {
@@ -361,8 +448,6 @@ void InventoryOverlay::draw_rect(SDL_Renderer *renderer, const gl::render::Textu
 void InventoryOverlay::draw_panel(SDL_Renderer *renderer, const gl::render::Font *font) {
     const gl::assets::ItemCatalogEntry *entry = selected_entry();
     panel_scroll_max_ = 0;
-    if (entry == nullptr)
-        return;
 
     const Rect outer{654.0f, 44.0f, 360.0f, 520.0f};
     const Rect content{664.0f, 54.0f, 340.0f, 500.0f};
@@ -375,6 +460,13 @@ void InventoryOverlay::draw_panel(SDL_Renderer *renderer, const gl::render::Font
 
     if (font == nullptr)
         return;
+
+    const gl::render::Color name_color{255, 232, 160, 255};
+    if (entry == nullptr) {
+        panel_scroll_ = 0;
+        font->draw_text(renderer, kEmptyText, content.x, content.y, name_color);
+        return;
+    }
 
     const PanelLines lines = build_panel_lines(*entry, *font);
     if (lines.content_height > content.h) {
@@ -395,7 +487,6 @@ void InventoryOverlay::draw_panel(SDL_Renderer *renderer, const gl::render::Font
     };
     SDL_RenderSetClipRect(renderer, &clip);
 
-    const gl::render::Color name_color{255, 232, 160, 255};
     const gl::render::Color stat_color{200, 205, 215, 255};
     const gl::render::Color desc_color{214, 214, 222, 255};
     float y = content.y - static_cast<float>(panel_scroll_);
@@ -460,6 +551,8 @@ void InventoryOverlay::render(SDL_Renderer *renderer, int screen_w, int screen_h
         return;
     if (texture_renderer_ != renderer)
         reset_texture_cache(renderer);
+    if (font != nullptr)
+        font_ = font;
     update_transform(screen_w, screen_h);
 
     float old_scale_x = 1.0f;
@@ -516,14 +609,8 @@ void InventoryOverlay::render(SDL_Renderer *renderer, int screen_w, int screen_h
             }
         }
 
-        if (font != nullptr && item != nullptr && item->count > 1) {
-            const std::string count = std::to_string(item->count);
-            const gl::render::Vec2 size = font->measure(count);
-            font->draw_text(renderer, count,
-                            x + 55.0f - 2.0f - size.x,
-                            y + 55.0f - 2.0f - size.y,
-                            gl::render::Color{255, 255, 255, 255});
-        }
+        if (item != nullptr)
+            draw_stack_count(renderer, item->count, x, y, 55.0f, 55.0f);
     }
 
     for (std::size_t slot = 1; slot < kHotX.size(); ++slot) {
@@ -548,24 +635,13 @@ void InventoryOverlay::render(SDL_Renderer *renderer, int screen_w, int screen_h
             const SDL_FRect fill{x, y, 27.0f, 27.0f};
             SDL_RenderFillRectF(renderer, &fill);
         }
-        if (font != nullptr && item->count > 1) {
-            const std::string count = std::to_string(item->count);
-            const gl::render::Vec2 size = font->measure(count);
-            font->draw_text(renderer, count,
-                            x + 27.0f - 2.0f - size.x,
-                            y + 27.0f - 2.0f - size.y,
-                            gl::render::Color{255, 255, 255, 255});
-        }
+        draw_stack_count(renderer, item->count, x, y, 27.0f, 27.0f);
     }
 
     for (const PuppetSpec &slot : kPuppetSlots) {
-        const gl::assets::InventoryItem *item = nullptr;
-        for (const gl::assets::InventoryItem &candidate : inventory_.equipped) {
-            if ((candidate.flags & 0x00FFF000u) == slot.mask) {
-                item = &candidate;
-                break;
-            }
-        }
+        if (!puppet_slot_visible(inventory_, slot))
+            continue;
+        const gl::assets::InventoryItem *item = find_equipped(inventory_, slot.mask);
         if (item == nullptr)
             continue;
         const gl::assets::ItemCatalogEntry *entry =
@@ -585,10 +661,16 @@ void InventoryOverlay::render(SDL_Renderer *renderer, int screen_w, int screen_h
     for (std::size_t i = 0; i < kFilters.size(); ++i) {
         const std::string path =
             "engineres/newinv/filter" + std::to_string(i + 1) + ".bmp";
-        if (gl::render::Texture *texture = load_texture(path); texture != nullptr) {
-            draw_rect(renderer, *texture,
-                      Rect{static_cast<float>(kFilters[i].x), static_cast<float>(kFilters[i].y),
-                           kFilterWidth, kFilterHeight});
+        const Rect rect{static_cast<float>(kFilters[i].x), static_cast<float>(kFilters[i].y),
+                        kFilterWidth, kFilterHeight};
+        if (gl::render::Texture *texture = load_texture(path); texture != nullptr)
+            draw_rect(renderer, *texture, rect);
+        if (view_.filter_mask == kFilters[i].mask) {
+            SDL_SetRenderDrawColor(renderer, 18, 16, 12, 110);
+            const SDL_FRect pressed{rect.x, rect.y, rect.w, rect.h};
+            SDL_RenderFillRectF(renderer, &pressed);
+            SDL_SetRenderDrawColor(renderer, 232, 201, 112, 255);
+            SDL_RenderDrawRectF(renderer, &pressed);
         }
     }
 
@@ -660,10 +742,7 @@ bool InventoryOverlay::handle_mouse(int x, int y, bool click) {
             if (index < visible_indices_.size()) {
                 select(InventorySelection::item, visible_indices_[index]);
             } else {
-                selection_ = InventorySelection::none;
-                view_.selected.reset();
-                panel_scroll_ = 0;
-                panel_scroll_max_ = 0;
+                clear_selection();
             }
             break;
         }
@@ -673,26 +752,36 @@ bool InventoryOverlay::handle_mouse(int x, int y, bool click) {
             if (!contains(static_cast<float>(kHotX[slot]), static_cast<float>(kHotY), 27.0f, 27.0f,
                           logical_x, logical_y))
                 continue;
+            bool found = false;
             for (std::size_t index = 0; index < inventory_.hot.size(); ++index) {
                 if (((inventory_.hot[index].flags & 0x0000F000u) >> 12) == slot) {
                     select(InventorySelection::hot, index);
+                    found = true;
                     break;
                 }
             }
+            if (!found)
+                clear_selection();
             break;
         }
         break;
     case InventoryRegion::puppet_slot:
         for (const PuppetSpec &puppet : kPuppetSlots) {
+            if (!puppet_slot_visible(inventory_, puppet))
+                continue;
             if (!contains(static_cast<float>(puppet.x), static_cast<float>(puppet.y), 55.0f, 55.0f,
                           logical_x, logical_y))
                 continue;
+            bool found = false;
             for (std::size_t index = 0; index < inventory_.equipped.size(); ++index) {
                 if ((inventory_.equipped[index].flags & 0x00FFF000u) == puppet.mask) {
                     select(InventorySelection::equipped, index);
+                    found = true;
                     break;
                 }
             }
+            if (!found)
+                clear_selection();
             break;
         }
         break;
@@ -706,7 +795,7 @@ bool InventoryOverlay::handle_mouse(int x, int y, bool click) {
 }
 
 bool InventoryOverlay::handle_key(SDL_Keycode key) {
-    if (key == SDLK_ESCAPE) {
+    if (key == SDLK_ESCAPE || key == SDLK_AC_BACK) {
         if (!visible_)
             return false;
         close();
@@ -719,7 +808,10 @@ bool InventoryOverlay::handle_key(SDL_Keycode key) {
         return true;
     }
     if (key == SDLK_PAGEDOWN || key == SDLK_PAGEUP) {
-        if (!visible_ || panel_scroll_max_ == 0)
+        if (!visible_)
+            return false;
+        ensure_panel_scroll_max();
+        if (panel_scroll_max_ == 0)
             return false;
         constexpr std::size_t kPageStep = 90;
         if (key == SDLK_PAGEDOWN) {
@@ -747,6 +839,7 @@ bool InventoryOverlay::handle_wheel(int delta, int x, int y) {
         return false;
     if (hit_test(x, y) != InventoryRegion::panel)
         return handle_wheel(delta);
+    ensure_panel_scroll_max();
     if (panel_scroll_max_ == 0)
         return true;
     constexpr std::size_t kWheelStep = 54;
@@ -792,6 +885,8 @@ InventoryRegion InventoryOverlay::hit_test(int x, int y) const {
     }
 
     for (const PuppetSpec &slot : kPuppetSlots) {
+        if (!puppet_slot_visible(inventory_, slot))
+            continue;
         if (contains(static_cast<float>(slot.x), static_cast<float>(slot.y), 55.0f, 55.0f,
                      logical_x, logical_y))
             return InventoryRegion::puppet_slot;

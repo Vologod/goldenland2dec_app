@@ -7,8 +7,11 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <fstream>
+#include <iterator>
 #include <limits>
 #include <optional>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -124,6 +127,28 @@ TEST_CASE("system font measures Cyrillic text") {
     CHECK(font.measure("Привет").x > 0.0f);
     CHECK(font.measure("Привет").y > 0.0f);
     CHECK(font.measure("a\nb").y > font.line_height());
+}
+
+TEST_CASE("font loads from memory and renders text") {
+    const std::optional<std::filesystem::path> path = gl::render::find_system_font();
+    if (!path.has_value()) {
+        return;
+    }
+    std::ifstream file(*path, std::ios::binary);
+    REQUIRE(file);
+    const std::vector<std::uint8_t> bytes((std::istreambuf_iterator<char>(file)),
+                                          std::istreambuf_iterator<char>());
+    REQUIRE_FALSE(bytes.empty());
+
+    SoftwareCanvas canvas(240, 80);
+    const gl::Result<gl::render::Font> loaded = gl::render::Font::load_from_memory(
+        canvas.renderer(), std::span<const std::uint8_t>(bytes.data(), bytes.size()), 24.0f,
+        path->string());
+    REQUIRE(loaded.has_value());
+    CHECK(loaded.value().measure("Hello").x > 0.0f);
+    loaded.value().draw_text(canvas.renderer(), "Hello", 4.0f, 4.0f,
+                             gl::render::Color{255, 255, 255, 255});
+    CHECK(non_black_pixel_count(canvas.read_pixels()) > 100);
 }
 
 TEST_CASE("wrap splits long Cyrillic text on spaces") {

@@ -12,7 +12,9 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <optional>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -46,25 +48,34 @@ gl::assets::HeroInventory make_inventory() {
     return inventory;
 }
 
+std::optional<gl::assets::HeroInventory> load_real_inventory(int slot) {
+    const char *dir = std::getenv("GL_GAME_DIR");
+    if (dir == nullptr)
+        return std::nullopt;
+    const std::filesystem::path path =
+        std::filesystem::path(dir) / "Saves" / ("slot" + std::to_string(slot) + ".sav");
+    std::ifstream in(path, std::ios::binary);
+    if (!in)
+        return std::nullopt;
+    const std::vector<std::uint8_t> bytes((std::istreambuf_iterator<char>(in)),
+                                          std::istreambuf_iterator<char>());
+    auto body = gl::assets::decode_save_body(bytes);
+    if (!body)
+        return std::nullopt;
+    auto inventory = gl::assets::parse_hero_inventory(body.value());
+    if (!inventory)
+        return std::nullopt;
+    return std::move(inventory.value());
+}
+
 std::optional<gl::render::Font> load_game_font(SDL_Renderer *renderer,
                                                const gl::assets::GameVfs &vfs) {
     auto bytes = vfs.read("engineres/fonts/ttf/arial.ttf");
     if (!bytes)
         return std::nullopt;
-    const auto stamp = std::chrono::steady_clock::now().time_since_epoch().count();
-    const std::filesystem::path path =
-        std::filesystem::temp_directory_path() /
-        ("gl_inventory_font_" + std::to_string(stamp) + ".ttf");
-    {
-        std::ofstream out(path, std::ios::binary);
-        if (!out)
-            return std::nullopt;
-        out.write(reinterpret_cast<const char *>(bytes->data()),
-                  static_cast<std::streamsize>(bytes->size()));
-    }
-    auto font = gl::render::Font::load_from_file(renderer, path, 24.0f);
-    std::error_code ignored;
-    std::filesystem::remove(path, ignored);
+    auto font = gl::render::Font::load_from_memory(
+        renderer, std::span<const std::uint8_t>(bytes->data(), bytes->size()), 24.0f,
+        "engineres/fonts/ttf/arial.ttf");
     if (!font)
         return std::nullopt;
     return std::move(font.value());
@@ -180,6 +191,139 @@ TEST_CASE("inventory overlay filters reset the item page") {
     CHECK(overlay.visible_count() == 20);
 }
 
+TEST_CASE("inventory overlay clears a selection hidden by a filter") {
+    gl::assets::GameVfs vfs;
+    gl::assets::ItemCatalog catalog;
+    gl::app::InventoryOverlay overlay;
+    REQUIRE(overlay.open(vfs, catalog, make_inventory()));
+
+    CHECK(overlay.handle_mouse(167, 730, true));
+    CHECK(overlay.selection() == gl::app::InventorySelection::item);
+    CHECK(overlay.view().selected.has_value());
+
+    CHECK(overlay.handle_mouse(299, 683, true));
+    CHECK(overlay.view().filter_mask == 2);
+    CHECK(overlay.visible_count() == 0);
+    CHECK_FALSE(overlay.view().selected.has_value());
+    CHECK(overlay.selection() == gl::app::InventorySelection::none);
+}
+
+TEST_CASE("inventory overlay clears a selection when an empty slot is clicked") {
+    gl::assets::GameVfs vfs;
+    gl::assets::ItemCatalog catalog;
+    gl::app::InventoryOverlay overlay;
+    REQUIRE(overlay.open(vfs, catalog, make_inventory()));
+
+    CHECK(overlay.handle_mouse(167, 730, true));
+    CHECK(overlay.selection() == gl::app::InventorySelection::item);
+    CHECK(overlay.handle_mouse(85, 637, true));
+    CHECK(overlay.selection() == gl::app::InventorySelection::none);
+    CHECK_FALSE(overlay.view().selected.has_value());
+
+    CHECK(overlay.handle_mouse(167, 730, true));
+    CHECK(overlay.selection() == gl::app::InventorySelection::item);
+    CHECK(overlay.handle_mouse(94, 334, true));
+    CHECK(overlay.selection() == gl::app::InventorySelection::none);
+    CHECK_FALSE(overlay.view().selected.has_value());
+}
+
+TEST_CASE("inventory overlay draws only the active puppet weapon and shield set") {
+    gl::assets::GameVfs vfs;
+    gl::assets::ItemCatalog catalog;
+
+    gl::assets::HeroInventory active;
+    active.equipped.push_back(make_item(1, 0, 1, 0x001000));
+    active.equipped.push_back(make_item(2, 0, 1, 0x002000));
+
+    gl::app::InventoryOverlay overlay;
+    REQUIRE(overlay.open(vfs, catalog, active));
+    CHECK(overlay.hit_test(30, 480) == gl::app::InventoryRegion::puppet_slot);
+    CHECK(overlay.hit_test(18, 468) == gl::app::InventoryRegion::none);
+    CHECK(overlay.handle_mouse(30, 480, true));
+    CHECK(overlay.selection() == gl::app::InventorySelection::equipped);
+    REQUIRE(overlay.view().selected.has_value());
+    CHECK(*overlay.view().selected == 0);
+
+    gl::assets::HeroInventory only_b;
+    only_b.equipped.push_back(make_item(2, 0, 1, 0x002000));
+    gl::app::InventoryOverlay b_overlay;
+    REQUIRE(b_overlay.open(vfs, catalog, only_b));
+    CHECK(b_overlay.hit_test(18, 468) == gl::app::InventoryRegion::puppet_slot);
+    CHECK(b_overlay.handle_mouse(18, 468, true));
+    CHECK(b_overlay.selection() == gl::app::InventorySelection::equipped);
+    REQUIRE(b_overlay.view().selected.has_value());
+    CHECK(*b_overlay.view().selected == 0);
+
+    SoftwareRenderer active_canvas(1024, 768);
+    REQUIRE(active_canvas.renderer != nullptr);
+    gl::app::InventoryOverlay active_overlay;
+    REQUIRE(active_overlay.open(vfs, catalog, active));
+    gl::app::InventoryOverlay hidden_b_overlay;
+    gl::assets::HeroInventory hidden_b;
+    hidden_b.equipped.push_back(make_item(1, 0, 1, 0x001000));
+    REQUIRE(hidden_b_overlay.open(vfs, catalog, hidden_b));
+    SDL_SetRenderDrawColor(active_canvas.renderer, 0, 0, 0, 255);
+    SDL_RenderClear(active_canvas.renderer);
+    active_overlay.render(active_canvas.renderer, 1024, 768);
+    std::vector<std::uint8_t> with_b(1024 * 768 * 4);
+    REQUIRE(SDL_RenderReadPixels(active_canvas.renderer, nullptr, SDL_PIXELFORMAT_RGBA32,
+                                 with_b.data(), 1024 * 4) == 0);
+    SDL_SetRenderDrawColor(active_canvas.renderer, 0, 0, 0, 255);
+    SDL_RenderClear(active_canvas.renderer);
+    hidden_b_overlay.render(active_canvas.renderer, 1024, 768);
+    std::vector<std::uint8_t> without_b(1024 * 768 * 4);
+    REQUIRE(SDL_RenderReadPixels(active_canvas.renderer, nullptr, SDL_PIXELFORMAT_RGBA32,
+                                 without_b.data(), 1024 * 4) == 0);
+    CHECK(region_difference(with_b, without_b, 16, 466, 61, 62) == 0);
+}
+
+TEST_CASE("real slot0 puppet overlap selects the active weapon A" *
+          doctest::skip(!game_dir_available())) {
+    const char *dir = std::getenv("GL_GAME_DIR");
+    REQUIRE(dir != nullptr);
+    auto vfs = gl::assets::GameVfs::mount(dir);
+    REQUIRE(vfs.has_value());
+    auto catalog = gl::assets::ItemCatalog::load(vfs.value());
+    REQUIRE(catalog.has_value());
+    auto inventory = load_real_inventory(0);
+    REQUIRE(inventory.has_value());
+
+    gl::app::InventoryOverlay overlay;
+    REQUIRE(overlay.open(vfs.value(), catalog.value(), inventory.value()));
+    CHECK(overlay.hit_test(18, 468) == gl::app::InventoryRegion::none);
+    CHECK(overlay.hit_test(30, 480) == gl::app::InventoryRegion::puppet_slot);
+    CHECK(overlay.handle_mouse(30, 480, true));
+    CHECK(overlay.selection() == gl::app::InventorySelection::equipped);
+    CHECK(overlay.selected_name() == "Топор Сумеречного Палача");
+}
+
+TEST_CASE("inventory overlay highlights the active filter") {
+    gl::assets::GameVfs vfs;
+    gl::assets::ItemCatalog catalog;
+    gl::app::InventoryOverlay overlay;
+    REQUIRE(overlay.open(vfs, catalog, make_inventory()));
+    SoftwareRenderer canvas(1024, 768);
+    REQUIRE(canvas.renderer != nullptr);
+
+    SDL_SetRenderDrawColor(canvas.renderer, 0, 0, 0, 255);
+    SDL_RenderClear(canvas.renderer);
+    overlay.render(canvas.renderer, 1024, 768);
+    std::vector<std::uint8_t> all(1024 * 768 * 4);
+    REQUIRE(SDL_RenderReadPixels(canvas.renderer, nullptr, SDL_PIXELFORMAT_RGBA32, all.data(),
+                                 1024 * 4) == 0);
+
+    CHECK(overlay.handle_mouse(229, 683, true));
+    SDL_SetRenderDrawColor(canvas.renderer, 0, 0, 0, 255);
+    SDL_RenderClear(canvas.renderer);
+    overlay.render(canvas.renderer, 1024, 768);
+    std::vector<std::uint8_t> filtered(1024 * 768 * 4);
+    REQUIRE(SDL_RenderReadPixels(canvas.renderer, nullptr, SDL_PIXELFORMAT_RGBA32,
+                                 filtered.data(), 1024 * 4) == 0);
+
+    CHECK(region_difference(all, filtered, 201, 672, 56, 23) > 0);
+    CHECK(region_difference(all, filtered, 745, 673, 56, 23) > 0);
+}
+
 TEST_CASE("inventory overlay scroll buttons step one item and clamp") {
     gl::assets::GameVfs vfs;
     gl::assets::ItemCatalog catalog;
@@ -212,6 +356,10 @@ TEST_CASE("inventory overlay exit button and escape close it") {
     CHECK(overlay.handle_key(SDLK_ESCAPE));
     CHECK_FALSE(overlay.visible());
     CHECK_FALSE(overlay.handle_key(SDLK_ESCAPE));
+
+    REQUIRE(overlay.open(vfs, catalog, make_inventory()));
+    CHECK(overlay.handle_key(SDLK_AC_BACK));
+    CHECK_FALSE(overlay.visible());
 }
 
 TEST_CASE("inventory overlay hit-tests hot and puppet slot masks") {
@@ -376,6 +524,34 @@ TEST_CASE("inventory overlay panel scrolls text with wheel, keys and clipping" *
                                  scrolled.data(), 1024 * 4) == 0);
     CHECK(region_difference(top, scrolled, 664, 54, 340, 500) > 100);
     CHECK(region_difference(top, scrolled, 0, 0, 640, 768) == 0);
+}
+
+TEST_CASE("inventory overlay panel scrolls before the first render" *
+          doctest::skip(!game_dir_available())) {
+    const char *dir = std::getenv("GL_GAME_DIR");
+    REQUIRE(dir != nullptr);
+    auto vfs = gl::assets::GameVfs::mount(dir);
+    REQUIRE(vfs.has_value());
+    auto catalog = gl::assets::ItemCatalog::load(vfs.value());
+    REQUIRE(catalog.has_value());
+
+    SoftwareRenderer canvas(1024, 768);
+    REQUIRE(canvas.renderer != nullptr);
+    auto font = load_game_font(canvas.renderer, vfs.value());
+    REQUIRE(font.has_value());
+
+    gl::assets::HeroInventory inventory;
+    inventory.items.push_back(make_item(1083, 22, 1));
+    gl::app::InventoryOverlay overlay;
+    REQUIRE(overlay.open(vfs.value(), catalog.value(), inventory));
+    REQUIRE(overlay.handle_mouse(167, 730, true));
+    overlay.set_font(&font.value());
+    REQUIRE(overlay.panel_max_scroll(font.value()) > 0);
+    CHECK(overlay.panel_scroll() == 0);
+
+    CHECK(overlay.handle_wheel(1, 700, 200));
+    CHECK(overlay.panel_scroll() > 0);
+    CHECK(overlay.handle_key(SDLK_PAGEDOWN));
 }
 
 TEST_CASE("inventory overlay renders a background and icons" *

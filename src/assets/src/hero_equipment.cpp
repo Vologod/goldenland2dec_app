@@ -136,14 +136,19 @@ Result<HeroInventory> parse_hero_inventory(std::span<const std::uint8_t> body) {
 }
 
 Result<HeroEquipment> parse_hero_equipment(std::span<const std::uint8_t> body) {
-    auto inventory = parse_hero_inventory(body);
-    if (!inventory.has_value())
-        return inventory.error();
+    try {
+        auto inventory = parse_hero_inventory(body);
+        if (!inventory.has_value())
+            return inventory.error();
 
-    HeroEquipment equipment;
-    equipment.items.reserve(inventory->equipped.size());
-    for (const auto &item : inventory->equipped)
-        equipment.items.push_back(EquippedItem{item.item_id, item.type, item.flags, item.style});
-    return equipment;
+        HeroEquipment equipment;
+        equipment.items.reserve(inventory->equipped.size());
+        for (const auto &item : inventory->equipped)
+            equipment.items.push_back(
+                EquippedItem{item.item_id, item.type, item.flags, item.style});
+        return equipment;
+    } catch (const std::bad_alloc &) {
+        return format_error("BT_HERO equipment allocation failed");
+    }
 }
 } // namespace gl::assets

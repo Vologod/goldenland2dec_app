@@ -53,6 +53,8 @@ class InventoryOverlay {
 
     void render(SDL_Renderer *renderer, int screen_w, int screen_h,
                 const gl::render::Font *font = nullptr);
+    void set_font(const gl::render::Font *font) { font_ = font; }
+    bool select_visible_slot(std::size_t slot);
     bool handle_mouse(int x, int y, bool click);
     bool handle_key(SDL_Keycode key);
     bool handle_wheel(int delta);
@@ -79,6 +81,8 @@ class InventoryOverlay {
 
     void rebuild_visible();
     void select(InventorySelection source, std::size_t index);
+    void clear_selection();
+    void ensure_panel_scroll_max();
     void update_transform(int screen_w, int screen_h);
     void reset_texture_cache(SDL_Renderer *renderer);
     gl::render::Texture *load_texture(std::string_view path, bool magenta_key = false);
@@ -96,6 +100,7 @@ class InventoryOverlay {
 
     const gl::assets::GameVfs *vfs_ = nullptr;
     const gl::assets::ItemCatalog *catalog_ = nullptr;
+    const gl::render::Font *font_ = nullptr;
     gl::assets::HeroInventory inventory_;
     gl::game::InventoryViewState view_;
     std::vector<std::size_t> visible_indices_;

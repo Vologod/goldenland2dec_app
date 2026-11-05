@@ -5,9 +5,11 @@
 
 #include <SDL.h>
 
+#include <cstdint>
 #include <filesystem>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -26,6 +28,9 @@ public:
     // pixel_height must be in [8, 256]; invalid values return ErrorCode::argument.
     static Result<Font> load_from_file(SDL_Renderer* renderer, const std::filesystem::path& path,
                                        float pixel_height);
+    static Result<Font> load_from_memory(SDL_Renderer* renderer,
+                                         std::span<const std::uint8_t> data, float pixel_height,
+                                         std::string_view label = "memory");
 
     Font(Font&& other) noexcept;
     Font& operator=(Font&& other) noexcept;

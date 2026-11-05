@@ -182,15 +182,35 @@ Result<Font> Font::load_from_file(SDL_Renderer* renderer, const std::filesystem:
         return Error{ErrorCode::io, "font: cannot open " + path.string()};
     }
 
-    auto impl = std::make_unique<Impl>();
-    impl->data.assign(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>());
-    if (impl->data.empty()) {
+    std::vector<std::uint8_t> data((std::istreambuf_iterator<char>(file)),
+                                   std::istreambuf_iterator<char>());
+    if (data.empty()) {
         return Error{ErrorCode::format, "font: empty file " + path.string()};
     }
+    return load_from_memory(renderer, std::span<const std::uint8_t>(data.data(), data.size()),
+                            pixel_height, path.string());
+}
+
+Result<Font> Font::load_from_memory(SDL_Renderer* renderer, std::span<const std::uint8_t> data,
+                                    float pixel_height, std::string_view label) {
+    if (renderer == nullptr) {
+        return Error{ErrorCode::argument, "font: renderer is null"};
+    }
+    if (!(pixel_height >= kMinPixelHeight && pixel_height <= kMaxPixelHeight)) {
+        return Error{ErrorCode::argument, "font: pixel height " + std::to_string(pixel_height) +
+                                              " outside supported range [8, 256]"};
+    }
+    if (data.empty()) {
+        return Error{ErrorCode::format, "font: empty data " + std::string(label)};
+    }
+
+    auto impl = std::make_unique<Impl>();
+    impl->data.assign(data.begin(), data.end());
 
     const int offset = stbtt_GetFontOffsetForIndex(impl->data.data(), 0);
     if (offset < 0 || stbtt_InitFont(&impl->info, impl->data.data(), offset) == 0) {
-        return Error{ErrorCode::format, "font: invalid TrueType data " + path.string()};
+        return Error{ErrorCode::format,
+                     "font: invalid TrueType data " + std::string(label)};
     }
 
     int ascent = 0;

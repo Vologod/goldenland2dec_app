@@ -94,6 +94,7 @@ struct Options {
     std::optional<int> equip_save;
     bool equip_save_pending = false;
     bool inventory = false;
+    std::optional<int> inventory_select;
     std::optional<int> camera_x;
     std::optional<int> camera_y;
     bool walkable_overlay = false;
@@ -128,6 +129,7 @@ void print_usage() {
         "  --equip-save <slot>  Apply hero equipment from save slot <slot>\n"
         "  --equip-save-pending Apply --equip-save on the next level load only\n"
         "  --inventory          Open the inventory overlay for the selected save\n"
+        "  --inventory-select <n> Select bottom-strip slot <n> when the inventory opens\n"
         "  --camera-x <px>      World X of the left viewport edge (screenshot mode)\n"
         "  --camera-y <px>      World Y of the top viewport edge (screenshot mode)\n"
         "  --walkable-overlay   Draw blocked tiles in red on the level\n"
@@ -293,6 +295,15 @@ ParseStatus parse_args(int argc, char** argv, Options& options) {
             options.equip_save_pending = true;
         } else if (arg == "--inventory") {
             options.inventory = true;
+        } else if (arg == "--inventory-select") {
+            if (!next_value(arg, value)) return ParseStatus::error;
+            int slot = 0;
+            if (!parse_int(value, slot) || slot < 0) {
+                std::fprintf(stderr, "glgame: invalid --inventory-select: %.*s\n",
+                             static_cast<int>(value.size()), value.data());
+                return ParseStatus::error;
+            }
+            options.inventory_select = slot;
         } else if (arg == "--camera-x") {
             if (!next_value(arg, value)) return ParseStatus::error;
             int camera = 0;
@@ -495,6 +506,7 @@ class Game {
 
         test_dialog_available_ = vfs_.exists(kTestDialogScript);
         load_font();
+        load_inventory_font();
         load_item_catalog();
 
         if (!state_.transition(gl::core::AppState::menu)) return 3;
@@ -667,6 +679,34 @@ class Game {
         update_dialog_style();
     }
 
+    void load_inventory_font() {
+        if (font_) return;
+        constexpr std::string_view kGameFont = "engineres/fonts/ttf/arial.ttf";
+        auto bytes = vfs_.read(kGameFont);
+        if (!bytes) {
+            gl::log(gl::LogLevel::warning,
+                    "inventory font: cannot read " + std::string(kGameFont));
+            return;
+        }
+        auto loaded = gl::render::Font::load_from_memory(
+            window_.renderer(),
+            std::span<const std::uint8_t>(bytes->data(), bytes->size()),
+            kFontPixelHeight, kGameFont);
+        if (!loaded) {
+            gl::log(gl::LogLevel::warning,
+                    "inventory font: " + loaded.error().message);
+            return;
+        }
+        inventory_font_.emplace(std::move(loaded.value()));
+        gl::log(gl::LogLevel::info,
+                "inventory font: loaded '" + std::string(kGameFont) + "'");
+    }
+
+    const gl::render::Font* inventory_font() const {
+        if (font_) return &*font_;
+        return inventory_font_ ? &*inventory_font_ : nullptr;
+    }
+
     void load_item_catalog() {
         gl::Result<gl::assets::ItemCatalog> catalog = gl::assets::ItemCatalog::load(vfs_);
         if (!catalog) {
@@ -682,6 +722,15 @@ class Game {
         gl::assets::HeroInventory inventory;
         if (pending_inventory_) inventory = *pending_inventory_;
         inventory_overlay_.open(vfs_, item_catalog_, inventory);
+        inventory_overlay_.set_font(inventory_font());
+        if (options_.inventory_select) {
+            if (!inventory_overlay_.select_visible_slot(
+                    static_cast<std::size_t>(*options_.inventory_select))) {
+                gl::log(gl::LogLevel::warning,
+                        "inventory: selected slot " + std::to_string(*options_.inventory_select) +
+                            " is empty");
+            }
+        }
         gl::log(gl::LogLevel::info,
                 "inventory: opened hot=" + std::to_string(inventory.hot.size()) + " items=" +
                     std::to_string(inventory.items.size()) + " equipped=" +
@@ -1500,10 +1549,63 @@ class Game {
                     input_ += text;
                 }
                 return;
+            case SDL_FINGERDOWN: {
+                if (!inventory_overlay_.visible() || finger_id_ != -1) return;
+                finger_id_ = event.tfinger.fingerId;
+                finger_start_x_ = static_cast<int>(
+                    std::lround(event.tfinger.x * static_cast<float>(viewport_width_)));
+                finger_start_y_ = static_cast<int>(
+                    std::lround(event.tfinger.y * static_cast<float>(viewport_height_)));
+                finger_last_x_ = finger_start_x_;
+                finger_last_y_ = finger_start_y_;
+                finger_scroll_accum_ = 0.0f;
+                finger_dragged_ = false;
+                inventory_overlay_.handle_mouse(finger_start_x_, finger_start_y_, false);
+                return;
+            }
+            case SDL_FINGERMOTION: {
+                if (!inventory_overlay_.visible() || finger_id_ != event.tfinger.fingerId)
+                    return;
+                const int x = static_cast<int>(
+                    std::lround(event.tfinger.x * static_cast<float>(viewport_width_)));
+                const int y = static_cast<int>(
+                    std::lround(event.tfinger.y * static_cast<float>(viewport_height_)));
+                const int dx = x - finger_start_x_;
+                const int dy = y - finger_start_y_;
+                if (dx * dx + dy * dy >= 16 * 16) finger_dragged_ = true;
+                finger_scroll_accum_ += static_cast<float>(finger_last_y_ - y);
+                finger_last_x_ = x;
+                finger_last_y_ = y;
+                constexpr float kFingerScrollStep = 24.0f;
+                while (finger_scroll_accum_ >= kFingerScrollStep) {
+                    inventory_overlay_.handle_wheel(1, finger_start_x_, finger_start_y_);
+                    finger_scroll_accum_ -= kFingerScrollStep;
+                }
+                while (finger_scroll_accum_ <= -kFingerScrollStep) {
+                    inventory_overlay_.handle_wheel(-1, finger_start_x_, finger_start_y_);
+                    finger_scroll_accum_ += kFingerScrollStep;
+                }
+                return;
+            }
+            case SDL_FINGERUP: {
+                if (finger_id_ != event.tfinger.fingerId) return;
+                if (inventory_overlay_.visible() && !finger_dragged_) {
+                    const int x = static_cast<int>(
+                        std::lround(event.tfinger.x * static_cast<float>(viewport_width_)));
+                    const int y = static_cast<int>(
+                        std::lround(event.tfinger.y * static_cast<float>(viewport_height_)));
+                    inventory_overlay_.handle_mouse(x, y, true);
+                }
+                finger_id_ = -1;
+                finger_dragged_ = false;
+                finger_scroll_accum_ = 0.0f;
+                return;
+            }
             case SDL_MOUSEMOTION:
                 if (console_visible_) return;
                 if (inventory_overlay_.visible()) {
-                    inventory_overlay_.handle_mouse(event.motion.x, event.motion.y, false);
+                    if (event.motion.which != SDL_TOUCH_MOUSEID)
+                        inventory_overlay_.handle_mouse(event.motion.x, event.motion.y, false);
                     return;
                 }
                 if (dialog_) {
@@ -1527,8 +1629,9 @@ class Game {
             case SDL_MOUSEBUTTONDOWN:
                 if (console_visible_) return;
                 if (inventory_overlay_.visible()) {
-                    inventory_overlay_.handle_mouse(event.button.x, event.button.y,
-                                                    event.button.button == SDL_BUTTON_LEFT);
+                    if (event.button.which != SDL_TOUCH_MOUSEID)
+                        inventory_overlay_.handle_mouse(event.button.x, event.button.y,
+                                                        event.button.button == SDL_BUTTON_LEFT);
                     return;
                 }
                 if (event.button.button == SDL_BUTTON_RIGHT) {
@@ -1609,7 +1712,9 @@ class Game {
     }
 
     void handle_keydown(const SDL_KeyboardEvent& key) {
-        const SDL_Keycode symbol = key.keysym.sym;
+        const SDL_Keycode raw_symbol = key.keysym.sym;
+        const SDL_Keycode symbol =
+            raw_symbol == SDLK_AC_BACK ? SDLK_ESCAPE : raw_symbol;
         if (console_visible_) {
             handle_console_key(key);
             return;
@@ -1942,7 +2047,7 @@ class Game {
 
         if (inventory_overlay_.visible()) {
             inventory_overlay_.render(window_.renderer(), viewport_width_, viewport_height_,
-                                      font_ ? &*font_ : nullptr);
+                                      inventory_font());
         }
 
         if (console_visible_) render_console(now_ms);
@@ -2140,6 +2245,13 @@ class Game {
     bool mouse_down_ = false;
     bool dragging_ = false;
     bool debug_overlay_ = false;
+    SDL_FingerID finger_id_ = -1;
+    bool finger_dragged_ = false;
+    int finger_start_x_ = 0;
+    int finger_start_y_ = 0;
+    int finger_last_x_ = 0;
+    int finger_last_y_ = 0;
+    float finger_scroll_accum_ = 0.0f;
     int mouse_down_x_ = 0;
     int mouse_down_y_ = 0;
     int viewport_width_ = 0;
@@ -2150,6 +2262,7 @@ class Game {
     bool save_slots_ = false;
     std::string save_message_;
     std::optional<gl::render::Font> font_;
+    std::optional<gl::render::Font> inventory_font_;
     std::unique_ptr<DialogContext> dialog_;
     gl::app::DialogOverlay dialog_overlay_;
     gl::app::InventoryOverlay inventory_overlay_;

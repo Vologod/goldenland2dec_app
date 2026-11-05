@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <atomic>
 #include <chrono>
+#include <cmath>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -333,6 +334,26 @@ std::size_t count_region_differences(const std::vector<unsigned char>& first,
         }
     }
     return different;
+}
+
+struct PixelRect {
+    int x = 0;
+    int y = 0;
+    int width = 0;
+    int height = 0;
+};
+
+PixelRect inventory_panel_rect(int screen_width, int screen_height) {
+    const float scale = std::min(static_cast<float>(screen_width) / 1024.0f,
+                                 static_cast<float>(screen_height) / 768.0f);
+    const float offset_x = (static_cast<float>(screen_width) - 1024.0f * scale) * 0.5f;
+    const float offset_y = (static_cast<float>(screen_height) - 768.0f * scale) * 0.5f;
+    return PixelRect{
+        static_cast<int>(std::floor(offset_x + 654.0f * scale)),
+        static_cast<int>(std::floor(offset_y + 44.0f * scale)),
+        static_cast<int>(std::ceil(360.0f * scale)),
+        static_cast<int>(std::ceil(520.0f * scale)),
+    };
 }
 
 std::size_t count_bottom_differences(const std::vector<unsigned char>& first,
@@ -1028,6 +1049,138 @@ TEST_CASE("glgame --inventory with an invalid save opens an empty overlay" *
     CHECK(canvas_differences == 0);
     CHECK(empty_vs_hook_open == 0);
     CHECK(level_vs_hook_closed == 0);
+}
+
+TEST_CASE("glgame selected inventory renders panel text at multiple viewports" *
+          doctest::skip(!font_available())) {
+    const char* game_dir = std::getenv("GL_GAME_DIR");
+    REQUIRE(game_dir != nullptr);
+
+    TempDir temp;
+    const fs::path config = write_test_config(temp.path);
+    struct Viewport {
+        int width;
+        int height;
+    };
+    const Viewport viewports[] = {{1024, 768}, {1280, 720}, {600, 800}};
+    for (const Viewport& viewport : viewports) {
+        CAPTURE(viewport.width);
+        CAPTURE(viewport.height);
+        const std::string width = std::to_string(viewport.width);
+        const std::string height = std::to_string(viewport.height);
+        const fs::path empty_png = temp.path / ("panel_empty_" + width + "x" + height + ".png");
+        const fs::path first_png = temp.path / ("panel_first_" + width + "x" + height + ".png");
+        const fs::path second_png = temp.path / ("panel_second_" + width + "x" + height + ".png");
+
+        const std::vector<std::string> base = {
+            "--level", "l1_1", "--equip-save", "0", "--inventory",
+            "--width", width, "--height", height};
+        std::vector<std::string> first = base;
+        first.insert(first.end(), {"--inventory-select", "0"});
+        std::vector<std::string> second = base;
+        second.insert(second.end(), {"--inventory-select", "1"});
+
+        const int empty_code = run_glgame(screenshot_arguments(game_dir, config, empty_png, base));
+        const int first_code = run_glgame(screenshot_arguments(game_dir, config, first_png, first));
+        const int second_code = run_glgame(screenshot_arguments(game_dir, config, second_png,
+                                                               second));
+        CAPTURE(empty_code);
+        CAPTURE(first_code);
+        CAPTURE(second_code);
+        REQUIRE(fs::exists(empty_png));
+        REQUIRE(fs::exists(first_png));
+        REQUIRE(fs::exists(second_png));
+        CHECK(empty_code == 0);
+        CHECK(first_code == 0);
+        CHECK(second_code == 0);
+        check_png(empty_png, viewport.width, viewport.height);
+        check_png(first_png, viewport.width, viewport.height);
+        check_png(second_png, viewport.width, viewport.height);
+
+        int empty_width = 0;
+        int empty_height = 0;
+        int first_width = 0;
+        int first_height = 0;
+        int second_width = 0;
+        int second_height = 0;
+        const std::vector<unsigned char> empty =
+            read_png(empty_png, empty_width, empty_height);
+        const std::vector<unsigned char> selected =
+            read_png(first_png, first_width, first_height);
+        const std::vector<unsigned char> other =
+            read_png(second_png, second_width, second_height);
+        REQUIRE(empty_width == viewport.width);
+        REQUIRE(empty_height == viewport.height);
+        REQUIRE(first_width == viewport.width);
+        REQUIRE(first_height == viewport.height);
+        REQUIRE(second_width == viewport.width);
+        REQUIRE(second_height == viewport.height);
+
+        const PixelRect panel = inventory_panel_rect(viewport.width, viewport.height);
+        const std::size_t empty_total = count_region_differences(
+            empty, selected, viewport.width, viewport.height, 0, 0, viewport.width,
+            viewport.height);
+        const std::size_t empty_panel = count_region_differences(
+            empty, selected, viewport.width, viewport.height, panel.x, panel.y, panel.width,
+            panel.height);
+        const std::size_t other_total = count_region_differences(
+            selected, other, viewport.width, viewport.height, 0, 0, viewport.width,
+            viewport.height);
+        const std::size_t other_panel = count_region_differences(
+            selected, other, viewport.width, viewport.height, panel.x, panel.y, panel.width,
+            panel.height);
+        CAPTURE(empty_total);
+        CAPTURE(empty_panel);
+        CAPTURE(other_total);
+        CAPTURE(other_panel);
+        CHECK(empty_panel > 100);
+        CHECK(empty_total == empty_panel);
+        CHECK(other_panel > 0);
+        CHECK(other_total == other_panel);
+    }
+}
+
+TEST_CASE("glgame --no-font still renders the inventory panel") {
+    const char* game_dir = std::getenv("GL_GAME_DIR");
+    REQUIRE(game_dir != nullptr);
+
+    TempDir temp;
+    const fs::path config = write_test_config(temp.path);
+    const fs::path empty_png = temp.path / "no_font_panel_empty.png";
+    const fs::path selected_png = temp.path / "no_font_panel_selected.png";
+    const std::vector<std::string> base = {"--level", "l1_1", "--equip-save", "0", "--inventory",
+                                           "--no-font", "--width", "1024", "--height", "768"};
+    std::vector<std::string> selected = base;
+    selected.insert(selected.end(), {"--inventory-select", "0"});
+
+    const int empty_code =
+        run_glgame(screenshot_arguments(game_dir, config, empty_png, base));
+    const int selected_code =
+        run_glgame(screenshot_arguments(game_dir, config, selected_png, selected));
+    CAPTURE(empty_code);
+    CAPTURE(selected_code);
+    REQUIRE(fs::exists(empty_png));
+    REQUIRE(fs::exists(selected_png));
+    CHECK(empty_code == 0);
+    CHECK(selected_code == 0);
+    check_png(empty_png, 1024, 768);
+    check_png(selected_png, 1024, 768);
+
+    int empty_width = 0;
+    int empty_height = 0;
+    int selected_width = 0;
+    int selected_height = 0;
+    const std::vector<unsigned char> empty =
+        read_png(empty_png, empty_width, empty_height);
+    const std::vector<unsigned char> chosen =
+        read_png(selected_png, selected_width, selected_height);
+    REQUIRE(empty_width == 1024);
+    REQUIRE(empty_height == 768);
+    REQUIRE(selected_width == 1024);
+    REQUIRE(selected_height == 768);
+    const PixelRect panel = inventory_panel_rect(1024, 768);
+    CHECK(count_region_differences(empty, chosen, 1024, 768, panel.x, panel.y, panel.width,
+                                   panel.height) > 100);
 }
 
 TEST_CASE("glgame --click-npc opens the dialog overlay over the level" *
