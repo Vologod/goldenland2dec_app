@@ -3,6 +3,7 @@ add_library(gl_game STATIC
     src/hero.cpp
     src/hero_outfit_resolver.cpp
     src/hero_wear.cpp
+    src/inventory_view.cpp
     src/level_loader.cpp
     src/level_simulation.cpp
     src/mask_selection.cpp
