@@ -49,6 +49,7 @@ add_library(gl_assets STATIC
     src/assets/src/person_script.cpp
     src/assets/src/hero_equipment.cpp
     src/assets/src/herowear.cpp
+    src/assets/src/item_catalog.cpp
     src/assets/src/image.cpp
     src/assets/src/stb_impl.cpp
 )
