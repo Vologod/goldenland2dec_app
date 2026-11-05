@@ -86,6 +86,38 @@ std::size_t region_difference(const std::vector<std::uint8_t> &a,
     return different;
 }
 
+std::size_t count_pure_magenta(const std::vector<std::uint8_t> &pixels, int x, int y, int w,
+                               int h) {
+    std::size_t count = 0;
+    for (int py = y; py < y + h; ++py) {
+        for (int px = x; px < x + w; ++px) {
+            const std::size_t offset =
+                (static_cast<std::size_t>(py) * 1024 + static_cast<std::size_t>(px)) * 4;
+            if (pixels[offset] == 255 && pixels[offset + 1] == 0 && pixels[offset + 2] == 255)
+                ++count;
+        }
+    }
+    return count;
+}
+
+std::size_t count_magenta_pixels(const gl::assets::Image &image) {
+    std::size_t count = 0;
+    for (const gl::assets::Rgba &pixel : image.rgba) {
+        if (pixel.r == 255 && pixel.g == 0 && pixel.b == 255)
+            ++count;
+    }
+    return count;
+}
+
+std::size_t count_opaque_magenta_pixels(const gl::assets::Image &image) {
+    std::size_t count = 0;
+    for (const gl::assets::Rgba &pixel : image.rgba) {
+        if (pixel.r == 255 && pixel.g == 0 && pixel.b == 255 && pixel.a != 0)
+            ++count;
+    }
+    return count;
+}
+
 struct SoftwareRenderer {
     SoftwareRenderer(int width, int height) {
         surface = SDL_CreateRGBSurfaceWithFormat(0, width, height, 32, SDL_PIXELFORMAT_ARGB8888);
@@ -355,6 +387,16 @@ TEST_CASE("inventory overlay renders a background and icons" *
     auto catalog = gl::assets::ItemCatalog::load(vfs.value());
     REQUIRE(catalog.has_value());
 
+    const gl::assets::ItemCatalogEntry *armor = catalog->find(318);
+    REQUIRE(armor != nullptr);
+    auto icon_bytes = vfs->read(armor->icon_path);
+    REQUIRE(icon_bytes.has_value());
+    auto icon_image = gl::assets::decode_image(icon_bytes.value());
+    REQUIRE(icon_image.has_value());
+    CHECK(count_magenta_pixels(icon_image.value()) > 0);
+    gl::app::InventoryOverlay::apply_magenta_key(icon_image.value());
+    CHECK(count_opaque_magenta_pixels(icon_image.value()) == 0);
+
     gl::assets::HeroInventory inventory;
     inventory.items.push_back(make_item(318, 12, 1));
     inventory.items.push_back(make_item(486, 1, 2));
@@ -384,6 +426,9 @@ TEST_CASE("inventory overlay renders a background and icons" *
             ++non_black;
     }
     CHECK(non_black > 100000);
+    CHECK(count_pure_magenta(pixels, 140, 703, 55, 55) == 0);
+    CHECK(count_pure_magenta(pixels, 14, 624, 27, 27) == 0);
+    CHECK(count_pure_magenta(pixels, 4, 402, 55, 55) == 0);
 
     SoftwareRenderer empty_canvas(1024, 768);
     REQUIRE(empty_canvas.renderer != nullptr);
@@ -412,7 +457,7 @@ TEST_CASE("inventory overlay renders a background and icons" *
         return different;
     };
     CHECK(region_difference(140, 703, 55, 55) > 100);
-    CHECK(region_difference(14, 624, 27, 27) > 100);
+    CHECK(region_difference(14, 624, 27, 27) > 20);
 
     gl::assets::Image image;
     image.width = 1024;

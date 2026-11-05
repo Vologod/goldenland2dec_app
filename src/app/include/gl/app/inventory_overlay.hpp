@@ -17,6 +17,7 @@
 namespace gl::assets {
 class GameVfs;
 class ItemCatalog;
+struct Image;
 struct ItemCatalogEntry;
 } // namespace gl::assets
 
@@ -64,6 +65,7 @@ class InventoryOverlay {
     std::size_t panel_scroll() const { return panel_scroll_; }
     std::size_t panel_max_scroll(const gl::render::Font &font) const;
     static float native_icon_offset(float target, float texture_size);
+    static void apply_magenta_key(gl::assets::Image &image);
 
     InventoryRegion hit_test(int x, int y) const;
 
@@ -79,7 +81,7 @@ class InventoryOverlay {
     void select(InventorySelection source, std::size_t index);
     void update_transform(int screen_w, int screen_h);
     void reset_texture_cache(SDL_Renderer *renderer);
-    gl::render::Texture *load_texture(std::string_view path);
+    gl::render::Texture *load_texture(std::string_view path, bool magenta_key = false);
     gl::render::Texture *icon_texture(const gl::assets::ItemCatalogEntry *entry);
     gl::render::Texture *background_texture();
     const gl::assets::InventoryItem *selected_item() const;

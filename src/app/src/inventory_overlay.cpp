@@ -240,10 +240,10 @@ void InventoryOverlay::reset_texture_cache(SDL_Renderer *renderer) {
     texture_renderer_ = renderer;
 }
 
-gl::render::Texture *InventoryOverlay::load_texture(std::string_view path) {
+gl::render::Texture *InventoryOverlay::load_texture(std::string_view path, bool magenta_key) {
     if (vfs_ == nullptr || texture_renderer_ == nullptr)
         return nullptr;
-    const std::string key(path);
+    const std::string key = std::string(path) + (magenta_key ? "#magenta" : "");
     const auto cached = textures_.find(key);
     if (cached != textures_.end())
         return &cached->second;
@@ -273,6 +273,8 @@ gl::render::Texture *InventoryOverlay::load_texture(std::string_view path) {
             return nullptr;
         }
         image = std::move(decoded.value());
+        if (magenta_key)
+            apply_magenta_key(image);
     }
 
     auto created = gl::render::Texture::from_image(texture_renderer_, image);
@@ -287,18 +289,19 @@ gl::render::Texture *InventoryOverlay::load_texture(std::string_view path) {
 gl::render::Texture *InventoryOverlay::icon_texture(const gl::assets::ItemCatalogEntry *entry) {
     if (entry != nullptr) {
         if (lower_suffix(entry->icon_path, ".bmp") || lower_suffix(entry->icon_path, ".csx")) {
-            if (gl::render::Texture *texture = load_texture(entry->icon_path); texture != nullptr)
-                return texture;
-        } else if (!entry->icon_path.empty()) {
-            if (gl::render::Texture *texture = load_texture(entry->icon_path + ".bmp");
+            if (gl::render::Texture *texture = load_texture(entry->icon_path, true);
                 texture != nullptr)
                 return texture;
-            if (gl::render::Texture *texture = load_texture(entry->icon_path + ".csx");
+        } else if (!entry->icon_path.empty()) {
+            if (gl::render::Texture *texture = load_texture(entry->icon_path + ".bmp", true);
+                texture != nullptr)
+                return texture;
+            if (gl::render::Texture *texture = load_texture(entry->icon_path + ".csx", true);
                 texture != nullptr)
                 return texture;
         }
     }
-    return load_texture(kFallbackIcon);
+    return load_texture(kFallbackIcon, true);
 }
 
 gl::render::Texture *InventoryOverlay::background_texture() { return load_texture(kBackground); }
@@ -442,6 +445,13 @@ std::size_t InventoryOverlay::panel_max_scroll(const gl::render::Font &font) con
 
 float InventoryOverlay::native_icon_offset(float target, float texture_size) {
     return std::max(0.0f, (target - texture_size) * 0.5f);
+}
+
+void InventoryOverlay::apply_magenta_key(gl::assets::Image &image) {
+    for (gl::assets::Rgba &pixel : image.rgba) {
+        if (pixel.r == 255 && pixel.g == 0 && pixel.b == 255)
+            pixel.a = 0;
+    }
 }
 
 void InventoryOverlay::render(SDL_Renderer *renderer, int screen_w, int screen_h,
