@@ -312,6 +312,29 @@ std::size_t count_differences(const std::vector<unsigned char>& first,
     return different;
 }
 
+std::size_t count_region_differences(const std::vector<unsigned char>& first,
+                                     const std::vector<unsigned char>& second, int width,
+                                     int height, int x0, int y0, int region_width,
+                                     int region_height) {
+    REQUIRE(first.size() == second.size());
+    const int x_end = std::min(x0 + region_width, width);
+    const int y_end = std::min(y0 + region_height, height);
+    std::size_t different = 0;
+    for (int y = std::max(0, y0); y < y_end; ++y) {
+        for (int x = std::max(0, x0); x < x_end; ++x) {
+            const std::size_t index =
+                (static_cast<std::size_t>(y) * static_cast<std::size_t>(width) +
+                 static_cast<std::size_t>(x)) *
+                4;
+            if (first[index] != second[index] || first[index + 1] != second[index + 1] ||
+                first[index + 2] != second[index + 2] || first[index + 3] != second[index + 3]) {
+                ++different;
+            }
+        }
+    }
+    return different;
+}
+
 std::size_t count_bottom_differences(const std::vector<unsigned char>& first,
                                      const std::vector<unsigned char>& second, int width,
                                      int height, int bottom_height) {
@@ -828,6 +851,183 @@ TEST_CASE("glgame --equip-save applies the slot outfit and falls back to naked")
     CHECK(none_log.find("ignored (--hero-outfit none)") != std::string::npos);
     CHECK(pending0_log.find("outfit: slot 0") != std::string::npos);
     CHECK(pending_invalid_log.find("invalid save slot 9999") != std::string::npos);
+}
+
+TEST_CASE("glgame --inventory opens the selected save inventory" *
+          doctest::skip(!font_available())) {
+    const char* game_dir = std::getenv("GL_GAME_DIR");
+    REQUIRE(game_dir != nullptr);
+
+    TempDir temp;
+    const fs::path config = write_test_config(temp.path);
+    const fs::path level_png = temp.path / "inventory_level.png";
+    const fs::path empty_png = temp.path / "inventory_empty.png";
+    const fs::path slot0_png = temp.path / "inventory_slot0.png";
+    const fs::path none_png = temp.path / "inventory_none.png";
+
+    std::string slot0_log;
+    std::string none_log;
+    const int level_code = run_glgame(
+        screenshot_arguments(game_dir, config, level_png, {"--level", "l1_1"}));
+    const int empty_code = run_glgame(screenshot_arguments(
+        game_dir, config, empty_png, {"--level", "l1_1", "--inventory"}));
+    const int slot0_code = run_glgame_capture(
+        screenshot_arguments(game_dir, config, slot0_png,
+                             {"--level", "l1_1", "--equip-save", "0", "--inventory"}),
+        slot0_log);
+    const int none_code = run_glgame_capture(
+        screenshot_arguments(game_dir, config, none_png,
+                             {"--level", "l1_1", "--hero-outfit", "none", "--equip-save", "0",
+                              "--inventory"}),
+        none_log);
+    CAPTURE(level_code);
+    CAPTURE(empty_code);
+    CAPTURE(slot0_code);
+    CAPTURE(none_code);
+    CAPTURE(slot0_log);
+    CAPTURE(none_log);
+    REQUIRE(fs::exists(level_png));
+    REQUIRE(fs::exists(empty_png));
+    REQUIRE(fs::exists(slot0_png));
+    REQUIRE(fs::exists(none_png));
+    CHECK(level_code == 0);
+    CHECK(empty_code == 0);
+    CHECK(slot0_code == 0);
+    CHECK(none_code == 0);
+    CHECK(slot0_log.find("inventory: slot 0") != std::string::npos);
+    CHECK(slot0_log.find("items=117") != std::string::npos);
+    CHECK(none_log.find("inventory: slot 0") != std::string::npos);
+    CHECK(none_log.find("items=117") != std::string::npos);
+    check_png(level_png, 1280, 720);
+    check_png(empty_png, 1280, 720);
+    check_png(slot0_png, 1280, 720);
+    check_png(none_png, 1280, 720);
+
+    int level_width = 0;
+    int level_height = 0;
+    int empty_width = 0;
+    int empty_height = 0;
+    int slot0_width = 0;
+    int slot0_height = 0;
+    int none_width = 0;
+    int none_height = 0;
+    const std::vector<unsigned char> level =
+        read_png(level_png, level_width, level_height);
+    const std::vector<unsigned char> empty =
+        read_png(empty_png, empty_width, empty_height);
+    const std::vector<unsigned char> slot0 =
+        read_png(slot0_png, slot0_width, slot0_height);
+    const std::vector<unsigned char> none = read_png(none_png, none_width, none_height);
+    REQUIRE(level_width == empty_width);
+    REQUIRE(level_height == empty_height);
+    REQUIRE(level_width == slot0_width);
+    REQUIRE(level_height == slot0_height);
+    REQUIRE(level_width == none_width);
+    REQUIRE(level_height == none_height);
+
+    const std::size_t level_vs_empty = count_differences(level, empty);
+    const std::size_t empty_vs_slot0 = count_differences(empty, slot0);
+    const std::size_t empty_vs_none = count_differences(empty, none);
+    CAPTURE(level_vs_empty);
+    CAPTURE(empty_vs_slot0);
+    CAPTURE(empty_vs_none);
+    CHECK(level_vs_empty > 1000);
+    CHECK(empty_vs_slot0 > 1000);
+    CHECK(empty_vs_none > 1000);
+}
+
+TEST_CASE("glgame --inventory with an invalid save opens an empty overlay" *
+          doctest::skip(!font_available())) {
+    const char* game_dir = std::getenv("GL_GAME_DIR");
+    REQUIRE(game_dir != nullptr);
+
+    TempDir temp;
+    const fs::path config = write_test_config(temp.path);
+    const fs::path level_png = temp.path / "inventory_invalid_level.png";
+    const fs::path empty_png = temp.path / "inventory_invalid_empty.png";
+    const fs::path invalid_png = temp.path / "inventory_invalid.png";
+    const fs::path hook_open_png = temp.path / "inventory_hook_open.png";
+    const fs::path hook_closed_png = temp.path / "inventory_hook_closed.png";
+
+    std::string invalid_log;
+    const int level_code = run_glgame(
+        screenshot_arguments(game_dir, config, level_png, {"--level", "l1_1"}));
+    const int empty_code = run_glgame(screenshot_arguments(
+        game_dir, config, empty_png, {"--level", "l1_1", "--inventory"}));
+    const int invalid_code = run_glgame_capture(
+        screenshot_arguments(game_dir, config, invalid_png,
+                             {"--level", "l1_1", "--equip-save", "9999", "--inventory"}),
+        invalid_log);
+    const int hook_open_code = run_glgame(screenshot_arguments(
+        game_dir, config, hook_open_png, {"--level", "l1_1", "--exec", "inventory"}));
+    const int hook_closed_code = run_glgame(screenshot_arguments(
+        game_dir, config, hook_closed_png,
+        {"--level", "l1_1", "--exec", "inventory", "--exec", "inventory"}));
+    CAPTURE(level_code);
+    CAPTURE(empty_code);
+    CAPTURE(invalid_code);
+    CAPTURE(hook_open_code);
+    CAPTURE(hook_closed_code);
+    CAPTURE(invalid_log);
+    REQUIRE(fs::exists(level_png));
+    REQUIRE(fs::exists(empty_png));
+    REQUIRE(fs::exists(invalid_png));
+    REQUIRE(fs::exists(hook_open_png));
+    REQUIRE(fs::exists(hook_closed_png));
+    CHECK(level_code == 0);
+    CHECK(empty_code == 0);
+    CHECK(invalid_code == 0);
+    CHECK(hook_open_code == 0);
+    CHECK(hook_closed_code == 0);
+    CHECK(invalid_log.find("invalid save slot 9999") != std::string::npos);
+    check_png(level_png, 1280, 720);
+    check_png(empty_png, 1280, 720);
+    check_png(invalid_png, 1280, 720);
+    check_png(hook_open_png, 1280, 720);
+    check_png(hook_closed_png, 1280, 720);
+
+    int level_width = 0;
+    int level_height = 0;
+    int empty_width = 0;
+    int empty_height = 0;
+    int invalid_width = 0;
+    int invalid_height = 0;
+    int hook_open_width = 0;
+    int hook_open_height = 0;
+    int hook_closed_width = 0;
+    int hook_closed_height = 0;
+    const std::vector<unsigned char> level =
+        read_png(level_png, level_width, level_height);
+    const std::vector<unsigned char> empty =
+        read_png(empty_png, empty_width, empty_height);
+    const std::vector<unsigned char> invalid =
+        read_png(invalid_png, invalid_width, invalid_height);
+    const std::vector<unsigned char> hook_open =
+        read_png(hook_open_png, hook_open_width, hook_open_height);
+    const std::vector<unsigned char> hook_closed =
+        read_png(hook_closed_png, hook_closed_width, hook_closed_height);
+    REQUIRE(level_width == empty_width);
+    REQUIRE(level_height == empty_height);
+    REQUIRE(level_width == invalid_width);
+    REQUIRE(level_height == invalid_height);
+    REQUIRE(level_width == hook_open_width);
+    REQUIRE(level_height == hook_open_height);
+    REQUIRE(level_width == hook_closed_width);
+    REQUIRE(level_height == hook_closed_height);
+
+    const std::size_t level_vs_invalid = count_differences(level, invalid);
+    const std::size_t canvas_differences =
+        count_region_differences(empty, invalid, empty_width, empty_height, 160, 0, 960, 720);
+    const std::size_t empty_vs_hook_open = count_differences(empty, hook_open);
+    const std::size_t level_vs_hook_closed = count_differences(level, hook_closed);
+    CAPTURE(level_vs_invalid);
+    CAPTURE(canvas_differences);
+    CAPTURE(empty_vs_hook_open);
+    CAPTURE(level_vs_hook_closed);
+    CHECK(level_vs_invalid > 1000);
+    CHECK(canvas_differences == 0);
+    CHECK(empty_vs_hook_open == 0);
+    CHECK(level_vs_hook_closed == 0);
 }
 
 TEST_CASE("glgame --click-npc opens the dialog overlay over the level" *

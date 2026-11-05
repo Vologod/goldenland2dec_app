@@ -1,11 +1,13 @@
 #include <gl/app/click_actions.hpp>
 #include <gl/app/dialog_overlay.hpp>
 #include <gl/app/input_gate.hpp>
+#include <gl/app/inventory_overlay.hpp>
 #include <gl/app/level_screen.hpp>
 #include <gl/app/pending_talk.hpp>
 #include <gl/assets/cs.hpp>
 #include <gl/assets/hero_equipment.hpp>
 #include <gl/assets/herowear.hpp>
+#include <gl/assets/item_catalog.hpp>
 #include <gl/assets/log.hpp>
 #include <gl/assets/sdb.hpp>
 #include <gl/assets/vfs.hpp>
@@ -91,6 +93,7 @@ struct Options {
     bool hero_outfit_none = false;
     std::optional<int> equip_save;
     bool equip_save_pending = false;
+    bool inventory = false;
     std::optional<int> camera_x;
     std::optional<int> camera_y;
     bool walkable_overlay = false;
@@ -124,6 +127,7 @@ void print_usage() {
         "  --no-persons         Skip NPC sprites on the level\n"
         "  --equip-save <slot>  Apply hero equipment from save slot <slot>\n"
         "  --equip-save-pending Apply --equip-save on the next level load only\n"
+        "  --inventory          Open the inventory overlay for the selected save\n"
         "  --camera-x <px>      World X of the left viewport edge (screenshot mode)\n"
         "  --camera-y <px>      World Y of the top viewport edge (screenshot mode)\n"
         "  --walkable-overlay   Draw blocked tiles in red on the level\n"
@@ -135,7 +139,7 @@ void print_usage() {
         "  --exec \"<command>\"   Run a console command after boot (repeatable)\n"
         "  -h, --help           Show this help and exit\n"
         "\n"
-        "Console commands include: help, exit, saves.\n"
+        "Console commands include: help, exit, saves, inventory.\n"
         "Exit codes: 0 success, 1 arguments, 2 I/O, 3 format/load.");
 }
 
@@ -287,6 +291,8 @@ ParseStatus parse_args(int argc, char** argv, Options& options) {
             options.equip_save = slot;
         } else if (arg == "--equip-save-pending") {
             options.equip_save_pending = true;
+        } else if (arg == "--inventory") {
+            options.inventory = true;
         } else if (arg == "--camera-x") {
             if (!next_value(arg, value)) return ParseStatus::error;
             int camera = 0;
@@ -489,6 +495,7 @@ class Game {
 
         test_dialog_available_ = vfs_.exists(kTestDialogScript);
         load_font();
+        load_item_catalog();
 
         if (!state_.transition(gl::core::AppState::menu)) return 3;
 
@@ -525,6 +532,8 @@ class Game {
         for (const std::string& command : options_.exec) {
             execute_line(command, false);
         }
+
+        if (options_.inventory) open_inventory();
 
         gl::log(gl::LogLevel::info,
                 "glgame: boot complete, state=" + std::string(state_name(state_.state())) +
@@ -603,7 +612,8 @@ class Game {
 
             if (state_.state() == gl::core::AppState::level && level_ &&
                 gl::app::level_input_enabled(dialog_ != nullptr || dialog_overlay_.active(),
-                                             save_slots_, console_visible_)) {
+                                             save_slots_, console_visible_,
+                                             inventory_overlay_.visible())) {
                 int move_x = 0;
                 int move_y = 0;
                 const Uint8* keys = SDL_GetKeyboardState(nullptr);
@@ -655,6 +665,36 @@ class Game {
             gl::log(gl::LogLevel::warning, "font: no TrueType font available, using ASCII fallback");
         }
         update_dialog_style();
+    }
+
+    void load_item_catalog() {
+        gl::Result<gl::assets::ItemCatalog> catalog = gl::assets::ItemCatalog::load(vfs_);
+        if (!catalog) {
+            gl::log(gl::LogLevel::warning,
+                    "inventory: item catalog: " + catalog.error().message);
+            return;
+        }
+        item_catalog_ = std::move(catalog.value());
+        gl::log(gl::LogLevel::info, "inventory: catalog loaded");
+    }
+
+    void open_inventory() {
+        gl::assets::HeroInventory inventory;
+        if (pending_inventory_) inventory = *pending_inventory_;
+        inventory_overlay_.open(vfs_, item_catalog_, inventory);
+        gl::log(gl::LogLevel::info,
+                "inventory: opened hot=" + std::to_string(inventory.hot.size()) + " items=" +
+                    std::to_string(inventory.items.size()) + " equipped=" +
+                    std::to_string(inventory.equipped.size()));
+    }
+
+    void toggle_inventory() {
+        if (inventory_overlay_.visible()) {
+            inventory_overlay_.close();
+            gl::log(gl::LogLevel::info, "inventory: closed");
+        } else {
+            open_inventory();
+        }
     }
 
     gl::Result<void> open_dialog(std::string_view virtual_path, std::string_view speaker = {}) {
@@ -1100,6 +1140,16 @@ class Game {
                           return saves_text();
                       });
 
+        registry_.add("inventory", "toggle the inventory overlay",
+                      [this](gl::core::Args args) -> gl::Result<std::string> {
+                          if (!args.empty()) {
+                              return gl::Error{gl::ErrorCode::argument,
+                                               "usage: inventory"};
+                          }
+                          toggle_inventory();
+                          return std::string{};
+                      });
+
         registry_.add("game_save", "save the game (stub): game_save <slot>",
                       [](gl::core::Args args) -> gl::Result<std::string> {
                           if (args.size() != 1) {
@@ -1217,27 +1267,23 @@ class Game {
         console_print(result.value());
     }
 
-    std::optional<gl::assets::HeroEquipment> load_equipment_from_save(
-        const gl::core::SaveSlotInfo& slot, std::string& error) {
+    bool read_save_body(const gl::core::SaveSlotInfo& slot, std::vector<std::uint8_t>& body,
+                        std::string& error) {
         error.clear();
         std::ifstream in(slot.path, std::ios::binary);
         if (!in) {
             error = "cannot open '" + slot.path.string() + "'";
-            return std::nullopt;
+            return false;
         }
         std::vector<std::uint8_t> bytes((std::istreambuf_iterator<char>(in)),
                                         std::istreambuf_iterator<char>());
-        auto body = gl::assets::decode_save_body(bytes);
-        if (!body) {
-            error = body.error().message;
-            return std::nullopt;
+        auto decoded = gl::assets::decode_save_body(bytes);
+        if (!decoded) {
+            error = decoded.error().message;
+            return false;
         }
-        auto equipment = gl::assets::parse_hero_equipment(body.value());
-        if (!equipment) {
-            error = equipment.error().message;
-            return std::nullopt;
-        }
-        return equipment.value();
+        body = std::move(decoded.value());
+        return true;
     }
 
     std::optional<gl::game::HeroOutfit> resolve_outfit_from_equipment(
@@ -1280,6 +1326,9 @@ class Game {
     }
 
     void apply_equip_save(int slot, bool apply_to_level) {
+        pending_equipment_.reset();
+        pending_inventory_.reset();
+
         const gl::core::SaveSlotInfo* info = saves_.find(slot);
         gl::core::SaveSlotInfo synthetic;
         if (info == nullptr) {
@@ -1292,6 +1341,7 @@ class Game {
         std::error_code path_error;
         if (!fs::exists(info->path, path_error)) {
             pending_equipment_ = gl::assets::HeroEquipment{};
+            pending_inventory_ = gl::assets::HeroInventory{};
             report_outfit_message(
                 "outfit: naked (invalid save slot " + std::to_string(slot) + ")", false);
             if (apply_to_level && level_ && !options_.hero_outfit_none)
@@ -1299,17 +1349,45 @@ class Game {
             return;
         }
 
+        std::vector<std::uint8_t> body;
         std::string error;
-        auto equipment = load_equipment_from_save(*info, error);
-        if (!equipment) {
+        if (!read_save_body(*info, body, error)) {
             pending_equipment_ = gl::assets::HeroEquipment{};
+            pending_inventory_ = gl::assets::HeroInventory{};
             report_outfit_message(
                 "outfit: naked (slot " + std::to_string(slot) + "): " + error, false);
             if (apply_to_level && level_ && !options_.hero_outfit_none)
                 level_->apply_hero_outfit(make_naked_outfit());
             return;
         }
-        pending_equipment_ = std::move(*equipment);
+
+        auto inventory = gl::assets::parse_hero_inventory(body);
+        if (inventory) {
+            pending_inventory_ = std::move(inventory.value());
+            gl::log(gl::LogLevel::info,
+                    "inventory: slot " + std::to_string(slot) + " hot=" +
+                        std::to_string(pending_inventory_->hot.size()) + " items=" +
+                        std::to_string(pending_inventory_->items.size()) + " equipped=" +
+                        std::to_string(pending_inventory_->equipped.size()));
+        } else {
+            pending_inventory_ = gl::assets::HeroInventory{};
+            gl::log(gl::LogLevel::warning,
+                    "inventory: slot " + std::to_string(slot) + ": " +
+                        inventory.error().message);
+        }
+
+        auto equipment = gl::assets::parse_hero_equipment(body);
+        if (!equipment) {
+            pending_equipment_ = gl::assets::HeroEquipment{};
+            report_outfit_message(
+                "outfit: naked (slot " + std::to_string(slot) + "): " +
+                    equipment.error().message,
+                false);
+            if (apply_to_level && level_ && !options_.hero_outfit_none)
+                level_->apply_hero_outfit(make_naked_outfit());
+            return;
+        }
+        pending_equipment_ = std::move(equipment.value());
 
         if (options_.hero_outfit_none) {
             report_outfit_message("outfit: slot " + std::to_string(slot) +
@@ -1424,6 +1502,10 @@ class Game {
                 return;
             case SDL_MOUSEMOTION:
                 if (console_visible_) return;
+                if (inventory_overlay_.visible()) {
+                    inventory_overlay_.handle_mouse(event.motion.x, event.motion.y, false);
+                    return;
+                }
                 if (dialog_) {
                     dialog_hover(event.motion.x, event.motion.y);
                 } else if (save_slots_) {
@@ -1444,6 +1526,11 @@ class Game {
                 return;
             case SDL_MOUSEBUTTONDOWN:
                 if (console_visible_) return;
+                if (inventory_overlay_.visible()) {
+                    inventory_overlay_.handle_mouse(event.button.x, event.button.y,
+                                                    event.button.button == SDL_BUTTON_LEFT);
+                    return;
+                }
                 if (event.button.button == SDL_BUTTON_RIGHT) {
                     if (!dialog_ && !save_slots_ &&
                         state_.state() == gl::core::AppState::level && level_) {
@@ -1468,6 +1555,11 @@ class Game {
                 }
                 return;
             case SDL_MOUSEBUTTONUP:
+                if (inventory_overlay_.visible()) {
+                    mouse_down_ = false;
+                    dragging_ = false;
+                    return;
+                }
                 if (event.button.button != SDL_BUTTON_LEFT) return;
                 if (mouse_down_ && !dialog_ && !save_slots_ && !console_visible_ &&
                     state_.state() == gl::core::AppState::level && level_) {
@@ -1480,22 +1572,28 @@ class Game {
                 mouse_down_ = false;
                 dragging_ = false;
                 return;
-            case SDL_MOUSEWHEEL:
+            case SDL_MOUSEWHEEL: {
                 if (console_visible_ || state_.state() != gl::core::AppState::level ||
-                    !level_ || event.wheel.y == 0 ||
-                    !gl::app::level_input_enabled(dialog_ != nullptr || dialog_overlay_.active(),
-                                                  save_slots_, console_visible_)) {
+                    !level_ || event.wheel.y == 0) {
                     return;
                 }
-                {
-                    int mouse_x = 0;
-                    int mouse_y = 0;
-                    SDL_GetMouseState(&mouse_x, &mouse_y);
-                    const float factor = event.wheel.y > 0 ? kZoomStep : 1.0f / kZoomStep;
-                    level_->zoom_at(factor, static_cast<float>(mouse_x),
-                                    static_cast<float>(mouse_y));
+                int mouse_x = 0;
+                int mouse_y = 0;
+                SDL_GetMouseState(&mouse_x, &mouse_y);
+                if (inventory_overlay_.visible()) {
+                    inventory_overlay_.handle_wheel(event.wheel.y, mouse_x, mouse_y);
+                    return;
                 }
+                if (!gl::app::level_input_enabled(dialog_ != nullptr || dialog_overlay_.active(),
+                                                  save_slots_, console_visible_,
+                                                  inventory_overlay_.visible())) {
+                    return;
+                }
+                const float factor = event.wheel.y > 0 ? kZoomStep : 1.0f / kZoomStep;
+                level_->zoom_at(factor, static_cast<float>(mouse_x),
+                                static_cast<float>(mouse_y));
                 return;
+            }
             case SDL_WINDOWEVENT:
                 if (event.window.event == SDL_WINDOWEVENT_SIZE_CHANGED) {
                     update_viewport();
@@ -1516,11 +1614,21 @@ class Game {
             handle_console_key(key);
             return;
         }
+        if (inventory_overlay_.visible()) {
+            if (key.repeat == 0) inventory_overlay_.handle_key(symbol);
+            return;
+        }
         if (symbol == SDLK_BACKQUOTE) {
             set_console_visible(true);
             return;
         }
         if (key.repeat != 0 && symbol != SDLK_HOME) return;
+
+        if (state_.state() == gl::core::AppState::level && level_ &&
+            (symbol == SDLK_i || symbol == static_cast<SDL_Keycode>('I'))) {
+            toggle_inventory();
+            return;
+        }
 
         if (dialog_) {
             handle_dialog_key(key);
@@ -1832,6 +1940,11 @@ class Game {
             }
         }
 
+        if (inventory_overlay_.visible()) {
+            inventory_overlay_.render(window_.renderer(), viewport_width_, viewport_height_,
+                                      font_ ? &*font_ : nullptr);
+        }
+
         if (console_visible_) render_console(now_ms);
     }
 
@@ -2017,6 +2130,8 @@ class Game {
     gl::core::ConsoleBuffer console_lines_;
     std::optional<gl::app::LevelScreen> level_;
     std::optional<gl::assets::HeroEquipment> pending_equipment_;
+    std::optional<gl::assets::HeroInventory> pending_inventory_;
+    gl::assets::ItemCatalog item_catalog_;
     std::string level_name_;
     std::string input_;
     bool console_visible_ = false;
@@ -2037,6 +2152,7 @@ class Game {
     std::optional<gl::render::Font> font_;
     std::unique_ptr<DialogContext> dialog_;
     gl::app::DialogOverlay dialog_overlay_;
+    gl::app::InventoryOverlay inventory_overlay_;
     std::optional<std::size_t> pending_talk_;
     std::optional<gl::game::Tile> pending_talk_tile_;
     std::uint64_t level_animation_ms_ = 0;
