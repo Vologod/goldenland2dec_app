@@ -297,6 +297,27 @@ TEST_CASE("real slot0 puppet overlap selects the active weapon A" *
     CHECK(overlay.selected_name() == "Топор Сумеречного Палача");
 }
 
+TEST_CASE("real slot0 shield B is selectable when shield A is absent" *
+          doctest::skip(!game_dir_available())) {
+    const char *dir = std::getenv("GL_GAME_DIR");
+    REQUIRE(dir != nullptr);
+    auto vfs = gl::assets::GameVfs::mount(dir);
+    REQUIRE(vfs.has_value());
+    auto catalog = gl::assets::ItemCatalog::load(vfs.value());
+    REQUIRE(catalog.has_value());
+    auto inventory = load_real_inventory(0);
+    REQUIRE(inventory.has_value());
+
+    gl::app::InventoryOverlay overlay;
+    REQUIRE(overlay.open(vfs.value(), catalog.value(), inventory.value()));
+    CHECK(overlay.hit_test(238, 493) == gl::app::InventoryRegion::puppet_slot);
+    CHECK(overlay.handle_mouse(238, 493, true));
+    CHECK(overlay.selection() == gl::app::InventorySelection::equipped);
+    REQUIRE(overlay.view().selected.has_value());
+    CHECK(inventory->equipped[*overlay.view().selected].item_id == 353);
+    CHECK(overlay.selected_name() == "Крепкий костяной щит");
+}
+
 TEST_CASE("inventory overlay highlights the active filter") {
     gl::assets::GameVfs vfs;
     gl::assets::ItemCatalog catalog;

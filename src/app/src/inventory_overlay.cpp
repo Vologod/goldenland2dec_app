@@ -64,6 +64,10 @@ constexpr float kPanelNameLine = 18.0f;
 constexpr float kPanelStatLine = 18.0f;
 constexpr float kPanelDescLine = 16.0f;
 
+bool contains(float rx, float ry, float rw, float rh, float x, float y) {
+    return x >= rx && y >= ry && x < rx + rw && y < ry + rh;
+}
+
 const gl::assets::InventoryItem *find_equipped(const gl::assets::HeroInventory &inventory,
                                                std::uint32_t mask) {
     for (const gl::assets::InventoryItem &candidate : inventory.equipped) {
@@ -79,6 +83,19 @@ bool puppet_slot_visible(const gl::assets::HeroInventory &inventory, const Puppe
     if (slot.mask == kShieldBMask)
         return find_equipped(inventory, kShieldAMask) == nullptr;
     return true;
+}
+
+const PuppetSpec *hit_puppet_slot(const gl::assets::HeroInventory &inventory, float x, float y,
+                                  bool require_item) {
+    for (const PuppetSpec &slot : kPuppetSlots) {
+        if (!puppet_slot_visible(inventory, slot))
+            continue;
+        if (require_item && find_equipped(inventory, slot.mask) == nullptr)
+            continue;
+        if (contains(static_cast<float>(slot.x), static_cast<float>(slot.y), 55.0f, 55.0f, x, y))
+            return &slot;
+    }
+    return nullptr;
 }
 
 void draw_stack_count(SDL_Renderer *renderer, std::uint32_t count, float x, float y, float w,
@@ -99,10 +116,6 @@ void draw_stack_count(SDL_Renderer *renderer, std::uint32_t count, float x, floa
     const float height = gl::render::text_height(scale);
     gl::render::draw_text(renderer, text, x + w - 2.0f - width, y + h - 2.0f - height, scale,
                           gl::render::Color{255, 255, 255, 255});
-}
-
-bool contains(float rx, float ry, float rw, float rh, float x, float y) {
-    return x >= rx && y >= ry && x < rx + rw && y < ry + rh;
 }
 
 bool lower_suffix(std::string_view path, std::string_view suffix) {
@@ -765,26 +778,24 @@ bool InventoryOverlay::handle_mouse(int x, int y, bool click) {
             break;
         }
         break;
-    case InventoryRegion::puppet_slot:
-        for (const PuppetSpec &puppet : kPuppetSlots) {
-            if (!puppet_slot_visible(inventory_, puppet))
-                continue;
-            if (!contains(static_cast<float>(puppet.x), static_cast<float>(puppet.y), 55.0f, 55.0f,
-                          logical_x, logical_y))
-                continue;
-            bool found = false;
+    case InventoryRegion::puppet_slot: {
+        const PuppetSpec *puppet = hit_puppet_slot(inventory_, logical_x, logical_y, true);
+        if (puppet == nullptr)
+            puppet = hit_puppet_slot(inventory_, logical_x, logical_y, false);
+        bool found = false;
+        if (puppet != nullptr) {
             for (std::size_t index = 0; index < inventory_.equipped.size(); ++index) {
-                if ((inventory_.equipped[index].flags & 0x00FFF000u) == puppet.mask) {
+                if ((inventory_.equipped[index].flags & 0x00FFF000u) == puppet->mask) {
                     select(InventorySelection::equipped, index);
                     found = true;
                     break;
                 }
             }
-            if (!found)
-                clear_selection();
-            break;
         }
+        if (!found)
+            clear_selection();
         break;
+    }
     case InventoryRegion::none:
     case InventoryRegion::skills_tab:
     case InventoryRegion::drop:
@@ -884,13 +895,10 @@ InventoryRegion InventoryOverlay::hit_test(int x, int y) const {
             return InventoryRegion::hot_slot;
     }
 
-    for (const PuppetSpec &slot : kPuppetSlots) {
-        if (!puppet_slot_visible(inventory_, slot))
-            continue;
-        if (contains(static_cast<float>(slot.x), static_cast<float>(slot.y), 55.0f, 55.0f,
-                     logical_x, logical_y))
-            return InventoryRegion::puppet_slot;
-    }
+    if (hit_puppet_slot(inventory_, logical_x, logical_y, true) != nullptr)
+        return InventoryRegion::puppet_slot;
+    if (hit_puppet_slot(inventory_, logical_x, logical_y, false) != nullptr)
+        return InventoryRegion::puppet_slot;
 
     if (contains(19.0f, 690.0f, 81.0f, 75.0f, logical_x, logical_y))
         return InventoryRegion::drop;
