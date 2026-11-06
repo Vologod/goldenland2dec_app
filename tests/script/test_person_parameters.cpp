@@ -62,7 +62,49 @@ TEST_CASE("set person parameter dispatches to services") {
     CHECK(seen_person == "Hero");
     CHECK(seen_param == PersonParameter::life);
     CHECK(seen_value == 7.0);
-    CHECK(std::get<std::int32_t>(result) == 0);
+    CHECK(std::get<double>(result) == doctest::Approx(0.0));
+}
+
+TEST_CASE("set person parameter truncates fractional values to int") {
+    gl::script::NativeServices services;
+    double seen_value = 0.0;
+    services.person.set_parameter = [&](std::string_view, PersonParameter, double value) {
+        seen_value = value;
+    };
+    const gl::script::Value person = std::string("Hero");
+    const gl::script::Value param = std::string("LIFE");
+    const gl::script::Value value = 7.9;
+    const gl::script::Value args[] = {person, param, value};
+    const auto result = gl::script::NativeRegistry::call(
+        *gl::script::NativeRegistry::find(0x4000001), args, services);
+    CHECK(seen_value == 7.0);
+    CHECK(std::get<double>(result) == doctest::Approx(0.0));
+}
+
+TEST_CASE("set person parameter rejects a non-numeric value") {
+    gl::script::NativeServices services;
+    bool called = false;
+    std::vector<std::string> messages;
+    services.person.set_parameter = [&](std::string_view, PersonParameter, double) {
+        called = true;
+    };
+    services.log = [&](std::string_view text) { messages.emplace_back(text); };
+    const gl::script::Value person = std::string("Hero");
+    const gl::script::Value param = std::string("LIFE");
+    const gl::script::Value value = std::string("seven");
+    const gl::script::Value args[] = {person, param, value};
+    const auto result = gl::script::NativeRegistry::call(
+        *gl::script::NativeRegistry::find(0x4000001), args, services);
+    CHECK_FALSE(called);
+    CHECK(std::get<double>(result) == doctest::Approx(0.0));
+    REQUIRE(messages.size() == 1);
+    CHECK(messages.front().find("invalid") != std::string::npos);
+}
+
+TEST_CASE("person native registry arities match Server.dll") {
+    CHECK(gl::script::NativeRegistry::find(0x4000000)->arity == 2);
+    CHECK(gl::script::NativeRegistry::find(0x4000001)->arity == 3);
+    CHECK(gl::script::NativeRegistry::find(0x400000C)->arity == 2);
 }
 
 TEST_CASE("get person skill dispatches to services") {
@@ -97,5 +139,5 @@ TEST_CASE("person native rejects wrong arguments") {
     const gl::script::Value args[] = {only};
     const auto result = gl::script::NativeRegistry::call(
         *gl::script::NativeRegistry::find(0x4000000), args, services);
-    CHECK(std::get<double>(result) == doctest::Approx(0.0));
+    CHECK(std::get<std::int32_t>(result) == 0);
 }

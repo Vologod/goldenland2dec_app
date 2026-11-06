@@ -27,13 +27,6 @@ std::int32_t as_int(const Value& value) {
     return 0;
 }
 
-double as_double(const Value& value) {
-    if (const auto* item = std::get_if<std::int32_t>(&value)) return *item;
-    if (const auto* item = std::get_if<std::uint32_t>(&value)) return *item;
-    if (const auto* item = std::get_if<double>(&value)) return *item;
-    return 0.0;
-}
-
 std::string_view as_string(const Value& value) {
     if (const auto* item = std::get_if<std::string>(&value)) return *item;
     return {};
@@ -41,6 +34,12 @@ std::string_view as_string(const Value& value) {
 
 bool is_string(const Value& value) {
     return std::holds_alternative<std::string>(value);
+}
+
+bool is_numeric(const Value& value) {
+    return std::holds_alternative<std::int32_t>(value) ||
+           std::holds_alternative<std::uint32_t>(value) ||
+           std::holds_alternative<double>(value);
 }
 
 void warn_native(std::string_view text, NativeServices& services) {
@@ -58,14 +57,16 @@ Value native_get_person_parameter(std::span<const Value> args, NativeServices& s
 }
 
 Value native_set_person_parameter(std::span<const Value> args, NativeServices& services) {
-    if (args.size() < 3 || !is_string(args[0]) || !is_string(args[1])) {
+    if (args.size() < 3 || !is_string(args[0]) || !is_string(args[1]) ||
+        !is_numeric(args[2])) {
         warn_native("script native RS_SetPersonParameterI: invalid arguments", services);
-        return std::int32_t{0};
+        return double{0.0};
     }
     const auto parameter = person_parameter_from_name(as_string(args[1]));
     if (services.person.set_parameter)
-        services.person.set_parameter(as_string(args[0]), parameter, as_double(args[2]));
-    return std::int32_t{0};
+        services.person.set_parameter(as_string(args[0]), parameter,
+                                      static_cast<double>(as_int(args[2])));
+    return double{0.0};
 }
 
 Value native_get_person_skill(std::span<const Value> args, NativeServices& services) {
@@ -133,9 +134,9 @@ std::vector<NativeInfo> make_entries() {
         add(id, NativeSupport::unsupported, "requires world/effect runtime");
     for (std::uint32_t id = 0x3000000; id <= 0x3000008; ++id)
         add(id, NativeSupport::unsupported, "requires world/level runtime");
-    add(0x4000000, NativeSupport::supported, {}, &native_get_person_parameter);
-    add(0x4000001, NativeSupport::supported, {}, &native_set_person_parameter);
-    add(0x400000c, NativeSupport::supported, {}, &native_get_person_skill);
+    add(0x4000000, NativeSupport::supported, {}, &native_get_person_parameter, 2);
+    add(0x4000001, NativeSupport::supported, {}, &native_set_person_parameter, 3);
+    add(0x400000c, NativeSupport::supported, {}, &native_get_person_skill, 2);
     for (std::uint32_t id = 0x4000000; id <= 0x400000c; ++id)
         if (id != 0x4000000 && id != 0x4000001 && id != 0x400000c)
             add(id, NativeSupport::unsupported, "requires person runtime state");
