@@ -874,6 +874,28 @@ TEST_CASE("glgame --equip-save applies the slot outfit and falls back to naked")
     CHECK(pending_invalid_log.find("invalid save slot 9999") != std::string::npos);
 }
 
+TEST_CASE("glgame --dialog --equip-save populates inventory before the dialog starts" *
+          doctest::skip(!font_available())) {
+    const char* game_dir = std::getenv("GL_GAME_DIR");
+    REQUIRE(game_dir != nullptr);
+
+    TempDir temp;
+    const fs::path config = write_test_config(temp.path);
+    const fs::path png = temp.path / "dialog_inventory.png";
+    std::string output;
+    const int code = run_glgame_capture(
+        screenshot_arguments(
+            game_dir, config, png,
+            {"--dialog", "scripts/dialogs/l13_1/l13_1.p517_boat_trader.d517.age.cs",
+             "--equip-save", "0"}),
+        output);
+    CAPTURE(code);
+    CAPTURE(output);
+    REQUIRE(fs::exists(png));
+    CHECK(code == 0);
+    CHECK(output.find("inventory runtime: Hero money=43875") != std::string::npos);
+}
+
 TEST_CASE("glgame --inventory opens the selected save inventory" *
           doctest::skip(!font_available())) {
     const char* game_dir = std::getenv("GL_GAME_DIR");

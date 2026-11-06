@@ -525,8 +525,7 @@ class Game {
             gl::log(gl::LogLevel::info, "dialog: console disabled for --dialog");
         }
 
-        if (options_.equip_save && options_.equip_save_pending)
-            apply_equip_save(*options_.equip_save, false);
+        if (options_.equip_save) load_equip_save(*options_.equip_save);
 
         if (options_.has_dialog) {
             rebuild_person_runtime({});
@@ -540,7 +539,7 @@ class Game {
         }
 
         if (options_.equip_save && !options_.equip_save_pending)
-            apply_equip_save(*options_.equip_save, true);
+            apply_loaded_equip_save();
 
         update_viewport();
         if (level_ && options_.camera_x && options_.camera_y) {
@@ -747,6 +746,9 @@ class Game {
             inventory_runtime_ = gl::game::InventoryRuntime::create(
                 inventory, gl::assets::ItemNameIndex{});
         }
+        gl::log(gl::LogLevel::info,
+                "inventory runtime: Hero money=" +
+                    std::to_string(inventory_runtime_.money()));
     }
 
     void open_inventory() {
@@ -1425,10 +1427,11 @@ class Game {
         gl::log(info ? gl::LogLevel::info : gl::LogLevel::warning, message);
     }
 
-    void apply_equip_save(int slot, bool apply_to_level) {
+    void load_equip_save(int slot) {
         pending_equipment_.reset();
         pending_inventory_.reset();
         pending_hero_stats_.reset();
+        pending_outfit_.reset();
 
         const gl::core::SaveSlotInfo* info = saves_.find(slot);
         gl::core::SaveSlotInfo synthetic;
@@ -1443,12 +1446,10 @@ class Game {
         if (!fs::exists(info->path, path_error)) {
             pending_equipment_ = gl::assets::HeroEquipment{};
             pending_inventory_ = gl::assets::HeroInventory{};
+            pending_outfit_ = make_naked_outfit();
             rebuild_inventory_runtime();
             report_outfit_message(
                 "outfit: naked (invalid save slot " + std::to_string(slot) + ")", false);
-            if (apply_to_level && level_ && !options_.hero_outfit_none)
-                level_->apply_hero_outfit(make_naked_outfit());
-            if (apply_to_level && level_) rebuild_person_runtime(level_->level().persons);
             return;
         }
 
@@ -1457,12 +1458,10 @@ class Game {
         if (!read_save_body(*info, body, error)) {
             pending_equipment_ = gl::assets::HeroEquipment{};
             pending_inventory_ = gl::assets::HeroInventory{};
+            pending_outfit_ = make_naked_outfit();
             rebuild_inventory_runtime();
             report_outfit_message(
                 "outfit: naked (slot " + std::to_string(slot) + "): " + error, false);
-            if (apply_to_level && level_ && !options_.hero_outfit_none)
-                level_->apply_hero_outfit(make_naked_outfit());
-            if (apply_to_level && level_) rebuild_person_runtime(level_->level().persons);
             return;
         }
 
@@ -1472,7 +1471,6 @@ class Game {
         } else {
             gl::log(gl::LogLevel::warning, "hero stats: " + hero_stats.error().message);
         }
-        if (apply_to_level && level_) rebuild_person_runtime(level_->level().persons);
 
         auto inventory = gl::assets::parse_hero_inventory(body);
         if (inventory) {
@@ -1493,17 +1491,17 @@ class Game {
         auto equipment = gl::assets::parse_hero_equipment(body);
         if (!equipment) {
             pending_equipment_ = gl::assets::HeroEquipment{};
+            pending_outfit_ = make_naked_outfit();
             report_outfit_message(
                 "outfit: naked (slot " + std::to_string(slot) + "): " +
                     equipment.error().message,
                 false);
-            if (apply_to_level && level_ && !options_.hero_outfit_none)
-                level_->apply_hero_outfit(make_naked_outfit());
             return;
         }
         pending_equipment_ = std::move(equipment.value());
 
         if (options_.hero_outfit_none) {
+            pending_outfit_ = make_naked_outfit();
             report_outfit_message("outfit: slot " + std::to_string(slot) +
                                       " ignored (--hero-outfit none)",
                                   true);
@@ -1513,14 +1511,20 @@ class Game {
         std::string resolve_error;
         auto outfit = resolve_outfit_from_equipment(*pending_equipment_, resolve_error);
         if (!outfit) {
+            pending_outfit_ = make_naked_outfit();
             report_outfit_message(
                 "outfit: naked (slot " + std::to_string(slot) + "): " + resolve_error, false);
-            if (apply_to_level && level_) level_->apply_hero_outfit(make_naked_outfit());
             return;
         }
-
+        pending_outfit_ = std::move(outfit.value());
         report_outfit_message("outfit: slot " + std::to_string(slot), true);
-        if (apply_to_level && level_) level_->apply_hero_outfit(*outfit);
+    }
+
+    void apply_loaded_equip_save() {
+        if (!level_) return;
+        const gl::game::HeroOutfit outfit =
+            pending_outfit_ ? *pending_outfit_ : make_naked_outfit();
+        level_->apply_hero_outfit(outfit);
     }
 
     void rebuild_person_runtime(const std::vector<gl::game::PersonInstance>& persons) {
@@ -2080,7 +2084,11 @@ class Game {
         save_selected_ = std::clamp(save_selected_, 0, last);
         const gl::core::SaveSlotInfo& slot =
             *display_saves_[static_cast<std::size_t>(save_selected_)];
-        apply_equip_save(slot.slot, true);
+        load_equip_save(slot.slot);
+        if (level_) {
+            rebuild_person_runtime(level_->level().persons);
+            apply_loaded_equip_save();
+        }
     }
 
     void render(std::uint64_t now_ms, std::uint64_t animation_ms) {
@@ -2313,6 +2321,7 @@ class Game {
     std::optional<gl::assets::HeroEquipment> pending_equipment_;
     std::optional<gl::assets::HeroInventory> pending_inventory_;
     std::optional<gl::assets::HeroStats> pending_hero_stats_;
+    std::optional<gl::game::HeroOutfit> pending_outfit_;
     gl::game::PersonRuntime person_runtime_;
     gl::game::InventoryRuntime inventory_runtime_;
     std::optional<gl::assets::ItemNameIndex> item_names_;
