@@ -52,7 +52,11 @@
   шаблона → add no-op (research §3.4: стекинг в существующую запись
   мог бы произойти); runtime-снятие бита `0x80` (`DAT_14088df8+4`)
   не моделируется; `max_stack` не хранится per-record (берётся текущий
-  ITM); нет `Transfer`/`Trade`/`PassToTradePanel`; save не пишется;
+  ITM); `max_stack == 0` → add no-op (в оригинале цикл); новая запись
+  добавляется в конец, а оригинал — в первый свободный слот (порядок
+  overlay после delete+add может отличаться); `count` усекается к int32
+  (в оригинале `ROUND`; counts в `.cs` целые); нет
+  `Transfer`/`Trade`/`PassToTradePanel`; save не пишется;
   автоматического интеграционного теста на два последовательных
   диалога нет (мутации переживают диалог, но проверен один проход).
 - **Следующее:** `RS_PersonTransferItemI`/`RS_PersonTransferAllItemsI`/

@@ -59,7 +59,7 @@ state `+0x18`) фиксируются research (Task 1) и реализуютс�
 - Add: если запись с `item_id` есть — увеличить `count` с учётом
   `max_stack` из ITM (split на несколько записей, если `max_stack >= 2`);
   иначе добавить запись с `count`, `type/flags/style` из ITM. `max_stack
-  == 0` — без split (по research).
+  == 0` → add no-op (защитно; в оригинале цикл).
 - Remove: уменьшить `count`; при нуле удалить запись; поведение при
   `count > available` и частичном удалении — по research.
 - Money — обычная запись `MON_1_0_1` (type 18); `GetMoney`/`GetItemCount`
@@ -87,7 +87,8 @@ state `+0x18`) фиксируются research (Task 1) и реализуютс�
 
 ### 5.1 `gl::game::InventoryRuntime`
 
-- Хранит `std::vector<gl::assets::InventoryItem> hero_items_` (копия save).
+- Хранит `gl::assets::HeroInventory hero_inventory_` (копия save; live
+  `items` вектор).
 - `add_item(std::string_view person, std::string_view tech,
   std::int32_t count) -> bool`;
   `remove_item(...) -> bool`.
