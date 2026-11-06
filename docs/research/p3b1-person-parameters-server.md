@@ -296,11 +296,17 @@ if (delta > 0) {
 if (delta < 0 && FUN_1400cb64(id, 3) > 4) delta *= 2;     // SKILL_DARKMAG
 if (delta != 0) {
     vtable+0x4C(manager, id);                 // hook (семантика unverified)
-    manager[0x6C] += delta;                   // base reputation
-    vtable+0x08(manager, id);                 // hook/recompute (unverified)
 }
+manager[0x6C] += delta;                       // base reputation (always)
+vtable+0x08(manager, id);                     // always; hook/recompute (unverified)
 return 1;
 ```
+
+Только `vtable+0x4C` условен. Обновление `manager[0x6C]` и вызов
+`vtable+0x08` безусловны: они лежат на `LAB_1400aa93`
+(`decompiled.c:8231-8233`), который достигается и при `delta == 0`
+(ветки `goto LAB_1400aa87`/`LAB_1400aa93` на `8223/8228`). Поэтому
+flush/recompute происходит даже при нулевой дельте.
 
 `return 1` игнорируется нативом (наружу всегда `0.0`). Из-за
 `round(curve(...))` в getter'е итоговое effective-значение может
