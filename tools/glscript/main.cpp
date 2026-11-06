@@ -1,7 +1,9 @@
 #include "gl/assets/cs.hpp"
+#include "gl/assets/log.hpp"
 #include "gl/assets/result.hpp"
 #include "gl/assets/sdb.hpp"
 #include "gl/assets/vfs.hpp"
+#include "gl/game/game_script_host.hpp"
 #include "gl/script/globals.hpp"
 #include "gl/script/host.hpp"
 #include "gl/script/script_vm.hpp"
@@ -232,7 +234,11 @@ int run(int argc, char** argv) {
     auto globals = gl::script::parse_globals(globals_data.value());
     if (!globals) return fail(globals.error());
 
-    gl::script::DefaultScriptHost host;
+    gl::script::NativeServices services;
+    services.console = [](std::string_view text) {
+        gl::log(gl::LogLevel::info, "script console: " + std::string(text));
+    };
+    gl::game::GameScriptHost host(services);
     gl::script::ScriptVm vm(std::move(nodes.value()), host);
     vm.set_globals(globals.value());
 

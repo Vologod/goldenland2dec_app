@@ -18,6 +18,7 @@
 #include <gl/core/server.hpp>
 #include <gl/core/state.hpp>
 #include <gl/game/dialog_path.hpp>
+#include <gl/game/game_script_host.hpp>
 #include <gl/game/hero_outfit_resolver.hpp>
 #include <gl/platform/sdl_context.hpp>
 #include <gl/render/font.hpp>
@@ -466,7 +467,7 @@ void erase_last_utf8(std::string& text) {
 
 struct DialogContext {
     gl::assets::Sdb sdb;
-    gl::script::DefaultScriptHost host;
+    gl::game::GameScriptHost host;
     std::unique_ptr<gl::script::ScriptVm> vm;
     std::unique_ptr<gl::script::DialogSession> session;
     std::string path;
@@ -769,6 +770,22 @@ class Game {
         if (!sdb) return report(sdb.error());
 
         auto context = std::make_unique<DialogContext>();
+        context->host.services().console = [](std::string_view text) {
+            gl::log(gl::LogLevel::info, "script console: " + std::string(text));
+        };
+        context->host.services().command = [this](std::string_view text) {
+            const auto result = registry_.execute(text);
+            if (!result) gl::log(gl::LogLevel::warning, "script cmd: " + result.error().message);
+        };
+        context->host.services().signal = [](std::string_view text) {
+            gl::log(gl::LogLevel::info, "script signal: " + std::string(text));
+        };
+        context->host.services().play_sound = [](std::string_view name) {
+            gl::log(gl::LogLevel::debug, "script sound: " + std::string(name));
+        };
+        context->host.services().exit = [](std::int32_t code) {
+            gl::log(gl::LogLevel::info, "script exit: " + std::to_string(code));
+        };
         context->path = std::string(virtual_path);
         context->speaker = std::string(speaker);
         context->sdb = std::move(sdb.value());
