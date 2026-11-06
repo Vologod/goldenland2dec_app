@@ -739,12 +739,20 @@ class Game {
     void rebuild_inventory_runtime() {
         const gl::assets::HeroInventory inventory =
             pending_inventory_ ? *pending_inventory_ : gl::assets::HeroInventory{};
+        const auto item_template =
+            [this](std::uint32_t id) -> std::optional<gl::game::ItemTemplate> {
+            const gl::assets::ItemCatalogEntry* entry = item_catalog_.find(id);
+            if (entry == nullptr) return std::nullopt;
+            return gl::game::ItemTemplate{
+                static_cast<std::uint32_t>(entry->item.type), entry->item.flags,
+                entry->item.unknown_b[1], entry->item.max_stack};
+        };
         if (item_names_) {
             inventory_runtime_ =
-                gl::game::InventoryRuntime::create(inventory, *item_names_);
+                gl::game::InventoryRuntime::create(inventory, *item_names_, item_template);
         } else {
             inventory_runtime_ = gl::game::InventoryRuntime::create(
-                inventory, gl::assets::ItemNameIndex{});
+                inventory, gl::assets::ItemNameIndex{}, item_template);
         }
         gl::log(gl::LogLevel::info,
                 "inventory runtime: Hero money=" +
@@ -752,8 +760,7 @@ class Game {
     }
 
     void open_inventory() {
-        gl::assets::HeroInventory inventory;
-        if (pending_inventory_) inventory = *pending_inventory_;
+        const gl::assets::HeroInventory& inventory = inventory_runtime_.hero_inventory();
         inventory_overlay_.open(vfs_, item_catalog_, inventory);
         inventory_overlay_.set_font(inventory_font());
         if (options_.inventory_select) {

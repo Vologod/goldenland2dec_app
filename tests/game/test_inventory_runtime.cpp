@@ -91,13 +91,22 @@ TEST_CASE("inventory_runtime empty inventory returns zero") {
 }
 
 TEST_CASE("inventory_runtime access callbacks delegate to queries") {
-    auto runtime = InventoryRuntime::create(make_inventory(), make_names());
+    auto runtime = InventoryRuntime::create(make_inventory(), make_names(), template_for);
     auto access = runtime.access();
     REQUIRE(access.item_count);
     REQUIRE(access.money);
+    REQUIRE(access.add_item);
+    REQUIRE(access.remove_item);
 
     CHECK(access.item_count("Hero", "MON_1_0_1") == 500);
     CHECK(access.item_count("Other", "MON_1_0_1") == 0);
+    CHECK(access.money() == 500);
+
+    access.add_item("Hero", "MON_1_0_1", 100);
+    CHECK(access.item_count("Hero", "MON_1_0_1") == 600);
+    CHECK(access.money() == 600);
+    access.remove_item("Hero", "MON_1_0_1", 100);
+    CHECK(access.item_count("Hero", "MON_1_0_1") == 500);
     CHECK(access.money() == 500);
 }
 

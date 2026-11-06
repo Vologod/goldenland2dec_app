@@ -119,6 +119,12 @@ gl::script::InventoryAccess InventoryRuntime::access() {
         return count(person, tech_name);
     };
     access.money = [this] { return money(); };
+    access.add_item = [this](std::string_view person, std::string_view tech_name,
+                             std::int32_t item_count) { add_item(person, tech_name, item_count); };
+    access.remove_item = [this](std::string_view person, std::string_view tech_name,
+                                std::int32_t item_count) {
+        remove_item(person, tech_name, item_count);
+    };
     return access;
 }
 } // namespace gl::game
