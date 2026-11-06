@@ -429,7 +429,7 @@ Value ScriptVm::eval(std::int32_t index, int depth) {
     case 48:
         return call_function(node, depth);
     case 49:
-        return std::int32_t{0};
+        return 0.0;
     case 50:
         return eval_assignment(
             nodes_, node, depth + 1, [this](std::int32_t value) { return valid_index(value); },

@@ -773,18 +773,21 @@ TEST_CASE("vm: bitwise opcodes reject string operands") {
 }
 
 TEST_CASE("vm: unary opcode rejects a string operand") {
-    std::vector<CsNode> nodes(5);
+    std::vector<CsNode> nodes(6);
     nodes[0] = make_assign(1, 2, 3);
     nodes[1] = make_str_var("x");
     nodes[2] = make_node(19);
-    nodes[2].a = 4;
+    nodes[2].a = 5;
+    nodes[2].b = 4;
     nodes[3] = make_jmp(-1, -1);
     nodes[4] = make_str_var("s");
+    nodes[5] = make_num(1.0);
 
     VmHarness h(std::move(nodes), {global_string("s", "abc"), global_int("x", 9)});
     CHECK_FALSE(h.vm.step());
     CHECK(h.vm.status() == VmStatus::end);
     CHECK(h.vm.failed());
+    CHECK(std::get<std::int32_t>(*h.vm.variable("x")) == 9);
 }
 
 TEST_CASE("vm: arithmetic failure stops before evaluating the sibling operand") {
@@ -1045,6 +1048,22 @@ TEST_CASE("vm: opcodes 49 and 50 evaluate as operands like Server.dll 0x3a141") 
         CHECK(std::get<std::int32_t>(*h.vm.variable("x")) == 12);
         CHECK(std::get<std::int32_t>(*h.vm.variable("y")) == 7);
     }
+}
+
+TEST_CASE("vm: opcode 0x31 returns double zero like Server.dll 0x3a141") {
+    std::vector<CsNode> nodes(6);
+    nodes[0] = make_assign(1, 2, 5);
+    nodes[1] = make_str_var("x");
+    nodes[2] = make_bin(14, 3, 4);
+    nodes[3] = make_jmp(-1, -1);
+    nodes[4] = make_num(2.5);
+    nodes[5] = make_jmp(-1, -1);
+
+    VmHarness h(std::move(nodes), {global_float("x", 0.0)});
+    CHECK(h.vm.step());
+    CHECK_FALSE(h.vm.failed());
+    REQUIRE(std::holds_alternative<double>(*h.vm.variable("x")));
+    CHECK(std::get<double>(*h.vm.variable("x")) == doctest::Approx(2.5));
 }
 
 TEST_CASE("vm: opcode 0x12 truncates modulo like Server.dll 0x3a279") {
