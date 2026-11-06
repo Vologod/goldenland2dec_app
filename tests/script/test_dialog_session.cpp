@@ -92,20 +92,20 @@ Sdb make_sdb(std::initializer_list<std::pair<std::uint32_t, std::string_view>> e
 }
 
 std::vector<CsNode> two_page_dialog() {
-    std::vector<CsNode> nodes(15);
-    nodes[0] = make_compare_eq(1, 2, 3, 8);
+    std::vector<CsNode> nodes(14);
+    nodes[0] = make_compare_eq(1, 2, 3, 6);
     nodes[1] = make_var("LastAnswer");
     nodes[2] = make_num(2.0);
-    nodes[3] = make_func(kD_Say, {4});
-    nodes[4] = make_num(200.0);
-    nodes[5] = make_jmp(-1, -1);
-    nodes[8] = make_func(kD_Say, {9});
-    nodes[9] = make_num(100.0);
-    nodes[10] = make_func(kD_Answer, {11});
-    nodes[11] = make_num(1.0);
-    nodes[12] = make_func(kD_Answer, {13});
+    nodes[3] = make_func(kD_Say, {10});
+    nodes[4] = make_jmp(-1, -1);
+    nodes[6] = make_func(kD_Say, {11});
+    nodes[7] = make_func(kD_Answer, {12});
+    nodes[8] = make_func(kD_Answer, {13});
+    nodes[9] = make_jmp(-1, -1);
+    nodes[10] = make_num(200.0);
+    nodes[11] = make_num(100.0);
+    nodes[12] = make_num(1.0);
     nodes[13] = make_num(2.0);
-    nodes[14] = make_jmp(-1, -1);
     return nodes;
 }
 
@@ -173,11 +173,11 @@ TEST_CASE("dialog session: choose rejects an out-of-range answer") {
 
 TEST_CASE("dialog session: missing SDB phrases fall back to placeholders") {
     std::vector<CsNode> nodes(5);
-    nodes[0] = make_func(kD_Say, {1});
-    nodes[1] = make_num(999.0);
-    nodes[2] = make_func(kD_Answer, {3});
-    nodes[3] = make_num(998.0);
-    nodes[4] = make_jmp(-1, -1);
+    nodes[0] = make_func(kD_Say, {3});
+    nodes[1] = make_func(kD_Answer, {4});
+    nodes[2] = make_jmp(-1, -1);
+    nodes[3] = make_num(999.0);
+    nodes[4] = make_num(998.0);
 
     SessionHarness h(std::move(nodes), make_sdb({{100, "Hello"}}));
     DialogSession session(h.vm, h.sdb);
@@ -193,11 +193,11 @@ TEST_CASE("dialog session: missing SDB phrases fall back to placeholders") {
 
 TEST_CASE("dialog session: a dialog that ends immediately leaves no page") {
     std::vector<CsNode> nodes(5);
-    nodes[0] = make_func(kD_Say, {1});
-    nodes[1] = make_num(100.0);
-    nodes[2] = make_func(kD_CloseDialog, {3});
-    nodes[3] = make_num(0.0);
-    nodes[4] = make_jmp(-1, -1);
+    nodes[0] = make_func(kD_Say, {3});
+    nodes[1] = make_func(kD_CloseDialog, {4});
+    nodes[2] = make_jmp(-1, -1);
+    nodes[3] = make_num(100.0);
+    nodes[4] = make_num(0.0);
 
     SessionHarness h(std::move(nodes), make_sdb({{100, "Hello"}}));
     DialogSession session(h.vm, h.sdb);
@@ -231,11 +231,11 @@ TEST_CASE("dialog session: a failure after choosing is an error") {
     nodes[1] = make_var("LastAnswer");
     nodes[2] = make_num(1.0);
     nodes[3] = make_node(3);
-    nodes[6] = make_func(kD_Say, {7});
-    nodes[7] = make_num(100.0);
-    nodes[8] = make_func(kD_Answer, {9});
-    nodes[9] = make_num(1.0);
-    nodes[10] = make_jmp(-1, -1);
+    nodes[6] = make_func(kD_Say, {9});
+    nodes[7] = make_func(kD_Answer, {10});
+    nodes[8] = make_jmp(-1, -1);
+    nodes[9] = make_num(100.0);
+    nodes[10] = make_num(1.0);
 
     SessionHarness h(std::move(nodes), make_sdb({{100, "Hello"}, {1, "Yes"}}));
     DialogSession session(h.vm, h.sdb);

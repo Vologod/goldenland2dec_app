@@ -422,26 +422,26 @@ TEST_CASE("vm: top-level func ignores d and advances to the next node") {
     CHECK(std::get<std::int32_t>(*x) == 5);
 }
 
-TEST_CASE("vm: division by zero marks the run failed and stops") {
-    std::vector<CsNode> nodes(6);
-    nodes[0] = make_assign(1, 2, 3);
+TEST_CASE("vm: division by zero yields 1e10 without evaluating the left operand") {
+    std::vector<CsNode> nodes(7);
+    nodes[0] = make_assign(1, 2, 6);
     nodes[1] = make_str_var("x");
-    nodes[2] = make_bin(17, 4, 5);
-    nodes[3] = make_jmp(-1, -1);
-    nodes[4] = make_str_var("a");
-    nodes[5] = make_str_var("b");
+    nodes[2] = make_bin(17, 3, 4);
+    nodes[3] = make_func(kPersonParameter, {});
+    nodes[4] = make_str_var("b");
+    nodes[5] = make_num(0.0);
+    nodes[6] = make_jmp(-1, -1);
 
     VmHarness h(std::move(nodes),
-                {global_int("a", 5), global_int("b", 0), global_int("x", 9)});
-    CHECK_FALSE(h.vm.step());
+                {global_float("x", 9.0), global_int("b", 0)});
+    CHECK(h.vm.step());
+    CHECK_FALSE(h.vm.failed());
+    CHECK(h.host.calls.empty());
 
     Value* x = h.vm.variable("x");
     REQUIRE(x != nullptr);
-    REQUIRE(std::holds_alternative<std::int32_t>(*x));
-    CHECK(std::get<std::int32_t>(*x) == 9);
-    CHECK(h.vm.status() == VmStatus::end);
-    CHECK(h.vm.failed());
-    CHECK_FALSE(h.vm.step());
+    REQUIRE(std::holds_alternative<double>(*x));
+    CHECK(std::get<double>(*x) == doctest::Approx(1e10));
 }
 
 TEST_CASE("vm: string comparison supports equality") {
@@ -541,16 +541,20 @@ TEST_CASE("vm: unsupported top-level opcode ends safely") {
     CHECK(h.vm.failed());
 }
 
-TEST_CASE("vm: top-level numeric value node is a no-op") {
-    std::vector<CsNode> nodes(2);
-    nodes[0] = make_num_var(0.0);
-    nodes[1] = make_jmp(-1, -1);
+TEST_CASE("vm: top-level value node ends execution like Server.dll FUN_1403fb04") {
+    std::vector<CsNode> nodes(5);
+    nodes[0] = make_num_var(5.0);
+    nodes[1] = make_assign(2, 3, 4);
+    nodes[2] = make_str_var("x");
+    nodes[3] = make_num(9.0);
+    nodes[4] = make_jmp(-1, -1);
 
-    VmHarness h(std::move(nodes), {});
-    CHECK(h.vm.step());
+    VmHarness h(std::move(nodes), {global_int("x", 0)});
     CHECK_FALSE(h.vm.step());
     CHECK(h.vm.status() == VmStatus::end);
     CHECK_FALSE(h.vm.failed());
+    CHECK(h.vm.steps() == 1);
+    CHECK(std::get<std::int32_t>(*h.vm.variable("x")) == 0);
 }
 
 TEST_CASE("vm: step limit reports infinity") {
@@ -641,7 +645,7 @@ TEST_CASE("vm: assignment coerces a numeric literal to a string destination") {
     CHECK_FALSE(h.vm.step());
 }
 
-TEST_CASE("vm: logical and/or evaluate both operands without short-circuit") {
+TEST_CASE("vm: logical and/or short-circuit like Server.dll 0x3a7cb") {
     for (const std::int32_t opcode : {0, 2}) {
         CAPTURE(opcode);
         std::vector<CsNode> nodes(4);
@@ -652,8 +656,7 @@ TEST_CASE("vm: logical and/or evaluate both operands without short-circuit") {
 
         VmHarness h(std::move(nodes), {});
         CHECK(h.vm.step());
-        REQUIRE(h.host.calls.size() == 1);
-        CHECK(h.host.calls[0].id == kPersonParameter);
+        CHECK(h.host.calls.empty());
         CHECK(h.vm.status() == VmStatus::continue_);
     }
 }
@@ -740,7 +743,7 @@ TEST_CASE("vm: unary complement and logical not opcodes") {
         nodes[0] = make_assign(1, 2, 3);
         nodes[1] = make_str_var("x");
         nodes[2] = make_node(item.opcode);
-        nodes[2].a = 4;
+        nodes[2].b = 4;
         nodes[3] = make_jmp(-1, -1);
         nodes[4] = make_num(item.operand);
 
@@ -789,14 +792,13 @@ TEST_CASE("vm: arithmetic failure stops before evaluating the sibling operand") 
     nodes[0] = make_assign(1, 2, 7);
     nodes[1] = make_str_var("x");
     nodes[2] = make_bin(14, 3, 4);
-    nodes[3] = make_bin(17, 5, 6);
+    nodes[3] = make_bin(14, 5, 6);
     nodes[4] = make_func(kPersonParameter, {});
-    nodes[5] = make_str_var("a");
-    nodes[6] = make_str_var("b");
+    nodes[5] = make_str_var("s");
+    nodes[6] = make_num(1.0);
     nodes[7] = make_jmp(-1, -1);
 
-    VmHarness h(std::move(nodes),
-                {global_int("a", 5), global_int("b", 0), global_int("x", 9)});
+    VmHarness h(std::move(nodes), {global_string("s", "abc"), global_int("x", 9)});
     CHECK_FALSE(h.vm.step());
     CHECK(h.vm.status() == VmStatus::end);
     CHECK(h.vm.failed());
@@ -835,4 +837,250 @@ TEST_CASE("vm: cyclic expression terminates without hanging") {
     CHECK(h.vm.status() == VmStatus::end);
     CHECK(h.vm.failed());
     CHECK(h.vm.steps() == 1);
+}
+
+TEST_CASE("vm: opcode 0x00 short-circuits like Server.dll 0x3a7cb") {
+    std::vector<CsNode> nodes(5);
+    nodes[0] = make_assign(1, 2, 4);
+    nodes[1] = make_str_var("x");
+    nodes[2] = make_bin(0, 3, 99);
+    nodes[3] = make_num(1.0);
+    nodes[4] = make_jmp(-1, -1);
+
+    VmHarness h(std::move(nodes), {global_int("x", 0)});
+    CHECK(h.vm.step());
+    CHECK_FALSE(h.vm.failed());
+    CHECK(std::get<std::int32_t>(*h.vm.variable("x")) == 1);
+}
+
+TEST_CASE("vm: opcode 0x02 short-circuits like Server.dll 0x3a71e") {
+    std::vector<CsNode> nodes(5);
+    nodes[0] = make_assign(1, 2, 4);
+    nodes[1] = make_str_var("x");
+    nodes[2] = make_bin(2, 3, 99);
+    nodes[3] = make_num(0.0);
+    nodes[4] = make_jmp(-1, -1);
+
+    VmHarness h(std::move(nodes), {global_int("x", 7)});
+    CHECK(h.vm.step());
+    CHECK_FALSE(h.vm.failed());
+    CHECK(std::get<std::int32_t>(*h.vm.variable("x")) == 0);
+}
+
+TEST_CASE("vm: opcode 0x11 divides as double like Server.dll 0x3a2c8") {
+    SUBCASE("int operands produce a double quotient") {
+        std::vector<CsNode> nodes(6);
+        nodes[0] = make_assign(1, 2, 5);
+        nodes[1] = make_str_var("x");
+        nodes[2] = make_bin(17, 3, 4);
+        nodes[3] = make_str_var("a");
+        nodes[4] = make_str_var("b");
+        nodes[5] = make_jmp(-1, -1);
+
+        VmHarness h(std::move(nodes),
+                    {global_float("x", 0.0), global_int("a", 7), global_int("b", 2)});
+        CHECK(h.vm.step());
+        CHECK_FALSE(h.vm.failed());
+        REQUIRE(std::holds_alternative<double>(*h.vm.variable("x")));
+        CHECK(std::get<double>(*h.vm.variable("x")) == doctest::Approx(3.5));
+    }
+
+    SUBCASE("zero divisor yields 1e10") {
+        std::vector<CsNode> nodes(6);
+        nodes[0] = make_assign(1, 2, 5);
+        nodes[1] = make_str_var("x");
+        nodes[2] = make_bin(17, 3, 4);
+        nodes[3] = make_str_var("a");
+        nodes[4] = make_str_var("b");
+        nodes[5] = make_jmp(-1, -1);
+
+        VmHarness h(std::move(nodes),
+                    {global_float("x", 0.0), global_int("a", 7), global_int("b", 0)});
+        CHECK(h.vm.step());
+        CHECK_FALSE(h.vm.failed());
+        REQUIRE(std::holds_alternative<double>(*h.vm.variable("x")));
+        CHECK(std::get<double>(*h.vm.variable("x")) == doctest::Approx(1e10));
+    }
+}
+
+TEST_CASE("vm: opcodes 0x11 and 0x12 evaluate b before a like Server.dll 0x3a2a1") {
+    for (const std::int32_t opcode : {17, 18}) {
+        CAPTURE(opcode);
+        std::vector<CsNode> nodes(6);
+        nodes[0] = make_assign(1, 2, 5);
+        nodes[1] = make_str_var("x");
+        nodes[2] = make_bin(opcode, 3, 4);
+        nodes[3] = make_func(kPersonParameter, {});
+        nodes[4] = make_func(0x4000002, {});
+        nodes[5] = make_jmp(-1, -1);
+
+        VmHarness h(std::move(nodes), {global_int("x", 0)});
+        h.host.result = std::int32_t{2};
+        CHECK(h.vm.step());
+        REQUIRE(h.host.calls.size() == 2);
+        CHECK(h.host.calls[0].id == 0x4000002);
+        CHECK(h.host.calls[1].id == kPersonParameter);
+    }
+}
+
+TEST_CASE("vm: opcode 0x0c masks the shift count like Server.dll 0x3a432") {
+    std::vector<CsNode> nodes(6);
+    nodes[0] = make_assign(1, 2, 5);
+    nodes[1] = make_str_var("x");
+    nodes[2] = make_bin(12, 3, 4);
+    nodes[3] = make_str_var("a");
+    nodes[4] = make_str_var("b");
+    nodes[5] = make_jmp(-1, -1);
+
+    VmHarness h(std::move(nodes),
+                {global_int("x", 0), global_int("a", 1), global_int("b", 33)});
+    CHECK(h.vm.step());
+    CHECK_FALSE(h.vm.failed());
+    CHECK(std::get<std::int32_t>(*h.vm.variable("x")) == 2);
+}
+
+TEST_CASE("vm: opcode 0x0d shifts arithmetically like Server.dll 0x3a3c2") {
+    for (const std::int32_t count : {1, 33}) {
+        CAPTURE(count);
+        std::vector<CsNode> nodes(6);
+        nodes[0] = make_assign(1, 2, 5);
+        nodes[1] = make_str_var("x");
+        nodes[2] = make_bin(13, 3, 4);
+        nodes[3] = make_str_var("a");
+        nodes[4] = make_str_var("b");
+        nodes[5] = make_jmp(-1, -1);
+
+        VmHarness h(std::move(nodes),
+                    {global_int("x", 0), global_int("a", -8), global_int("b", count)});
+        CHECK(h.vm.step());
+        CHECK_FALSE(h.vm.failed());
+        CHECK(std::get<std::int32_t>(*h.vm.variable("x")) == -4);
+    }
+}
+
+TEST_CASE("vm: opcode 0x13 complements operand b like Server.dll 0x3a1e2") {
+    std::vector<CsNode> nodes(6);
+    nodes[0] = make_assign(1, 2, 5);
+    nodes[1] = make_str_var("x");
+    nodes[2] = make_node(19);
+    nodes[2].a = 3;
+    nodes[2].b = 4;
+    nodes[3] = make_num(99.0);
+    nodes[4] = make_num(5.0);
+    nodes[5] = make_jmp(-1, -1);
+
+    VmHarness h(std::move(nodes), {global_int("x", 0)});
+    CHECK(h.vm.step());
+    CHECK_FALSE(h.vm.failed());
+    CHECK(std::get<std::int32_t>(*h.vm.variable("x")) == -6);
+}
+
+TEST_CASE("vm: opcode 0x14 negates operand b as int32 like Server.dll 0x3a1ae") {
+    for (const auto& [operand, expected] : {std::pair{0.5, 1}, std::pair{5.0, 0}}) {
+        CAPTURE(operand);
+        std::vector<CsNode> nodes(6);
+        nodes[0] = make_assign(1, 2, 5);
+        nodes[1] = make_str_var("x");
+        nodes[2] = make_node(20);
+        nodes[2].a = 3;
+        nodes[2].b = 4;
+        nodes[3] = make_num(99.0);
+        nodes[4] = make_num(operand);
+        nodes[5] = make_jmp(-1, -1);
+
+        VmHarness h(std::move(nodes), {global_int("x", 9)});
+        CHECK(h.vm.step());
+        CHECK_FALSE(h.vm.failed());
+        CHECK(std::get<std::int32_t>(*h.vm.variable("x")) == expected);
+    }
+}
+
+TEST_CASE("vm: function arguments use the executor without short-circuit like Server.dll 0x3aabd") {
+    std::vector<CsNode> nodes(7);
+    nodes[0] = make_assign(1, 2, 6);
+    nodes[1] = make_str_var("x");
+    nodes[2] = make_func(kPersonParameter, {3});
+    nodes[3] = make_bin(2, 4, 5);
+    nodes[4] = make_num(0.0);
+    nodes[5] = make_func(0x4000002, {});
+    nodes[6] = make_jmp(-1, -1);
+
+    VmHarness h(std::move(nodes), {global_int("x", 0)});
+    CHECK(h.vm.step());
+    REQUIRE(h.host.calls.size() == 2);
+    CHECK(h.host.calls[0].id == 0x4000002);
+    CHECK(h.host.calls[1].id == kPersonParameter);
+}
+
+TEST_CASE("vm: opcodes 49 and 50 evaluate as operands like Server.dll 0x3a141") {
+    SUBCASE("jmp returns 0.0") {
+        std::vector<CsNode> nodes(6);
+        nodes[0] = make_assign(1, 2, 5);
+        nodes[1] = make_str_var("x");
+        nodes[2] = make_bin(14, 3, 4);
+        nodes[3] = make_num(5.0);
+        nodes[4] = make_jmp(-1, -1);
+        nodes[5] = make_jmp(-1, -1);
+
+        VmHarness h(std::move(nodes), {global_int("x", 0)});
+        CHECK(h.vm.step());
+        CHECK_FALSE(h.vm.failed());
+        CHECK(std::get<std::int32_t>(*h.vm.variable("x")) == 5);
+    }
+
+    SUBCASE("assign performs the write and returns the source") {
+        std::vector<CsNode> nodes(8);
+        nodes[0] = make_assign(1, 2, 7);
+        nodes[1] = make_str_var("x");
+        nodes[2] = make_bin(14, 3, 4);
+        nodes[3] = make_num(5.0);
+        nodes[4] = make_assign(5, 6, 0);
+        nodes[5] = make_str_var("y");
+        nodes[6] = make_num(7.0);
+        nodes[7] = make_jmp(-1, -1);
+
+        VmHarness h(std::move(nodes), {global_int("x", 0), global_int("y", 0)});
+        CHECK(h.vm.step());
+        CHECK_FALSE(h.vm.failed());
+        CHECK(std::get<std::int32_t>(*h.vm.variable("x")) == 12);
+        CHECK(std::get<std::int32_t>(*h.vm.variable("y")) == 7);
+    }
+}
+
+TEST_CASE("vm: opcode 0x12 truncates modulo like Server.dll 0x3a279") {
+    SUBCASE("fractional operands are truncated before the remainder") {
+        std::vector<CsNode> nodes(6);
+        nodes[0] = make_assign(1, 2, 5);
+        nodes[1] = make_str_var("x");
+        nodes[2] = make_bin(18, 3, 4);
+        nodes[3] = make_str_var("a");
+        nodes[4] = make_str_var("b");
+        nodes[5] = make_jmp(-1, -1);
+
+        VmHarness h(std::move(nodes),
+                    {global_float("x", 0.0), global_float("a", 7.9),
+                     global_float("b", 2.9)});
+        CHECK(h.vm.step());
+        CHECK_FALSE(h.vm.failed());
+        REQUIRE(std::holds_alternative<double>(*h.vm.variable("x")));
+        CHECK(std::get<double>(*h.vm.variable("x")) == doctest::Approx(1.0));
+    }
+
+    SUBCASE("zero divisor yields 1e10") {
+        std::vector<CsNode> nodes(6);
+        nodes[0] = make_assign(1, 2, 5);
+        nodes[1] = make_str_var("x");
+        nodes[2] = make_bin(18, 3, 4);
+        nodes[3] = make_str_var("a");
+        nodes[4] = make_str_var("b");
+        nodes[5] = make_jmp(-1, -1);
+
+        VmHarness h(std::move(nodes),
+                    {global_float("x", 0.0), global_float("a", 7.9),
+                     global_float("b", 0.0)});
+        CHECK(h.vm.step());
+        CHECK_FALSE(h.vm.failed());
+        REQUIRE(std::holds_alternative<double>(*h.vm.variable("x")));
+        CHECK(std::get<double>(*h.vm.variable("x")) == doctest::Approx(1e10));
+    }
 }

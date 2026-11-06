@@ -59,13 +59,13 @@ CsNode make_jmp(std::int32_t target, std::int32_t next = -1) {
 
 std::vector<CsNode> synthetic_dialog() {
     std::vector<CsNode> nodes(7);
-    nodes[0] = make_func(kD_Say, {1});
-    nodes[1] = make_num(100.0);
-    nodes[2] = make_func(kD_Answer, {3});
-    nodes[3] = make_num(1.0);
-    nodes[4] = make_func(kD_Answer, {5});
-    nodes[5] = make_num(2.0);
-    nodes[6] = make_jmp(-1, -1);
+    nodes[0] = make_func(kD_Say, {4});
+    nodes[1] = make_func(kD_Answer, {5});
+    nodes[2] = make_func(kD_Answer, {6});
+    nodes[3] = make_jmp(-1, -1);
+    nodes[4] = make_num(100.0);
+    nodes[5] = make_num(1.0);
+    nodes[6] = make_num(2.0);
     return nodes;
 }
 
@@ -93,15 +93,15 @@ TEST_CASE("dialogs: D_Say and D_Answer reach wait_user and expose ids") {
 
 TEST_CASE("dialogs: only the first D_Say is exposed on a page") {
     std::vector<CsNode> nodes(9);
-    nodes[0] = make_func(kD_Say, {1});
-    nodes[1] = make_num(100.0);
-    nodes[2] = make_func(kD_Say, {3});
-    nodes[3] = make_num(200.0);
-    nodes[4] = make_func(kD_Answer, {5});
-    nodes[5] = make_num(1.0);
-    nodes[6] = make_func(kD_Answer, {7});
-    nodes[7] = make_num(2.0);
-    nodes[8] = make_jmp(-1, -1);
+    nodes[0] = make_func(kD_Say, {5});
+    nodes[1] = make_func(kD_Say, {6});
+    nodes[2] = make_func(kD_Answer, {7});
+    nodes[3] = make_func(kD_Answer, {8});
+    nodes[4] = make_jmp(-1, -1);
+    nodes[5] = make_num(100.0);
+    nodes[6] = make_num(200.0);
+    nodes[7] = make_num(1.0);
+    nodes[8] = make_num(2.0);
 
     DialogHarness h(std::move(nodes));
     while (h.vm.step()) {
@@ -176,9 +176,9 @@ TEST_CASE("dialogs: user_input rejects an out-of-range answer") {
 
 TEST_CASE("dialogs: user_input without recorded answers is a no-op") {
     std::vector<CsNode> nodes(3);
-    nodes[0] = make_func(kD_Say, {1});
-    nodes[1] = make_num(100.0);
-    nodes[2] = make_jmp(-1, -1);
+    nodes[0] = make_func(kD_Say, {2});
+    nodes[1] = make_jmp(-1, -1);
+    nodes[2] = make_num(100.0);
 
     DialogHarness h(std::move(nodes));
     while (h.vm.step()) {
@@ -194,18 +194,18 @@ TEST_CASE("dialogs: user_input without recorded answers is a no-op") {
 
 TEST_CASE("dialogs: D_CloseDialog after D_Say ends execution") {
     std::vector<CsNode> nodes(5);
-    nodes[0] = make_func(kD_Say, {1});
-    nodes[1] = make_num(100.0);
-    nodes[2] = make_func(kD_CloseDialog, {3});
-    nodes[3] = make_num(0.0);
-    nodes[4] = make_jmp(-1, -1);
+    nodes[0] = make_func(kD_Say, {3});
+    nodes[1] = make_func(kD_CloseDialog, {4});
+    nodes[2] = make_jmp(-1, -1);
+    nodes[3] = make_num(100.0);
+    nodes[4] = make_num(0.0);
 
     DialogHarness h(std::move(nodes));
-    CHECK(h.vm.step());
     CHECK(h.vm.step());
     CHECK_FALSE(h.vm.step());
     CHECK(h.vm.status() == VmStatus::end);
     CHECK(h.vm.dialogs_data().empty());
+    CHECK_FALSE(h.vm.step());
 }
 
 TEST_CASE("host: known and unknown function stubs return zero") {

@@ -19,6 +19,18 @@ bool is_bitwise(std::int32_t opcode) {
 bool is_unary(std::int32_t opcode) { return opcode == 19 || opcode == 20; }
 bool is_value(std::int32_t opcode) { return opcode >= 21 && opcode <= 24; }
 
+thread_local bool short_circuit_enabled = true;
+
+struct ExecutorScope {
+    ExecutorScope() : previous_(short_circuit_enabled) { short_circuit_enabled = false; }
+    ~ExecutorScope() { short_circuit_enabled = previous_; }
+    ExecutorScope(const ExecutorScope&) = delete;
+    ExecutorScope& operator=(const ExecutorScope&) = delete;
+
+private:
+    bool previous_;
+};
+
 void log_warning(std::string_view message) {
     gl::log(gl::LogLevel::warning, "script vm: " + std::string(message));
 }
@@ -110,6 +122,101 @@ bool compare_op(T left, T right, std::int32_t opcode) {
     case 11: return left < right;
     default: return false;
     }
+}
+
+template <typename ValidFn, typename LookupFn, typename EvalFn, typename CoerceFn,
+          typename StoreFn, typename FailedFn, typename FailFn>
+Value eval_assignment(const std::vector<gl::assets::CsNode>& nodes,
+                      const gl::assets::CsNode& node, int depth, ValidFn valid,
+                      LookupFn lookup, EvalFn eval_fn, CoerceFn coerce, StoreFn store,
+                      FailedFn has_failed, FailFn fail_fn) {
+    if (!valid(node.a)) {
+        fail_fn("assign destination index out of range: " + std::to_string(node.a));
+        return std::int32_t{0};
+    }
+    const gl::assets::CsNode& destination = nodes[static_cast<std::size_t>(node.a)];
+    if (destination.opcode != 23) {
+        fail_fn("assign destination is not a variable");
+        return std::int32_t{0};
+    }
+    if (!valid(node.b)) {
+        fail_fn("assign source index out of range: " + std::to_string(node.b));
+        return std::int32_t{0};
+    }
+
+    const gl::assets::CsNode& source = nodes[static_cast<std::size_t>(node.b)];
+    Value result;
+    if (source.opcode == 23) {
+        result = lookup(source.text);
+    } else if (source.opcode == 21 || source.opcode == 24) {
+        result = source.value;
+    } else {
+        result = eval_fn(node.b, depth);
+    }
+    if (has_failed()) return std::int32_t{0};
+
+    const Value returned = result;
+    result = coerce(result, lookup(destination.text));
+    if (has_failed()) return std::int32_t{0};
+    store(destination.text, std::move(result));
+    return returned;
+}
+
+template <typename EvalFn, typename FailedFn, typename RecordFn>
+Value eval_logical(const gl::assets::CsNode& node, int depth, EvalFn eval_fn,
+                   FailedFn has_failed, RecordFn record_fn) {
+    const Value left = eval_fn(node.a, depth);
+    if (has_failed()) return std::int32_t{0};
+    if (short_circuit_enabled && node.opcode == 0 && is_true(left))
+        return std::int32_t{1};
+    if (short_circuit_enabled && node.opcode == 2 && !is_true(left))
+        return std::int32_t{0};
+    const Value right = eval_fn(node.b, depth);
+    if (has_failed()) return std::int32_t{0};
+    if (node.opcode == 1 && (std::holds_alternative<std::string>(left) ||
+                             std::holds_alternative<std::string>(right))) {
+        record_fn("logical xor on strings is not supported");
+        return std::int32_t{0};
+    }
+    const bool left_true = is_true(left);
+    const bool right_true = is_true(right);
+    bool result = false;
+    if (node.opcode == 0) {
+        result = left_true || right_true;
+    } else if (node.opcode == 1) {
+        result = left_true != right_true;
+    } else {
+        result = left_true && right_true;
+    }
+    return std::int32_t{result ? 1 : 0};
+}
+
+template <typename EvalFn, typename FailedFn, typename CompareFn>
+Value eval_comparison(const gl::assets::CsNode& node, int depth, EvalFn eval_fn,
+                      FailedFn has_failed, CompareFn compare) {
+    const Value left = eval_fn(node.a, depth);
+    if (has_failed()) return std::int32_t{0};
+    const Value right = eval_fn(node.b, depth);
+    if (has_failed()) return std::int32_t{0};
+    return std::int32_t{compare(left, right, node.opcode) ? 1 : 0};
+}
+
+template <typename EvalFn, typename FailedFn, typename ApplyFn>
+Value eval_bitwise(const gl::assets::CsNode& node, int depth, EvalFn eval_fn,
+                   FailedFn has_failed, ApplyFn apply) {
+    const Value left = eval_fn(node.a, depth);
+    if (has_failed()) return std::int32_t{0};
+    const Value right = eval_fn(node.b, depth);
+    if (has_failed()) return std::int32_t{0};
+    return apply(left, right, node.opcode);
+}
+
+template <typename EvalFn, typename FailedFn, typename ApplyFn>
+Value eval_unary(const gl::assets::CsNode& node, int depth, EvalFn eval_fn,
+                 FailedFn has_failed, ApplyFn apply) {
+    const Value operand = eval_fn(node.b, depth);
+    if (has_failed()) return std::int32_t{0};
+    return apply(operand, node.opcode);
 }
 } // namespace
 
@@ -251,40 +358,11 @@ bool ScriptVm::step() {
             next = node.c;
             break;
 
-        case 50: {
-            if (!valid_index(node.a)) {
-                fail("assign destination index out of range: " + std::to_string(node.a));
-                break;
-            }
-            const gl::assets::CsNode& destination =
-                nodes_[static_cast<std::size_t>(node.a)];
-            if (destination.opcode != 23) {
-                fail("assign destination is not a variable");
-                break;
-            }
-
-            if (!valid_index(node.b)) {
-                fail("assign source index out of range: " + std::to_string(node.b));
-                break;
-            }
-
-            const gl::assets::CsNode& source = nodes_[static_cast<std::size_t>(node.b)];
-            Value result;
-            if (source.opcode == 23) {
-                result = lookup_variable(source.text);
-            } else if (source.opcode == 21 || source.opcode == 24) {
-                result = source.value;
-            } else {
-                result = eval(node.b, 0);
-            }
-
+        case 50:
+            (void)eval(pc_, 0);
             if (failed_) break;
-            result = coerce_assignment(result, lookup_variable(destination.text));
-            if (failed_) break;
-            variables_[destination.text] = std::move(result);
             next = node.d;
             break;
-        }
 
         case 48: {
             (void)call_function(node, 0);
@@ -302,10 +380,6 @@ bool ScriptVm::step() {
             if (is_value(node.opcode)) {
                 (void)eval(pc_, 0);
                 if (failed_) break;
-                if (valid_index(pc_ + 1)) {
-                    next = pc_ + 1;
-                    break;
-                }
                 status_ = VmStatus::end;
                 return false;
             }
@@ -354,11 +428,42 @@ Value ScriptVm::eval(std::int32_t index, int depth) {
         return lookup_variable(node.text);
     case 48:
         return call_function(node, depth);
+    case 49:
+        return std::int32_t{0};
+    case 50:
+        return eval_assignment(
+            nodes_, node, depth + 1, [this](std::int32_t value) { return valid_index(value); },
+            [this](const std::string& name) { return lookup_variable(name); },
+            [this](std::int32_t value, int inner_depth) { return eval(value, inner_depth); },
+            [this](const Value& value, const Value& destination) {
+                return coerce_assignment(value, destination);
+            },
+            [this](const std::string& name, Value value) {
+                variables_[name] = std::move(value);
+            },
+            [this] { return failed_; }, [this](std::string message) { fail(std::move(message)); });
     case 14:
     case 15:
     case 16:
     case 17:
     case 18: {
+        if (node.opcode == 17 || node.opcode == 18) {
+            const Value right = eval(node.b, depth + 1);
+            if (failed_) return std::int32_t{0};
+            if (std::holds_alternative<std::string>(right)) {
+                record_error("arithmetic on strings is not supported");
+                return std::int32_t{0};
+            }
+            if (node.opcode == 17 ? to_double(right) == 0.0 : to_int32(right) == 0)
+                return 1e10;
+            const Value left = eval(node.a, depth + 1);
+            if (failed_) return std::int32_t{0};
+            if (std::holds_alternative<std::string>(left)) {
+                record_error("arithmetic on strings is not supported");
+                return std::int32_t{0};
+            }
+            return apply_arithmetic(left, right, node.opcode);
+        }
         const Value left = eval(node.a, depth + 1);
         if (failed_) return std::int32_t{0};
         if (!valid_index(node.b)) {
@@ -375,46 +480,46 @@ Value ScriptVm::eval(std::int32_t index, int depth) {
     }
     default:
         if (is_bitwise(node.opcode)) {
-            const Value left = eval(node.a, depth + 1);
-            if (failed_) return std::int32_t{0};
-            const Value right = eval(node.b, depth + 1);
-            if (failed_) return std::int32_t{0};
-            return apply_bitwise(left, right, node.opcode);
+            return eval_bitwise(
+                node, depth + 1,
+                [this](std::int32_t value, int inner_depth) {
+                    return eval(value, inner_depth);
+                },
+                [this] { return failed_; },
+                [this](const Value& left, const Value& right, std::int32_t opcode) {
+                    return apply_bitwise(left, right, opcode);
+                });
         }
         if (is_unary(node.opcode)) {
-            const Value operand = eval(node.a, depth + 1);
-            if (failed_) return std::int32_t{0};
-            return apply_unary(operand, node.opcode);
+            return eval_unary(
+                node, depth + 1,
+                [this](std::int32_t value, int inner_depth) {
+                    return eval(value, inner_depth);
+                },
+                [this] { return failed_; },
+                [this](const Value& operand, std::int32_t opcode) {
+                    return apply_unary(operand, opcode);
+                });
         }
         if (is_comparison(node.opcode)) {
-            const Value left = eval(node.a, depth + 1);
-            if (failed_) return std::int32_t{0};
-            const Value right = eval(node.b, depth + 1);
-            if (failed_) return std::int32_t{0};
-            return std::int32_t{compare_values(left, right, node.opcode) ? 1 : 0};
+            return eval_comparison(
+                node, depth + 1,
+                [this](std::int32_t value, int inner_depth) {
+                    return eval(value, inner_depth);
+                },
+                [this] { return failed_; },
+                [this](const Value& left, const Value& right, std::int32_t opcode) {
+                    return compare_values(left, right, opcode);
+                });
         }
         if (is_logical(node.opcode)) {
-            const Value left = eval(node.a, depth + 1);
-            if (failed_) return std::int32_t{0};
-            const Value right = eval(node.b, depth + 1);
-            if (failed_) return std::int32_t{0};
-            if (node.opcode == 1 &&
-                (std::holds_alternative<std::string>(left) ||
-                 std::holds_alternative<std::string>(right))) {
-                record_error("logical xor on strings is not supported");
-                return std::int32_t{0};
-            }
-            const bool left_true = is_true(left);
-            const bool right_true = is_true(right);
-            bool result = false;
-            if (node.opcode == 0) {
-                result = left_true || right_true;
-            } else if (node.opcode == 1) {
-                result = left_true != right_true;
-            } else {
-                result = left_true && right_true;
-            }
-            return std::int32_t{result ? 1 : 0};
+            return eval_logical(
+                node, depth + 1,
+                [this](std::int32_t value, int inner_depth) {
+                    return eval(value, inner_depth);
+                },
+                [this] { return failed_; },
+                [this](std::string_view message) { record_error(message); });
         }
         fail("unsupported expression opcode: " + std::to_string(node.opcode));
         return std::int32_t{0};
@@ -430,6 +535,7 @@ Value ScriptVm::call_function(const gl::assets::CsNode& node, int depth) {
     const auto id = static_cast<std::uint32_t>(node.value);
 
     std::vector<Value> args;
+    ExecutorScope executor;
     for (std::int32_t argument : node.args) {
         if (argument == -1) break;
         if (!valid_index(argument)) {
@@ -460,6 +566,18 @@ Value ScriptVm::apply_arithmetic(const Value& left, const Value& right, std::int
         std::holds_alternative<std::string>(right)) {
         record_error("arithmetic on strings is not supported");
         return std::int32_t{0};
+    }
+
+    if (opcode == 17) {
+        const double b = to_double(right);
+        if (b == 0.0) return 1e10;
+        return to_double(left) / b;
+    }
+
+    if (opcode == 18) {
+        const std::int32_t divisor = to_int32(right);
+        if (divisor == 0) return 1e10;
+        return static_cast<double>(to_int32(left) % divisor);
     }
 
     if (std::holds_alternative<double>(left) || std::holds_alternative<double>(right)) {
@@ -552,13 +670,10 @@ Value ScriptVm::apply_bitwise(const Value& left, const Value& right, std::int32_
     case 4: result = a ^ b; break;
     case 5: result = a & b; break;
     case 12:
+        result = a << static_cast<std::uint32_t>(right_int & 31);
+        break;
     case 13:
-        if (right_int < 0 || right_int >= 32) {
-            record_error("shift count out of range");
-            return std::int32_t{0};
-        }
-        result = opcode == 12 ? a << static_cast<std::uint32_t>(right_int)
-                              : a >> static_cast<std::uint32_t>(right_int);
+        result = static_cast<std::uint32_t>(left_int >> (right_int & 31));
         break;
     default:
         record_error("unknown bitwise opcode: " + std::to_string(opcode));
@@ -580,7 +695,7 @@ Value ScriptVm::apply_unary(const Value& operand, std::int32_t opcode) {
         if (std::holds_alternative<std::uint32_t>(operand)) return result;
         return static_cast<std::int32_t>(result);
     }
-    return std::int32_t{is_true(operand) ? 0 : 1};
+    return std::int32_t{to_int32(operand) == 0 ? 1 : 0};
 }
 
 Value ScriptVm::coerce_assignment(const Value& value, const Value& destination) {
