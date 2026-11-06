@@ -53,9 +53,13 @@ state `+0x18`) фиксируются research (Task 1) и реализуютс�
 - Person — только точное `"Hero"`; иначе no-op.
 - TECH-имя — exact case-sensitive; неизвестное → no-op.
 - `count == 0` → no-op (натив проверяет `!= 0`).
-- Add: если запись с `item_id` есть — увеличить `count`; иначе добавить
-  запись с `count`, `type` из `ItemCatalog` (ITM), `flags/style` по
-  семантике оригинала.
+- Отрицательный `count`: в поставляемых `.cs` не встречается; оригинал
+  передаёт его как `uint` (поведение не доказано). Порт делает no-op и
+  фиксирует это отклонение в D-052.
+- Add: если запись с `item_id` есть — увеличить `count` с учётом
+  `max_stack` из ITM (split на несколько записей, если `max_stack >= 2`);
+  иначе добавить запись с `count`, `type/flags/style` из ITM. `max_stack
+  == 0` — без split (по research).
 - Remove: уменьшить `count`; при нуле удалить запись; поведение при
   `count > available` и частичном удалении — по research.
 - Money — обычная запись `MON_1_0_1` (type 18); `GetMoney`/`GetItemCount`
@@ -90,8 +94,10 @@ state `+0x18`) фиксируются research (Task 1) и реализуютс�
 - `count`/`money` пересчитываются по live-вектору (или поддерживаются
   инкрементально).
 - `const HeroInventory& hero_inventory() const` — для overlay.
-- Для type нового item id — `std::function<std::uint32_t(std::uint32_t)>
-  item_type` в `create`; glgame передаёт lookup через `ItemCatalog`.
+- Для нового item id — `std::function<std::optional<ItemTemplate>(std::uint32_t)>
+  item_template` в `create`, где `ItemTemplate { type, flags, style,
+  max_stack }`; glgame передаёт lookup через `ItemCatalogEntry`/`Item`
+  (`max_stack` — из ITM). Без шаблона add — no-op.
 - `access()` расширяется callbacks add/remove.
 
 ### 5.2 `gl::script`
@@ -130,7 +136,9 @@ state `+0x18`) фиксируются research (Task 1) и реализуютс�
 
 - Неизвестная/не-Hero персона → no-op.
 - Неизвестный TECH/не найден item id → no-op.
-- Некорректный count по семантике оригинала → no-op/без изменений.
+- Отрицательный count → no-op (D-052; в оригинале поведение не доказано).
+- Некорректный count по остальной семантике оригинала → no-op/без
+  изменений.
 - Неверная арность/тип → warning + `0.0`.
 - Нет save/пустой инвентарь → add создаёт запись, remove — no-op/0.
 

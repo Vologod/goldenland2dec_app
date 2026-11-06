@@ -71,14 +71,24 @@ UTF-8 no BOM/nul=0. Commit `docs(research): record inventory mutation natives`.
 
 **Interfaces:**
 ```cpp
+struct ItemTemplate {
+    std::uint32_t type = 0;
+    std::uint32_t flags = 0;
+    std::uint32_t style = 0;
+    std::uint32_t max_stack = 0;
+};
 static InventoryRuntime create(
     const gl::assets::HeroInventory& hero,
     const gl::assets::ItemNameIndex& names,
-    std::function<std::uint32_t(std::uint32_t)> item_type = {});
+    std::function<std::optional<ItemTemplate>(std::uint32_t)> item_template = {});
 bool add_item(std::string_view person, std::string_view tech, std::int32_t count);
 bool remove_item(std::string_view person, std::string_view tech, std::int32_t count);
 const gl::assets::HeroInventory& hero_inventory() const;
 ```
+
+`item_template` must supply `type`, `flags`, `style`, `max_stack` from
+ITM/ItemCatalog; a missing template or `max_stack` behavior follows
+research. Negative count is a no-op (D-052).
 
 - [ ] **Step 1: Failing tests**
 
@@ -206,8 +216,9 @@ and assert the mutated count/money/global matches the research oracle.
 - `P3-9`: supported `11 → 13`; list IDs 0x5000004/0x5000005; note Hero-only.
 - `STATUS`: completed 1b2b1 section.
 - `PROJECT`: P3/P5 row update.
-- `DECISIONS D-052`: mutable runtime, add/remove semantics, money via item,
-  overlay live view, NPC/box no-op, no save writes.
+- `DECISIONS D-052`: mutable runtime, add/remove semantics (flags/style/
+  max_stack from ITM, negative count → no-op), money via item, overlay live
+  view, NPC/box no-op, no save writes.
 
 - [ ] **Step 4: Encoding check**.
 
