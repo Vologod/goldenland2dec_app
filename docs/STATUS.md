@@ -1,6 +1,19 @@
 # STATUS
 
 Обновлено: 2026-11-06
+## Phase 1b2a — Hero inventory query natives (in progress 2026-11-06)
+
+- **Задача:** реализовать `RS_TestPersonHasItem` (`0x5000000`),
+  `RS_GetItemCountI` (`0x5000002`), `RS_GetMoney` (`0x5000008`) на
+  `HeroInventory` из save; TECH-имя → item id через `tech_names.sdb`;
+  money — sum type 18.
+- **Spec:** `docs/specs/2026-11-06-p3b2a-inventory-queries-design.md`.
+- **Plan:** `docs/plans/2026-11-06-p3b2a-inventory-queries.md`.
+- **Критерии:** research с RVA/константами/real counts; 3 ID → supported
+  (8→11); `ItemNameIndex` + `InventoryRuntime`; real-диалог через
+  `GameScriptHost`; targeted + full `ctest` pass; docs обновлены.
+- **Вне scope:** NPC/box лут, Transfer/Add/Remove/Trade, UI-изменения.
+
 ## Phase 1b1 — Person parameter natives (done 2026-11-06)
 
 - **Задача:** реализовать `RS_GetPersonParameterI` (`0x4000000`),
