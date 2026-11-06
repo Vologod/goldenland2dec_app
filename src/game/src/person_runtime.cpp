@@ -1,0 +1,371 @@
+#include "gl/game/person_runtime.hpp"
+
+#include "gl/assets/log.hpp"
+
+#include <charconv>
+#include <cmath>
+#include <cstdint>
+#include <limits>
+#include <string>
+#include <system_error>
+#include <utility>
+
+namespace gl::game {
+namespace {
+constexpr double kMaxPrimary = 30.0;
+constexpr double kReputationMinimum = -50.0;
+constexpr double kReputationMaximum = 50.0;
+constexpr double kMaxExperience = 500000.0;
+
+using gl::script::PersonParameter;
+
+std::size_t value_index(PersonParameter parameter) { return static_cast<std::size_t>(parameter); }
+
+double clamp_value(double value, double minimum, double maximum) {
+    if (value < minimum)
+        return minimum;
+    if (value > maximum)
+        return maximum;
+    return value;
+}
+
+std::int32_t round_half_away_from_zero(double value) {
+    if (!std::isfinite(value))
+        return 0;
+    const double adjusted = value + (value > 0.0 ? 0.5 : -0.5);
+    const double truncated = std::trunc(adjusted);
+    if (truncated >= static_cast<double>(std::numeric_limits<std::int32_t>::max()))
+        return std::numeric_limits<std::int32_t>::max();
+    if (truncated <= static_cast<double>(std::numeric_limits<std::int32_t>::min()))
+        return std::numeric_limits<std::int32_t>::min();
+    return static_cast<std::int32_t>(truncated);
+}
+
+double parse_number(std::string_view text) {
+    if (text.empty())
+        return 0.0;
+    double value = 0.0;
+    const auto [end, error] = std::from_chars(text.data(), text.data() + text.size(), value);
+    if (error != std::errc{} || end != text.data() + text.size())
+        return 0.0;
+    return value;
+}
+
+double lookup_number(const std::map<std::string, std::string> &values, std::string_view key) {
+    const auto it = values.find(std::string(key));
+    return it == values.end() ? 0.0 : parse_number(it->second);
+}
+
+double skill_value(const PersonState &state, std::string_view skill) {
+    const auto it = state.skills.find(skill);
+    return it == state.skills.end() ? 0.0 : it->second;
+}
+
+double strength_value(const PersonState &state) {
+    const double base = static_cast<double>(
+        round_half_away_from_zero(state.values[value_index(PersonParameter::strength)]));
+    return clamp_value(base + state.strength_bonus, 1.0, kMaxPrimary);
+}
+
+double constitution_value(const PersonState &state) {
+    const double base = static_cast<double>(
+        round_half_away_from_zero(state.values[value_index(PersonParameter::constitution)]));
+    return clamp_value(base, 1.0, kMaxPrimary);
+}
+
+double dexterity_value(const PersonState &state) {
+    const double base = static_cast<double>(
+        round_half_away_from_zero(state.values[value_index(PersonParameter::dexterity)]));
+    return clamp_value(base, 1.0, kMaxPrimary);
+}
+
+double perception_value(const PersonState &state) {
+    const double base = static_cast<double>(
+        round_half_away_from_zero(state.values[value_index(PersonParameter::perception)]));
+    return clamp_value(base, 1.0, kMaxPrimary);
+}
+
+double intelligence_value(const PersonState &state) {
+    const double base = static_cast<double>(
+        round_half_away_from_zero(state.values[value_index(PersonParameter::intelligence)]));
+    const double talking = skill_value(state, "SKILL_TALKING") > 9.0 ? 2.0 : 0.0;
+    return clamp_value(base + talking, 1.0, kMaxPrimary);
+}
+
+double wisdom_value(const PersonState &state) {
+    const double base = static_cast<double>(
+        round_half_away_from_zero(state.values[value_index(PersonParameter::wisdom)]));
+    const double talking = skill_value(state, "SKILL_TALKING") > 4.0 ? 1.0 : 0.0;
+    return clamp_value(base + talking, 1.0, kMaxPrimary);
+}
+
+double luck_value(const PersonState &state) {
+    const double base = static_cast<double>(
+        round_half_away_from_zero(state.values[value_index(PersonParameter::luck)]));
+    return clamp_value(base, 1.0, kMaxPrimary);
+}
+
+double reputation_value(const PersonState &state) {
+    const double stored = clamp_value(state.values[value_index(PersonParameter::reputation)],
+                                      kReputationMinimum, kReputationMaximum);
+    const double rounded = static_cast<double>(round_half_away_from_zero(stored));
+    return clamp_value(rounded, kReputationMinimum, kReputationMaximum);
+}
+
+double experience_value(const PersonState &state) {
+    return clamp_value(state.values[value_index(PersonParameter::experience)], 0.0, kMaxExperience);
+}
+
+int level_from_experience(double experience) {
+    int level = 1;
+    if (experience > 99.0) {
+        int step = 50;
+        do {
+            step += 50;
+            ++level;
+        } while (static_cast<double>(level) * step + step <= experience);
+    }
+    if (level > 98)
+        level = 99;
+    return level;
+}
+
+double maximum_life_value(const PersonState &state) {
+    const int level = level_from_experience(experience_value(state));
+    const int strength = static_cast<int>(strength_value(state));
+    const int constitution = static_cast<int>(constitution_value(state));
+    const float multiplier = static_cast<float>(level) * 0.02f + 1.0f;
+    const float raw = static_cast<float>((strength >> 1) * 3 + constitution * 3) * multiplier;
+    int result = round_half_away_from_zero(static_cast<double>(raw));
+    if (result < 2)
+        result = 1;
+    else if (result > 998)
+        result = 999;
+    return static_cast<double>(result);
+}
+
+double maximum_energy_value(const PersonState &state) {
+    const int level = level_from_experience(experience_value(state));
+    const int intelligence = static_cast<int>(intelligence_value(state));
+    const int wisdom = static_cast<int>(wisdom_value(state));
+    const float multiplier = static_cast<float>(level) * 0.01f + 1.0f;
+    const float raw = static_cast<float>((intelligence >> 1) * 3 + wisdom * 3) * multiplier;
+    int result = round_half_away_from_zero(static_cast<double>(raw));
+    if (result < 1)
+        result = 0;
+    else if (result > 998)
+        result = 999;
+    return static_cast<double>(result);
+}
+
+double life_value(const PersonState &state) {
+    return clamp_value(state.values[value_index(PersonParameter::life)], 0.0,
+                       maximum_life_value(state));
+}
+
+double energy_value(const PersonState &state) {
+    return clamp_value(state.values[value_index(PersonParameter::energy)], 0.0,
+                       maximum_energy_value(state));
+}
+
+void set_primary(PersonState &state, PersonParameter parameter, double value) {
+    if (value < 1.0 || value > kMaxPrimary)
+        return;
+    const double own_bonus = parameter == PersonParameter::strength ? state.strength_bonus : 0.0;
+    const double base = state.values[value_index(parameter)];
+    if (value == base + own_bonus)
+        return;
+    const double delta = value - (base + own_bonus);
+    state.strength_bonus += delta;
+}
+
+void set_reputation(PersonState &state, double value) {
+    const double target = clamp_value(value, kReputationMinimum, kReputationMaximum);
+    const double current = reputation_value(state);
+    double delta = target - current;
+    if (delta > 0.0) {
+        if (skill_value(state, "SKILL_LGHTMAG") > 4.0)
+            delta *= 2.0;
+    } else if (delta < 0.0) {
+        if (skill_value(state, "SKILL_DARKMAG") > 4.0)
+            delta *= 2.0;
+    }
+    state.values[value_index(PersonParameter::reputation)] += delta;
+}
+} // namespace
+
+PersonRuntime PersonRuntime::create(const std::vector<PersonInstance> &persons,
+                                    const std::optional<gl::assets::HeroStats> &hero) {
+    PersonRuntime runtime;
+    runtime.persons_.reserve(persons.size() + 1);
+
+    const auto add = [&runtime](PersonState state) {
+        const auto [it, inserted] = runtime.index_.emplace(state.name, runtime.persons_.size());
+        if (!inserted) {
+            gl::log(gl::LogLevel::warning,
+                    "person runtime: duplicate person name '" + state.name + "' ignored");
+            return;
+        }
+        runtime.persons_.push_back(std::move(state));
+    };
+
+    PersonState hero_state;
+    hero_state.name = "Hero";
+    if (hero) {
+        hero_state.loaded = true;
+        hero_state.values[value_index(PersonParameter::experience)] = hero->experience;
+        hero_state.values[value_index(PersonParameter::reputation)] = hero->reputation;
+        hero_state.values[value_index(PersonParameter::intelligence)] = hero->intelligence;
+        hero_state.values[value_index(PersonParameter::wisdom)] = hero->wisdom;
+        hero_state.values[value_index(PersonParameter::strength)] = hero->strength;
+        hero_state.values[value_index(PersonParameter::constitution)] = hero->constitution;
+        hero_state.values[value_index(PersonParameter::dexterity)] = hero->dexterity;
+        hero_state.values[value_index(PersonParameter::luck)] = hero->luck;
+        hero_state.values[value_index(PersonParameter::perception)] = hero->perception;
+        hero_state.values[value_index(PersonParameter::life)] = hero->life;
+        hero_state.values[value_index(PersonParameter::energy)] = hero->energy;
+    } else {
+        hero_state.loaded = false;
+    }
+    add(std::move(hero_state));
+
+    for (const PersonInstance &person : persons) {
+        PersonState state;
+        state.name = person.name;
+        state.loaded = true;
+        state.values[value_index(PersonParameter::experience)] =
+            lookup_number(person.def.values, "experience_value");
+        state.values[value_index(PersonParameter::reputation)] =
+            lookup_number(person.def.values, "reputation");
+        state.values[value_index(PersonParameter::intelligence)] =
+            lookup_number(person.def.values, "intelligence");
+        state.values[value_index(PersonParameter::wisdom)] =
+            lookup_number(person.def.values, "wisdom");
+        state.values[value_index(PersonParameter::strength)] =
+            lookup_number(person.def.values, "strength");
+        state.values[value_index(PersonParameter::constitution)] =
+            lookup_number(person.def.values, "constitution");
+        state.values[value_index(PersonParameter::dexterity)] =
+            lookup_number(person.def.values, "dexterity");
+        state.values[value_index(PersonParameter::luck)] = lookup_number(person.def.values, "luck");
+        state.values[value_index(PersonParameter::perception)] =
+            lookup_number(person.def.values, "perception");
+        state.values[value_index(PersonParameter::life)] = lookup_number(person.def.values, "life");
+        state.values[value_index(PersonParameter::energy)] =
+            lookup_number(person.def.values, "energy");
+        for (const auto &[key, text] : person.def.values) {
+            if (key.starts_with("skills."))
+                state.skills.emplace(key.substr(7), parse_number(text));
+        }
+        add(std::move(state));
+    }
+
+    return runtime;
+}
+
+const PersonState *PersonRuntime::find(std::string_view person) const {
+    const auto it = index_.find(person);
+    return it == index_.end() ? nullptr : &persons_[it->second];
+}
+
+PersonState *PersonRuntime::find(std::string_view person) {
+    const auto it = index_.find(person);
+    return it == index_.end() ? nullptr : &persons_[it->second];
+}
+
+double PersonRuntime::get_parameter(std::string_view person, PersonParameter parameter) const {
+    const PersonState *state = find(person);
+    if (state == nullptr || !state->loaded)
+        return 0.0;
+
+    switch (parameter) {
+    case PersonParameter::experience:
+        return experience_value(*state);
+    case PersonParameter::reputation:
+        return reputation_value(*state);
+    case PersonParameter::intelligence:
+        return intelligence_value(*state);
+    case PersonParameter::wisdom:
+        return wisdom_value(*state);
+    case PersonParameter::strength:
+        return strength_value(*state);
+    case PersonParameter::constitution:
+        return constitution_value(*state);
+    case PersonParameter::dexterity:
+        return dexterity_value(*state);
+    case PersonParameter::luck:
+        return luck_value(*state);
+    case PersonParameter::perception:
+        return perception_value(*state);
+    case PersonParameter::maximum_life:
+        return maximum_life_value(*state);
+    case PersonParameter::life:
+        return life_value(*state);
+    case PersonParameter::energy:
+        return energy_value(*state);
+    case PersonParameter::unknown:
+        break;
+    }
+    return 0.0;
+}
+
+void PersonRuntime::set_parameter(std::string_view person, PersonParameter parameter,
+                                  double value) {
+    PersonState *state = find(person);
+    if (state == nullptr)
+        return;
+
+    switch (parameter) {
+    case PersonParameter::unknown:
+    case PersonParameter::experience:
+    case PersonParameter::maximum_life:
+        return;
+    default:
+        break;
+    }
+
+    state->loaded = true;
+    switch (parameter) {
+    case PersonParameter::life:
+        state->values[value_index(PersonParameter::life)] = value;
+        return;
+    case PersonParameter::energy:
+        state->values[value_index(PersonParameter::energy)] = value;
+        return;
+    case PersonParameter::reputation:
+        set_reputation(*state, value);
+        return;
+    case PersonParameter::strength:
+    case PersonParameter::constitution:
+    case PersonParameter::dexterity:
+    case PersonParameter::perception:
+    case PersonParameter::intelligence:
+    case PersonParameter::wisdom:
+    case PersonParameter::luck:
+        set_primary(*state, parameter, value);
+        return;
+    default:
+        return;
+    }
+}
+
+double PersonRuntime::get_skill(std::string_view person, std::string_view skill) const {
+    const PersonState *state = find(person);
+    if (state == nullptr || !state->loaded)
+        return 0.0;
+    return skill_value(*state, skill);
+}
+
+gl::script::PersonAccess PersonRuntime::access() {
+    gl::script::PersonAccess access;
+    access.get_parameter = [this](std::string_view person, PersonParameter parameter) {
+        return get_parameter(person, parameter);
+    };
+    access.set_parameter = [this](std::string_view person, PersonParameter parameter,
+                                  double value) { set_parameter(person, parameter, value); };
+    access.get_skill = [this](std::string_view person, std::string_view skill) {
+        return get_skill(person, skill);
+    };
+    return access;
+}
+} // namespace gl::game

@@ -10,10 +10,10 @@ TEST_CASE("game script host logs an unsupported native once") {
     services.log = [&](std::string_view text) { messages.emplace_back(text); };
     gl::game::GameScriptHost host(services);
     const auto args = std::span<const gl::script::Value>{};
-    CHECK(std::get<std::int32_t>(host.call(0x4000000, args)) == 0);
-    CHECK(std::get<std::int32_t>(host.call(0x4000000, args)) == 0);
+    CHECK(std::get<std::int32_t>(host.call(0x4000002, args)) == 0);
+    CHECK(std::get<std::int32_t>(host.call(0x4000002, args)) == 0);
     REQUIRE(messages.size() == 1);
-    CHECK(messages.front().find("RS_GetPersonParameterI") != std::string::npos);
+    CHECK(messages.front().find("RS_AddPerson_1") != std::string::npos);
     CHECK(messages.front().find("unimplemented") != std::string::npos);
 }
 
