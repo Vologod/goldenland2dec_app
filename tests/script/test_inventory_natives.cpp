@@ -127,21 +127,30 @@ TEST_CASE("inventory GetItemCountI rejects non-string arguments") {
 TEST_CASE("inventory native registry arities and support match Server.dll") {
     const auto* test = NativeRegistry::find(0x5000000);
     const auto* count = NativeRegistry::find(0x5000002);
+    const auto* add = NativeRegistry::find(0x5000004);
+    const auto* remove = NativeRegistry::find(0x5000005);
     const auto* money = NativeRegistry::find(0x5000008);
     REQUIRE(test != nullptr);
     REQUIRE(count != nullptr);
+    REQUIRE(add != nullptr);
+    REQUIRE(remove != nullptr);
     REQUIRE(money != nullptr);
     CHECK(test->support == NativeSupport::supported);
     CHECK(count->support == NativeSupport::supported);
+    CHECK(add->support == NativeSupport::supported);
+    CHECK(remove->support == NativeSupport::supported);
     CHECK(money->support == NativeSupport::supported);
     CHECK(test->arity == 2);
     CHECK(count->arity == 2);
+    CHECK(add->arity == 3);
+    CHECK(remove->arity == 3);
     CHECK(money->arity == 0);
     CHECK(test->handler != nullptr);
     CHECK(count->handler != nullptr);
+    CHECK(add->handler != nullptr);
+    CHECK(remove->handler != nullptr);
     CHECK(money->handler != nullptr);
-    for (std::uint32_t id : {0x5000001u, 0x5000003u, 0x5000004u, 0x5000005u,
-                             0x5000006u, 0x5000007u}) {
+    for (std::uint32_t id : {0x5000001u, 0x5000003u, 0x5000006u, 0x5000007u}) {
         const auto* info = NativeRegistry::find(id);
         REQUIRE(info != nullptr);
         CHECK(info->support == NativeSupport::unsupported);

@@ -13,6 +13,10 @@ enum class NativeSupport { vm_internal, supported, unsupported };
 struct InventoryAccess {
     std::function<std::int32_t(std::string_view person, std::string_view tech_name)> item_count;
     std::function<std::int32_t()> money;
+    std::function<void(std::string_view person, std::string_view tech_name, std::int32_t count)>
+        add_item;
+    std::function<void(std::string_view person, std::string_view tech_name, std::int32_t count)>
+        remove_item;
 };
 
 struct NativeServices {
