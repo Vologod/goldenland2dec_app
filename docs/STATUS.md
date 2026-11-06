@@ -1,6 +1,60 @@
 # STATUS
 
 Обновлено: 2026-11-06
+## Phase 1b1 — Person parameter natives (done 2026-11-06)
+
+- **Задача:** реализовать `RS_GetPersonParameterI` (`0x4000000`),
+  `RS_SetPersonParameterI` (`0x4000001`), `RS_GetPersonSkillI` (`0x400000C`)
+  на состоянии порта: NPC-статы из `.scr`, Hero — из `BT_HERO` stat-блока
+  save; семантика — из `Server.dll` (D-029).
+- **Spec:** `docs/specs/2026-11-06-p3b1-person-parameters-design.md`.
+- **Plan:** `docs/plans/2026-11-06-p3b1-person-parameters.md`.
+- **Research:** `docs/research/p3b1-person-parameters-server.md`.
+- **Сделано (Tasks 1–6):**
+  - Research: 12 параметров (getter/setter RVA, формулы, clamp'ы),
+    default-константы `0.0`, skill id `0..26` (`verified`), layout
+    `BT_HERO` (`0x00C` + body `0x128`/`0x12C`/`0x130`), real slot0/slot2.
+  - `gl_script`: `PersonParameter`/`person_parameter_from_name`,
+    `PersonAccess`, три handler'а; `NativeRegistry` 8 supported, 3
+    vm_internal, 54 unsupported (всего 65).
+  - `gl_assets::parse_hero_stats` — read-only stat-блок `BT_HERO`
+    (`0x00C`, life/energy `0x128`/`0x12C`).
+  - `gl_game::PersonRuntime` — 12 параметров на персону, точный поиск по
+    имени, `Hero` всегда доступен (нули без save); формулы getter'ов из
+    research; `glgame` строит runtime в `load_level`/`apply_equip_save`
+    и передаёт `access()` в `GameScriptHost`.
+  - Real test `tests/script/test_real_person_natives.cpp` через
+    production `ScriptVm → GameScriptHost → PersonRuntime` на
+    `scripts/dialogs/old_test.age.cs`: get+set `("Hero",
+    "REPUTATION")`, `40 → 38` (штатный clamp-safe сценарий; исходный
+    `inter_kid3.age.cs`/`777` недостижим линейно и климпится в `50`).
+  - Ограничения (D-050): identity-кривая модификаторов (рантайм-таблица
+    не загружена/не доказана), `gate=0` default, `+0xF58` undead-gate не
+    моделируется; engine quirk воспроизведён — все семь stat-setter'ов
+    добавляют delta в bonus силы.
+- **Проверка (фактический вывод 2026-11-06):**
+  - `cmake --build build` — exit 0.
+  - Targeted `ctest -R "gl_script_tests|gl_script_real_tests|
+    gl_game_tests|gl_assets_tests|gl_assets_real_tests|
+    glgame_screenshot_tests"` с `GL_GAME_DIR` — **6/6 passed**,
+    925.19 s, exit 0: `gl_assets_tests` 3.56 s, `gl_assets_real_tests`
+    446.25 s, `gl_game_tests` 46.08 s, `gl_script_tests` 0.46 s,
+    `gl_script_real_tests` 3.15 s, `glgame_screenshot_tests` 425.10 s.
+  - Полный `ctest --test-dir build --output-on-failure` с `GL_GAME_DIR`
+    — **18/18 passed**, 998.87 s, exit 0: `gl_assets_tests` 3.17,
+    `gl_assets_real_tests` 416.13, `gl_game_tests` 43.07,
+    `gl_core_tests` 0.40, `gl_core_real_tests` 0.21, `gl_script_tests`
+    0.43, `gl_script_real_tests` 3.00, `glpak_cli_tests` 0.08,
+    `gl_cs_tools_tests` 7.05, `camera_tests` 0.44, `utf8_tests` 0.14,
+    `font_tests` 1.77, `glview_screenshot_tests` 104.04,
+    `glgame_screenshot_tests` 394.78, `person_render_tests` 2.65,
+    `level_click_tests` 10.05, `dialog_overlay_tests` 0.45,
+    `inventory_overlay_tests` 7.73.
+- **Вне scope:** `RS_IsPersonExistsI`, `RS_AddExp`, lifecycle, inventory,
+  party, quests/time/world.
+- **Следующее:** Phase 1b2 inventory natives (`P3-9` inventory-часть) или
+  `P2-15` (save payload).
+
 ## Phase 1a — Server.dll VM parity & native dispatch (done 2026-11-06)
 
 - **Задача:** снять `P3-4`–`P3-9`: сверить VM-семантику с `Server.dll` и

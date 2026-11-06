@@ -2,7 +2,8 @@
 
 Обновлено: 2026-11-06. Исходно (2026-11-05) — read-only аудит существующего
 состояния; Phase 1a добавила evidence VM-паритета и native dispatch (код
-порта менялся, см. D-049).
+порта менялся, см. D-049); Phase 1b1 добавила evidence person-параметров
+и Hero stat-блока (D-050).
 
 Матрица — единый источник истины о покрытии паритета. Строка без evidence не
 считается подтверждённой. Источники: `parity-audit-p0-p1.md`,
@@ -32,9 +33,12 @@ ID: `P4a-*`, `P4b-*`, `P4b2-*` — прежние A/B/C из аудита (пе�
 1. **B1 VM** — Phase 1a сверила VM с `Server.dll` (`P3-4` verified;
    `P3-5`/`P3-6`/`P3-7`/`P3-8` partial: недоказанные overflow/string/
    budget случаи остаются `unverified`).
-2. **B2 нативы** — реестр и `GameScriptHost` есть, но 57/65 нативов
-   `unsupported` (persons/inventory/quests/time/world) → возвращают 0
-   (`P3-9`); id `0` встречается 51 раз (`P3-3`).
+2. **B2 нативы** — реестр и `GameScriptHost` есть; поддержаны 8/65
+   (`Exit`/`Signal`/`Console`/`Cmd`/`D_PlaySound` + три person-натива
+   Phase 1b1), `vm_internal` 3, `unsupported` 54; оставшиеся 57
+   non-supported нативов требуют подсистем
+   (lifecycle/party/inventory/quests/time/world) → возвращают 0 (`P3-9`);
+   id `0` встречается 51 раз (`P3-3`).
 3. **B3 save/load** — payload не читается и не пишется (`P2-15`).
 4. **B4 тайминг** — порт 60 Гц, оригинал `sv_fps=35` (`P2-9`, `P4b-16`).
 5. **C1 ADSC** — `number/name` игнорируются, анимации ломаются на 4 уровнях
@@ -120,7 +124,7 @@ ID: `P4a-*`, `P4b-*`, `P4b2-*` — прежние A/B/C из аудита (пе�
 | P3-6 | VM | assign coercion | `script_vm.cpp:254-287` | research §4: `0x32` `0x3a036`, string dest `0x3a09f-0x3a0b7`; numeric match, D-025 | partial | string-приёмник `unverified` (string-переменных в данных нет) | Phase 1a Task 2/5 |
 | P3-7 | VM | limits/errors | `script_vm.hpp:38-40` | research §4: деление/модуль на 0 → `1e10` без ошибки (`0x3a2d8`/`0x3a28f`); sticky errors D-025 | partial | eval budget 100k/limits — решение порта, не извлечено | Phase 1a Task 2/5 |
 | P3-8 | VM | dialog data/answer index | `script_vm.cpp:163-201` | research §5: `D_Say` `0x3fc10`, `D_Answer` `0x3fc9c`, `D_CloseDialog` `0x3fc60`; real `2684/2686/2696` | partial | 0-based answer index — порт D-024, `Server.dll` не пинит | Phase 1a Task 2 |
-| P3-9 | нативы | dispatch/host | `native_registry.cpp`, `game_script_host.cpp` | `NativeRegistry` 65/65; supported 5 (`Exit`/`Signal`/`Console`/`Cmd`/`D_PlaySound`), vm_internal 3, unsupported 57; `GameScriptHost` one-shot log | partial | 57 нативов требуют подсистем (persons/inventory/quests/time/world); `Signal`/`D_PlaySound` — service-level stubs, не поведенческий паритет | Phase 1a Task 3/4/6 |
+| P3-9 | нативы | dispatch/host | `native_registry.cpp`, `game_script_host.cpp`, `person_runtime.cpp`, `hero_stats.cpp` | `NativeRegistry` 65/65; supported 8/65 (`Exit`/`Signal`/`Console`/`Cmd`/`D_PlaySound`, `RS_GetPersonParameterI`/`RS_SetPersonParameterI`/`RS_GetPersonSkillI`), vm_internal 3, unsupported 54; три person-ID backed `PersonRuntime` + `parse_hero_stats`; `GameScriptHost` one-shot log | partial | остаток 57 non-supported ID (54 unsupported + 3 vm_internal) требует подсистем (lifecycle/party/inventory/quests/time/world); `Signal`/`D_PlaySound` — service-level stubs, не поведенческий паритет | Phase 1a Task 3/4/6; Phase 1b1 Task 2–5 |
 | P3-10 | globals | типы/парсинг `.scr` | `globals.cpp:100-182` | real `zlato_vars.scr` | partial | неизвестные типы/кавычки | audit p2-p3 |
 | P3-11 | диалоги | DialogSession | `dialog_session.cpp:12-73` | real demon | partial | покрыт один диалог | audit p2-p3 |
 | P3-12 | диалоги | экран/клавиши/панель | `main.cpp:545-583` | screenshot tests | unverified | UI-раскладка порта | audit p2-p3 |
@@ -130,6 +134,7 @@ ID: `P4a-*`, `P4b-*`, `P4b2-*` — прежние A/B/C из аудита (пе�
 | P3-16 | шрифт | normalization/wrap | `font.cpp:54-72,442-537` | только порт | unverified | GDI layout не извлечён | audit p2-p3 |
 | P3-17 | шрифт | fallback | `font.cpp:539-562` | screenshot tests | partial | Windows-only; Android нужен TTF | audit p2-p3 |
 | P3-18 | cp1251 | строки CS/SDB | `cs.cpp:33-41`; `sdb.cpp:24` | real Cyrillic | verified | undefined bytes не важны | audit p2-p3 |
+| P3-19 | persons | параметры/навыки персоны, Hero stat-блок | `PersonRuntime`; `parse_hero_stats` | research §2–§7: 12 параметров/getter/setter RVA, skill id `0..26`, `BT_HERO` body `0x00C` + `0x128`/`0x12C`/`0x130`; unit + real `old_test.age.cs` (get/set reputation `40→38`) | partial | identity-кривая модификаторов (рантайм-таблица не загружена), `gate=0` default, `+0xF58` undead-gate не моделируются; 57 non-supported нативов вне scope | Phase 1b1 Task 1–5; D-050 |
 
 ## P4a — PAD/person/SEF/отрисовка NPC
 
@@ -269,19 +274,21 @@ ID: `P4a-*`, `P4b-*`, `P4b2-*` — прежние A/B/C из аудита (пе�
 
 ## Итог
 
-Всего строк: **157**. По статусам: `verified` 45, `partial` 60,
+Всего строк: **158**. По статусам: `verified` 45, `partial` 61,
 `unverified` 22, `missing` 15, `contradicted` 2, `superseded` 13.
 
 Native dispatch infrastructure (Phase 1a): `NativeRegistry` 65/65 +
-`GameScriptHost`; 5 supported, 3 vm_internal, 57 unsupported.
+`GameScriptHost`. Phase 1b1 добавляет три person-натива: итого 8 supported,
+3 vm_internal, 54 unsupported (57 non-supported).
 
 `contradicted`: `P1-3` (ADSC) и `P2-9` (60 Гц vs `sv_fps=35`).
 `missing` включает новые системы P5b2+ и отсутствующие P4d/P5a-состояния.
 
 Блокеры паритета, требующие отдельных spec/plan в порядке приоритета:
 
-1. `P3-9`: 57 нативов без подсистем (persons/inventory/quests/time/world);
-   VM-часть закрыта Phase 1a.
+1. `P3-9`: 57 non-supported нативов без подсистем
+   (lifecycle/party/inventory/quests/time/world); VM-часть закрыта Phase 1a,
+   person-параметры — Phase 1b1.
 2. `P2-15`: save payload/write/load.
 3. `P2-9`/`P4b-16`: 35 Гц vs 60 Гц.
 4. `P1-3`: ADSC `number/name`.
