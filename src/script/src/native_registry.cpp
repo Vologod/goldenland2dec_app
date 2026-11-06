@@ -27,9 +27,54 @@ std::int32_t as_int(const Value& value) {
     return 0;
 }
 
+double as_double(const Value& value) {
+    if (const auto* item = std::get_if<std::int32_t>(&value)) return *item;
+    if (const auto* item = std::get_if<std::uint32_t>(&value)) return *item;
+    if (const auto* item = std::get_if<double>(&value)) return *item;
+    return 0.0;
+}
+
 std::string_view as_string(const Value& value) {
     if (const auto* item = std::get_if<std::string>(&value)) return *item;
     return {};
+}
+
+bool is_string(const Value& value) {
+    return std::holds_alternative<std::string>(value);
+}
+
+void warn_native(std::string_view text, NativeServices& services) {
+    if (services.log) services.log(text);
+}
+
+Value native_get_person_parameter(std::span<const Value> args, NativeServices& services) {
+    if (args.size() < 2 || !is_string(args[0]) || !is_string(args[1])) {
+        warn_native("script native RS_GetPersonParameterI: invalid arguments", services);
+        return double{0.0};
+    }
+    const auto parameter = person_parameter_from_name(as_string(args[1]));
+    if (!services.person.get_parameter) return double{0.0};
+    return services.person.get_parameter(as_string(args[0]), parameter);
+}
+
+Value native_set_person_parameter(std::span<const Value> args, NativeServices& services) {
+    if (args.size() < 3 || !is_string(args[0]) || !is_string(args[1])) {
+        warn_native("script native RS_SetPersonParameterI: invalid arguments", services);
+        return std::int32_t{0};
+    }
+    const auto parameter = person_parameter_from_name(as_string(args[1]));
+    if (services.person.set_parameter)
+        services.person.set_parameter(as_string(args[0]), parameter, as_double(args[2]));
+    return std::int32_t{0};
+}
+
+Value native_get_person_skill(std::span<const Value> args, NativeServices& services) {
+    if (args.size() < 2 || !is_string(args[0]) || !is_string(args[1])) {
+        warn_native("script native RS_GetPersonSkillI: invalid arguments", services);
+        return double{0.0};
+    }
+    if (!services.person.get_skill) return double{0.0};
+    return services.person.get_skill(as_string(args[0]), as_string(args[1]));
 }
 
 std::string_view first_string(std::span<const Value> args) {
@@ -88,8 +133,12 @@ std::vector<NativeInfo> make_entries() {
         add(id, NativeSupport::unsupported, "requires world/effect runtime");
     for (std::uint32_t id = 0x3000000; id <= 0x3000008; ++id)
         add(id, NativeSupport::unsupported, "requires world/level runtime");
+    add(0x4000000, NativeSupport::supported, {}, &native_get_person_parameter);
+    add(0x4000001, NativeSupport::supported, {}, &native_set_person_parameter);
+    add(0x400000c, NativeSupport::supported, {}, &native_get_person_skill);
     for (std::uint32_t id = 0x4000000; id <= 0x400000c; ++id)
-        add(id, NativeSupport::unsupported, "requires person runtime state");
+        if (id != 0x4000000 && id != 0x4000001 && id != 0x400000c)
+            add(id, NativeSupport::unsupported, "requires person runtime state");
     for (std::uint32_t id = 0x5000000; id <= 0x5000008; ++id)
         add(id, NativeSupport::unsupported, "requires item runtime state");
     for (std::uint32_t id = 0x6000000; id <= 0x6000003; ++id)
@@ -107,6 +156,22 @@ std::vector<NativeInfo> make_entries() {
     return entries;
 }
 } // namespace
+
+PersonParameter person_parameter_from_name(std::string_view name) {
+    if (name == "EXPERIENCE") return PersonParameter::experience;
+    if (name == "REPUTATION") return PersonParameter::reputation;
+    if (name == "INTELLIGENCE") return PersonParameter::intelligence;
+    if (name == "WISDOM") return PersonParameter::wisdom;
+    if (name == "STRENGTH") return PersonParameter::strength;
+    if (name == "CONSTITUTION") return PersonParameter::constitution;
+    if (name == "DEXTERITY") return PersonParameter::dexterity;
+    if (name == "LUCK") return PersonParameter::luck;
+    if (name == "PERCEPTION") return PersonParameter::perception;
+    if (name == "MAXIMUM LIFE") return PersonParameter::maximum_life;
+    if (name == "LIFE") return PersonParameter::life;
+    if (name == "ENERGY") return PersonParameter::energy;
+    return PersonParameter::unknown;
+}
 
 const char* NativeInfo::name() const { return gl::assets::cs_function_name(id); }
 

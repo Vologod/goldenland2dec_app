@@ -30,7 +30,8 @@ TEST_CASE("native registry classifies dialog and host natives") {
         CHECK(NativeRegistry::find(id)->support == NativeSupport::vm_internal);
     for (std::uint32_t id : {0x1000000u, 0x1000001u, 0x1000002u, 0x1000003u, 0x1000007u})
         CHECK(NativeRegistry::find(id)->support == NativeSupport::supported);
-    CHECK(NativeRegistry::find(0x4000001)->support == NativeSupport::unsupported);
+    for (std::uint32_t id : {0x4000000u, 0x4000001u, 0x400000cu})
+        CHECK(NativeRegistry::find(id)->support == NativeSupport::supported);
     CHECK(NativeRegistry::find(0xDEADBEEF) == nullptr);
 }
 
@@ -69,7 +70,7 @@ TEST_CASE("native registry dispatches supported services") {
 TEST_CASE("unsupported native returns zero") {
     gl::script::NativeServices services;
     gl::script::Value result = gl::script::NativeRegistry::call(
-        *gl::script::NativeRegistry::find(0x4000000), {}, services);
+        *gl::script::NativeRegistry::find(0x4000002), {}, services);
     CHECK(std::get<std::int32_t>(result) == 0);
 }
 

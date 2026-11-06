@@ -5,6 +5,7 @@ add_executable(gl_script_tests
     test_dialogs.cpp
     test_dialog_session.cpp
     test_native_registry.cpp
+    test_person_parameters.cpp
 )
 target_include_directories(gl_script_tests PRIVATE ${CMAKE_SOURCE_DIR}/third_party)
 target_link_libraries(gl_script_tests PRIVATE gl_script)

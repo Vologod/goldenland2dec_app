@@ -1,4 +1,5 @@
 #pragma once
+#include "gl/script/person_access.hpp"
 #include "gl/script/value.hpp"
 #include <cstddef>
 #include <cstdint>
@@ -16,6 +17,7 @@ struct NativeServices {
     std::function<void(std::int32_t)> exit;
     std::function<void(std::string_view)> play_sound;
     std::function<void(std::string_view)> log;
+    PersonAccess person;
 };
 
 using NativeHandler = Value (*)(std::span<const Value>, NativeServices&);
