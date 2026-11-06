@@ -1,6 +1,7 @@
 add_executable(gl_game_tests
     test_main.cpp
     test_dialog_path.cpp
+    test_game_script_host.cpp
     test_hero.cpp
     test_hero_outfit_resolver.cpp
     test_hero_wear.cpp
