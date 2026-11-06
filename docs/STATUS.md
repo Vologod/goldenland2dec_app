@@ -79,9 +79,9 @@
   `decomp-index.md` содержит SHA-256 и число функций; корпус непуст;
   документы UTF-8 без BOM/NUL; `ctest` не требуется.
 - **Сделано:**
-  - `docs/research/parity-matrix.md` — 157 строк: `verified` 44,
-    `partial` 57, `unverified` 25, `missing` 16, `contradicted` 2,
-    `superseded` 13. `contradicted`: `P1-3` (ADSC `number/name`) и
+  - `docs/research/parity-matrix.md` — 157 строк (на 2026-11-05):
+    `verified` 44, `partial` 57, `unverified` 25, `missing` 16,
+    `contradicted` 2, `superseded` 13. `contradicted`: `P1-3` (ADSC `number/name`) и
     `P2-9` (60 Гц vs `sv_fps=35`).
   - `docs/specs/2026-11-05-parity-matrix-design.md`,
     `docs/plans/2026-11-05-parity-matrix-phase0.md`.
@@ -89,8 +89,9 @@
     корпус локален, в git только индекс и скрипт.
   - `tools/ghidra/ExportDecomp.java` + `docs/research/decomp-index.md`.
 - **Проверка (фактический вывод):**
-  - `parity-matrix.md`: 157 строк; `verified` 44, `partial` 57,
-    `unverified` 25, `missing` 16, `contradicted` 2, `superseded` 13.
+  - `parity-matrix.md`: 157 строк (на 2026-11-05); `verified` 44,
+    `partial` 57, `unverified` 25, `missing` 16, `contradicted` 2,
+    `superseded` 13.
   - Ghidra: `Server.dll` SHA-256
     `418E256063748F2E90DB35AE7C6ABE6EAC401FB86908CB5F27EBF565A21CC837`;
     импорт и анализ — 109 s; `done functions=1108 ok=1107 failed=0 thunks=1`.

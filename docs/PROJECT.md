@@ -59,9 +59,9 @@
 **A8 parity (cell masks) — implemented:** engine-модель `ApplyCellMask`; `Level::MaskCellGrid` из LVL (`flags=relief|sound<<16`, `mask=LvlTile.mask`), `select_cell_mask` (сканы вправо/вниз), `LevelScreen` выбирает mask id в строке персонажа и рисует клетки кадра с этим id; baseline удалён. `ctest` 17/17; manual gate PASSED 2026-11-04. Детали — `docs/specs/2026-11-03-a8-mask-parity-design.md`, research `a8-mask-parity.md`.
 
 **Parity matrix & decomp reference (Phase 0) — done 2026-11-05:**
-`docs/research/parity-matrix.md` — 157 строк покрытия (`verified` 44,
-`partial` 57, `unverified` 25, `missing` 16, `contradicted` 2,
-`superseded` 13); `docs/research/decomp-index.md` + локальный корпус
+`docs/research/parity-matrix.md` — 157 строк покрытия (на 2026-11-06:
+`verified` 45, `partial` 60, `unverified` 22, `missing` 15,
+`contradicted` 2, `superseded` 13); `docs/research/decomp-index.md` + локальный корпус
 `Server.dll` (1108 функций, SHA-256
 `418E256063748F2E90DB35AE7C6ABE6EAC401FB86908CB5F27EBF565A21CC837`) в
 `.local/decomp/server/`; D-048. Phase 1a (VM parity + native dispatch)
