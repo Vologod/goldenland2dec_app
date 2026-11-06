@@ -9,6 +9,7 @@
 #include <gl/assets/hero_stats.hpp>
 #include <gl/assets/herowear.hpp>
 #include <gl/assets/item_catalog.hpp>
+#include <gl/assets/item_name_index.hpp>
 #include <gl/assets/log.hpp>
 #include <gl/assets/sdb.hpp>
 #include <gl/assets/vfs.hpp>
@@ -21,6 +22,7 @@
 #include <gl/game/dialog_path.hpp>
 #include <gl/game/game_script_host.hpp>
 #include <gl/game/hero_outfit_resolver.hpp>
+#include <gl/game/inventory_runtime.hpp>
 #include <gl/game/person_runtime.hpp>
 #include <gl/platform/sdl_context.hpp>
 #include <gl/render/font.hpp>
@@ -511,6 +513,8 @@ class Game {
         load_font();
         load_inventory_font();
         load_item_catalog();
+        load_item_name_index();
+        rebuild_inventory_runtime();
 
         if (!state_.transition(gl::core::AppState::menu)) return 3;
 
@@ -722,6 +726,29 @@ class Game {
         gl::log(gl::LogLevel::info, "inventory: catalog loaded");
     }
 
+    void load_item_name_index() {
+        gl::Result<gl::assets::ItemNameIndex> names = gl::assets::ItemNameIndex::load(vfs_);
+        if (!names) {
+            gl::log(gl::LogLevel::warning,
+                    "inventory: item name index: " + names.error().message);
+            return;
+        }
+        item_names_ = std::move(names.value());
+        gl::log(gl::LogLevel::info, "inventory: item name index loaded");
+    }
+
+    void rebuild_inventory_runtime() {
+        const gl::assets::HeroInventory inventory =
+            pending_inventory_ ? *pending_inventory_ : gl::assets::HeroInventory{};
+        if (item_names_) {
+            inventory_runtime_ =
+                gl::game::InventoryRuntime::create(inventory, *item_names_);
+        } else {
+            inventory_runtime_ = gl::game::InventoryRuntime::create(
+                inventory, gl::assets::ItemNameIndex{});
+        }
+    }
+
     void open_inventory() {
         gl::assets::HeroInventory inventory;
         if (pending_inventory_) inventory = *pending_inventory_;
@@ -772,6 +799,8 @@ class Game {
         auto sdb = gl::assets::Sdb::parse(sdb_data.value());
         if (!sdb) return report(sdb.error());
 
+        rebuild_inventory_runtime();
+
         auto context = std::make_unique<DialogContext>();
         context->host.services().console = [](std::string_view text) {
             gl::log(gl::LogLevel::info, "script console: " + std::string(text));
@@ -790,6 +819,7 @@ class Game {
             gl::log(gl::LogLevel::info, "script exit: " + std::to_string(code));
         };
         context->host.services().person = person_runtime_.access();
+        context->host.services().inventory = inventory_runtime_.access();
         context->path = std::string(virtual_path);
         context->speaker = std::string(speaker);
         context->sdb = std::move(sdb.value());
@@ -1413,6 +1443,7 @@ class Game {
         if (!fs::exists(info->path, path_error)) {
             pending_equipment_ = gl::assets::HeroEquipment{};
             pending_inventory_ = gl::assets::HeroInventory{};
+            rebuild_inventory_runtime();
             report_outfit_message(
                 "outfit: naked (invalid save slot " + std::to_string(slot) + ")", false);
             if (apply_to_level && level_ && !options_.hero_outfit_none)
@@ -1426,6 +1457,7 @@ class Game {
         if (!read_save_body(*info, body, error)) {
             pending_equipment_ = gl::assets::HeroEquipment{};
             pending_inventory_ = gl::assets::HeroInventory{};
+            rebuild_inventory_runtime();
             report_outfit_message(
                 "outfit: naked (slot " + std::to_string(slot) + "): " + error, false);
             if (apply_to_level && level_ && !options_.hero_outfit_none)
@@ -1456,6 +1488,7 @@ class Game {
                     "inventory: slot " + std::to_string(slot) + ": " +
                         inventory.error().message);
         }
+        rebuild_inventory_runtime();
 
         auto equipment = gl::assets::parse_hero_equipment(body);
         if (!equipment) {
@@ -2281,6 +2314,8 @@ class Game {
     std::optional<gl::assets::HeroInventory> pending_inventory_;
     std::optional<gl::assets::HeroStats> pending_hero_stats_;
     gl::game::PersonRuntime person_runtime_;
+    gl::game::InventoryRuntime inventory_runtime_;
+    std::optional<gl::assets::ItemNameIndex> item_names_;
     bool hero_stats_absent_logged_ = false;
     gl::assets::ItemCatalog item_catalog_;
     std::string level_name_;
