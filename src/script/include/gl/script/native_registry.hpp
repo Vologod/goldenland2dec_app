@@ -10,6 +10,11 @@
 namespace gl::script {
 enum class NativeSupport { vm_internal, supported, unsupported };
 
+struct InventoryAccess {
+    std::function<std::int32_t(std::string_view person, std::string_view tech_name)> item_count;
+    std::function<std::int32_t()> money;
+};
+
 struct NativeServices {
     std::function<void(std::string_view)> console;
     std::function<void(std::string_view)> command;
@@ -18,6 +23,7 @@ struct NativeServices {
     std::function<void(std::string_view)> play_sound;
     std::function<void(std::string_view)> log;
     PersonAccess person;
+    InventoryAccess inventory;
 };
 
 using NativeHandler = Value (*)(std::span<const Value>, NativeServices&);

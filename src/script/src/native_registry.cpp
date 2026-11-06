@@ -81,6 +81,31 @@ Value native_get_person_skill(std::span<const Value> args, NativeServices& servi
     return services.person.get_skill(as_string(args[0]), as_string(args[1]));
 }
 
+Value native_test_person_has_item(std::span<const Value> args, NativeServices& services) {
+    if (args.size() < 2 || !is_string(args[0]) || !is_string(args[1])) {
+        warn_native("script native RS_TestPersonHasItem: invalid arguments", services);
+        return double{0.0};
+    }
+    if (!services.inventory.item_count) return double{0.0};
+    const auto count = services.inventory.item_count(as_string(args[0]), as_string(args[1]));
+    return count > 0 ? double{1.0} : double{0.0};
+}
+
+Value native_get_item_count(std::span<const Value> args, NativeServices& services) {
+    if (args.size() < 2 || !is_string(args[0]) || !is_string(args[1])) {
+        warn_native("script native RS_GetItemCountI: invalid arguments", services);
+        return double{0.0};
+    }
+    if (!services.inventory.item_count) return double{0.0};
+    return static_cast<double>(
+        services.inventory.item_count(as_string(args[0]), as_string(args[1])));
+}
+
+Value native_get_money(std::span<const Value>, NativeServices& services) {
+    if (!services.inventory.money) return double{0.0};
+    return static_cast<double>(services.inventory.money());
+}
+
 std::string_view first_string(std::span<const Value> args) {
     return args.empty() ? std::string_view{} : as_string(args.front());
 }
@@ -143,8 +168,12 @@ std::vector<NativeInfo> make_entries() {
     for (std::uint32_t id = 0x4000000; id <= 0x400000c; ++id)
         if (id != 0x4000000 && id != 0x4000001 && id != 0x400000c)
             add(id, NativeSupport::unsupported, "requires person runtime state");
+    add(0x5000000, NativeSupport::supported, {}, &native_test_person_has_item, 2);
+    add(0x5000002, NativeSupport::supported, {}, &native_get_item_count, 2);
+    add(0x5000008, NativeSupport::supported, {}, &native_get_money, 0);
     for (std::uint32_t id = 0x5000000; id <= 0x5000008; ++id)
-        add(id, NativeSupport::unsupported, "requires item runtime state");
+        if (id != 0x5000000 && id != 0x5000002 && id != 0x5000008)
+            add(id, NativeSupport::unsupported, "requires item runtime state");
     for (std::uint32_t id = 0x6000000; id <= 0x6000003; ++id)
         add(id, NativeSupport::unsupported, "requires world clock");
     for (std::uint32_t id = 0x7000000; id <= 0x7000010; ++id)
