@@ -6,6 +6,8 @@
 namespace gl::assets {
 namespace {
 constexpr std::size_t kPersonRecordOffset = 0x00C;
+constexpr std::size_t kSkillOffset = 0x02C;
+constexpr std::size_t kSkillCount = 27;
 constexpr std::size_t kLifeOffset = 0x128;
 constexpr std::size_t kEnergyOffset = 0x12C;
 constexpr std::size_t kExtraOffset = 0x130;
@@ -36,6 +38,8 @@ Result<HeroStats> parse_hero_stats(std::span<const std::uint8_t> body) {
     stats.life = read_i32(body, kLifeOffset);
     stats.energy = read_i32(body, kEnergyOffset);
     stats.extra = read_i32(body, kExtraOffset);
+    for (std::size_t id = 0; id < kSkillCount; ++id)
+        stats.skills[id] = read_i32(body, kPersonRecordOffset + kSkillOffset + 4 * id);
     return stats;
 }
 } // namespace gl::assets

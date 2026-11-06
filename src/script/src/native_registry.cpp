@@ -43,7 +43,10 @@ bool is_numeric(const Value& value) {
 }
 
 void warn_native(std::string_view text, NativeServices& services) {
-    if (services.log) services.log(text);
+    if (services.log)
+        services.log(text);
+    else
+        gl::log(gl::LogLevel::warning, text);
 }
 
 Value native_get_person_parameter(std::span<const Value> args, NativeServices& services) {

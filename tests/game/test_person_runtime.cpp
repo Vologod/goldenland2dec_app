@@ -44,6 +44,33 @@ TEST_CASE("person runtime keeps the hero entry without save") {
     CHECK(runtime.get_parameter("Hero", PersonParameter::reputation) == 0.0);
 }
 
+TEST_CASE("person runtime leaves untouched no-save hero parameters absent") {
+    auto runtime = gl::game::PersonRuntime::create({}, std::nullopt);
+    for (PersonParameter parameter : {PersonParameter::experience, PersonParameter::reputation,
+                                      PersonParameter::intelligence, PersonParameter::wisdom,
+                                      PersonParameter::strength, PersonParameter::constitution,
+                                      PersonParameter::dexterity, PersonParameter::luck,
+                                      PersonParameter::perception, PersonParameter::maximum_life,
+                                      PersonParameter::life, PersonParameter::energy}) {
+        CHECK(runtime.get_parameter("Hero", parameter) == 0.0);
+    }
+
+    runtime.set_parameter("Hero", PersonParameter::reputation, 7.0);
+    runtime.set_parameter("Hero", PersonParameter::life, 2.0);
+    CHECK(runtime.get_parameter("Hero", PersonParameter::reputation) == doctest::Approx(7.0));
+    CHECK(runtime.get_parameter("Hero", PersonParameter::life) == doctest::Approx(2.0));
+    CHECK(runtime.get_parameter("Hero", PersonParameter::strength) == 0.0);
+    CHECK(runtime.get_parameter("Hero", PersonParameter::constitution) == 0.0);
+    CHECK(runtime.get_parameter("Hero", PersonParameter::dexterity) == 0.0);
+    CHECK(runtime.get_parameter("Hero", PersonParameter::perception) == 0.0);
+    CHECK(runtime.get_parameter("Hero", PersonParameter::intelligence) == 0.0);
+    CHECK(runtime.get_parameter("Hero", PersonParameter::wisdom) == 0.0);
+    CHECK(runtime.get_parameter("Hero", PersonParameter::luck) == 0.0);
+    CHECK(runtime.get_parameter("Hero", PersonParameter::experience) == 0.0);
+    CHECK(runtime.get_parameter("Hero", PersonParameter::maximum_life) == 0.0);
+    CHECK(runtime.get_parameter("Hero", PersonParameter::energy) == 0.0);
+}
+
 TEST_CASE("person runtime applies save hero stats") {
     gl::assets::HeroStats hero;
     hero.reputation = 11;
@@ -64,6 +91,20 @@ TEST_CASE("person runtime reads skills") {
     auto runtime = gl::game::PersonRuntime::create({make_person("L1.P1", "L1.P1")}, std::nullopt);
     CHECK(runtime.get_skill("L1.P1", "SKILL_WPN_AXE") == doctest::Approx(9.0));
     CHECK(runtime.get_skill("L1.P1", "SKILL_UNKNOWN") == doctest::Approx(0.0));
+}
+
+TEST_CASE("person runtime reads hero skills from the stat block") {
+    gl::assets::HeroStats hero;
+    hero.skills[0] = 99;
+    hero.skills[1] = -2;
+    hero.skills[6] = 10;
+    hero.skills[13] = 15;
+    auto runtime = gl::game::PersonRuntime::create({}, hero);
+    CHECK(runtime.get_skill("Hero", "SKILL_ATHLETIC") == doctest::Approx(10.0));
+    CHECK(runtime.get_skill("Hero", "SKILL_WPN_AXE") == doctest::Approx(15.0));
+    CHECK(runtime.get_skill("Hero", "SKILL_GODSMAG") == doctest::Approx(15.0));
+    CHECK(runtime.get_skill("Hero", "SKILL_ELEMMAG") == doctest::Approx(0.0));
+    CHECK(runtime.get_skill("Hero", "SKILL_UNKNOWN") == doctest::Approx(0.0));
 }
 
 TEST_CASE("person runtime exposes access callbacks") {
@@ -89,33 +130,37 @@ TEST_CASE("person runtime clamps primary stats to the configured range") {
     CHECK(runtime.get_parameter("L1.P1", PersonParameter::luck) == doctest::Approx(1.0));
 }
 
-TEST_CASE("person runtime setter rejects values outside the primary range") {
+TEST_CASE("person runtime does not surface primary setter bonuses while the gate is closed") {
     auto runtime = gl::game::PersonRuntime::create({make_person("L1.P1", "L1.P1")}, std::nullopt);
     const double strength = runtime.get_parameter("L1.P1", PersonParameter::strength);
+    const double constitution = runtime.get_parameter("L1.P1", PersonParameter::constitution);
     runtime.set_parameter("L1.P1", PersonParameter::strength, 0.0);
     CHECK(runtime.get_parameter("L1.P1", PersonParameter::strength) == strength);
     runtime.set_parameter("L1.P1", PersonParameter::strength, 31.0);
     CHECK(runtime.get_parameter("L1.P1", PersonParameter::strength) == strength);
     runtime.set_parameter("L1.P1", PersonParameter::strength, 1.0);
-    CHECK(runtime.get_parameter("L1.P1", PersonParameter::strength) == doctest::Approx(1.0));
+    CHECK(runtime.get_parameter("L1.P1", PersonParameter::strength) == strength);
     runtime.set_parameter("L1.P1", PersonParameter::strength, 30.0);
-    CHECK(runtime.get_parameter("L1.P1", PersonParameter::strength) == doctest::Approx(30.0));
+    CHECK(runtime.get_parameter("L1.P1", PersonParameter::strength) == strength);
+    runtime.set_parameter("L1.P1", PersonParameter::constitution, 12.0);
+    CHECK(runtime.get_parameter("L1.P1", PersonParameter::constitution) == constitution);
+    CHECK(runtime.get_parameter("L1.P1", PersonParameter::strength) == strength);
 }
 
-TEST_CASE("person runtime reproduces the Server.dll strength bonus quirk") {
+TEST_CASE("person runtime writes the Server.dll strength bonus without exposing it") {
     auto runtime = gl::game::PersonRuntime::create({make_person("L1.P1", "L1.P1")}, std::nullopt);
     CHECK(runtime.get_parameter("L1.P1", PersonParameter::strength) == doctest::Approx(10.0));
     CHECK(runtime.get_parameter("L1.P1", PersonParameter::constitution) == doctest::Approx(8.0));
 
     runtime.set_parameter("L1.P1", PersonParameter::constitution, 12.0);
     CHECK(runtime.get_parameter("L1.P1", PersonParameter::constitution) == doctest::Approx(8.0));
-    CHECK(runtime.get_parameter("L1.P1", PersonParameter::strength) == doctest::Approx(14.0));
+    CHECK(runtime.get_parameter("L1.P1", PersonParameter::strength) == doctest::Approx(10.0));
 
     runtime.set_parameter("L1.P1", PersonParameter::strength, 14.0);
-    CHECK(runtime.get_parameter("L1.P1", PersonParameter::strength) == doctest::Approx(14.0));
+    CHECK(runtime.get_parameter("L1.P1", PersonParameter::strength) == doctest::Approx(10.0));
 
     runtime.set_parameter("L1.P1", PersonParameter::strength, 30.0);
-    CHECK(runtime.get_parameter("L1.P1", PersonParameter::strength) == doctest::Approx(30.0));
+    CHECK(runtime.get_parameter("L1.P1", PersonParameter::strength) == doctest::Approx(10.0));
 }
 
 TEST_CASE("person runtime clamps reputation and rounds half away from zero") {
@@ -171,6 +216,15 @@ TEST_CASE("person runtime converts experience to level for maximum life and ener
     CHECK(runtime.get_parameter("L1.P1", PersonParameter::experience) == doctest::Approx(81099.0));
     CHECK(runtime.get_parameter("L1.P1", PersonParameter::maximum_life) == doctest::Approx(216.0));
     CHECK(runtime.get_parameter("L1.P1", PersonParameter::maximum_life) != doctest::Approx(263.0));
+}
+
+TEST_CASE("person runtime clamps positive energy to the computed maximum") {
+    auto runtime = gl::game::PersonRuntime::create({make_person("L1.P1", "L1.P1")}, std::nullopt);
+    CHECK(runtime.get_parameter("L1.P1", PersonParameter::energy) == doctest::Approx(0.0));
+    runtime.set_parameter("L1.P1", PersonParameter::energy, 100.0);
+    CHECK(runtime.get_parameter("L1.P1", PersonParameter::energy) == doctest::Approx(18.0));
+    runtime.set_parameter("L1.P1", PersonParameter::energy, -5.0);
+    CHECK(runtime.get_parameter("L1.P1", PersonParameter::energy) == doctest::Approx(0.0));
 }
 
 TEST_CASE("person runtime clamps experience and life") {

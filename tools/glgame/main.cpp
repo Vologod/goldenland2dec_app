@@ -1927,6 +1927,7 @@ class Game {
             save_scroll_ = 0;
             save_message_.clear();
         } else if (test_dialog_available_ && index == 2) {
+            rebuild_person_runtime({});
             const gl::Result<void> opened = open_dialog(kTestDialogScript);
             if (!opened) {
                 gl::log(gl::LogLevel::error, opened.error().message);

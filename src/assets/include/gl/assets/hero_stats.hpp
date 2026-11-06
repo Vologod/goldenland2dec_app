@@ -1,6 +1,7 @@
 #pragma once
 #include "gl/assets/result.hpp"
 
+#include <array>
 #include <cstdint>
 #include <span>
 
@@ -18,6 +19,7 @@ struct HeroStats {
     std::int32_t life = 0;
     std::int32_t energy = 0;
     std::int32_t extra = 0;
+    std::array<std::int32_t, 27> skills{};
 };
 
 Result<HeroStats> parse_hero_stats(std::span<const std::uint8_t> body);

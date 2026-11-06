@@ -39,7 +39,8 @@ TEST_CASE("real dialog reads and writes Hero reputation through person natives" 
     gl::script::ScriptVm vm(std::move(nodes.value()), host);
     vm.set_globals(globals.value());
 
-    while (vm.step()) {
+    for (int i = 0; i < 2000 && vm.status() != gl::script::VmStatus::wait_user; ++i) {
+        if (!vm.step()) break;
     }
     REQUIRE(vm.status() == gl::script::VmStatus::wait_user);
     REQUIRE(vm.answers_count() == 3);

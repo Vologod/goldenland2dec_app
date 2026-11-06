@@ -29,6 +29,10 @@ TEST_CASE("hero_stats use the BT_HERO stat block") {
     put_i32(body, 0x128, 263);
     put_i32(body, 0x12C, 5);
     put_i32(body, 0x130, 99);
+    put_i32(body, 0x00C + 0x02C + 4 * 6, 10);
+    put_i32(body, 0x00C + 0x02C + 4 * 13, 15);
+    put_i32(body, 0x00C + 0x02C + 4 * 24, 15);
+    put_i32(body, 0x00C + 0x02C + 4 * 26, 10);
 
     const auto stats = gl::assets::parse_hero_stats(body);
     REQUIRE(stats);
@@ -44,6 +48,11 @@ TEST_CASE("hero_stats use the BT_HERO stat block") {
     CHECK(stats->life == 263);
     CHECK(stats->energy == 5);
     CHECK(stats->extra == 99);
+    CHECK(stats->skills[6] == 10);
+    CHECK(stats->skills[13] == 15);
+    CHECK(stats->skills[24] == 15);
+    CHECK(stats->skills[26] == 10);
+    CHECK(stats->skills[0] == 0);
 }
 
 TEST_CASE("hero_stats reject a short body") {

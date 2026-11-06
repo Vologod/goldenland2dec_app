@@ -15,8 +15,9 @@ namespace gl::game {
 struct PersonState {
     std::string name;
     std::array<double, 12> values{};
+    std::array<bool, 12> present{};
     double strength_bonus = 0.0;
-    bool loaded = true;
+    bool modifier_gate = false;
     std::map<std::string, double, std::less<>> skills;
 };
 

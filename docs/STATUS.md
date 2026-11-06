@@ -18,38 +18,45 @@
     `PersonAccess`, три handler'а; `NativeRegistry` 8 supported, 3
     vm_internal, 54 unsupported (всего 65).
   - `gl_assets::parse_hero_stats` — read-only stat-блок `BT_HERO`
-    (`0x00C`, life/energy `0x128`/`0x12C`).
-  - `gl_game::PersonRuntime` — 12 параметров на персону, точный поиск по
-    имени, `Hero` всегда доступен (нули без save); формулы getter'ов из
-    research; `glgame` строит runtime в `load_level`/`apply_equip_save`
-    и передаёт `access()` в `GameScriptHost`.
+    (`0x00C`, life/energy `0x128`/`0x12C`, skills `0x02C + 4*id`).
+    Raw `life` 263/201 при computed max 216/170 хранится как есть;
+    get LIFE клампит к max (D-050, research §8.9).
+  - `gl_game::PersonRuntime` — 12 параметров на персону с per-parameter
+    presence: нетронутые параметры без save возвращают 0 (не clamp),
+    setter помечает только свой параметр; `Hero` всегда доступен (нули
+    без save, все 12 present из save); Hero-навыки из `0x02C+4*id`,
+    clamp `[0,15]`; формулы getter'ов из research; `glgame` строит
+    runtime в `load_level`/`apply_equip_save` и передаёт `access()` в
+    `GameScriptHost`.
   - Real test `tests/script/test_real_person_natives.cpp` через
     production `ScriptVm → GameScriptHost → PersonRuntime` на
     `scripts/dialogs/old_test.age.cs`: get+set `("Hero",
     "REPUTATION")`, `40 → 38` (штатный clamp-safe сценарий; исходный
     `inter_kid3.age.cs`/`777` недостижим линейно и климпится в `50`).
   - Ограничения (D-050): identity-кривая модификаторов (рантайм-таблица
-    не загружена/не доказана), `gate=0` default, `+0xF58` undead-gate не
+    не загружена/не доказана), `gate=0` default (getter силы не прибавляет
+    `strength_bonus`, запись bonus не наблюдаема), `+0xF58` undead-gate не
     моделируется; engine quirk воспроизведён — все семь stat-setter'ов
-    добавляют delta в bonus силы.
-- **Проверка (фактический вывод 2026-11-06):**
+    добавляют delta в bonus силы; лимиты захардкожены (primary 30,
+    reputation ±50, EXP 500000), reputation half-multiplier опущен,
+    NPC life/energy default 0.
+- **Проверка (фактический вывод 2026-11-06, final review fix):**
   - `cmake --build build` — exit 0.
   - Targeted `ctest -R "gl_script_tests|gl_script_real_tests|
-    gl_game_tests|gl_assets_tests|gl_assets_real_tests|
-    glgame_screenshot_tests"` с `GL_GAME_DIR` — **6/6 passed**,
-    925.19 s, exit 0: `gl_assets_tests` 3.56 s, `gl_assets_real_tests`
-    446.25 s, `gl_game_tests` 46.08 s, `gl_script_tests` 0.46 s,
-    `gl_script_real_tests` 3.15 s, `glgame_screenshot_tests` 425.10 s.
+    gl_game_tests|gl_assets_tests|gl_assets_real_tests"` с `GL_GAME_DIR`
+    — **5/5 passed**, 475.64 s, exit 0: `gl_assets_tests` 3.11 s,
+    `gl_assets_real_tests` 416.55 s, `gl_game_tests` 52.57 s,
+    `gl_script_tests` 0.42 s, `gl_script_real_tests` 2.94 s.
   - Полный `ctest --test-dir build --output-on-failure` с `GL_GAME_DIR`
-    — **18/18 passed**, 998.87 s, exit 0: `gl_assets_tests` 3.17,
-    `gl_assets_real_tests` 416.13, `gl_game_tests` 43.07,
-    `gl_core_tests` 0.40, `gl_core_real_tests` 0.21, `gl_script_tests`
-    0.43, `gl_script_real_tests` 3.00, `glpak_cli_tests` 0.08,
-    `gl_cs_tools_tests` 7.05, `camera_tests` 0.44, `utf8_tests` 0.14,
-    `font_tests` 1.77, `glview_screenshot_tests` 104.04,
-    `glgame_screenshot_tests` 394.78, `person_render_tests` 2.65,
-    `level_click_tests` 10.05, `dialog_overlay_tests` 0.45,
-    `inventory_overlay_tests` 7.73.
+    — **18/18 passed**, 1030.25 s, exit 0: `gl_assets_tests` 3.15,
+    `gl_assets_real_tests` 414.37, `gl_game_tests` 51.09,
+    `gl_core_tests` 0.36, `gl_core_real_tests` 0.44, `gl_script_tests`
+    0.42, `gl_script_real_tests` 2.81, `glpak_cli_tests` 0.10,
+    `gl_cs_tools_tests` 6.55, `camera_tests` 0.44, `utf8_tests` 0.13,
+    `font_tests` 1.73, `glview_screenshot_tests` 100.51,
+    `glgame_screenshot_tests` 421.54, `person_render_tests` 3.09,
+    `level_click_tests` 10.78, `dialog_overlay_tests` 0.45,
+    `inventory_overlay_tests` 8.66.
 - **Вне scope:** `RS_IsPersonExistsI`, `RS_AddExp`, lifecycle, inventory,
   party, quests/time/world.
 - **Следующее:** Phase 1b2 inventory natives (`P3-9` inventory-часть) или

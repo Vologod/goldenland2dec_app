@@ -13,9 +13,18 @@
 namespace gl::game {
 namespace {
 constexpr double kMaxPrimary = 30.0;
+constexpr double kMaxSkill = 15.0;
 constexpr double kReputationMinimum = -50.0;
 constexpr double kReputationMaximum = 50.0;
 constexpr double kMaxExperience = 500000.0;
+
+constexpr std::array<std::string_view, 27> kHeroSkillNames{
+    "SKILL_GODSMAG", "SKILL_ELEMMAG",  "SKILL_LGHTMAG", "SKILL_DARKMAG", "SKILL_SHADMAG",
+    "SKILL_NATRMAG", "SKILL_ATHLETIC", "SKILL_WPN_CRUSH", "SKILL_WPN_STAFF", "SKILL_WPN_DIST",
+    "SKILL_WPN_SPEAR", "SKILL_WPN_THROW", "SKILL_WPN_SWORD", "SKILL_WPN_AXE", "SKILL_WPN_HAND",
+    "SKILL_SCOUT",   "SKILL_TRADE",    "SKILL_MAGICUSE", "SKILL_STEAL", "SKILL_HACK",
+    "SKILL_HEALING", "SKILL_TALKING",  "SKILL_SMITH",   "SKILL_IDENTIFY", "SKILL_CRITICAL_HIT",
+    "SKILL_ALCHEMY", "SKILL_TACTIC"};
 
 using gl::script::PersonParameter;
 
@@ -51,9 +60,14 @@ double parse_number(std::string_view text) {
     return value;
 }
 
-double lookup_number(const std::map<std::string, std::string> &values, std::string_view key) {
+void assign_value(PersonState &state, PersonParameter parameter,
+                  const std::map<std::string, std::string> &values, std::string_view key) {
     const auto it = values.find(std::string(key));
-    return it == values.end() ? 0.0 : parse_number(it->second);
+    if (it == values.end())
+        return;
+    const std::size_t index = value_index(parameter);
+    state.values[index] = parse_number(it->second);
+    state.present[index] = true;
 }
 
 double skill_value(const PersonState &state, std::string_view skill) {
@@ -64,7 +78,8 @@ double skill_value(const PersonState &state, std::string_view skill) {
 double strength_value(const PersonState &state) {
     const double base = static_cast<double>(
         round_half_away_from_zero(state.values[value_index(PersonParameter::strength)]));
-    return clamp_value(base + state.strength_bonus, 1.0, kMaxPrimary);
+    const double bonus = state.modifier_gate ? state.strength_bonus : 0.0;
+    return clamp_value(base + bonus, 1.0, kMaxPrimary);
 }
 
 double constitution_value(const PersonState &state) {
@@ -212,7 +227,7 @@ PersonRuntime PersonRuntime::create(const std::vector<PersonInstance> &persons,
     PersonState hero_state;
     hero_state.name = "Hero";
     if (hero) {
-        hero_state.loaded = true;
+        hero_state.present.fill(true);
         hero_state.values[value_index(PersonParameter::experience)] = hero->experience;
         hero_state.values[value_index(PersonParameter::reputation)] = hero->reputation;
         hero_state.values[value_index(PersonParameter::intelligence)] = hero->intelligence;
@@ -224,35 +239,26 @@ PersonRuntime PersonRuntime::create(const std::vector<PersonInstance> &persons,
         hero_state.values[value_index(PersonParameter::perception)] = hero->perception;
         hero_state.values[value_index(PersonParameter::life)] = hero->life;
         hero_state.values[value_index(PersonParameter::energy)] = hero->energy;
-    } else {
-        hero_state.loaded = false;
+        for (std::size_t id = 0; id < kHeroSkillNames.size(); ++id)
+            hero_state.skills.emplace(kHeroSkillNames[id], hero->skills[id]);
     }
     add(std::move(hero_state));
 
     for (const PersonInstance &person : persons) {
         PersonState state;
         state.name = person.name;
-        state.loaded = true;
-        state.values[value_index(PersonParameter::experience)] =
-            lookup_number(person.def.values, "experience_value");
-        state.values[value_index(PersonParameter::reputation)] =
-            lookup_number(person.def.values, "reputation");
-        state.values[value_index(PersonParameter::intelligence)] =
-            lookup_number(person.def.values, "intelligence");
-        state.values[value_index(PersonParameter::wisdom)] =
-            lookup_number(person.def.values, "wisdom");
-        state.values[value_index(PersonParameter::strength)] =
-            lookup_number(person.def.values, "strength");
-        state.values[value_index(PersonParameter::constitution)] =
-            lookup_number(person.def.values, "constitution");
-        state.values[value_index(PersonParameter::dexterity)] =
-            lookup_number(person.def.values, "dexterity");
-        state.values[value_index(PersonParameter::luck)] = lookup_number(person.def.values, "luck");
-        state.values[value_index(PersonParameter::perception)] =
-            lookup_number(person.def.values, "perception");
-        state.values[value_index(PersonParameter::life)] = lookup_number(person.def.values, "life");
-        state.values[value_index(PersonParameter::energy)] =
-            lookup_number(person.def.values, "energy");
+        assign_value(state, PersonParameter::experience, person.def.values, "experience_value");
+        assign_value(state, PersonParameter::reputation, person.def.values, "reputation");
+        assign_value(state, PersonParameter::intelligence, person.def.values, "intelligence");
+        assign_value(state, PersonParameter::wisdom, person.def.values, "wisdom");
+        assign_value(state, PersonParameter::strength, person.def.values, "strength");
+        assign_value(state, PersonParameter::constitution, person.def.values, "constitution");
+        assign_value(state, PersonParameter::dexterity, person.def.values, "dexterity");
+        assign_value(state, PersonParameter::luck, person.def.values, "luck");
+        assign_value(state, PersonParameter::perception, person.def.values, "perception");
+        assign_value(state, PersonParameter::life, person.def.values, "life");
+        assign_value(state, PersonParameter::energy, person.def.values, "energy");
+        state.present[value_index(PersonParameter::maximum_life)] = true;
         for (const auto &[key, text] : person.def.values) {
             if (key.starts_with("skills."))
                 state.skills.emplace(key.substr(7), parse_number(text));
@@ -275,7 +281,10 @@ PersonState *PersonRuntime::find(std::string_view person) {
 
 double PersonRuntime::get_parameter(std::string_view person, PersonParameter parameter) const {
     const PersonState *state = find(person);
-    if (state == nullptr || !state->loaded)
+    if (state == nullptr || parameter == PersonParameter::unknown)
+        return 0.0;
+    const std::size_t index = value_index(parameter);
+    if (index >= state->present.size() || !state->present[index])
         return 0.0;
 
     switch (parameter) {
@@ -324,7 +333,7 @@ void PersonRuntime::set_parameter(std::string_view person, PersonParameter param
         break;
     }
 
-    state->loaded = true;
+    state->present[value_index(parameter)] = true;
     switch (parameter) {
     case PersonParameter::life:
         state->values[value_index(PersonParameter::life)] = value;
@@ -351,9 +360,9 @@ void PersonRuntime::set_parameter(std::string_view person, PersonParameter param
 
 double PersonRuntime::get_skill(std::string_view person, std::string_view skill) const {
     const PersonState *state = find(person);
-    if (state == nullptr || !state->loaded)
+    if (state == nullptr)
         return 0.0;
-    return skill_value(*state, skill);
+    return clamp_value(skill_value(*state, skill), 0.0, kMaxSkill);
 }
 
 gl::script::PersonAccess PersonRuntime::access() {

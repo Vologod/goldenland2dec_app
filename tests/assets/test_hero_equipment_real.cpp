@@ -5,6 +5,7 @@
 #include <doctest/doctest.h>
 
 #include <algorithm>
+#include <array>
 #include <cstdint>
 #include <cstdlib>
 #include <filesystem>
@@ -141,6 +142,24 @@ TEST_CASE("real save hero_stats match research" * doctest::skip(!game_dir_availa
         CHECK(stats->life == expected.stats.life);
         CHECK(stats->energy == expected.stats.energy);
         CHECK(stats->extra == expected.stats.extra);
+    }
+}
+
+TEST_CASE("real save hero skills match research" * doctest::skip(!game_dir_available())) {
+    const std::pair<int, std::array<std::int32_t, 27>> slots[] = {
+        {0,
+         {0, 0, 0, 0, 0, 0, 10, 0, 0, 0, 0, 0, 0, 15, 0, 0, 1, 0, 0, 1, 14, 0, 1, 0, 15, 0, 10}},
+        {2,
+         {0, 0, 0, 0, 0, 0, 13, 0, 0, 0, 0, 0, 0, 15, 0, 1, 5, 0, 0, 1, 1, 1, 5, 0, 15, 0, 10}},
+    };
+
+    for (const auto &[slot, expected] : slots) {
+        auto body = gl::assets::decode_save_body(read_save(slot));
+        REQUIRE(body.has_value());
+        auto stats = gl::assets::parse_hero_stats(body.value());
+        REQUIRE(stats.has_value());
+        for (std::size_t id = 0; id < expected.size(); ++id)
+            CHECK(stats->skills[id] == expected[id]);
     }
 }
 
