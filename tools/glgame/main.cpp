@@ -808,8 +808,6 @@ class Game {
         auto sdb = gl::assets::Sdb::parse(sdb_data.value());
         if (!sdb) return report(sdb.error());
 
-        rebuild_inventory_runtime();
-
         auto context = std::make_unique<DialogContext>();
         context->host.services().console = [](std::string_view text) {
             gl::log(gl::LogLevel::info, "script console: " + std::string(text));

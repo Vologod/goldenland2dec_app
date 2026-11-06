@@ -110,6 +110,22 @@ TEST_CASE("inventory_runtime access callbacks delegate to queries") {
     CHECK(access.money() == 500);
 }
 
+TEST_CASE("inventory_runtime mutations persist across access calls") {
+    auto runtime = InventoryRuntime::create({}, make_names(), template_for);
+
+    auto first = runtime.access();
+    first.add_item("Hero", "QST_1_0_159", 3);
+
+    auto second = runtime.access();
+    CHECK(second.item_count("Hero", "QST_1_0_159") == 3);
+    CHECK(runtime.hero_inventory().items.size() == 1);
+
+    second.remove_item("Hero", "QST_1_0_159", 3);
+    auto third = runtime.access();
+    CHECK(third.item_count("Hero", "QST_1_0_159") == 0);
+    CHECK(runtime.hero_inventory().items.empty());
+}
+
 TEST_CASE("inventory_runtime adds a new item using its template") {
     auto runtime = InventoryRuntime::create({}, make_names(), template_for);
 
