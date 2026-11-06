@@ -27,11 +27,26 @@ struct RecordingHost final : ScriptHost {
     };
     std::vector<Call> calls;
     Value result = std::int32_t{0};
+    bool stop_on_nonzero_exit = false;
+    bool stopped = false;
 
     Value call(std::uint32_t id, std::span<const Value> args) override {
         calls.push_back(Call{id, std::vector<Value>(args.begin(), args.end())});
+        if (stop_on_nonzero_exit && id == 0x1000000 && !args.empty()) {
+            const Value& code = args.front();
+            if (const auto* item = std::get_if<std::int32_t>(&code))
+                stopped = *item != 0;
+            else if (const auto* item = std::get_if<std::uint32_t>(&code))
+                stopped = *item != 0;
+            else if (const auto* item = std::get_if<double>(&code))
+                stopped = *item != 0.0;
+            else
+                stopped = false;
+        }
         return result;
     }
+
+    bool stop_requested() const override { return stopped; }
 };
 
 CsNode make_node(std::int32_t opcode) {
@@ -422,26 +437,29 @@ TEST_CASE("vm: top-level func ignores d and advances to the next node") {
     CHECK(std::get<std::int32_t>(*x) == 5);
 }
 
-TEST_CASE("vm: division by zero yields 1e10 without evaluating the left operand") {
-    std::vector<CsNode> nodes(7);
-    nodes[0] = make_assign(1, 2, 6);
-    nodes[1] = make_str_var("x");
-    nodes[2] = make_bin(17, 3, 4);
-    nodes[3] = make_func(kPersonParameter, {});
-    nodes[4] = make_str_var("b");
-    nodes[5] = make_num(0.0);
-    nodes[6] = make_jmp(-1, -1);
+TEST_CASE("vm: division and modulo by zero yield 1e10 without evaluating the left operand") {
+    for (const std::int32_t opcode : {17, 18}) {
+        CAPTURE(opcode);
+        std::vector<CsNode> nodes(7);
+        nodes[0] = make_assign(1, 2, 6);
+        nodes[1] = make_str_var("x");
+        nodes[2] = make_bin(opcode, 3, 4);
+        nodes[3] = make_func(kPersonParameter, {});
+        nodes[4] = make_str_var("b");
+        nodes[5] = make_num(0.0);
+        nodes[6] = make_jmp(-1, -1);
 
-    VmHarness h(std::move(nodes),
-                {global_float("x", 9.0), global_int("b", 0)});
-    CHECK(h.vm.step());
-    CHECK_FALSE(h.vm.failed());
-    CHECK(h.host.calls.empty());
+        VmHarness h(std::move(nodes),
+                    {global_float("x", 9.0), global_int("b", 0)});
+        CHECK(h.vm.step());
+        CHECK_FALSE(h.vm.failed());
+        CHECK(h.host.calls.empty());
 
-    Value* x = h.vm.variable("x");
-    REQUIRE(x != nullptr);
-    REQUIRE(std::holds_alternative<double>(*x));
-    CHECK(std::get<double>(*x) == doctest::Approx(1e10));
+        Value* x = h.vm.variable("x");
+        REQUIRE(x != nullptr);
+        REQUIRE(std::holds_alternative<double>(*x));
+        CHECK(std::get<double>(*x) == doctest::Approx(1e10));
+    }
 }
 
 TEST_CASE("vm: string comparison supports equality") {
@@ -978,8 +996,9 @@ TEST_CASE("vm: opcode 0x13 complements operand b like Server.dll 0x3a1e2") {
     CHECK(std::get<std::int32_t>(*h.vm.variable("x")) == -6);
 }
 
-TEST_CASE("vm: opcode 0x14 negates operand b as int32 like Server.dll 0x3a1ae") {
-    for (const auto& [operand, expected] : {std::pair{0.5, 1}, std::pair{5.0, 0}}) {
+TEST_CASE("vm: opcode 0x14 compares operand b to double zero like Server.dll 0x3a1ae") {
+    for (const auto& [operand, expected] :
+         {std::pair{0.0, 1}, std::pair{0.5, 0}, std::pair{5.0, 0}}) {
         CAPTURE(operand);
         std::vector<CsNode> nodes(6);
         nodes[0] = make_assign(1, 2, 5);
@@ -1013,6 +1032,55 @@ TEST_CASE("vm: function arguments use the executor without short-circuit like Se
     REQUIRE(h.host.calls.size() == 2);
     CHECK(h.host.calls[0].id == 0x4000002);
     CHECK(h.host.calls[1].id == kPersonParameter);
+}
+
+TEST_CASE("vm: executor div and mod evaluate a before b and call a for zero divisor") {
+    for (const std::int32_t opcode : {17, 18}) {
+        CAPTURE(opcode);
+        std::vector<CsNode> nodes(5);
+        nodes[0] = make_func(kPersonParameter, {2});
+        nodes[1] = make_jmp(-1, -1);
+        nodes[2] = make_bin(opcode, 3, 4);
+        nodes[3] = make_func(0x4000002, {});
+        nodes[4] = make_func(0x4000003, {});
+
+        VmHarness h(std::move(nodes), {});
+        CHECK(h.vm.step());
+        REQUIRE(h.host.calls.size() == 3);
+        CHECK(h.host.calls[0].id == 0x4000002);
+        CHECK(h.host.calls[1].id == 0x4000003);
+        CHECK(h.host.calls[2].id == kPersonParameter);
+    }
+}
+
+TEST_CASE("vm: Exit stops execution only for a nonzero code") {
+    SUBCASE("nonzero code ends the run after the call") {
+        std::vector<CsNode> nodes(3);
+        nodes[0] = make_func(0x1000000, {1});
+        nodes[1] = make_num(1.0);
+        nodes[2] = make_jmp(-1, -1);
+
+        VmHarness h(std::move(nodes), {});
+        h.host.stop_on_nonzero_exit = true;
+        CHECK_FALSE(h.vm.step());
+        CHECK(h.vm.status() == VmStatus::end);
+        CHECK_FALSE(h.vm.failed());
+        REQUIRE(h.host.calls.size() == 1);
+    }
+
+    SUBCASE("zero code continues to the next node") {
+        std::vector<CsNode> nodes(3);
+        nodes[0] = make_func(0x1000000, {1});
+        nodes[1] = make_num(0.0);
+        nodes[2] = make_jmp(-1, -1);
+
+        VmHarness h(std::move(nodes), {});
+        h.host.stop_on_nonzero_exit = true;
+        CHECK(h.vm.step());
+        CHECK(h.vm.status() == VmStatus::continue_);
+        CHECK_FALSE(h.vm.step());
+        CHECK(h.vm.status() == VmStatus::end);
+    }
 }
 
 TEST_CASE("vm: opcodes 49 and 50 evaluate as operands like Server.dll 0x3a141") {

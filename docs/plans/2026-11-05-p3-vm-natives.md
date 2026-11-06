@@ -88,14 +88,14 @@ git commit -m "feat(ghidra): export Server.dll native handlers"
   - §4 VM delta list vs `gl_script` (each row: opcode, Server behavior, port behavior, verdict);
   - §5 native table: `ID | name | RVA | arity | arg types | return | side effects | support`.
 
-- [ ] **Step 1: Record node layout from the parser**
+- [x] **Step 1: Record node layout from the parser**
 
 Read `FUN_1403e020` (RVA `0x3e020`) and write the parsed record layout and
 sizes for opcodes `0..0x32`; state whether it matches
 `gl::assets::CsNode` in `src/assets/include/gl/assets/cs.hpp`.
 Cite RVA, record size, and the `case` blocks used as evidence.
 
-- [ ] **Step 2: Extract VM opcode semantics**
+- [x] **Step 2: Extract VM opcode semantics**
 
 Read `FUN_1403a010` (evaluator, RVA `0x3a010`) and `FUN_1403a914`
 (executor, RVA `0x3a914`). For each opcode `0..0x32` write: operands,
@@ -103,7 +103,7 @@ result type, rounding/overflow behavior, control-flow effect. For ambiguous
 Ghidra output, disassemble the specific block (Ghidra listing or `objdump`)
 and record the instruction sequence instead of guessing.
 
-- [ ] **Step 3: Produce the port delta list**
+- [x] **Step 3: Produce the port delta list**
 
 Compare §2 findings with `src/script/src/script_vm.cpp`. Write one row per
 difference:
@@ -113,7 +113,7 @@ difference:
 Only rows with `port-fix` become Task 5 tests. Rows that remain ambiguous
 are `unverified` and must not change code.
 
-- [ ] **Step 4: Fill the 65-row native table**
+- [x] **Step 4: Fill the 65-row native table**
 
 For every ID in `.local/decomp/server/natives/natives.csv`:
 - copy name and handler RVA;
@@ -125,7 +125,7 @@ For every ID in `.local/decomp/server/natives/natives.csv`:
 - assign support: `vm_internal`, `supported`, `unsupported` + subsystem
   required.
 
-- [ ] **Step 5: Verify the document**
+- [x] **Step 5: Verify the document**
 
 Checks:
 - 65 rows in §5, IDs unique and equal to `natives.csv`;
@@ -133,7 +133,7 @@ Checks:
 - every `port-fix` row in §4 has both RVAs and port line numbers;
 - UTF-8 without BOM, `nul=0`.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add docs/research/p3-vm-natives-server.md docs/research/decomp-index.md
@@ -162,7 +162,7 @@ git commit -m "docs(research): record Server.dll VM and native semantics"
     std::string_view reason; NativeHandler handler; const char* name() const; };`
   - `NativeRegistry::entries()`, `find(id)`, `call(info, args, services)`.
 
-- [ ] **Step 1: Write the failing registry tests**
+- [x] **Step 1: Write the failing registry tests**
 
 `tests/script/test_native_registry.cpp`:
 
@@ -239,7 +239,7 @@ TEST_CASE("unsupported native returns zero") {
 }
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run:
 ```powershell
@@ -248,7 +248,7 @@ build\bin\gl_script_tests.exe
 ```
 Expected: build failure — `native_registry.hpp` does not exist.
 
-- [ ] **Step 3: Write the registry header**
+- [x] **Step 3: Write the registry header**
 
 `src/script/include/gl/script/native_registry.hpp`:
 
@@ -293,7 +293,7 @@ class NativeRegistry {
 } // namespace gl::script
 ```
 
-- [ ] **Step 4: Write the registry implementation**
+- [x] **Step 4: Write the registry implementation**
 
 `src/script/src/native_registry.cpp`:
 
@@ -410,13 +410,13 @@ Value NativeRegistry::call(const NativeInfo& info, std::span<const Value> args,
 } // namespace gl::script
 ```
 
-- [ ] **Step 5: Register the sources and test**
+- [x] **Step 5: Register the sources and test**
 
 `src/script/CMakeLists.txt`: add `src/native_registry.cpp` to `gl_script`.
 `tests/script/CMakeLists.txt`: add `test_native_registry.cpp` to
 `gl_script_tests`.
 
-- [ ] **Step 6: Run the tests to verify they pass**
+- [x] **Step 6: Run the tests to verify they pass**
 
 Run:
 ```powershell
@@ -426,7 +426,7 @@ build\bin\gl_script_tests.exe
 ```
 Expected: all test cases pass; registry size 65.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/script/include/gl/script/native_registry.hpp src/script/src/native_registry.cpp \
@@ -451,7 +451,7 @@ git commit -m "feat(script): add Server.dll native registry"
   `Value call(std::uint32_t, std::span<const Value>) override` and
   `gl::script::NativeServices& services()`.
 
-- [ ] **Step 1: Write the failing host tests**
+- [x] **Step 1: Write the failing host tests**
 
 `tests/game/test_game_script_host.cpp`:
 
@@ -492,11 +492,11 @@ TEST_CASE("game script host ignores unknown ids") {
 }
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `cmake --build build` — expected error: `game_script_host.hpp` missing.
 
-- [ ] **Step 3: Write the header**
+- [x] **Step 3: Write the header**
 
 `src/game/include/gl/game/game_script_host.hpp`:
 
@@ -523,7 +523,7 @@ class GameScriptHost : public gl::script::ScriptHost {
 } // namespace gl::game
 ```
 
-- [ ] **Step 4: Write the implementation**
+- [x] **Step 4: Write the implementation**
 
 `src/game/src/game_script_host.cpp`:
 
@@ -576,7 +576,7 @@ gl::script::Value GameScriptHost::call(std::uint32_t id,
 } // namespace gl::game
 ```
 
-- [ ] **Step 5: Link gl_script into gl_game**
+- [x] **Step 5: Link gl_script into gl_game**
 
 `src/game/CMakeLists.txt`:
 - add `src/game_script_host.cpp` to `gl_game`;
@@ -584,7 +584,7 @@ gl::script::Value GameScriptHost::call(std::uint32_t id,
 
 `tests/game/CMakeLists.txt`: add `test_game_script_host.cpp`.
 
-- [ ] **Step 6: Run the tests to verify they pass**
+- [x] **Step 6: Run the tests to verify they pass**
 
 Run:
 ```powershell
@@ -593,7 +593,7 @@ build\bin\gl_game_tests.exe --test-case=*script_host*
 ```
 Expected: 3 test cases pass.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/game/include/gl/game/game_script_host.hpp src/game/src/game_script_host.cpp \
@@ -614,13 +614,13 @@ git commit -m "feat(game): dispatch script natives through GameScriptHost"
 - Consumes: `docs/research/p3-vm-natives-server.md` §4 delta table.
 - Produces: `script_vm.cpp` matching every `port-fix` row; one test per row.
 
-- [ ] **Step 1: List the port-fix rows**
+- [x] **Step 1: List the port-fix rows**
 
 Open `docs/research/p3-vm-natives-server.md` §4 and copy every row whose
 verdict is `port-fix` into a checklist with: opcode, input values, Server
 result, current port result.
 
-- [ ] **Step 2: Add one failing test per delta**
+- [x] **Step 2: Add one failing test per delta**
 
 For each row append a test to `tests/script/test_vm.cpp` using the node
 builder already used in that file. Example shape:
@@ -638,18 +638,18 @@ TEST_CASE("vm opcode <N> matches Server.dll <RVA>") {
 }
 ```
 
-- [ ] **Step 3: Run the tests to verify they fail**
+- [x] **Step 3: Run the tests to verify they fail**
 
 Run: `build\bin\gl_script_tests.exe --test-case=*Server.dll*`
 Expected: each new test fails with the port value, not the Server value.
 
-- [ ] **Step 4: Fix script_vm.cpp**
+- [x] **Step 4: Fix script_vm.cpp**
 
 Change only the branches named in the delta rows. Keep existing behavior for
 all `match`/`unverified` rows. If a fix changes a documented decision
 (D-023/D-024/D-025), append a new `DECISIONS.md` entry before coding.
 
-- [ ] **Step 5: Run the tests to verify they pass**
+- [x] **Step 5: Run the tests to verify they pass**
 
 Run:
 ```powershell
@@ -658,7 +658,7 @@ build\bin\gl_script_tests.exe
 ```
 Expected: all VM tests pass, including the new Server.dll cases.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/script/src/script_vm.cpp tests/script/test_vm.cpp docs/DECISIONS.md
@@ -678,7 +678,7 @@ git commit -m "fix(script): match Server.dll VM semantics"
 - Produces: dialogs executed in `glgame` go through the registry; `glscript`
   keeps the same CLI output.
 
-- [ ] **Step 1: Switch glgame to GameScriptHost**
+- [x] **Step 1: Switch glgame to GameScriptHost**
 
 In `tools/glgame/main.cpp` replace
 `gl::script::DefaultScriptHost host;` in `DialogContext` with
@@ -708,7 +708,7 @@ context->host.services().exit = [](std::int32_t code) {
 Add `#include <gl/game/game_script_host.hpp>` and `#include <cstdint>` if
 missing.
 
-- [ ] **Step 2: Switch glscript to GameScriptHost**
+- [x] **Step 2: Switch glscript to GameScriptHost**
 
 In `tools/glscript/main.cpp` replace `gl::script::DefaultScriptHost host;`
 with:
@@ -724,7 +724,7 @@ gl::game::GameScriptHost host(services);
 Add `gl_game` to the `glscript` target link libraries if it is not already
 linked (the translation unit needs `game_script_host.cpp`).
 
-- [ ] **Step 3: Build and run the CLI smoke tests**
+- [x] **Step 3: Build and run the CLI smoke tests**
 
 Run:
 ```powershell
@@ -734,7 +734,7 @@ build\bin\glscript.exe --game-dir "I:\Games\Златогорье-2" --file scrip
 Expected: `status waiting_user`/`wait_user`, `steps 43`,
 `dialogs 2684 2686 2696`, `answers 2` (same as `p3a-cs-vm.md`).
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add tools/glgame/main.cpp tools/glscript/main.cpp tools/glscript/CMakeLists.txt
@@ -750,7 +750,7 @@ git commit -m "feat(tools): run dialogs through GameScriptHost"
 - Modify: `docs/PROJECT.md`
 - Modify: `docs/research/parity-matrix.md`
 
-- [ ] **Step 1: Run the targeted test set**
+- [x] **Step 1: Run the targeted test set**
 
 ```powershell
 $env:PATH="I:\goldenland2dec\.local\toolchains\llvm-mingw-20261006-ucrt-x86_64\bin;I:\goldenland2dec\.local\toolchains\ninja;I:\goldenland2dec\.local\toolchains\cmake\cmake-4.4.4-windows-x86_64\bin;$env:PATH"
@@ -761,7 +761,7 @@ ctest --test-dir build --output-on-failure -R "gl_script_tests|gl_script_real_te
 
 Expected: all selected tests pass; record exact counts/times.
 
-- [ ] **Step 2: Run the full test suite**
+- [x] **Step 2: Run the full test suite**
 
 ```powershell
 ctest --test-dir build --output-on-failure
@@ -769,7 +769,7 @@ ctest --test-dir build --output-on-failure
 
 Expected: full pass; record `N/N passed`, duration, exit code.
 
-- [ ] **Step 3: Update the parity matrix**
+- [x] **Step 3: Update the parity matrix**
 
 In `docs/research/parity-matrix.md`:
 - `P3-4`–`P3-8`: add the new RVA evidence and set `verified`/`partial`
@@ -778,14 +778,14 @@ In `docs/research/parity-matrix.md`:
   remaining 57 natives require subsystems;
 - add a line in the summary for the native dispatch infrastructure.
 
-- [ ] **Step 4: Update STATUS and PROJECT**
+- [x] **Step 4: Update STATUS and PROJECT**
 
 `docs/STATUS.md` Phase 1a section: what was done, exact test output, next
 step (Phase 1b: person natives or `P2-15`).
 `docs/PROJECT.md` P3 row: `NativeRegistry` + `GameScriptHost`, supported
 5/65, remaining gaps.
 
-- [ ] **Step 5: Verify document encoding**
+- [x] **Step 5: Verify document encoding**
 
 ```powershell
 $files = 'docs\STATUS.md','docs\PROJECT.md','docs\research\parity-matrix.md','docs\research\p3-vm-natives-server.md'
@@ -797,7 +797,7 @@ foreach ($f in $files) {
 
 Expected: `bom=False nul=False`.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add docs/STATUS.md docs/PROJECT.md docs/research/parity-matrix.md

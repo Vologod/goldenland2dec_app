@@ -1,13 +1,17 @@
 #include <doctest/doctest.h>
 #include "gl/assets/cs.hpp"
 #include "gl/script/native_registry.hpp"
+#include <cstdint>
+#include <limits>
 #include <set>
 #include <string>
 #include <string_view>
+#include <vector>
 
 TEST_CASE("native registry covers every Server.dll id") {
     const auto entries = gl::script::NativeRegistry::entries();
     REQUIRE(entries.size() == 65);
+    CHECK(gl::script::NativeRegistry::size() == entries.size());
     std::set<std::uint32_t> ids;
     for (const auto& entry : entries) {
         CHECK(ids.insert(entry.id).second);
@@ -67,4 +71,53 @@ TEST_CASE("unsupported native returns zero") {
     gl::script::Value result = gl::script::NativeRegistry::call(
         *gl::script::NativeRegistry::find(0x4000000), {}, services);
     CHECK(std::get<std::int32_t>(result) == 0);
+}
+
+TEST_CASE("native registry rejects a supported call with missing arguments") {
+    gl::script::NativeServices services;
+    std::vector<std::string> messages;
+    bool played = false;
+    services.log = [&](std::string_view text) { messages.emplace_back(text); };
+    services.play_sound = [&](std::string_view) { played = true; };
+
+    const gl::script::Value result = gl::script::NativeRegistry::call(
+        *gl::script::NativeRegistry::find(0x1000007), {}, services);
+    CHECK(std::get<std::int32_t>(result) == 0);
+    CHECK_FALSE(played);
+    REQUIRE(messages.size() == 1);
+    CHECK(messages.front().find("missing") != std::string::npos);
+}
+
+TEST_CASE("native registry rejects a non-numeric Exit argument") {
+    gl::script::NativeServices services;
+    std::vector<std::string> messages;
+    std::int32_t exit_code = -1;
+    services.log = [&](std::string_view text) { messages.emplace_back(text); };
+    services.exit = [&](std::int32_t code) { exit_code = code; };
+
+    const std::string text = "stop";
+    const gl::script::Value argument = text;
+    const gl::script::Value result = gl::script::NativeRegistry::call(
+        *gl::script::NativeRegistry::find(0x1000000), {&argument, 1}, services);
+    CHECK(std::get<std::int32_t>(result) == 0);
+    CHECK(exit_code == -1);
+    REQUIRE(messages.size() == 1);
+}
+
+TEST_CASE("native registry clamps extreme Exit arguments safely") {
+    gl::script::NativeServices services;
+    std::int32_t exit_code = 0;
+    services.exit = [&](std::int32_t code) { exit_code = code; };
+    const auto call_exit = [&](gl::script::Value value) {
+        gl::script::NativeRegistry::call(
+            *gl::script::NativeRegistry::find(0x1000000), {&value, 1}, services);
+    };
+
+    gl::script::Value infinite = std::numeric_limits<double>::infinity();
+    call_exit(infinite);
+    CHECK(exit_code == 0);
+
+    gl::script::Value huge = 1e300;
+    call_exit(huge);
+    CHECK(exit_code == std::numeric_limits<std::int32_t>::max());
 }

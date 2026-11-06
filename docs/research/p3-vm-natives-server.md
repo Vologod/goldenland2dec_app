@@ -126,7 +126,7 @@ double.
 | `0x0c` `<<` | `0x3a3d8` | `int32(a) << (cl & 31)` (`shl edx,cl`) | double |
 | `0x0d` `>>` | `0x3a368` | `int32(a) >> (cl & 31)` (`sar edx,cl`, арифметический) | double |
 | `0x13` `~` | `0x3a1e2` | операнд — **`b`**: `~int32(b)` | double |
-| `0x14` `!` | `0x3a1ae` | операнд — **`b`**: `int32(b) == 0 ? 1 : 0` | double |
+| `0x14` `!` | `0x3a1ae` (executor `0x3ab3f`) | операнд — **`b`**: `double(b) == 0.0 ? 1 : 0` | double |
 
 ### 3.2 Сравнения `0x06..0x0b`
 
@@ -242,7 +242,7 @@ Evaluator (`0x3a036`) и executor (`0x3a93a`):
 | `0x0c <<` | `int32(a) << (cl&31)` (`shl`, `0x3a432`) | `uint32` сдвиг; count вне `0..31` → error (`554-562`) | `port-fix` |
 | `0x0d >>` | `int32(a) >> (cl&31)` арифметический (`sar`, `0x3a3c2`) | `uint32` логический `>>` (`560-561`); count вне `0..31` → error | `port-fix` |
 | `0x13 ~` | операнд `b` (+0x14), `~int32(b)` (`0x3a1e2`) | операнд `a` (`script_vm.cpp:384-387`), `apply_unary` (`572-582`) | `port-fix` |
-| `0x14 !` | операнд `b` (+0x14), `b==0` (`0x3a1ae`) | операнд `a` (`384-387`), `is_true` (`89-100`, `583`) | `port-fix` |
+| `0x14 !` | операнд `b` (+0x14), `double(b) == 0.0` (`0x3a1ae`; executor `0x3ab3f`) | операнд `b`, `to_double(b) == 0.0` (`apply_unary`); `!0.5 == 0` | `match` |
 | `0x30` args (executor) | аргументы `func` считает executor `FUN_1403a914` (`decompiled.c:40152,40173,40181`); `0x00`/`0x02` там без short-circuit | аргументы считает `eval` (`script_vm.cpp:439`), после short-circuit fix расходится на выражениях с побочными эффектами | `port-fix` |
 | `49/50` как операнд | evaluator обрабатывает `0x31` (`0x3a141`) и `0x32` (`0x3a036`) | `eval` отвергает 49/50 (`script_vm.cpp:419-420`) | `port-fix` |
 | `0x0e/0x0f/0x10` | результат всегда double (`faddp 0x3a35a`, `fsubrp 0x3a330`, `fmulp 0x3a306`); int-операнды в диапазоне эквивалентны, overflow не проверен | для int-операндов результат `int32` (`513-516`) | `unverified` |
@@ -347,6 +347,12 @@ fallback-константа при несовпадении типов — `0.0`
 
 Проверка: 65 строк, ID уникальны и совпадают с `natives.csv`; для всех
 `supported`/`vm_internal` есть тело в `natives.c`.
+
+В порте `Signal` и `D_PlaySound` реализованы как **сервисные заглушки**:
+`NativeRegistry` вызывает инъецированные `NativeServices::signal` /
+`NativeServices::play_sound` (лог/будущий UI/аудио), а не `MessageBoxA` и
+`FUN_1404345c` оригинала. Арность, тип аргумента и возврат `0.0` совпадают;
+побочный эффект подключается хостом (`GameScriptHost`).
 
 ### 5.1 Использование нативов в 555 поставляемых `.cs`
 

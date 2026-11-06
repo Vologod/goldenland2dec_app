@@ -39,6 +39,8 @@ private:
     static constexpr int kMaxEvalDepth = 1024;
     static constexpr std::uint64_t kEvalBudget = 100'000;
 
+    enum class EvalMode { evaluator, executor };
+
     bool valid_index(std::int32_t index) const;
     Value eval(std::int32_t index, int depth);
     Value call_function(const gl::assets::CsNode& node, int depth);
@@ -61,6 +63,7 @@ private:
     std::uint64_t counter_ = 0;
     std::uint64_t eval_ops_ = 0;
     VmStatus status_ = VmStatus::start;
+    EvalMode eval_mode_ = EvalMode::evaluator;
     bool dialog_say_ = false;
     bool end_request_ = false;
     bool failed_ = false;

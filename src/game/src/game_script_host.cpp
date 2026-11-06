@@ -5,10 +5,22 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <variant>
 
 namespace gl::game {
+namespace {
+bool is_nonzero(const gl::script::Value& value) {
+    if (const auto* item = std::get_if<std::int32_t>(&value)) return *item != 0;
+    if (const auto* item = std::get_if<std::uint32_t>(&value)) return *item != 0;
+    if (const auto* item = std::get_if<double>(&value)) return *item != 0.0;
+    return false;
+}
+} // namespace
+
 GameScriptHost::GameScriptHost(gl::script::NativeServices services)
     : services_(std::move(services)) {}
+
+bool GameScriptHost::stop_requested() const { return stop_requested_; }
 
 gl::script::Value GameScriptHost::call(std::uint32_t id,
                                        std::span<const gl::script::Value> args) {
@@ -32,7 +44,7 @@ gl::script::Value GameScriptHost::call(std::uint32_t id,
             std::snprintf(hex, sizeof(hex), "0x%X", id);
             const std::string message =
                 std::string("script native ") + info->name() + " (" + hex +
-                "): unimplemented — " + std::string(info->reason);
+                "): unimplemented - " + std::string(info->reason);
             if (services_.log)
                 services_.log(message);
             else
@@ -41,6 +53,10 @@ gl::script::Value GameScriptHost::call(std::uint32_t id,
         return std::int32_t{0};
     }
 
-    return gl::script::NativeRegistry::call(*info, args, services_);
+    const gl::script::Value result =
+        gl::script::NativeRegistry::call(*info, args, services_);
+    if (info->id == 0x1000000 && !args.empty() && is_nonzero(args.front()))
+        stop_requested_ = true;
+    return result;
 }
 } // namespace gl::game

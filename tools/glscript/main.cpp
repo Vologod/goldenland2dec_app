@@ -5,7 +5,6 @@
 #include "gl/assets/vfs.hpp"
 #include "gl/game/game_script_host.hpp"
 #include "gl/script/globals.hpp"
-#include "gl/script/host.hpp"
 #include "gl/script/script_vm.hpp"
 
 #include <charconv>

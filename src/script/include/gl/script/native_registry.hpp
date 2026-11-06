@@ -1,10 +1,10 @@
 #pragma once
 #include "gl/script/value.hpp"
+#include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <span>
 #include <string_view>
-#include <vector>
 
 namespace gl::script {
 enum class NativeSupport { vm_internal, supported, unsupported };
@@ -25,6 +25,7 @@ struct NativeInfo {
     NativeSupport support = NativeSupport::unsupported;
     std::string_view reason;
     NativeHandler handler = nullptr;
+    std::uint8_t arity = 0;
     const char* name() const;
 };
 
@@ -32,6 +33,7 @@ class NativeRegistry {
   public:
     static std::span<const NativeInfo> entries();
     static const NativeInfo* find(std::uint32_t id);
+    static std::size_t size();
     static Value call(const NativeInfo& info, std::span<const Value> args,
                       NativeServices& services);
 };

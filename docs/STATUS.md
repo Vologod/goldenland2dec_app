@@ -45,6 +45,31 @@
     `answers: 2`, exit 0.
   - Полный `ctest --test-dir build --output-on-failure` с `GL_GAME_DIR` —
     **18/18 passed**, 1224.01 s, exit 0.
+- **Final review fixes (2026-11-06):**
+  - `0x14 !` сравнивает **double** с `0.0` (evaluator `0x3a1ae`, executor
+    `0x3ab3f`): `!0.5 == 0`; тесты `0.0→1`, `0.5→0`, `5.0→0`; research
+    §3.1/§4 и D-049 исправлены.
+  - Executor `/`/`%`: вычисляет `a`, затем `b`, всегда оба операнда
+    (`0x3ac3a`/`0x3abb3`); `thread_local` убран, режим — явный
+    `ScriptVm::EvalMode` (member + scoped executor для аргументов `func`).
+    Тест: div/mod как аргумент функции с side-effecting операндами.
+  - `Exit(nonzero)` останавливает VM: `ScriptHost::stop_requested` →
+    `GameScriptHost` (флаг по `0x3fd38`) → `ScriptVm` (`end`); `Exit(0)`
+    продолжает. Тесты на оба случая.
+  - `NativeRegistry::call`: arity из research §5, warn + `0` при
+    недостатке аргументов; безопасный `as_int` (non-finite/clamp);
+    `size()`.
+  - Minors: тесты vm_internal/Signal/`%` skip-a; удалены dead `17/18`,
+    unused `<vector>`, stale `host.hpp`, redundant `gl_script` link;
+    ASCII `-` в сообщении; Signal/`D_PlaySound` документированы как
+    service stubs; plan Tasks 2–7 отмечены `[x]`.
+  - **Проверка:** `cmake --build build` — exit 0; `gl_script_tests`
+    **79/79** (751 assertion), `gl_script_real_tests` **2/2** (46),
+    `gl_game_tests --test-case=*script*host*` **7/7** (11); все exit 0.
+    Полный `ctest` не запускался по указанию задачи.
+  - **Concern (deferred):** кадр `eval` 952 B; при `kMaxEvalDepth=1024`
+    рекурсия занимает ≈0.97 MB стека Windows. Cyclic-тест проходит, но
+    near-limit stack test остаётся отложенным (report only).
 - **Следующее:** Phase 1b — person natives (остаток `P3-9`: persons,
   inventory, quests, time, world) или `P2-15` (save payload).
 

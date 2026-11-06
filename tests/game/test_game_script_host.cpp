@@ -32,3 +32,33 @@ TEST_CASE("game script host ignores unknown ids") {
     const auto args = std::span<const gl::script::Value>{};
     CHECK(std::get<std::int32_t>(host.call(0xDEADBEEF, args)) == 0);
 }
+
+TEST_CASE("game script host ignores vm-internal natives") {
+    gl::game::GameScriptHost host;
+    const auto args = std::span<const gl::script::Value>{};
+    CHECK(std::get<std::int32_t>(host.call(0x1000004, args)) == 0);
+}
+
+TEST_CASE("game script host dispatches Signal") {
+    std::string signal_text;
+    gl::script::NativeServices services;
+    services.signal = [&](std::string_view text) { signal_text = std::string(text); };
+    gl::game::GameScriptHost host(services);
+    const gl::script::Value argument = std::string("alarm");
+    host.call(0x1000001, {&argument, 1});
+    CHECK(signal_text == "alarm");
+}
+
+TEST_CASE("game script host requests stop on a nonzero Exit") {
+    gl::game::GameScriptHost host;
+    const gl::script::Value code = std::int32_t{1};
+    host.call(0x1000000, {&code, 1});
+    CHECK(host.stop_requested());
+}
+
+TEST_CASE("game script host keeps running on a zero Exit") {
+    gl::game::GameScriptHost host;
+    const gl::script::Value code = std::int32_t{0};
+    host.call(0x1000000, {&code, 1});
+    CHECK_FALSE(host.stop_requested());
+}

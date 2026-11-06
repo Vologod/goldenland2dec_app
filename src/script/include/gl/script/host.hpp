@@ -8,6 +8,7 @@ class ScriptHost {
 public:
     virtual ~ScriptHost() = default;
     virtual Value call(std::uint32_t id, std::span<const Value> args) = 0;
+    virtual bool stop_requested() const { return false; }
 };
 
 class DefaultScriptHost : public ScriptHost {

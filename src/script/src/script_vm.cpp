@@ -19,18 +19,6 @@ bool is_bitwise(std::int32_t opcode) {
 bool is_unary(std::int32_t opcode) { return opcode == 19 || opcode == 20; }
 bool is_value(std::int32_t opcode) { return opcode >= 21 && opcode <= 24; }
 
-thread_local bool short_circuit_enabled = true;
-
-struct ExecutorScope {
-    ExecutorScope() : previous_(short_circuit_enabled) { short_circuit_enabled = false; }
-    ~ExecutorScope() { short_circuit_enabled = previous_; }
-    ExecutorScope(const ExecutorScope&) = delete;
-    ExecutorScope& operator=(const ExecutorScope&) = delete;
-
-private:
-    bool previous_;
-};
-
 void log_warning(std::string_view message) {
     gl::log(gl::LogLevel::warning, "script vm: " + std::string(message));
 }
@@ -164,12 +152,12 @@ Value eval_assignment(const std::vector<gl::assets::CsNode>& nodes,
 
 template <typename EvalFn, typename FailedFn, typename RecordFn>
 Value eval_logical(const gl::assets::CsNode& node, int depth, EvalFn eval_fn,
-                   FailedFn has_failed, RecordFn record_fn) {
+                   FailedFn has_failed, RecordFn record_fn, bool short_circuit) {
     const Value left = eval_fn(node.a, depth);
     if (has_failed()) return std::int32_t{0};
-    if (short_circuit_enabled && node.opcode == 0 && is_true(left))
+    if (short_circuit && node.opcode == 0 && is_true(left))
         return std::int32_t{1};
-    if (short_circuit_enabled && node.opcode == 2 && !is_true(left))
+    if (short_circuit && node.opcode == 2 && !is_true(left))
         return std::int32_t{0};
     const Value right = eval_fn(node.b, depth);
     if (has_failed()) return std::int32_t{0};
@@ -434,7 +422,9 @@ Value ScriptVm::eval(std::int32_t index, int depth) {
         return eval_assignment(
             nodes_, node, depth + 1, [this](std::int32_t value) { return valid_index(value); },
             [this](const std::string& name) { return lookup_variable(name); },
-            [this](std::int32_t value, int inner_depth) { return eval(value, inner_depth); },
+            [this](std::int32_t value, int inner_depth) {
+                return eval(value, inner_depth);
+            },
             [this](const Value& value, const Value& destination) {
                 return coerce_assignment(value, destination);
             },
@@ -448,6 +438,13 @@ Value ScriptVm::eval(std::int32_t index, int depth) {
     case 17:
     case 18: {
         if (node.opcode == 17 || node.opcode == 18) {
+            if (eval_mode_ == EvalMode::executor) {
+                const Value left = eval(node.a, depth + 1);
+                if (failed_) return std::int32_t{0};
+                const Value right = eval(node.b, depth + 1);
+                if (failed_) return std::int32_t{0};
+                return apply_arithmetic(left, right, node.opcode);
+            }
             const Value right = eval(node.b, depth + 1);
             if (failed_) return std::int32_t{0};
             if (std::holds_alternative<std::string>(right)) {
@@ -519,7 +516,8 @@ Value ScriptVm::eval(std::int32_t index, int depth) {
                     return eval(value, inner_depth);
                 },
                 [this] { return failed_; },
-                [this](std::string_view message) { record_error(message); });
+                [this](std::string_view message) { record_error(message); },
+                eval_mode_ == EvalMode::evaluator);
         }
         fail("unsupported expression opcode: " + std::to_string(node.opcode));
         return std::int32_t{0};
@@ -534,8 +532,19 @@ Value ScriptVm::call_function(const gl::assets::CsNode& node, int depth) {
     }
     const auto id = static_cast<std::uint32_t>(node.value);
 
+    struct ModeScope {
+        EvalMode& slot;
+        EvalMode previous;
+        explicit ModeScope(EvalMode& target)
+            : slot(target), previous(target) {
+            slot = EvalMode::executor;
+        }
+        ~ModeScope() { slot = previous; }
+        ModeScope(const ModeScope&) = delete;
+        ModeScope& operator=(const ModeScope&) = delete;
+    } mode_scope(eval_mode_);
+
     std::vector<Value> args;
-    ExecutorScope executor;
     for (std::int32_t argument : node.args) {
         if (argument == -1) break;
         if (!valid_index(argument)) {
@@ -558,7 +567,9 @@ Value ScriptVm::call_function(const gl::assets::CsNode& node, int depth) {
         return std::int32_t{0};
     }
 
-    return host_.call(id, std::span<const Value>(args));
+    const Value result = host_.call(id, std::span<const Value>(args));
+    if (host_.stop_requested()) end_request_ = true;
+    return result;
 }
 
 Value ScriptVm::apply_arithmetic(const Value& left, const Value& right, std::int32_t opcode) {
@@ -587,15 +598,6 @@ Value ScriptVm::apply_arithmetic(const Value& left, const Value& right, std::int
         case 14: return a + b;
         case 15: return a - b;
         case 16: return a * b;
-        case 17:
-            if (b == 0.0) {
-                record_error("division by zero");
-                return std::int32_t{0};
-            }
-            return a / b;
-        case 18:
-            record_error("modulo requires integers");
-            return std::int32_t{0};
         default:
             return std::int32_t{0};
         }
@@ -609,18 +611,6 @@ Value ScriptVm::apply_arithmetic(const Value& left, const Value& right, std::int
         case 14: return static_cast<std::uint32_t>(a + b);
         case 15: return static_cast<std::uint32_t>(a - b);
         case 16: return static_cast<std::uint32_t>(a * b);
-        case 17:
-            if (b == 0) {
-                record_error("division by zero");
-                return std::int32_t{0};
-            }
-            return a / b;
-        case 18:
-            if (b == 0) {
-                record_error("modulo by zero");
-                return std::int32_t{0};
-            }
-            return a % b;
         default:
             return std::int32_t{0};
         }
@@ -632,18 +622,6 @@ Value ScriptVm::apply_arithmetic(const Value& left, const Value& right, std::int
     case 14: return static_cast<std::int32_t>(a + b);
     case 15: return static_cast<std::int32_t>(a - b);
     case 16: return static_cast<std::int32_t>(a * b);
-    case 17:
-        if (b == 0) {
-            record_error("division by zero");
-            return std::int32_t{0};
-        }
-        return static_cast<std::int32_t>(a / b);
-    case 18:
-        if (b == 0) {
-            record_error("modulo by zero");
-            return std::int32_t{0};
-        }
-        return static_cast<std::int32_t>(a % b);
     default:
         return std::int32_t{0};
     }
@@ -695,7 +673,7 @@ Value ScriptVm::apply_unary(const Value& operand, std::int32_t opcode) {
         if (std::holds_alternative<std::uint32_t>(operand)) return result;
         return static_cast<std::int32_t>(result);
     }
-    return std::int32_t{to_int32(operand) == 0 ? 1 : 0};
+    return std::int32_t{to_double(operand) == 0.0 ? 1 : 0};
 }
 
 Value ScriptVm::coerce_assignment(const Value& value, const Value& destination) {
