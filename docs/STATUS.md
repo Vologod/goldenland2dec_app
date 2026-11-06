@@ -63,13 +63,17 @@
     unused `<vector>`, stale `host.hpp`, redundant `gl_script` link;
     ASCII `-` в сообщении; Signal/`D_PlaySound` документированы как
     service stubs; plan Tasks 2–7 отмечены `[x]`.
-  - **Проверка:** `cmake --build build` — exit 0; `gl_script_tests`
-    **79/79** (751 assertion), `gl_script_real_tests` **2/2** (46),
-    `gl_game_tests --test-case=*script*host*` **7/7** (11); все exit 0.
-    Полный `ctest` не запускался по указанию задачи.
-  - **Concern (deferred):** кадр `eval` 952 B; при `kMaxEvalDepth=1024`
-    рекурсия занимает ≈0.97 MB стека Windows. Cyclic-тест проходит, но
-    near-limit stack test остаётся отложенным (report only).
+  - **Проверка после final-fix:** `cmake --build build` — exit 0;
+    `gl_script_tests` **79/79** (751 assertion), `gl_script_real_tests`
+    **2/2** (46), `gl_game_tests --test-case=*script*host*` **7/7** (11);
+    все exit 0. Полный `ctest --test-dir build --output-on-failure` с
+    `GL_GAME_DIR` — **18/18 passed**, 1307.64 s, exit 0.
+  - **Отложено (final review):** 555-script execution sweep (нужен новый
+    harness); near-limit stack test (кадр `eval` 952 B при
+    `kMaxEvalDepth=1024`, ≈0.97 MB стека Windows; cyclic-тест проходит);
+    process-wide dedup one-shot логов; assertion на warning-ветку
+    vm_internal; заметка о Signal/`D_PlaySound` как service stubs в
+    `parity-matrix` (в research §5 уже есть).
 - **Следующее:** Phase 1b — person natives (остаток `P3-9`: persons,
   inventory, quests, time, world) или `P2-15` (save payload).
 
