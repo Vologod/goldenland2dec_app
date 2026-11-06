@@ -2,7 +2,6 @@
 #include "gl/assets/result.hpp"
 #include "gl/assets/sdb.hpp"
 #include <cstdint>
-#include <functional>
 #include <map>
 #include <optional>
 #include <span>

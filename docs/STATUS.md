@@ -50,10 +50,18 @@
     `level_click_tests` 27.55, `dialog_overlay_tests` 1.57,
     `inventory_overlay_tests` 21.06.
 - **Ограничения (D-051):** inventory — только `Hero`; NPC-инвентарь
-  (`.inv`) и EF type `0x10` box/trigger-контейнеры не моделируются и
-  возвращают 0 до 1b2b/c. Нет `Transfer/Add/Remove/Trade`; запросы
-  read-only, save не пишется; UI инвентаря от этих нативов не обновляется
-  (снимок на момент открытия, P5b1).
+  (`.inv`) и fallback `FUN_14029270` по entity type `0x10` (`EF_TRIGGER`,
+  не `EF_INVCONTAINER` = type `8`) не моделируются и возвращают 0 до
+  1b2b/c; отсутствующая/не-`Hero` персона → 0 (в оригинале `Count` — AV).
+  Нет `Transfer/Add/Remove/Trade`; запросы read-only, save не пишется;
+  UI инвентаря от этих нативов не обновляется (снимок на момент
+  открытия, P5b1).
+- **Final review fixes (2026-11-06):** boot-order test now asserts
+  `money=43875` before the `dialog:` marker and that the last runtime log
+  before it is non-zero (RED on old order, GREEN on fixed); D-051 records
+  the missing-person/AV deviation; parity P3-9 lists the three hex IDs and
+  precise EF type wording; real oracle adds non-money `RGT_1_0_8` count
+  (slot0 6 / slot2 1); unused `<functional>` removed.
 - **Следующее:** Phase 1b2b inventory mutations (`Transfer`/`Add`/`Remove`/
   `Trade`, NPC `.inv`) или `P2-15` (save payload).
 

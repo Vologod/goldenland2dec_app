@@ -33,7 +33,7 @@ gl::game::InventoryRuntime make_runtime(const gl::assets::GameVfs &vfs, int slot
     return gl::game::InventoryRuntime::create(inventory.value(), names.value());
 }
 
-void check_slot(int slot, std::int32_t money) {
+void check_slot(int slot, std::int32_t money, std::int32_t non_money_count) {
     auto vfs = gl::assets::GameVfs::mount(std::getenv("GL_GAME_DIR"));
     REQUIRE(vfs.has_value());
     auto runtime = make_runtime(vfs.value(), slot);
@@ -41,14 +41,15 @@ void check_slot(int slot, std::int32_t money) {
     CHECK(runtime.count("Hero", "MON_1_0_1") == money);
     CHECK(runtime.count("Hero", "QST_1_0_159") == 0);
     CHECK(runtime.count("Hero", "ARM_1_08_2") == 0);
+    CHECK(runtime.count("Hero", "RGT_1_0_8") == non_money_count);
     CHECK(runtime.money() == money);
 }
 } // namespace
 
 TEST_CASE("real data: inventory_runtime slot0 oracle" * doctest::skip(!game_dir_available())) {
-    check_slot(0, 43875);
+    check_slot(0, 43875, 6);
 }
 
 TEST_CASE("real data: inventory_runtime slot2 oracle" * doctest::skip(!game_dir_available())) {
-    check_slot(2, 122008);
+    check_slot(2, 122008, 1);
 }

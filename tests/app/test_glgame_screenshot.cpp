@@ -882,18 +882,29 @@ TEST_CASE("glgame --dialog --equip-save populates inventory before the dialog st
     TempDir temp;
     const fs::path config = write_test_config(temp.path);
     const fs::path png = temp.path / "dialog_inventory.png";
+    const std::string dialog_path =
+        "scripts/dialogs/l13_1/l13_1.p517_boat_trader.d517.age.cs";
     std::string output;
     const int code = run_glgame_capture(
-        screenshot_arguments(
-            game_dir, config, png,
-            {"--dialog", "scripts/dialogs/l13_1/l13_1.p517_boat_trader.d517.age.cs",
-             "--equip-save", "0"}),
+        screenshot_arguments(game_dir, config, png,
+                             {"--dialog", dialog_path, "--equip-save", "0"}),
         output);
     CAPTURE(code);
     CAPTURE(output);
     REQUIRE(fs::exists(png));
     CHECK(code == 0);
-    CHECK(output.find("inventory runtime: Hero money=43875") != std::string::npos);
+
+    const std::string money_marker = "inventory runtime: Hero money=43875";
+    const std::string dialog_marker = "dialog: '" + dialog_path + "'";
+    const std::size_t dialog_pos = output.find(dialog_marker);
+    REQUIRE(dialog_pos != std::string::npos);
+    const std::size_t first_money_pos = output.find(money_marker);
+    REQUIRE(first_money_pos != std::string::npos);
+    CHECK(first_money_pos < dialog_pos);
+    const std::size_t last_runtime_pos =
+        output.rfind("inventory runtime: Hero money=", dialog_pos);
+    REQUIRE(last_runtime_pos != std::string::npos);
+    CHECK(output.compare(last_runtime_pos, money_marker.size(), money_marker) == 0);
 }
 
 TEST_CASE("glgame --inventory opens the selected save inventory" *
