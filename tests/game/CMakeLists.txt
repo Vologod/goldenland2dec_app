@@ -5,6 +5,8 @@ add_executable(gl_game_tests
     test_hero.cpp
     test_hero_outfit_resolver.cpp
     test_hero_wear.cpp
+    test_inventory_runtime.cpp
+    test_inventory_runtime_real.cpp
     test_inventory_view.cpp
     test_level_simulation.cpp
     test_mask_selection.cpp
