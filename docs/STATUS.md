@@ -1,6 +1,20 @@
 # STATUS
 
-Обновлено: 2026-11-06
+Обновлено: 2026-11-07
+## Phase 1b2b2a — NPC `.inv` loot generation research (in progress 2026-11-07)
+
+- **Задача:** доказать/опровергнуть точное воспроизведение стартового
+  NPC-инвентаря из `scripts/inventory/*.inv` по `Server.dll`
+  (`FUN_14047784` парсер, `FUN_140489ec` генератор, RNG `FUN_14006288`).
+  Research-only, production-код не меняется.
+- **Spec:** `docs/specs/2026-11-07-p3b2b2a-npc-loot-research-design.md`.
+- **Plan:** `docs/plans/2026-11-07-p3b2b2a-npc-loot-research.md`.
+- **Критерии:** формат, псевдокод, полный RNG-список, точка/момент
+  генерации, verdict `implementable`/`blocked` с недостающими фактами;
+  `STATUS`/`PROJECT` обновлены.
+- **Следующее после verdict:** implementation spec 1b2b2b (Transfer +
+  NPC-лут) или live-oracle задача.
+
 ## Phase 1b2b1 — Hero inventory mutations (done 2026-11-06)
 
 - **Задача:** реализовать `RS_PersonAddItem` (`0x5000004`) и
