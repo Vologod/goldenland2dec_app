@@ -1,5 +1,6 @@
 #include "gl/assets/bytes.hpp"
 #include "gl/assets/hero_equipment.hpp"
+#include "gl/assets/hero_stats.hpp"
 
 #include <doctest/doctest.h>
 
@@ -110,6 +111,36 @@ TEST_CASE("real save equipped items are not stacked" * doctest::skip(!game_dir_a
         REQUIRE(inventory.has_value());
         for (const auto &item : inventory->equipped)
             CHECK(item.count == 1);
+    }
+}
+
+TEST_CASE("real save hero_stats match research" * doctest::skip(!game_dir_available())) {
+    struct Expected {
+        int slot;
+        gl::assets::HeroStats stats;
+    };
+    const Expected slots[] = {
+        {0, {30, 25, 18, 12, 5, 7, 9, -40, 81099, 263, 0, 5}},
+        {2, {24, 21, 22, 10, 8, 8, 10, -50, 65133, 201, 0, 51}},
+    };
+
+    for (const auto &expected : slots) {
+        auto body = gl::assets::decode_save_body(read_save(expected.slot));
+        REQUIRE(body.has_value());
+        auto stats = gl::assets::parse_hero_stats(body.value());
+        REQUIRE(stats.has_value());
+        CHECK(stats->strength == expected.stats.strength);
+        CHECK(stats->constitution == expected.stats.constitution);
+        CHECK(stats->dexterity == expected.stats.dexterity);
+        CHECK(stats->perception == expected.stats.perception);
+        CHECK(stats->intelligence == expected.stats.intelligence);
+        CHECK(stats->wisdom == expected.stats.wisdom);
+        CHECK(stats->luck == expected.stats.luck);
+        CHECK(stats->reputation == expected.stats.reputation);
+        CHECK(stats->experience == expected.stats.experience);
+        CHECK(stats->life == expected.stats.life);
+        CHECK(stats->energy == expected.stats.energy);
+        CHECK(stats->extra == expected.stats.extra);
     }
 }
 
