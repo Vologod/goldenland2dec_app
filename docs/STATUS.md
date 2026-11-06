@@ -25,7 +25,11 @@
   ctest --test-dir build --output-on-failure
   ```
   с `$env:GL_GAME_DIR="I:\Games\Златогорье-2"`.
-- **Статус:** spec approved 2026-11-05; implementation plan pending.
+- **Прогресс 2026-11-05:** Task 1 (native export), Task 2 (research,
+  `docs/research/p3-vm-natives-server.md`, commit `01e7306`) и Task 3
+  (`NativeRegistry` 65/65, commit `703d766`, `gl_script_tests` 62/62)
+  выполнены. Следующая — Task 4 (`GameScriptHost`). Работа остановлена по
+  просьбе пользователя 2026-11-05 21:21.
 
 ## Состояние на 2026-11-05 (handoff)
 
