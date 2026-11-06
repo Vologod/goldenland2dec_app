@@ -1,17 +1,62 @@
 # STATUS
 
 Обновлено: 2026-11-06
-## Phase 1b2b1 — Hero inventory mutations (in progress 2026-11-06)
+## Phase 1b2b1 — Hero inventory mutations (done 2026-11-06)
 
 - **Задача:** реализовать `RS_PersonAddItem` (`0x5000004`) и
   `RS_PersonRemoveItem` (`0x5000005`) на mutable `InventoryRuntime`
   (Hero); money — через `MON_1_0_1` (type 18); save не пишется.
 - **Spec:** `docs/specs/2026-11-06-p3b2b1-inventory-mutations-design.md`.
 - **Plan:** `docs/plans/2026-11-06-p3b2b1-inventory-mutations.md`.
-- **Критерии:** research add/remove семантики; 2 ID → supported (13/65);
-  unit + real oracle; real-диалог через production path; targeted/full
-  `ctest` pass; документы/D-052 обновлены.
-- **Вне scope:** Transfer/Trade/PassToTradePanel, NPC `.inv` лут.
+- **Research:** `docs/research/p3b2b1-inventory-mutations-server.md`.
+- **Сделано (Tasks 1–6):**
+  - Research: handler RVA `0x41320`/`0x41478`, signature `(3,3,0)`,
+    return `0.0`; `FUN_1404cd28` (add: stacking по item id,
+    `max_stack` = `rec+0x34` из ITM, split на новые записи,
+    type/flags/style из ITM) и `FUN_1404cae8` (remove: частичное/
+    полное удаление, `count > available` удаляет найденное); container
+    `+0x18` write-only и `FUN_140482e8` notify не моделируются; real
+    oracle slot0/slot2 (money `43875`/`122008`, potion `953`).
+  - `gl::game::InventoryRuntime` mutable: Hero `std::vector<InventoryItem>`,
+    `add_item`/`remove_item` по `Server.dll`; `ItemTemplate { type,
+    flags, style(unknown_b[1]), max_stack }` из `ItemCatalogEntry`/ITM;
+    live overlay view (`hero_inventory()`); мутации переживают диалоги
+    (`open_dialog` больше не reseed'ит из save).
+  - `gl::script::InventoryAccess` add/remove callbacks + handlers
+    `0x5000004`/`0x5000005` (`3,3,0`, return `0.0`); `NativeRegistry`
+    **13 supported, 3 vm_internal, 49 unsupported (всего 65)**.
+  - Real-диалог: `scripts/dialogs/unique/gypsy.age.cs` через production
+    `ScriptVm → GameScriptHost → InventoryRuntime`; money
+    slot0 `43875 → 41075`, slot2 `122008 → 119208` (Remove 2800).
+- **Проверка (фактический вывод 2026-11-06):**
+  - `cmake --build build` — exit 0.
+  - Targeted `ctest -R "gl_script_tests|gl_script_real_tests|gl_game_tests|
+    gl_assets_tests|gl_assets_real_tests|glgame_screenshot_tests"` с
+    `GL_GAME_DIR` — **6/6 passed**, 1280.46 s, exit 0: `gl_assets_tests`
+    5.84 s, `gl_assets_real_tests` 589.86 s, `gl_game_tests` 80.16 s,
+    `gl_script_tests` 0.63 s, `gl_script_real_tests` 13.64 s,
+    `glgame_screenshot_tests` 590.20 s.
+  - Полный `ctest --test-dir build --output-on-failure` с `GL_GAME_DIR`
+    — **18/18 passed**, 1487.28 s, exit 0: `gl_assets_tests` 5.81,
+    `gl_assets_real_tests` 592.77, `gl_game_tests` 79.59,
+    `gl_core_tests` 0.74, `gl_core_real_tests` 0.30, `gl_script_tests`
+    0.65, `gl_script_real_tests` 13.71, `glpak_cli_tests` 0.13,
+    `gl_cs_tools_tests` 9.93, `camera_tests` 0.70, `utf8_tests` 0.20,
+    `font_tests` 2.61, `glview_screenshot_tests` 150.35,
+    `glgame_screenshot_tests` 594.45, `person_render_tests` 4.96,
+    `level_click_tests` 15.43, `dialog_overlay_tests` 0.76,
+    `inventory_overlay_tests` 12.12.
+- **Ограничения (D-052):** mutations — только `Hero`; NPC/EF type
+  `0x10` контейнеры → no-op; отрицательный `count` → no-op (в оригинале
+  uint-wrap, поведение не доказано live); известный TECH без ITM-
+  шаблона → add no-op (research §3.4: стекинг в существующую запись
+  мог бы произойти); runtime-снятие бита `0x80` (`DAT_14088df8+4`)
+  не моделируется; `max_stack` не хранится per-record (берётся текущий
+  ITM); нет `Transfer`/`Trade`/`PassToTradePanel`; save не пишется;
+  автоматического интеграционного теста на два последовательных
+  диалога нет (мутации переживают диалог, но проверен один проход).
+- **Следующее:** `RS_PersonTransferItemI`/`RS_PersonTransferAllItemsI`/
+  Trade, NPC `.inv` лут (Phase 1b2b/c) или `P2-15` (save payload).
 
 ## Phase 1b2a — Hero inventory query natives (done 2026-11-06)
 
