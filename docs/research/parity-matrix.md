@@ -28,10 +28,12 @@ ID: `P4a-*`, `P4b-*`, `P4b2-*` — прежние A/B/C из аудита (пе�
 
 Топ приоритетных пробелов:
 
-1. **B1 VM** — семантика взята из `GoldenLandEditor`, а не из `Server.dll`
-   (`P3-4`, `P3-5`, `P3-6`, `P3-7`, `P3-8`).
-2. **B2 нативы** — 7 439 недиалоговых вызовов + 1 154 `D_PlaySound`
-   возвращают 0 (`P3-9`); id `0` встречается 51 раз (`P3-3`).
+1. **B1 VM** — Phase 1a сверила VM с `Server.dll` (`P3-4` verified;
+   `P3-5`/`P3-6`/`P3-7`/`P3-8` partial: недоказанные overflow/string/
+   budget случаи остаются `unverified`).
+2. **B2 нативы** — реестр и `GameScriptHost` есть, но 57/65 нативов
+   `unsupported` (persons/inventory/quests/time/world) → возвращают 0
+   (`P3-9`); id `0` встречается 51 раз (`P3-3`).
 3. **B3 save/load** — payload не читается и не пишется (`P2-15`).
 4. **B4 тайминг** — порт 60 Гц, оригинал `sv_fps=35` (`P2-9`, `P4b-16`).
 5. **C1 ADSC** — `number/name` игнорируются, анимации ломаются на 4 уровнях
@@ -112,12 +114,12 @@ ID: `P4a-*`, `P4b-*`, `P4b2-*` — прежние A/B/C из аудита (пе�
 | P3-1 | CS | node layout | `cs.cpp:43-126` | 555/555, 338977 nodes | partial | layout из редактора | audit p2-p3 |
 | P3-2 | CS | legacy XOR body | `cs.cpp:106-122`; D-022 | 6 файлов, 3 пары | partial | fallback по первому опкоду | audit p2-p3 |
 | P3-3 | CS | opcode/function tables | `cs.cpp:128-246` | редактор; id 0 ×51 | partial | id 0 = `unknown` | audit p2-p3 |
-| P3-4 | VM | top-level/логика/jmp/dialog | `script_vm.cpp:203-650` | редактор | unverified | нужен `Server.dll` RVA | audit p2-p3 |
-| P3-5 | VM | арифметика/битовые/unary | `script_vm.cpp:458-584` | synthetic | partial | реальное использование крошечное | audit p2-p3 |
-| P3-6 | VM | assign coercion | `script_vm.cpp:254-287` | D-025 | unverified | editor TODO, выбор порта | audit p2-p3 |
-| P3-7 | VM | limits/errors | `script_vm.hpp:38-40` | D-023/D-025 | unverified | 10M/100k/sticky — порт | audit p2-p3 |
-| P3-8 | VM | dialog data/answer index | `script_vm.cpp:163-201` | D-023/D-024 | partial | 0-based vs editor; первый D_Say | audit p2-p3 |
-| P3-9 | нативы | dispatch/host stubs | `script_vm.cpp:424-456` | 7439+1154 вызовов → 0 | missing | крупнейший разрыв P3 | audit p2-p3 |
+| P3-4 | VM | top-level/логика/jmp | `script_vm.cpp:203-650` | research §3–§4: цикл `FUN_1403d944` (`0x3d944`), short-circuit `0x3a7cb`/`0x3a71e`, `jmp` `0x3a141`, `c=d=0` `FUN_1403fb04` `0x3fb15`/`0x3fb18`; D-049 + unit | verified | индекс ответа диалога — P3-8 | Phase 1a Task 2/5 |
+| P3-5 | VM | арифметика/битовые/unary | `script_vm.cpp:458-584` | research §4: `/`/`%` `0x3a2a1`/`0x3a222`, `1e10` `0x3a2d8`/`0x3a28f`, `shl`/`sar` `0x3a432`/`0x3a3c2`, unary `0x3a1e2`/`0x3a1ae`; D-049 + unit | partial | int overflow `0x0e-0x10` и DWORD `0x03-0x05` — `unverified` | Phase 1a Task 2/5 |
+| P3-6 | VM | assign coercion | `script_vm.cpp:254-287` | research §4: `0x32` `0x3a036`, string dest `0x3a09f-0x3a0b7`; numeric match, D-025 | partial | string-приёмник `unverified` (string-переменных в данных нет) | Phase 1a Task 2/5 |
+| P3-7 | VM | limits/errors | `script_vm.hpp:38-40` | research §4: деление/модуль на 0 → `1e10` без ошибки (`0x3a2d8`/`0x3a28f`); sticky errors D-025 | partial | eval budget 100k/limits — решение порта, не извлечено | Phase 1a Task 2/5 |
+| P3-8 | VM | dialog data/answer index | `script_vm.cpp:163-201` | research §5: `D_Say` `0x3fc10`, `D_Answer` `0x3fc9c`, `D_CloseDialog` `0x3fc60`; real `2684/2686/2696` | partial | 0-based answer index — порт D-024, `Server.dll` не пинит | Phase 1a Task 2 |
+| P3-9 | нативы | dispatch/host | `native_registry.cpp`, `game_script_host.cpp` | `NativeRegistry` 65/65; supported 5 (`Exit`/`Signal`/`Console`/`Cmd`/`D_PlaySound`), vm_internal 3, unsupported 57; `GameScriptHost` one-shot log | partial | 57 нативов требуют подсистем (persons/inventory/quests/time/world) | Phase 1a Task 3/4/6 |
 | P3-10 | globals | типы/парсинг `.scr` | `globals.cpp:100-182` | real `zlato_vars.scr` | partial | неизвестные типы/кавычки | audit p2-p3 |
 | P3-11 | диалоги | DialogSession | `dialog_session.cpp:12-73` | real demon | partial | покрыт один диалог | audit p2-p3 |
 | P3-12 | диалоги | экран/клавиши/панель | `main.cpp:545-583` | screenshot tests | unverified | UI-раскладка порта | audit p2-p3 |
@@ -266,15 +268,19 @@ ID: `P4a-*`, `P4b-*`, `P4b2-*` — прежние A/B/C из аудита (пе�
 
 ## Итог
 
-Всего строк: **157**. По статусам: `verified` 44, `partial` 57,
-`unverified` 25, `missing` 16, `contradicted` 2, `superseded` 13.
+Всего строк: **157**. По статусам: `verified` 45, `partial` 60,
+`unverified` 22, `missing` 15, `contradicted` 2, `superseded` 13.
+
+Native dispatch infrastructure (Phase 1a): `NativeRegistry` 65/65 +
+`GameScriptHost`; 5 supported, 3 vm_internal, 57 unsupported.
 
 `contradicted`: `P1-3` (ADSC) и `P2-9` (60 Гц vs `sv_fps=35`).
 `missing` включает новые системы P5b2+ и отсутствующие P4d/P5a-состояния.
 
 Блокеры паритета, требующие отдельных spec/plan в порядке приоритета:
 
-1. `P3-4`–`P3-9`: VM и нативы из `Server.dll`.
+1. `P3-9`: 57 нативов без подсистем (persons/inventory/quests/time/world);
+   VM-часть закрыта Phase 1a.
 2. `P2-15`: save payload/write/load.
 3. `P2-9`/`P4b-16`: 35 Гц vs 60 Гц.
 4. `P1-3`: ADSC `number/name`.

@@ -1,7 +1,7 @@
 # STATUS
 
-Обновлено: 2026-11-05
-## Phase 1a — Server.dll VM parity & native dispatch (in progress)
+Обновлено: 2026-11-06
+## Phase 1a — Server.dll VM parity & native dispatch (done 2026-11-06)
 
 - **Задача:** снять `P3-4`–`P3-9`: сверить VM-семантику с `Server.dll` и
   ввести `NativeRegistry` (65 ID) + `GameScriptHost`; реально работают
@@ -9,27 +9,44 @@
   `unsupported` с одной info-записью на ID.
 - **Spec:** `docs/specs/2026-11-05-p3-vm-natives-design.md`.
 - **Plan:** `docs/plans/2026-11-05-p3-vm-natives.md`.
-- **Task 1 done 2026-11-05:** `tools/ghidra/ExportNativeHandlers.java`;
-  экспорт всех 65 handler'ов — `done natives=65 created=33 ok=65 failed=0`;
-  корпус `.local/decomp/server/natives/{natives.csv,natives.c}`;
-  `decomp-index.md` обновлён.
+- **Сделано (Tasks 1–7):**
+  - Task 1: `tools/ghidra/ExportNativeHandlers.java`; экспорт всех 65
+    handler'ов — `done natives=65 created=33 ok=65 failed=0`; корпус
+    `.local/decomp/server/natives/{natives.csv,natives.c}`;
+    `decomp-index.md` обновлён.
+  - Task 2: `docs/research/p3-vm-natives-server.md` — layout узла,
+    семантика `0x00..0x32` с RVA, delta-таблица (23 строки), нативная
+    таблица 65/65 `ID → RVA handler`.
+  - Task 3: `NativeRegistry` — 65 ID: 5 supported (`Exit`, `Signal`,
+    `Console`, `Cmd`, `D_PlaySound`), 3 vm_internal (`D_Say`, `D_Answer`,
+    `D_CloseDialog`), 57 unsupported с reason.
+  - Task 4: `GameScriptHost` в `gl_game` — диспетчеризация через реестр,
+    один info-лог на unsupported ID, warning на vm_internal/unknown.
+  - Task 5: VM parity по §4 research (D-049): short-circuit `0x00/0x02`,
+    порядок `b,a` и `1e10` для `/`/`%`, int32-сдвиги `cl&31`, операнд `b`
+    у `0x13/0x14`, eval `0x31/0x32`, завершение top-level value-узлов.
+  - Task 6: `glgame`/`glscript` переведены на `GameScriptHost`.
+  - Task 7: регрессия + `STATUS`/`PROJECT`/`parity-matrix`.
 - **Критерии приёмки:** research 65/65 `ID → RVA handler` + семантика VM;
   реестр 65/65, имена совпадают с `cs_function_name`; каждое изменение VM
   имеет evidence и тест; `glgame`/`glscript` на `GameScriptHost`;
   targeted + полный `ctest` с `GL_GAME_DIR` pass; `STATUS`/`PROJECT`/
   `parity-matrix` обновлены.
-- **Команды проверки:**
-  ```powershell
-  cmake --build build
-  ctest --test-dir build --output-on-failure -R "gl_script_tests|gl_game_tests|glgame_screenshot_tests|glscript_tests"
-  ctest --test-dir build --output-on-failure
-  ```
-  с `$env:GL_GAME_DIR="I:\Games\Златогорье-2"`.
-- **Прогресс 2026-11-05:** Task 1 (native export), Task 2 (research,
-  `docs/research/p3-vm-natives-server.md`, commit `01e7306`) и Task 3
-  (`NativeRegistry` 65/65, commit `703d766`, `gl_script_tests` 62/62)
-  выполнены. Следующая — Task 4 (`GameScriptHost`). Работа остановлена по
-  просьбе пользователя 2026-11-05 21:21.
+- **Проверка (фактический вывод 2026-11-06):**
+  - `cmake --build build` — exit 0.
+  - Targeted `ctest -R "gl_script_tests|gl_script_real_tests|gl_game_tests|
+    glgame_screenshot_tests|glscript_tests"` — **4/4 passed**, 480.08 s,
+    exit 0: `gl_game_tests` 43.68 s, `gl_script_tests` 0.43 s,
+    `gl_script_real_tests` 2.07 s, `glgame_screenshot_tests` 433.81 s.
+    Отдельного зарегистрированного `glscript_tests` нет (18 тестов в
+    проекте), поэтому regexp выбирает 4.
+  - `glscript --game-dir ... --file scripts/dialogs/demon.d1.age.cs --run`
+    — `status: wait_user`, `steps: 43`, `dialogs: 2684 2686 2696`,
+    `answers: 2`, exit 0.
+  - Полный `ctest --test-dir build --output-on-failure` с `GL_GAME_DIR` —
+    **18/18 passed**, 1224.01 s, exit 0.
+- **Следующее:** Phase 1b — person natives (остаток `P3-9`: persons,
+  inventory, quests, time, world) или `P2-15` (save payload).
 
 ## Состояние на 2026-11-05 (handoff)
 
