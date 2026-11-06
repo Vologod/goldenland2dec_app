@@ -1,7 +1,7 @@
 # STATUS
 
 Обновлено: 2026-11-06
-## Phase 1b2a — Hero inventory query natives (in progress 2026-11-06)
+## Phase 1b2a — Hero inventory query natives (done 2026-11-06)
 
 - **Задача:** реализовать `RS_TestPersonHasItem` (`0x5000000`),
   `RS_GetItemCountI` (`0x5000002`), `RS_GetMoney` (`0x5000008`) на
@@ -9,10 +9,53 @@
   money — sum type 18.
 - **Spec:** `docs/specs/2026-11-06-p3b2a-inventory-queries-design.md`.
 - **Plan:** `docs/plans/2026-11-06-p3b2a-inventory-queries.md`.
-- **Критерии:** research с RVA/константами/real counts; 3 ID → supported
-  (8→11); `ItemNameIndex` + `InventoryRuntime`; real-диалог через
-  `GameScriptHost`; targeted + full `ctest` pass; docs обновлены.
-- **Вне scope:** NPC/box лут, Transfer/Add/Remove/Trade, UI-изменения.
+- **Research:** `docs/research/p3b2a-inventory-queries-server.md`.
+- **Сделано (Tasks 1–6):**
+  - Research: handler RVA `0x40144`/`0x40d40`/`0x41120`, arity/типы
+    `(3,3)`/`(3,3)`/`(-1)`, default-константы `1.0`/`0.0`, lookup
+    `entity+0x10` (container 1), `FUN_1404c574` (TECH → item id + sum
+    count), `FUN_1404c494` (sum type `0x12`), `FUN_1402914c`/`FUN_14029270`;
+    `tech_names.sdb` 1848 уникальных имён; save oracle slot0/slot2.
+  - `gl::assets::ItemNameIndex` — exact/case-sensitive `TECH → id` из
+    `sdb/items/tech_names.sdb`; `gl::script::InventoryAccess` +
+    три handler'а; `NativeRegistry` 11 supported, 3 vm_internal,
+    51 unsupported (всего 65).
+  - `gl::game::InventoryRuntime` — `HeroInventory.items` из save
+    (container `entity+0x10`), precomputed counts и money (sum type 18);
+    только `"Hero"`, unknown/не-`Hero` → 0.
+  - `glgame` wiring: `ItemNameIndex`/`InventoryRuntime` в `boot`/
+    `apply_equip_save`, `services.inventory` в `open_dialog`; boot-order
+    fix `f212ac0` — save загружается до CLI-dialog/`--click-npc`.
+  - Real tests: boat trader
+    `scripts/dialogs/l13_1/l13_1.p517_boat_trader.d517.age.cs`
+    (`money` slot0 = 43875, slot2 = 122008 через production
+    `ScriptVm → GameScriptHost → InventoryRuntime`) и `l1_1` NPC click
+    (`--click-npc 13`, dialog открывается, exit 0).
+- **Проверка (фактический вывод 2026-11-06):**
+  - `cmake --build build` — exit 0.
+  - Targeted `ctest -R "gl_script_tests|gl_script_real_tests|gl_game_tests|
+    gl_assets_tests|gl_assets_real_tests|glgame_screenshot_tests"` с
+    `GL_GAME_DIR` — **6/6 passed**, 1705.37 s, exit 0: `gl_assets_tests`
+    10.07 s, `gl_assets_real_tests` 858.08 s, `gl_game_tests` 95.34 s,
+    `gl_script_tests` 0.78 s, `gl_script_real_tests` 10.55 s,
+    `glgame_screenshot_tests` 730.33 s.
+  - Полный `ctest --test-dir build --output-on-failure` с `GL_GAME_DIR`
+    — **18/18 passed**, 1649.10 s, exit 0: `gl_assets_tests` 6.43,
+    `gl_assets_real_tests` 736.47, `gl_game_tests` 95.38, `gl_core_tests`
+    0.66, `gl_core_real_tests` 0.36, `gl_script_tests` 0.70,
+    `gl_script_real_tests` 10.89, `glpak_cli_tests` 0.19,
+    `gl_cs_tools_tests` 12.98, `camera_tests` 1.01, `utf8_tests` 0.25,
+    `font_tests` 3.26, `glview_screenshot_tests` 187.75,
+    `glgame_screenshot_tests` 525.90, `person_render_tests` 8.39,
+    `level_click_tests` 27.55, `dialog_overlay_tests` 1.57,
+    `inventory_overlay_tests` 21.06.
+- **Ограничения (D-051):** inventory — только `Hero`; NPC-инвентарь
+  (`.inv`) и EF type `0x10` box/trigger-контейнеры не моделируются и
+  возвращают 0 до 1b2b/c. Нет `Transfer/Add/Remove/Trade`; запросы
+  read-only, save не пишется; UI инвентаря от этих нативов не обновляется
+  (снимок на момент открытия, P5b1).
+- **Следующее:** Phase 1b2b inventory mutations (`Transfer`/`Add`/`Remove`/
+  `Trade`, NPC `.inv`) или `P2-15` (save payload).
 
 ## Phase 1b1 — Person parameter natives (done 2026-11-06)
 
