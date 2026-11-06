@@ -7,12 +7,26 @@
 #include <doctest/doctest.h>
 
 #include <cstdint>
+#include <optional>
 #include <string_view>
 #include <vector>
 
 using namespace gl::game;
 
 namespace {
+std::optional<ItemTemplate> template_for(std::uint32_t item_id) {
+    switch (item_id) {
+    case 812:
+        return ItemTemplate{18, 0xC0000000u, 1, 100000000u};
+    case 1101:
+        return ItemTemplate{26, 0, 0, 10000u};
+    case 307:
+        return ItemTemplate{12, 0xC0000084u, 8, 1u};
+    default:
+        return std::nullopt;
+    }
+}
+
 gl::assets::ItemNameIndex make_names() {
     const std::vector<gl::assets::SdbEntry> entries = {
         {812, "MON_1_0_1"},
@@ -84,5 +98,253 @@ TEST_CASE("inventory_runtime access callbacks delegate to queries") {
 
     CHECK(access.item_count("Hero", "MON_1_0_1") == 500);
     CHECK(access.item_count("Other", "MON_1_0_1") == 0);
+    CHECK(access.money() == 500);
+}
+
+TEST_CASE("inventory_runtime adds a new item using its template") {
+    auto runtime = InventoryRuntime::create({}, make_names(), template_for);
+
+    REQUIRE(runtime.add_item("Hero", "QST_1_0_159", 3));
+    CHECK(runtime.count("Hero", "QST_1_0_159") == 3);
+    const auto &inventory = runtime.hero_inventory();
+    REQUIRE(inventory.items.size() == 1);
+    CHECK(inventory.items[0].item_id == 1101);
+    CHECK(inventory.items[0].count == 3);
+    CHECK(inventory.items[0].type == 26);
+    CHECK(inventory.items[0].flags == 0);
+    CHECK(inventory.items[0].style == 0);
+}
+
+TEST_CASE("inventory_runtime stacks into an existing item record") {
+    gl::assets::HeroInventory inventory;
+    inventory.items.push_back({1101, 2, 0, 0, 0});
+    auto runtime = InventoryRuntime::create(inventory, make_names(), template_for);
+
+    REQUIRE(runtime.add_item("Hero", "QST_1_0_159", 3));
+    CHECK(runtime.count("Hero", "QST_1_0_159") == 5);
+    REQUIRE(runtime.hero_inventory().items.size() == 1);
+    CHECK(runtime.hero_inventory().items[0].count == 5);
+}
+
+TEST_CASE("inventory_runtime add money updates count and money") {
+    gl::assets::HeroInventory inventory;
+    inventory.items.push_back({812, 500, 0, 18, 0});
+    auto runtime = InventoryRuntime::create(inventory, make_names(), template_for);
+
+    REQUIRE(runtime.add_item("Hero", "MON_1_0_1", 100));
+    CHECK(runtime.count("Hero", "MON_1_0_1") == 600);
+    CHECK(runtime.money() == 600);
+    REQUIRE(runtime.hero_inventory().items.size() == 1);
+    CHECK(runtime.hero_inventory().items[0].count == 600);
+}
+
+TEST_CASE("inventory_runtime add money creates a record when missing") {
+    auto runtime = InventoryRuntime::create({}, make_names(), template_for);
+
+    REQUIRE(runtime.add_item("Hero", "MON_1_0_1", 100));
+    CHECK(runtime.count("Hero", "MON_1_0_1") == 100);
+    CHECK(runtime.money() == 100);
+    REQUIRE(runtime.hero_inventory().items.size() == 1);
+    CHECK(runtime.hero_inventory().items[0].type == 18);
+}
+
+TEST_CASE("inventory_runtime removes part of a stack") {
+    gl::assets::HeroInventory inventory;
+    inventory.items.push_back({1101, 5, 0, 0, 0});
+    auto runtime = InventoryRuntime::create(inventory, make_names(), template_for);
+
+    REQUIRE(runtime.remove_item("Hero", "QST_1_0_159", 2));
+    CHECK(runtime.count("Hero", "QST_1_0_159") == 3);
+    REQUIRE(runtime.hero_inventory().items.size() == 1);
+    CHECK(runtime.hero_inventory().items[0].count == 3);
+}
+
+TEST_CASE("inventory_runtime removes a whole record") {
+    gl::assets::HeroInventory inventory;
+    inventory.items.push_back({1101, 5, 0, 0, 0});
+    auto runtime = InventoryRuntime::create(inventory, make_names(), template_for);
+
+    REQUIRE(runtime.remove_item("Hero", "QST_1_0_159", 5));
+    CHECK(runtime.count("Hero", "QST_1_0_159") == 0);
+    CHECK(runtime.hero_inventory().items.empty());
+}
+
+TEST_CASE("inventory_runtime removes all records when count exceeds available") {
+    gl::assets::HeroInventory inventory;
+    inventory.items.push_back({1101, 2, 0, 0, 0});
+    inventory.items.push_back({1101, 3, 0, 0, 0});
+    auto runtime = InventoryRuntime::create(inventory, make_names(), template_for);
+
+    REQUIRE(runtime.remove_item("Hero", "QST_1_0_159", 8));
+    CHECK(runtime.count("Hero", "QST_1_0_159") == 0);
+    CHECK(runtime.hero_inventory().items.empty());
+}
+
+TEST_CASE("inventory_runtime removes across records in slot order") {
+    gl::assets::HeroInventory inventory;
+    inventory.items.push_back({1101, 2, 0, 0, 0});
+    inventory.items.push_back({1101, 3, 0, 0, 0});
+    auto runtime = InventoryRuntime::create(inventory, make_names(), template_for);
+
+    REQUIRE(runtime.remove_item("Hero", "QST_1_0_159", 4));
+    CHECK(runtime.count("Hero", "QST_1_0_159") == 1);
+    REQUIRE(runtime.hero_inventory().items.size() == 1);
+    CHECK(runtime.hero_inventory().items[0].count == 1);
+}
+
+TEST_CASE("inventory_runtime remove missing item is a no-op") {
+    gl::assets::HeroInventory inventory;
+    inventory.items.push_back({1101, 5, 0, 0, 0});
+    auto runtime = InventoryRuntime::create(inventory, make_names(), template_for);
+
+    CHECK_FALSE(runtime.remove_item("Hero", "MON_1_0_1", 1));
+    CHECK(runtime.count("Hero", "QST_1_0_159") == 5);
+    CHECK(runtime.money() == 0);
+}
+
+TEST_CASE("inventory_runtime zero and negative counts are no-ops") {
+    gl::assets::HeroInventory inventory;
+    inventory.items.push_back({1101, 5, 0, 0, 0});
+    auto runtime = InventoryRuntime::create(inventory, make_names(), template_for);
+
+    CHECK_FALSE(runtime.add_item("Hero", "QST_1_0_159", 0));
+    CHECK_FALSE(runtime.add_item("Hero", "QST_1_0_159", -2));
+    CHECK_FALSE(runtime.remove_item("Hero", "QST_1_0_159", 0));
+    CHECK_FALSE(runtime.remove_item("Hero", "QST_1_0_159", -2));
+    CHECK(runtime.count("Hero", "QST_1_0_159") == 5);
+}
+
+TEST_CASE("inventory_runtime unknown tech and person are no-ops") {
+    auto runtime = InventoryRuntime::create(make_inventory(), make_names(), template_for);
+
+    CHECK_FALSE(runtime.add_item("Hero", "NOPE", 1));
+    CHECK_FALSE(runtime.remove_item("Hero", "NOPE", 1));
+    CHECK_FALSE(runtime.add_item("Other", "QST_1_0_159", 1));
+    CHECK_FALSE(runtime.remove_item("Other", "QST_1_0_159", 1));
+    CHECK(runtime.count("Hero", "QST_1_0_159") == 2);
+    CHECK(runtime.count("Hero", "MON_1_0_1") == 500);
+}
+
+TEST_CASE("inventory_runtime missing template makes add a no-op") {
+    auto runtime = InventoryRuntime::create(make_inventory(), make_names());
+
+    CHECK_FALSE(runtime.add_item("Hero", "QST_1_0_159", 1));
+    CHECK(runtime.count("Hero", "QST_1_0_159") == 2);
+
+    auto missing = [](std::uint32_t) -> std::optional<ItemTemplate> {
+        return std::nullopt;
+    };
+    auto runtime2 = InventoryRuntime::create(make_inventory(), make_names(), missing);
+    CHECK_FALSE(runtime2.add_item("Hero", "QST_1_0_159", 1));
+    CHECK(runtime2.count("Hero", "QST_1_0_159") == 2);
+}
+
+TEST_CASE("inventory_runtime remove does not require a template") {
+    gl::assets::HeroInventory inventory;
+    inventory.items.push_back({1101, 2, 0, 0, 0});
+    auto runtime = InventoryRuntime::create(inventory, make_names());
+
+    REQUIRE(runtime.remove_item("Hero", "QST_1_0_159", 1));
+    CHECK(runtime.count("Hero", "QST_1_0_159") == 1);
+}
+
+TEST_CASE("inventory_runtime add splits new records by max_stack") {
+    auto lookup = [](std::uint32_t item_id) -> std::optional<ItemTemplate> {
+        if (item_id == 1101)
+            return ItemTemplate{26, 0, 0, 3};
+        return std::nullopt;
+    };
+    auto runtime = InventoryRuntime::create({}, make_names(), lookup);
+
+    REQUIRE(runtime.add_item("Hero", "QST_1_0_159", 7));
+    CHECK(runtime.count("Hero", "QST_1_0_159") == 7);
+    const auto &items = runtime.hero_inventory().items;
+    REQUIRE(items.size() == 3);
+    CHECK(items[0].count == 3);
+    CHECK(items[1].count == 3);
+    CHECK(items[2].count == 1);
+}
+
+TEST_CASE("inventory_runtime add fills an existing stack before splitting") {
+    gl::assets::HeroInventory inventory;
+    inventory.items.push_back({1101, 2, 0, 0, 0});
+    auto lookup = [](std::uint32_t item_id) -> std::optional<ItemTemplate> {
+        if (item_id == 1101)
+            return ItemTemplate{26, 0, 0, 3};
+        return std::nullopt;
+    };
+    auto runtime = InventoryRuntime::create(inventory, make_names(), lookup);
+
+    REQUIRE(runtime.add_item("Hero", "QST_1_0_159", 4));
+    const auto &items = runtime.hero_inventory().items;
+    REQUIRE(items.size() == 2);
+    CHECK(items[0].count == 3);
+    CHECK(items[1].count == 3);
+}
+
+TEST_CASE("inventory_runtime add starts a new record when the stack is full") {
+    gl::assets::HeroInventory inventory;
+    inventory.items.push_back({1101, 3, 0, 0, 0});
+    auto lookup = [](std::uint32_t item_id) -> std::optional<ItemTemplate> {
+        if (item_id == 1101)
+            return ItemTemplate{26, 0, 0, 3};
+        return std::nullopt;
+    };
+    auto runtime = InventoryRuntime::create(inventory, make_names(), lookup);
+
+    REQUIRE(runtime.add_item("Hero", "QST_1_0_159", 1));
+    const auto &items = runtime.hero_inventory().items;
+    REQUIRE(items.size() == 2);
+    CHECK(items[0].count == 3);
+    CHECK(items[1].count == 1);
+}
+
+TEST_CASE("inventory_runtime max_stack one creates one record per unit") {
+    auto runtime = InventoryRuntime::create({}, make_names(), template_for);
+
+    REQUIRE(runtime.add_item("Hero", "ARM_1_08_2", 3));
+    const auto &items = runtime.hero_inventory().items;
+    REQUIRE(items.size() == 3);
+    CHECK(items[0].count == 1);
+    CHECK(items[1].count == 1);
+    CHECK(items[2].count == 1);
+    CHECK(items[0].type == 12);
+    CHECK(items[0].style == 8);
+}
+
+TEST_CASE("inventory_runtime max_stack zero makes add a no-op") {
+    auto lookup = [](std::uint32_t item_id) -> std::optional<ItemTemplate> {
+        if (item_id == 1101)
+            return ItemTemplate{26, 0, 0, 0};
+        return std::nullopt;
+    };
+    auto runtime = InventoryRuntime::create({}, make_names(), lookup);
+
+    CHECK_FALSE(runtime.add_item("Hero", "QST_1_0_159", 1));
+    CHECK(runtime.count("Hero", "QST_1_0_159") == 0);
+    CHECK(runtime.hero_inventory().items.empty());
+}
+
+TEST_CASE("inventory_runtime hero_inventory reflects mutations") {
+    auto runtime = InventoryRuntime::create({}, make_names(), template_for);
+
+    REQUIRE(runtime.add_item("Hero", "QST_1_0_159", 2));
+    REQUIRE(runtime.add_item("Hero", "ARM_1_08_2", 1));
+    REQUIRE(runtime.hero_inventory().items.size() == 2);
+    REQUIRE(runtime.remove_item("Hero", "QST_1_0_159", 2));
+    REQUIRE(runtime.hero_inventory().items.size() == 1);
+    CHECK(runtime.hero_inventory().items[0].item_id == 307);
+}
+
+TEST_CASE("inventory_runtime access callbacks observe mutations") {
+    auto runtime = InventoryRuntime::create(make_inventory(), make_names(), template_for);
+    auto access = runtime.access();
+
+    REQUIRE(runtime.add_item("Hero", "MON_1_0_1", 100));
+    CHECK(access.item_count("Hero", "MON_1_0_1") == 600);
+    CHECK(access.money() == 600);
+
+    REQUIRE(runtime.remove_item("Hero", "MON_1_0_1", 100));
+    CHECK(access.item_count("Hero", "MON_1_0_1") == 500);
     CHECK(access.money() == 500);
 }
