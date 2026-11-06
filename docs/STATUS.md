@@ -12,8 +12,21 @@
 - **Критерии:** формат, псевдокод, полный RNG-список, точка/момент
   генерации, verdict `implementable`/`blocked` с недостающими фактами;
   `STATUS`/`PROJECT` обновлены.
-- **Следующее после verdict:** implementation spec 1b2b2b (Transfer +
-  NPC-лут) или live-oracle задача.
+- **Состояние (2026-11-07, сессия остановлена 02:14):**
+  - Task 1 research закоммичен `6c035dd`: `.inv` grammar, layout
+    `FUN_14047784`, проверка 238 файлов (11 543 five-number item,
+    362 four-number skipped), `special` reset, unverified items.
+  - Ревью Task 1: **не завершено** — 1 Important в research doc:
+    утверждение об эквивалентности `5//comment` и `5 //comment` неверно
+    (attached `//` не завершает токен; в реальных данных таких нет, 586
+    комментариев whitespace-separated) + 4 minor citation fixes.
+  - Task 2 (генератор/RNG/timing) и Task 3 (verdict) не начаты.
+  - SDD ledger (gitignored):
+    `.superpowers/sdd/2026-11-07-p3b2b2a-npc-loot-research/progress.md`.
+  - Локальные коммиты `426d25b` (spec/plan) и `6c035dd` (research), **не
+    запушены**.
+- **Следующее:** применить fix Task 1 (comment equivalence + citations),
+  scoped re-review, затем Task 2 (RNG/генератор) → verdict.
 
 ## Phase 1b2b1 — Hero inventory mutations (done 2026-11-06)
 
