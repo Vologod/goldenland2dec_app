@@ -1,6 +1,18 @@
 # STATUS
 
 Обновлено: 2026-11-06
+## Phase 1b2b1 — Hero inventory mutations (in progress 2026-11-06)
+
+- **Задача:** реализовать `RS_PersonAddItem` (`0x5000004`) и
+  `RS_PersonRemoveItem` (`0x5000005`) на mutable `InventoryRuntime`
+  (Hero); money — через `MON_1_0_1` (type 18); save не пишется.
+- **Spec:** `docs/specs/2026-11-06-p3b2b1-inventory-mutations-design.md`.
+- **Plan:** `docs/plans/2026-11-06-p3b2b1-inventory-mutations.md`.
+- **Критерии:** research add/remove семантики; 2 ID → supported (13/65);
+  unit + real oracle; real-диалог через production path; targeted/full
+  `ctest` pass; документы/D-052 обновлены.
+- **Вне scope:** Transfer/Trade/PassToTradePanel, NPC `.inv` лут.
+
 ## Phase 1b2a — Hero inventory query natives (done 2026-11-06)
 
 - **Задача:** реализовать `RS_TestPersonHasItem` (`0x5000000`),
