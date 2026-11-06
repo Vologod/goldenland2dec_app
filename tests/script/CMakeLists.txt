@@ -17,9 +17,10 @@ add_executable(gl_script_real_tests
     test_real_main.cpp
     test_real_dialogs.cpp
     test_real_dialog_session.cpp
+    test_real_person_natives.cpp
 )
 target_include_directories(gl_script_real_tests PRIVATE ${CMAKE_SOURCE_DIR}/third_party)
-target_link_libraries(gl_script_real_tests PRIVATE gl_script)
+target_link_libraries(gl_script_real_tests PRIVATE gl_script gl_game)
 gl_enable_warnings(gl_script_real_tests)
 
 add_test(NAME gl_script_real_tests COMMAND gl_script_real_tests)

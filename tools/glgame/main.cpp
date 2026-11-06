@@ -6,6 +6,7 @@
 #include <gl/app/pending_talk.hpp>
 #include <gl/assets/cs.hpp>
 #include <gl/assets/hero_equipment.hpp>
+#include <gl/assets/hero_stats.hpp>
 #include <gl/assets/herowear.hpp>
 #include <gl/assets/item_catalog.hpp>
 #include <gl/assets/log.hpp>
@@ -20,6 +21,7 @@
 #include <gl/game/dialog_path.hpp>
 #include <gl/game/game_script_host.hpp>
 #include <gl/game/hero_outfit_resolver.hpp>
+#include <gl/game/person_runtime.hpp>
 #include <gl/platform/sdl_context.hpp>
 #include <gl/render/font.hpp>
 #include <gl/render/text.hpp>
@@ -523,6 +525,7 @@ class Game {
             apply_equip_save(*options_.equip_save, false);
 
         if (options_.has_dialog) {
+            rebuild_person_runtime({});
             const gl::Result<void> opened = open_dialog(options_.dialog);
             if (!opened) return exit_code_for(opened.error());
             dialog_launched_from_cli_ = true;
@@ -786,6 +789,7 @@ class Game {
         context->host.services().exit = [](std::int32_t code) {
             gl::log(gl::LogLevel::info, "script exit: " + std::to_string(code));
         };
+        context->host.services().person = person_runtime_.access();
         context->path = std::string(virtual_path);
         context->speaker = std::string(speaker);
         context->sdb = std::move(sdb.value());
@@ -1394,6 +1398,7 @@ class Game {
     void apply_equip_save(int slot, bool apply_to_level) {
         pending_equipment_.reset();
         pending_inventory_.reset();
+        pending_hero_stats_.reset();
 
         const gl::core::SaveSlotInfo* info = saves_.find(slot);
         gl::core::SaveSlotInfo synthetic;
@@ -1412,6 +1417,7 @@ class Game {
                 "outfit: naked (invalid save slot " + std::to_string(slot) + ")", false);
             if (apply_to_level && level_ && !options_.hero_outfit_none)
                 level_->apply_hero_outfit(make_naked_outfit());
+            if (apply_to_level && level_) rebuild_person_runtime(level_->level().persons);
             return;
         }
 
@@ -1424,8 +1430,17 @@ class Game {
                 "outfit: naked (slot " + std::to_string(slot) + "): " + error, false);
             if (apply_to_level && level_ && !options_.hero_outfit_none)
                 level_->apply_hero_outfit(make_naked_outfit());
+            if (apply_to_level && level_) rebuild_person_runtime(level_->level().persons);
             return;
         }
+
+        auto hero_stats = gl::assets::parse_hero_stats(body);
+        if (hero_stats) {
+            pending_hero_stats_ = hero_stats.value();
+        } else {
+            gl::log(gl::LogLevel::warning, "hero stats: " + hero_stats.error().message);
+        }
+        if (apply_to_level && level_) rebuild_person_runtime(level_->level().persons);
 
         auto inventory = gl::assets::parse_hero_inventory(body);
         if (inventory) {
@@ -1475,6 +1490,15 @@ class Game {
         if (apply_to_level && level_) level_->apply_hero_outfit(*outfit);
     }
 
+    void rebuild_person_runtime(const std::vector<gl::game::PersonInstance>& persons) {
+        person_runtime_ = gl::game::PersonRuntime::create(persons, pending_hero_stats_);
+        if (!pending_hero_stats_ && !hero_stats_absent_logged_) {
+            hero_stats_absent_logged_ = true;
+            gl::log(gl::LogLevel::info,
+                    "person runtime: Hero stats absent (no save); using zeros");
+        }
+    }
+
     bool load_level(std::string_view name) {
         gl::game::HeroOutfit hero_outfit;
         if (options_.hero_outfit_none) {
@@ -1504,6 +1528,7 @@ class Game {
         pending_talk_.reset();
         pending_talk_tile_.reset();
         update_viewport();
+        rebuild_person_runtime(level_->level().persons);
         return true;
     }
 
@@ -2253,6 +2278,9 @@ class Game {
     std::optional<gl::app::LevelScreen> level_;
     std::optional<gl::assets::HeroEquipment> pending_equipment_;
     std::optional<gl::assets::HeroInventory> pending_inventory_;
+    std::optional<gl::assets::HeroStats> pending_hero_stats_;
+    gl::game::PersonRuntime person_runtime_;
+    bool hero_stats_absent_logged_ = false;
     gl::assets::ItemCatalog item_catalog_;
     std::string level_name_;
     std::string input_;
