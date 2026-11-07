@@ -60,8 +60,8 @@
 
 **Parity matrix & decomp reference (Phase 0) — done 2026-11-05:**
 `docs/research/parity-matrix.md` — 158 строк покрытия (на 2026-11-07:
-`verified` 45, `partial` 63, `unverified` 22, `missing` 15,
-`contradicted` 2, `superseded` 11); `docs/research/decomp-index.md` + локальный корпус
+`verified` 45, `partial` 64, `unverified` 22, `missing` 15,
+`contradicted` 2, `superseded` 10); `docs/research/decomp-index.md` + локальный корпус
 `Server.dll` (1108 функций, SHA-256
 `418E256063748F2E90DB35AE7C6ABE6EAC401FB86908CB5F27EBF565A21CC837`) в
 `.local/decomp/server/`; D-048. Phase 1a (VM parity + native dispatch)

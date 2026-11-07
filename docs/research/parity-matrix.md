@@ -280,8 +280,8 @@ ID: `P4a-*`, `P4b-*`, `P4b2-*` — прежние A/B/C из аудита (пе�
 
 ## Итог
 
-Всего строк: **158**. По статусам: `verified` 45, `partial` 63,
-`unverified` 22, `missing` 15, `contradicted` 2, `superseded` 11.
+Всего строк: **158**. По статусам: `verified` 45, `partial` 64,
+`unverified` 22, `missing` 15, `contradicted` 2, `superseded` 10.
 
 Native dispatch infrastructure (Phase 1a): `NativeRegistry` 65/65 +
 `GameScriptHost`. Phase 1b1 добавляет три person-натива, Phase 1b2a — три
