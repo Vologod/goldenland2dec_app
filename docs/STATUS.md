@@ -1,6 +1,17 @@
 # STATUS
 
 Обновлено: 2026-11-07
+## P4 — RNG parity (D-053 implementation) (in progress 2026-11-07)
+
+- **Задача:** `MsvcRandom::range` — truncation, `coin` — float,
+  production seed — `steady_clock` ms вместо `1` (D-053).
+- **Spec:** `docs/specs/2026-11-07-p4-rng-parity-design.md`.
+- **Plan:** `docs/plans/2026-11-07-p4-rng-parity.md`.
+- **Критерии:** формулы совпадают с research §9.2/§9.3; обновлённые
+  movement/STAY_ROTATE тесты; full `ctest`; D-054/parity/STATUS.
+- **Ограничения:** seed недетерминирован (как `timeGetTime`); RNG-поток
+  не непрерывен между уровнями; NPC-лут specials — вне scope.
+
 ## Phase 1b2b2a — NPC `.inv` loot generation research (done 2026-11-07)
 
 - **Задача:** доказать/опровергнуть точное воспроизведение стартового
