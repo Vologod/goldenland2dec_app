@@ -133,9 +133,12 @@ document why.
 
 - [ ] **Step 2: D-054**
 
-Record: truncation/float coin implemented; production seed = steady_clock
-ms; remaining limitations: original `timeGetTime` non-deterministic,
-RNG stream not continuous across levels, NPC loot specials still blocked.
+D-054 was opened in Task 2 for the port-side anti-livelock guard
+(occupancy-abort resample + backoff; **not parity**). Extend that same entry:
+truncation/float coin implemented; production seed = steady_clock ms; remaining
+limitations: original `timeGetTime` non-deterministic, RNG stream not continuous
+across levels, NPC loot specials still blocked; keep the anti-livelock guard
+explicitly marked as a port robustness deviation.
 
 - [ ] **Step 3: parity-matrix**
 

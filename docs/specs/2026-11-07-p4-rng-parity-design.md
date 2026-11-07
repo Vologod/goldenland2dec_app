@@ -63,6 +63,11 @@ coin(p):
   порте `LevelSimulation` создаётся заново и получает новый seed.
   Непрерывность потока между уровнями не реализуется в этой задаче.
 - NPC-лут specials/`DAT_14088df4`, Transfer/Trade — вне scope.
+- Port-side anti-livelock guard (Task 2, D-054): occupancy-abort движущегося
+  `RANDOM`/`RANDOM_RADIUS` сбрасывает цель, ставит паузу ≥500 мс и делает
+  дополнительный `range()` draw. Это защита порта, **не паритет**: поведение
+  occupancy-abort в `Server.dll` не извлечено; D-032/D-034 этот случай не
+  покрывают. Запись расширяется RNG seed/stream ограничениями в Task 4.
 
 ## 4. Non-goals
 
