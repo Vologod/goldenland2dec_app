@@ -8,6 +8,7 @@
 #include <gl/assets/log.hpp>
 #include <gl/assets/pad.hpp>
 #include <gl/game/mask_selection.hpp>
+#include <gl/game/msvc_random.hpp>
 #include <gl/game/person_movement.hpp>
 #include <gl/render/animation.hpp>
 
@@ -446,7 +447,8 @@ Result<LevelScreen> LevelScreen::load(SDL_Renderer* renderer, gl::assets::GameVf
                                              instance_index, animation_index, go_animation});
         }
 
-        screen.simulation_ = gl::game::LevelSimulation::create(screen.level_, 1);
+        screen.simulation_ = gl::game::LevelSimulation::create(
+            screen.level_, gl::game::MsvcRandom::production_seed());
     }
 
     if (!screen.persons_.empty()) {
