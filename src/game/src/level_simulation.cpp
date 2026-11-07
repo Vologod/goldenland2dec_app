@@ -199,6 +199,8 @@ void LevelSimulation::advance(double dt_seconds) {
                         if (state.route_type == RouteType::random ||
                             state.route_type == RouteType::random_radius) {
                             state.has_goal = false;
+                            m.path.clear();
+                            m.path_index = 0;
                             pause(state, std::max(kMinBackoffMs,
                                                   rng_.range(state.delay_min, state.delay_max)));
                         }
