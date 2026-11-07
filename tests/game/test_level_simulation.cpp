@@ -88,7 +88,9 @@ TEST_CASE("initial planning rolls delay before selecting a RANDOM target") {
     REQUIRE(delay == 1);
     const std::int32_t offset_x = rng.range(-3, 3);
     const std::int32_t offset_y = rng.range(-3, 3);
-    CHECK(offset_x == 1);
+    // Truncating range (Server.dll FUN_140061e4): seed 1, rand values 18467/6334 ->
+    // -3 + trunc(6.99999 * rand / 32767) = 0 and -2.
+    CHECK(offset_x == 0);
     CHECK(offset_y == -2);
 
     const auto tile = [](float value, float size) {
@@ -658,7 +660,10 @@ TEST_CASE("failed RANDOM plan resamples on the next attempt") {
     person.go_delay_ms = 100;
     level.persons.push_back(person);
 
-    constexpr std::uint64_t seed = 5;
+    // With truncating range() the first accepted sample for seed 5 is the reachable (0,16),
+    // so the initial plan no longer fails. Seed 11 is the smallest seed whose first accepted
+    // sample is in the unreachable x>=14 region, preserving this failed-then-resample case.
+    constexpr std::uint64_t seed = 11;
     auto sim = LevelSimulation::create(level, seed);
     const auto &failed = sim.persons()[0];
     REQUIRE(failed.waiting);

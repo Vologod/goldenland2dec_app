@@ -222,10 +222,11 @@ TEST_CASE("real data: l1_1 60 s simulation is bounded and deterministic" *
         if (!at_spawn)
             ++displaced;
     }
-    // STAY delay gates now consume the shared MSVC rand stream, which changes the mover
-    // draw sequence relative to P4b: 2 moving + 4 waiting out of 6 route movers at t=60 s.
-    CHECK(moving == 2);
-    CHECK(waiting == 4);
+    // STAY delay gates consume the shared MSVC rand stream; with truncating range()
+    // (Server.dll FUN_140061e4) the seed-1 stream yields 3 moving + 3 waiting out of
+    // 6 route movers at t=60 s.
+    CHECK(moving == 3);
+    CHECK(waiting == 3);
     CHECK(moving + waiting == route_movers);
     CHECK(displaced >= 1);
 }
