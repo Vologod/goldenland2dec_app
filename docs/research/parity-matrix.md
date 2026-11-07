@@ -1,10 +1,12 @@
 # Parity matrix
 
-Обновлено: 2026-11-06. Исходно (2026-11-05) — read-only аудит существующего
+Обновлено: 2026-11-07. Исходно (2026-11-05) — read-only аудит существующего
 состояния; Phase 1a добавила evidence VM-паритета и native dispatch (код
 порта менялся, см. D-049); Phase 1b1 добавила evidence person-параметров
 и Hero stat-блока (D-050); Phase 1b2a добавила inventory-запросы Hero
-(D-051); Phase 1b2b1 добавила мутации Hero inventory (D-052).
+(D-051); Phase 1b2b1 добавила мутации Hero inventory (D-052); Phase 1b2b2a
+(NPC `.inv` loot research, docs-only) переоткрыла RNG-строки под D-053
+(D-030 superseded).
 
 Матрица — единый источник истины о покрытии паритета. Строка без evidence не
 считается подтверждённой. Источники: `parity-audit-p0-p1.md`,
@@ -168,19 +170,19 @@ ID: `P4a-*`, `P4b-*`, `P4b2-*` — прежние A/B/C из аудита (пе�
 |---|---|---|---|---|---|---|---|
 | P4b-1 | route types | 0..5 mapping | `person_movement.cpp:13-25` | live `FUN_1401f9bc` | partial | неизвестные → stay без warning | audit p4 |
 | P4b-2 | MOVED | index advance | `level_simulation.cpp:250-307` | live + A2/D-031 | superseded | закрыто A2 | audit p4; D-031 |
-| P4b-3 | MOVED_FLIP | ±1 coin | `level_simulation.cpp:301-405` | live + A1/A2 | superseded | закрыто A1/A2 | audit p4; D-030/D-031 |
+| P4b-3 | MOVED_FLIP | ±1 coin | `level_simulation.cpp:301-405` | live + A1/A2; D-053 supersedes D-030 | partial | переоткрыто D-053: coin float/seed parity pending; A2 закрыт | audit p4; D-031; D-053 |
 | P4b-4 | RANDOM_RADIUS | вокруг spawn | `level_simulation.cpp:256-289` | live `FUN_1401c2a0`; A3/D-032 | superseded | закрыто A3 | audit p4; D-032 |
 | P4b-5 | RANDOM | вокруг текущей | `level_simulation.cpp:256-289` | live; A3/D-032 | superseded | закрыто A3; C12 остаётся | audit p4; D-032 |
 | P4b-6 | STAY | возврат к spawn | `level_simulation.cpp:260-316` | A4/D-035 | superseded | закрыто A4 | audit p4; D-035 |
-| P4b-7 | STAY_ROTATE | поворот на месте | `level_simulation.cpp:278-305` | A4/D-035 | superseded | длительность `SET_DIRECTION` = 500 мс порт | audit p4; D-035 |
+| P4b-7 | STAY_ROTATE | поворот на месте | `level_simulation.cpp:278-305` | A4/D-035; RNG per D-053 | partial | длительность `SET_DIRECTION` = 500 мс порт; `rand(10,25)` truncation/seed per D-053 | audit p4; D-035; D-053 |
 | P4b-8 | delay | `<500` без паузы | `level_simulation.cpp:129-164` | live `FUN_1401c378` | partial | fallback 500 мс — порт | audit p4 |
-| P4b-9 | delay | `rand(min..max)` | `level_simulation.cpp:53-56` | live `FUN_140061e4` | partial | inclusive/exclusive не пинится | audit p4 |
+| P4b-9 | delay | `rand(min..max)` | `level_simulation.cpp:53-56` | live `FUN_140061e4`; D-053 (truncation, inclusive) | partial | D-053: port `nearbyint` vs truncation pending | audit p4; D-053 |
 | P4b-10 | speed | `iso_speed*1000/(go*0.8)` | `level_simulation.cpp:180-182` | live; A5/D-033 | verified | 35 Гц интеграция | audit p4 |
 | P4b-11 | speed | изо-формула | `person_movement.cpp:88-94` | live | verified | — | audit p4 |
 | P4b-12 | arrival | `<4 px`, snap | `level_simulation.cpp:183-200` | live-замер | partial | extra `distance<=step` | audit p4 |
 | P4b-13 | direction | 16-way thresholds | `person_movement.cpp:7-75` | live `FUN_1402085c` | verified | нормализация 10..25 | audit p4 |
 | P4b-14 | direction | 16↔8 maps | `person_movement.cpp:77-86` | live | verified | — | audit p4 |
-| P4b-15 | RNG | CRT `rand` | `MsvcRandom`; A1/D-030 | live `_rand` | superseded | закрыто A1 | audit p4; D-030 |
+| P4b-15 | RNG | CRT `rand` | `MsvcRandom` | live `_rand`; D-053 supersedes D-030 | partial | D-053: seed/clock + truncation + float `coin`; port uses `nearbyint` | audit p4; D-053 |
 | P4b-16 | tick | 60 Гц vs 35 Гц | `level_simulation.cpp:16,143-150` | live `sv_fps=35` | verified (const) | интеграция 1/60 — порт | audit p4; A5 |
 | P4b-17 | init | начальная цель/пауза | `level_simulation.cpp:113-140` | только порт | unverified | spawn-поза/тайминг | audit p4 |
 | P4b-18 | fail | replan каждый тик | `level_simulation.cpp:194-342` | только порт | unverified | число retry/сдвиг цели | audit p4 |
@@ -278,8 +280,8 @@ ID: `P4a-*`, `P4b-*`, `P4b2-*` — прежние A/B/C из аудита (пе�
 
 ## Итог
 
-Всего строк: **158**. По статусам: `verified` 45, `partial` 61,
-`unverified` 22, `missing` 15, `contradicted` 2, `superseded` 13.
+Всего строк: **158**. По статусам: `verified` 45, `partial` 63,
+`unverified` 22, `missing` 15, `contradicted` 2, `superseded` 11.
 
 Native dispatch infrastructure (Phase 1a): `NativeRegistry` 65/65 +
 `GameScriptHost`. Phase 1b1 добавляет три person-натива, Phase 1b2a — три

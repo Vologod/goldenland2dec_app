@@ -2,6 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+> **Completion note (2026-11-07):** Tasks 1–2 + verdict выполнены
+> (research + docs-only handoff); все шаги отмечены `[x]` как журнал
+> исполнения. Итоговый вердикт и блокеры — в
+> `docs/research/p3b2b2-npc-loot-server.md` §13.
+
 **Goal:** Доказать или опровергнуть возможность точного воспроизведения NPC-лута из `.inv`; production-код не меняется.
 
 **Architecture:** Research-only: разбор `FUN_14047784` (парсер), `FUN_140489ec` (генератор), RNG и точки вызова; итоговый verdict и handoff.
@@ -24,19 +29,19 @@
 **Files:**
 - Create: `docs/research/p3b2b2-npc-loot-server.md`
 
-- [ ] **Step 1: Grammar**
+- [x] **Step 1: Grammar**
 
 Read `FUN_14047784` (`decompiled.c:48581`) and record the exact `.inv`
 grammar, header fields/defaults, `item` line fields, `special`, comments,
 and the in-memory layout (`+0x38/+0x40/+0x44/+0x48/+0x50/+0x54`).
 
-- [ ] **Step 2: Real files**
+- [x] **Step 2: Real files**
 
 Read representative real `.inv` (`scripts/inventory/inv001_swordsman.inv`,
 `scripts/inventory/boxes/*.inv`, `scripts/inventory/hero_items.inv`) and
 check the grammar covers all observed lines.
 
-- [ ] **Step 3: Verify and commit**
+- [x] **Step 3: Verify and commit**
 
 UTF-8 no BOM/nul=0. Commit `docs(research): record .inv loot format`.
 
@@ -47,37 +52,37 @@ UTF-8 no BOM/nul=0. Commit `docs(research): record .inv loot format`.
 **Files:**
 - Modify: `docs/research/p3b2b2-npc-loot-server.md`
 
-- [ ] **Step 1: Generator**
+- [x] **Step 1: Generator**
 
 Read `FUN_140489ec` (`decompiled.c:49416`) and write pseudocode: entry
 selection, player level/`level_offset`, `regenerate_chance`,
 `chance_decrease`, `quantity_decrease`, quantity roll, item creation,
 stacking/insertion order, money.
 
-- [ ] **Step 2: RNG list**
+- [x] **Step 2: RNG list**
 
 List every RNG call in order (`FUN_14006288`, `FUN_140061e4`, `rand`),
 with argument/parameter and whether it is conditional. Identify the RNG
 source/seed and whether it is the shared MSVC stream.
 
-- [ ] **Step 3: Timing/callers**
+- [x] **Step 3: Timing/callers**
 
 Trace callers of `FUN_1404805c`/`FUN_140489ec`/`FUN_14047784` to determine
 when loot is generated (level load, spawn, lazy), and what level/input is
 used. Record RVA/file:line.
 
-- [ ] **Step 4: Container records**
+- [x] **Step 4: Container records**
 
 Record insertion order, item record fields (type/flags/style/max_stack),
 stacking, and money.
 
-- [ ] **Step 5: Verdict**
+- [x] **Step 5: Verdict**
 
 State `implementable` or `blocked`, with exact missing evidence. If
 `implementable`, list inputs/state needed and a verification plan (live
 oracle/differential). If `blocked`, list options.
 
-- [ ] **Step 6: Verify and commit**
+- [x] **Step 6: Verify and commit**
 
 Commit `docs(research): record NPC loot generation`.
 
@@ -90,14 +95,14 @@ Commit `docs(research): record NPC loot generation`.
 - Modify: `docs/PROJECT.md` (if verdict changes P3/P5 status)
 - Modify: `docs/DECISIONS.md` (if a parity decision is needed)
 
-- [ ] **Step 1: Update docs**
+- [x] **Step 1: Update docs**
 
 Record the verdict, what is proven/unproven, and the next action
 (implementation spec for 1b2b2b, live-oracle task, or keep NPC loot
 unsupported). If blocked, add Open Questions with exact missing facts.
 
-- [ ] **Step 2: Encoding check**
+- [x] **Step 2: Encoding check**
 
 `bom=False nul=False` for changed docs.
 
-- [ ] **Step 3: Commit** `docs: record 1b2b2a NPC loot research verdict`.
+- [x] **Step 3: Commit** `docs: record 1b2b2a NPC loot research verdict`.
