@@ -16,11 +16,10 @@
   - Task 1 research закоммичен `6c035dd`: `.inv` grammar, layout
     `FUN_14047784`, проверка 238 файлов (11 543 five-number item,
     362 four-number skipped), `special` reset, unverified items.
-  - Ревью Task 1: **не завершено** — 1 Important в research doc:
-    утверждение об эквивалентности `5//comment` и `5 //comment` неверно
-    (attached `//` не завершает токен; в реальных данных таких нет, 586
-    комментариев whitespace-separated) + 4 minor citation fixes.
-  - Task 2 (генератор/RNG/timing) и Task 3 (verdict) не начаты.
+  - Task 1: **done** (`37c7d7d`), ревью закрыто — grammar, layout,
+    comment-lexer claim, rewinds, `+0x58` citation, `_DAT_14091e30`/
+    `_DAT_14091e44`, int grammar исправлены.
+  - Task 2 (генератор/RNG/timing) — сейчас; Task 3 (verdict) — после.
   - SDD ledger (gitignored):
     `.superpowers/sdd/2026-11-07-p3b2b2a-npc-loot-research/progress.md`.
   - Локальные коммиты `426d25b` (spec/plan) и `6c035dd` (research), **не
