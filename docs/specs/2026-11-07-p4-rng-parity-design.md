@@ -53,7 +53,15 @@ coin(p):
 
 - `LevelScreen` создаёт `LevelSimulation::create(level,
   MsvcRandom::production_seed())` вместо `1`.
-- Тесты продолжают передавать явный seed для детерминизма.
+- `LevelScreen::load(..., std::optional<std::uint64_t> rng_seed = std::nullopt)`
+  использует `rng_seed.value_or(MsvcRandom::production_seed())`; без явного
+  seed поведение остаётся clock-based (production default).
+- `glgame`/`glview` получают `--seed <n>` и передают его в
+  `LevelScreen::load`. Это тестовый hook для детерминизма между отдельными
+  процессами; production запуск без `--seed` по-прежнему использует clock.
+- Тесты продолжают передавать явный seed для детерминизма (unit
+  `LevelSimulation::create(level, seed)`; app screenshot harnesses —
+  `--seed 1`).
 
 ### 3.3 Ограничения (фиксируются в D-054)
 

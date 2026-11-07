@@ -337,7 +337,8 @@ TEST_CASE("level screen reapplies hero outfit without reloading" *
     REQUIRE(canvas.renderer != nullptr);
 
     {
-        auto loaded = gl::app::LevelScreen::load(canvas.renderer, vfs.value(), "l1_1");
+        auto loaded = gl::app::LevelScreen::load(canvas.renderer, vfs.value(), "l1_1", true,
+                                                 nullptr, 1);
         REQUIRE(loaded.has_value());
         gl::app::LevelScreen screen = std::move(loaded.value());
 

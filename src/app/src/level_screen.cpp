@@ -199,7 +199,8 @@ float LevelScreen::world_height() const { return static_cast<float>(level_.heigh
 
 Result<LevelScreen> LevelScreen::load(SDL_Renderer* renderer, gl::assets::GameVfs& vfs,
                                       std::string_view level_name, bool load_persons,
-                                      const gl::game::HeroOutfit* hero_outfit) {
+                                      const gl::game::HeroOutfit* hero_outfit,
+                                      std::optional<std::uint64_t> rng_seed) {
     auto level = gl::game::load_level(vfs, level_name);
     if (!level) {
         return Error{level.error().code, "cannot load level: " + level.error().message};
@@ -448,7 +449,7 @@ Result<LevelScreen> LevelScreen::load(SDL_Renderer* renderer, gl::assets::GameVf
         }
 
         screen.simulation_ = gl::game::LevelSimulation::create(
-            screen.level_, gl::game::MsvcRandom::production_seed());
+            screen.level_, rng_seed.value_or(gl::game::MsvcRandom::production_seed()));
     }
 
     if (!screen.persons_.empty()) {

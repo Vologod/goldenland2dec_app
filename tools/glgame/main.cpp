@@ -104,6 +104,7 @@ struct Options {
     std::optional<int> camera_y;
     bool walkable_overlay = false;
     std::uint64_t sim_ms = 0;
+    std::optional<std::uint64_t> seed;
     std::string dialog;
     bool has_dialog = false;
     int click_npc = 0;
@@ -139,6 +140,7 @@ void print_usage() {
         "  --camera-y <px>      World Y of the top viewport edge (screenshot mode)\n"
         "  --walkable-overlay   Draw blocked tiles in red on the level\n"
         "  --sim-ms <ms>        Simulation time for screenshots (ignored interactively)\n"
+        "  --seed <n>           Deterministic RNG seed (default: clock-based)\n"
         "  --click-npc <index>  Headless test: click the person instance by index\n"
         "  --click-world <x> <y> Headless test: click the walk tile at x y\n"
         "  --list-saves         Print save slots as tab-separated lines and exit\n"
@@ -177,6 +179,16 @@ bool parse_milliseconds(std::string_view text, std::uint64_t& value) {
     const char* const end = text.data() + text.size();
     const auto [ptr, error] = std::from_chars(text.data(), end, parsed);
     if (error != std::errc{} || ptr != end || parsed > kMaxSimMs) return false;
+    value = parsed;
+    return true;
+}
+
+bool parse_seed(std::string_view text, std::uint64_t& value) {
+    if (text.empty()) return false;
+    std::uint64_t parsed = 0;
+    const char* const end = text.data() + text.size();
+    const auto [ptr, error] = std::from_chars(text.data(), end, parsed);
+    if (error != std::errc{} || ptr != end) return false;
     value = parsed;
     return true;
 }
@@ -336,6 +348,15 @@ ParseStatus parse_args(int argc, char** argv, Options& options) {
                              static_cast<int>(value.size()), value.data());
                 return ParseStatus::error;
             }
+        } else if (arg == "--seed") {
+            if (!next_value(arg, value)) return ParseStatus::error;
+            std::uint64_t seed = 0;
+            if (!parse_seed(value, seed)) {
+                std::fprintf(stderr, "glgame: invalid --seed: %.*s\n",
+                             static_cast<int>(value.size()), value.data());
+                return ParseStatus::error;
+            }
+            options.seed = seed;
         } else if (arg == "--click-npc") {
             if (!next_value(arg, value)) return ParseStatus::error;
             if (!parse_int(value, options.click_npc) || options.click_npc < 0) {
@@ -1558,7 +1579,8 @@ class Game {
             }
         }
         auto screen = gl::app::LevelScreen::load(window_.renderer(), vfs_, name,
-                                                 !options_.no_persons, &hero_outfit);
+                                                 !options_.no_persons, &hero_outfit,
+                                                 options_.seed);
         if (!screen) {
             gl::log(gl::LogLevel::error, screen.error().message);
             console_print("cannot load level: " + screen.error().message);

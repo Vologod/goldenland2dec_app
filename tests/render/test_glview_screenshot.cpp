@@ -79,9 +79,12 @@ void use_dummy_video() {
 
 std::vector<std::string> glview_arguments(const fs::path& game_dir, const fs::path& png,
                                           const std::vector<std::string>& extra = {}) {
-    std::vector<std::string> arguments = {"--game-dir", game_dir.string(), "--level", "l1_1",
-                                          "--screenshot", png.string(), "--width", "1280",
-                                          "--height", "720"};
+    std::vector<std::string> arguments = {"--game-dir", game_dir.string(),
+                                          "--level", "l1_1",
+                                          "--screenshot", png.string(),
+                                          "--width", "1280",
+                                          "--height", "720",
+                                          "--seed", "1"};
     arguments.insert(arguments.end(), extra.begin(), extra.end());
     return arguments;
 }

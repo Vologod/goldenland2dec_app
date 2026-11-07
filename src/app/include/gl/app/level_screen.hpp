@@ -87,7 +87,8 @@ class LevelScreen {
 public:
     static Result<LevelScreen> load(SDL_Renderer* renderer, gl::assets::GameVfs& vfs,
                                     std::string_view level_name, bool load_persons = true,
-                                    const gl::game::HeroOutfit* hero_outfit = nullptr);
+                                    const gl::game::HeroOutfit* hero_outfit = nullptr,
+                                    std::optional<std::uint64_t> rng_seed = std::nullopt);
 
     LevelScreen(LevelScreen&& other) noexcept;
 

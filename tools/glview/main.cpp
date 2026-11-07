@@ -40,6 +40,7 @@ struct Options {
     gl::game::HeroOutfit hero_outfit;
     std::uint64_t sim_ms = 0;
     bool sim_ms_set = false;
+    std::optional<std::uint64_t> seed;
     std::optional<int> camera_x;
     std::optional<int> camera_y;
     struct PlacePerson {
@@ -73,6 +74,7 @@ void print_usage() {
               "  --hero-weapon <dir> Weapon layer dir (default: none)\n"
               "  --hero-outfit none Disable equipment layers\n"
               "  --sim-ms <ms>      Simulation time for screenshots (ignored interactively)\n"
+              "  --seed <n>         Deterministic RNG seed (default: clock-based)\n"
               "  --camera-x <px>    World X of the left viewport edge (screenshot mode)\n"
               "  --camera-y <px>    World Y of the top viewport edge (screenshot mode)\n"
               "  --place-person <index> <tile_x> <tile_y>\n"
@@ -116,6 +118,16 @@ bool parse_milliseconds(std::string_view text, std::uint64_t& value) {
     const char* const end = text.data() + text.size();
     const auto [ptr, error] = std::from_chars(text.data(), end, parsed);
     if (error != std::errc{} || ptr != end || parsed > kMaxSimMs) return false;
+    value = parsed;
+    return true;
+}
+
+bool parse_seed(std::string_view text, std::uint64_t& value) {
+    if (text.empty()) return false;
+    std::uint64_t parsed = 0;
+    const char* const end = text.data() + text.size();
+    const auto [ptr, error] = std::from_chars(text.data(), end, parsed);
+    if (error != std::errc{} || ptr != end) return false;
     value = parsed;
     return true;
 }
@@ -233,6 +245,15 @@ ParseStatus parse_args(int argc, char** argv, Options& options) {
                 return ParseStatus::error;
             }
             options.sim_ms_set = true;
+        } else if (arg == "--seed") {
+            if (!next_value(arg, value)) return ParseStatus::error;
+            std::uint64_t seed = 0;
+            if (!parse_seed(value, seed)) {
+                std::fprintf(stderr, "glview: invalid --seed: %.*s\n",
+                             static_cast<int>(value.size()), value.data());
+                return ParseStatus::error;
+            }
+            options.seed = seed;
         } else if (arg == "--camera-x") {
             if (!next_value(arg, value)) return ParseStatus::error;
             int parsed = 0;
@@ -466,7 +487,7 @@ int main(int argc, char** argv) {
 
         auto screen = gl::app::LevelScreen::load(
             window.renderer(), vfs.value(), options.level, !options.no_persons,
-            options.hero_wear ? &options.hero_outfit : nullptr);
+            options.hero_wear ? &options.hero_outfit : nullptr, options.seed);
         if (!screen) {
             std::fprintf(stderr, "glview: %s\n", screen.error().message.c_str());
             return exit_code_for(screen.error());

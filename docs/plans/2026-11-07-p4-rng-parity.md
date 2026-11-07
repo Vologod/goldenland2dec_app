@@ -109,16 +109,31 @@ document why.
 
 **Files:**
 - Modify: `src/app/src/level_screen.cpp`
+- Modify: `src/app/include/gl/app/level_screen.hpp`
+- Modify: `tools/glgame/main.cpp`
+- Modify: `tools/glview/main.cpp`
+- Modify: `tests/app/test_glgame_screenshot.cpp`
+- Modify: `tests/render/test_glview_screenshot.cpp`
+- Modify: `tests/app/test_level_click.cpp`
 
 - [ ] **Step 1: Replace seed 1**
 
-`LevelSimulation::create(screen.level_, gl::game::MsvcRandom::production_seed())`.
+`LevelScreen::load(..., std::optional<std::uint64_t> rng_seed = std::nullopt)`,
+create with `rng_seed.value_or(MsvcRandom::production_seed())`. Production
+without a seed stays clock-based.
 
-- [ ] **Step 2: Smoke**
+- [ ] **Step 2: Deterministic test hook**
+
+Add `--seed <n>` to `glgame` and `glview`; parse and pass to
+`LevelScreen::load`. Test harnesses that compare screenshots/behavior across
+independent processes pass `--seed 1` (or an explicit seed for direct
+`LevelScreen::load`). `gl_game` tests keep their explicit seeds.
+
+- [ ] **Step 3: Smoke**
 
 `glgame --level l1_1 --click-npc 13 --screenshot` and `glview` smoke exit 0.
 
-- [ ] **Step 3: Commit** `feat(app): seed NPC RNG from clock`.
+- [ ] **Step 4: Commit** `feat(app): seed NPC RNG from clock`.
 
 ---
 

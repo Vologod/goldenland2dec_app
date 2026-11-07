@@ -221,7 +221,7 @@ std::vector<std::string> screenshot_arguments(const fs::path& game_dir, const fs
     std::vector<std::string> arguments = {
         "--game-dir", game_dir.string(), "--config",   config.string(),
         "--screenshot", png.string(),    "--width",    "1280",
-        "--height",   "720"};
+        "--height",   "720",             "--seed",     "1"};
     arguments.insert(arguments.end(), extra.begin(), extra.end());
     return arguments;
 }
