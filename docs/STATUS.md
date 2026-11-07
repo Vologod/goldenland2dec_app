@@ -1,16 +1,40 @@
 # STATUS
 
-Обновлено: 2026-11-07
-## P4 — RNG parity (D-053 implementation) (in progress 2026-11-07)
+Обновлено: 2026-11-08
+## P4 — RNG parity (D-053 implementation) (done 2026-11-08)
 
 - **Задача:** `MsvcRandom::range` — truncation, `coin` — float,
   production seed — `steady_clock` ms вместо `1` (D-053).
 - **Spec:** `docs/specs/2026-11-07-p4-rng-parity-design.md`.
 - **Plan:** `docs/plans/2026-11-07-p4-rng-parity.md`.
-- **Критерии:** формулы совпадают с research §9.2/§9.3; обновлённые
-  movement/STAY_ROTATE тесты; full `ctest`; D-054/parity/STATUS.
-- **Ограничения:** seed недетерминирован (как `timeGetTime`); RNG-поток
-  не непрерывен между уровнями; NPC-лут specials — вне scope.
+- **Сделано (Tasks 1–4):**
+  - `range(lo,hi)` = `lo + trunc(((hi-lo)+0.99999)*next()/32767)`;
+    `coin(p)` — float (`(float)next()/32767.0f < p`); `next()`/`fraction()`
+    без изменений.
+  - `MsvcRandom::production_seed()` = `steady_clock` ms; `LevelScreen::load`
+    использует его по умолчанию; `glgame`/`glview` — `--seed <n>`; тесты
+    пинят `--seed 1`; movement/`STAY_ROTATE` ожидания пересчитаны.
+  - Anti-livelock guard — port-side robustness (D-054), не паритет.
+  - D-054 расширен RNG-паритетом и ограничениями; parity-matrix RNG-строки
+    обновлены (`P4b-3`/`P4b-9`/`P4b-15` verified, `P4b-7` partial — 500 мс
+    `SET_DIRECTION`).
+- **Проверено (2026-11-08, `GL_GAME_DIR=I:\Games\Златогорье-2`):**
+  - build: `cmake --build build` → exit 0.
+  - targeted: `ctest -R "gl_script_tests|gl_script_real_tests|gl_game_tests|gl_assets_tests|gl_assets_real_tests|glgame_screenshot_tests|glview_screenshot_tests|level_click_tests"` → `100% tests passed out of 8`, `Total Test time (real) = 1152.24 sec`, exit 0.
+  - full: `ctest --test-dir build --output-on-failure` → `100% tests passed out of 18`, `Total Test time (real) = 1241.95 sec`, exit 0.
+  - doctest-счётчики (прогон Task 3/4): `gl_game_tests` 185/185
+    (558 021 assertions), `glgame_screenshot_tests` 26/26 (721),
+    `glview_screenshot_tests` 11/11, `level_click_tests` 23/23; полный
+    `ctest` 2026-11-08 их подтвердил.
+- **Ограничения:** оригинальный `timeGetTime` недетерминирован; порт —
+  `steady_clock` ms (не тот же источник); RNG-поток не непрерывен между
+  уровнями (глобальный поток оригинала vs `MsvcRandom` на `LevelSimulation`);
+  anti-livelock guard добавляет `range()` draw (port-side); NPC-loot
+  specials/`DAT_14088df4` blocked.
+- **Следующее:** Phase 1b2b2b (NPC `.inv` лут) после закрытия/явного scope
+  specials, `BT_RGINF`, `+0x26c4`, stacking и live-оракула; либо
+  Transfer/Trade/`PassToTradePanel`.
+- **Коммит:** `docs: record RNG parity fix` (docs-only).
 
 ## Phase 1b2b2a — NPC `.inv` loot generation research (done 2026-11-07)
 
