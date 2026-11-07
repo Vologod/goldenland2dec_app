@@ -196,6 +196,12 @@ void LevelSimulation::advance(double dt_seconds) {
                     const Tile next = tile_at(next_x, next_y);
                     if (next != current && tile_occupied(index, next)) {
                         m.moving = false;
+                        if (state.route_type == RouteType::random ||
+                            state.route_type == RouteType::random_radius) {
+                            state.has_goal = false;
+                            pause(state, std::max(kMinBackoffMs,
+                                                  rng_.range(state.delay_min, state.delay_max)));
+                        }
                     } else if (arrives) {
                         m.x = m.target_x;
                         m.y = m.target_y;
