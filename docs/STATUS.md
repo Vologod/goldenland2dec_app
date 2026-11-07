@@ -1,41 +1,65 @@
 # STATUS
 
 Обновлено: 2026-11-07
-## Phase 1b2b2a — NPC `.inv` loot generation research (in progress 2026-11-07)
+## Phase 1b2b2a — NPC `.inv` loot generation research (done 2026-11-07)
 
 - **Задача:** доказать/опровергнуть точное воспроизведение стартового
   NPC-инвентаря из `scripts/inventory/*.inv` по `Server.dll`
   (`FUN_14047784` парсер, `FUN_140489ec` генератор, RNG `FUN_14006288`).
-  Research-only, production-код не меняется.
+  Research-only, production-код не менялся.
 - **Spec:** `docs/specs/2026-11-07-p3b2b2a-npc-loot-research-design.md`.
 - **Plan:** `docs/plans/2026-11-07-p3b2b2a-npc-loot-research.md`.
-- **Критерии:** формат, псевдокод, полный RNG-список, точка/момент
-  генерации, verdict `implementable`/`blocked` с недостающими фактами;
-  `STATUS`/`PROJECT` обновлены.
-- **Состояние (2026-11-07, сессия остановлена 02:14):**
-  - Task 1 research закоммичен `6c035dd`: `.inv` grammar, layout
-    `FUN_14047784`, проверка 238 файлов (11 543 five-number item,
-    362 four-number skipped), `special` reset, unverified items.
-  - Task 1: **done** (`37c7d7d`), ревью закрыто — grammar, layout,
-    comment-lexer claim, rewinds, `+0x58` citation, `_DAT_14091e30`/
-    `_DAT_14091e44`, int grammar исправлены.
-  - Task 2 (генератор/RNG/timing) — сейчас; Task 3 (verdict) — после.
-  - Task 2 research: `docs/research/p3b2b2-npc-loot-server.md` §8–14
-    (коммит `df9a69d`); fix round 1 закрывает замечания ревью.
-  - **D-030 conflict follow-up (RNG parity):** D-030
-    (`docs/DECISIONS.md:37`) утверждает «нет `srand`, seed 1,
-    round-to-nearest»; Task 2 доказал `srand(timeGetTime())`
-    (`decompiled.c:34129`) и truncation (`fistp`, RC=`0xC00`). Это
-    общий RNG движения/`STAY_ROTATE` (`FUN_1401c2a0`,
-    `decompiled.c:20410-20411`) и лута (`:49538`). Нужно пересмотреть
-    D-030 (seed + truncation) и исправить `MsvcRandom::range`;
-    затрагивает движение/`STAY_ROTATE` и лут, не только NPC loot.
-  - SDD ledger (gitignored):
-    `.superpowers/sdd/2026-11-07-p3b2b2a-npc-loot-research/progress.md`.
-  - Локальные коммиты `426d25b` (spec/plan) и `6c035dd` (research), **не
-    запушены**.
-- **Следующее:** применить fix Task 1 (comment equivalence + citations),
-  scoped re-review, затем Task 2 (RNG/генератор) → verdict.
+- **Research:** `docs/research/p3b2b2-npc-loot-server.md` (§1–14).
+- **Вердикт:** `blocked` для полного паритета; ядро генерации
+  `implementable` после RNG-фикса (D-053). Полный паритет дополнительно
+  блокирует random-special ветка `FUN_14047284`/`DAT_14088df4`;
+  live-оракул не снимался.
+- **Доказано:**
+  - Парсер `FUN_14047784`: токенная грамматика и `//`-комментарии,
+    4 независимых прохода (header-ключи, первое валидное вхождение),
+    `special` после parse безусловно сбрасывается в identity `[0..57]`.
+    Реальные данные: 238/238 `.inv`, 11 543 five-number `item`,
+    362 four-number `item` отбрасываются кодом (10 файлов),
+    `boxes/iron.inv` — 0 записей.
+  - Генератор `FUN_140489ec`: записи перебираются в порядке файла
+    (выбора случайной записи нет), окно
+    `n1+level_offset <= level <= n2+level_offset`, chance/quantity,
+    chunking `min(qty, max_stack)`, порядок чанков, ранний выход при
+    `>= 4` стеках; деньги не генерируются;
+    `chance_decrease`/`quantity_decrease` используются только
+    restock-функциями (§10.2), не первичной генерацией.
+  - RNG: `_rand` — MSVC LCG `0x343FD/0x269EC3`,
+    `(state>>16)&0x7FFF`; seed — `FUN_1406c092(timeGetTime())`
+    (`decompiled.c:34129`); `FUN_14006288` — coin; `FUN_140061e4` —
+    truncation (`fistp`, RC=`0xC00`); полный упорядоченный список
+    вызовов R1–R10 (§9.4).
+  - Тайминг: первичная генерация — в конструкторах/спавне
+    (`FUN_14018990`/`FUN_140233d4`/`FUN_14023aa0`), не лениво при
+    открытии инвентаря; gate `BT_RGINF` (`+0x26c0`).
+- **Не доказано / блокеры:**
+  - random-special `FUN_14047284`/`DAT_14088df4`: поля записей specials,
+    allow-list типов предметов и порядок доп. роллов (R6–R10) не
+    восстановлены — полный паритет `blocked`;
+  - live-оракул: память запущенной игры и seed не снимались; нужна
+    сверка контейнеров 0/N;
+  - `MsvcRandom::range` в порте — `std::nearbyint`, оригинал —
+    truncation; `coin` считает в `double`, оригинал — во `float`
+    (D-053).
+- **D-053:** RNG-паритет — seed/clock (`timeGetTime`) + truncation;
+  затрагивает движение (`FUN_1401c2a0`), `STAY_ROTATE` и лут, не только
+  NPC loot. Реализация `MsvcRandom` — отдельная задача; до неё это
+  документированное отклонение паритета.
+- **Следующее:**
+  1. RNG-паритет по D-053: `MsvcRandom` seed/time + truncation +
+  float-арифметика `coin`; аудит движения/`STAY_ROTATE`/лута.
+  2. (опционально) live-оракул specials: снять контейнеры при известном
+  seed, восстановить `DAT_14088df4`.
+  3. Phase 1b2b2b (реализация NPC `.inv` лута) — только после (1).
+- **Коммиты:** `426d25b..674aa25` (spec/plan + Task 1/2 research +
+  fixes) и этот docs-коммит. Всё docs-only; production-код не менялся;
+  **не запушено**.
+- **Проверка:** `DECISIONS.md`/`STATUS.md`/`PROJECT.md` — UTF-8 без BOM,
+  `nul=0`, без escape-артефактов переноса в новых секциях.
 
 ## Phase 1b2b1 — Hero inventory mutations (done 2026-11-06)
 
