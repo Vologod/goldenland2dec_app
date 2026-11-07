@@ -661,8 +661,9 @@ TEST_CASE("failed RANDOM plan resamples on the next attempt") {
     level.persons.push_back(person);
 
     // With truncating range() the first accepted sample for seed 5 is the reachable (0,16),
-    // so the initial plan no longer fails. Seed 11 is the smallest seed whose first accepted
-    // sample is in the unreachable x>=14 region, preserving this failed-then-resample case.
+    // so the initial plan no longer fails. Seed 11 is the smallest seed where the first
+    // accepted sample is unreachable and the next accepted sample is reachable (seeds 2, 6
+    // and 8 also start unreachable, but their retry is still unreachable).
     constexpr std::uint64_t seed = 11;
     auto sim = LevelSimulation::create(level, seed);
     const auto &failed = sim.persons()[0];
@@ -678,6 +679,90 @@ TEST_CASE("failed RANDOM plan resamples on the next attempt") {
     CHECK(sim.time_ms() >= wait_ms);
     CHECK(p.moving);
     REQUIRE(p.path.size() >= 2);
+    CHECK(level.walkable.is_walkable(p.path.back().x, p.path.back().y));
+}
+
+TEST_CASE("occupancy abort clears a RANDOM goal and backs off before resampling") {
+    Level level;
+    level.name = "occupancy_abort";
+    level.width = 30 * 12;
+    level.height = 30 * 9;
+    level.walkable.width = 30;
+    level.walkable.height = 30;
+    level.walkable.walkable.assign(30 * 30, 1);
+
+    PersonInstance mover;
+    mover.name = "mover";
+    mover.tile_x = 5;
+    mover.tile_y = 5;
+    mover.route_type = "RANDOM_RADIUS";
+    mover.radius = 1;
+    mover.delay_min = 0;
+    mover.delay_max = 100;
+    mover.go_type = gl::assets::PadAnimationType::rt_go;
+    mover.go_move_x = 6.0f;
+    mover.go_move_y = 5.0f;
+    mover.go_delay_ms = 100;
+    level.persons.push_back(mover);
+
+    PersonInstance blocker;
+    blocker.name = "blocker";
+    blocker.tile_x = 6;
+    blocker.tile_y = 5;
+    blocker.route_type = "STAY";
+    blocker.delay_min = 0;
+    blocker.delay_max = 0;
+    blocker.go_type = gl::assets::PadAnimationType::rt_go;
+    blocker.go_move_x = 6.0f;
+    blocker.go_move_y = 5.0f;
+    blocker.go_delay_ms = 100;
+    level.persons.push_back(blocker);
+
+    const auto target_tile = [](float x, float y) {
+        return Tile{static_cast<std::int32_t>(std::lround((x - 6.0f) / 12.0f)),
+                    static_cast<std::int32_t>(std::lround((y - 4.0f) / 9.0f))};
+    };
+    const Tile blocker_tile{6, 5};
+
+    // Seed 23: a resampled RANDOM_RADIUS goal (6,6) is approached along a line whose
+    // micro-step clips the stationary blocker at (6,5) before the goal is reached.
+    auto sim = LevelSimulation::create(level, 23);
+    bool aborted = false;
+    Tile aborted_goal{};
+    std::uint64_t abort_time = 0;
+    std::uint64_t wait_until = 0;
+    for (int tick = 0; tick < 60 * 5 && !aborted; ++tick) {
+        const PersonMovement before = sim.persons()[0];
+        sim.advance(1.0 / 60.0);
+        const PersonMovement &p = sim.persons()[0];
+        if (before.moving && !p.moving && p.waiting) {
+            aborted = true;
+            aborted_goal = target_tile(before.target_x, before.target_y);
+            abort_time = sim.time_ms();
+            wait_until = p.wait_until_ms;
+            CHECK(p.path.empty());
+        }
+    }
+    REQUIRE(aborted);
+    CHECK(aborted_goal == Tile{6, 6});
+    CHECK(aborted_goal != blocker_tile);
+    CHECK(wait_until >= abort_time + 500u);
+
+    const float paused_x = sim.persons()[0].x;
+    const float paused_y = sim.persons()[0].y;
+    while (sim.time_ms() < wait_until) {
+        sim.advance(1.0 / 60.0);
+        CHECK(sim.persons()[0].x == paused_x);
+        CHECK(sim.persons()[0].y == paused_y);
+    }
+
+    for (int tick = 0; tick < 60 * 5 && !sim.persons()[0].moving; ++tick)
+        sim.advance(1.0 / 60.0);
+    const PersonMovement &p = sim.persons()[0];
+    REQUIRE(p.moving);
+    REQUIRE(p.path.size() >= 2);
+    CHECK(p.path.back() != aborted_goal);
+    CHECK(p.path.back() != blocker_tile);
     CHECK(level.walkable.is_walkable(p.path.back().x, p.path.back().y));
 }
 
