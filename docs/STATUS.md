@@ -20,6 +20,16 @@
     comment-lexer claim, rewinds, `+0x58` citation, `_DAT_14091e30`/
     `_DAT_14091e44`, int grammar исправлены.
   - Task 2 (генератор/RNG/timing) — сейчас; Task 3 (verdict) — после.
+  - Task 2 research: `docs/research/p3b2b2-npc-loot-server.md` §8–14
+    (коммит `df9a69d`); fix round 1 закрывает замечания ревью.
+  - **D-030 conflict follow-up (RNG parity):** D-030
+    (`docs/DECISIONS.md:37`) утверждает «нет `srand`, seed 1,
+    round-to-nearest»; Task 2 доказал `srand(timeGetTime())`
+    (`decompiled.c:34129`) и truncation (`fistp`, RC=`0xC00`). Это
+    общий RNG движения/`STAY_ROTATE` (`FUN_1401c2a0`,
+    `decompiled.c:20410-20411`) и лута (`:49538`). Нужно пересмотреть
+    D-030 (seed + truncation) и исправить `MsvcRandom::range`;
+    затрагивает движение/`STAY_ROTATE` и лут, не только NPC loot.
   - SDD ledger (gitignored):
     `.superpowers/sdd/2026-11-07-p3b2b2a-npc-loot-research/progress.md`.
   - Локальные коммиты `426d25b` (spec/plan) и `6c035dd` (research), **не
