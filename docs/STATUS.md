@@ -35,13 +35,11 @@
   specials, `BT_RGINF`, `+0x26c4`, stacking и live-оракула; либо
   Transfer/Trade/`PassToTradePanel`.
 - **Коммит:** `docs: record RNG parity fix` (docs-only).
-- **Состояние (2026-11-08 01:05, сессия остановлена):**
-  - Task 4 commit `1adf89c`; task review Task 4 и финальное whole-branch
-    review **не выполнены**.
-  - Коммиты локальные, **не запушены**.
-  - SDD ledger (gitignored):
-    `.superpowers/sdd/2026-11-07-p4-rng-parity/progress.md`.
-  - Продолжить с: review Task 4 → final review → push.
+- **Final review (2026-11-08):** Task 4 review clean; whole-branch review
+  «with fixes» (2 Important docs issues) → docs-fix `c652e24`; scoped
+  re-review — все findings addressed. Код/тесты не менялись после
+  `1adf89c`; full `ctest` подтверждён 18/18 (1068.24 s, exit 0).
+- **Коммиты:** `9c9eb72`…`c652e24` (RNG parity + docs). Запушены.
 
 ## Phase 1b2b2a — NPC `.inv` loot generation research (done 2026-11-07)
 
