@@ -23,6 +23,7 @@ add_executable(gl_script_real_tests
     test_real_person_natives.cpp
     test_real_inventory_natives.cpp
     test_real_inventory_mutations.cpp
+    test_real_transfer_natives.cpp
 )
 target_include_directories(gl_script_real_tests PRIVATE ${CMAKE_SOURCE_DIR}/third_party)
 target_link_libraries(gl_script_real_tests PRIVATE gl_script gl_game)
