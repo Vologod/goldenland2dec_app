@@ -124,7 +124,7 @@ TEST_CASE("npc_loot: two passes fill hot and main in RNG order") {
     MsvcRandom rng(1);
     const NpcLoot loot = NpcLootGenerator::generate(table, 11, names, lookup, rng);
 
-    check_items(loot.hot, {{100, 2, 1, 0x4u, 7}, {102, 3, 2, 0x80u, 3}, {102, 1, 2, 0x80u, 3}});
+    check_items(loot.hot, {{100, 2, 1, 0x4u, 7}, {102, 3, 2, 0x0u, 3}, {102, 1, 2, 0x0u, 3}});
     check_items(loot.main, {{100, 4, 1, 0x4u, 7}});
     CHECK(rng.next() == 26962u);
 }
@@ -225,9 +225,25 @@ TEST_CASE("npc_loot: scaled bounds use trunc plus one when fractional") {
     MsvcRandom rng(13);
     const NpcLoot loot = NpcLootGenerator::generate(table, 11, names, lookup, rng);
 
-    check_items(loot.hot, {{106, 2, 6, 0x84u, 9}, {106, 2, 6, 0x84u, 9}, {106, 2, 6, 0x84u, 9}});
+    check_items(loot.hot, {{106, 2, 6, 0x04u, 9}, {106, 2, 6, 0x04u, 9}, {106, 2, 6, 0x04u, 9}});
     check_items(loot.main, {{106, 2, 6, 0x84u, 9}});
     CHECK(rng.next() == 30076u);
+}
+
+TEST_CASE("npc_loot: pass 1 clears item flag 0x80 and pass 2 preserves it") {
+    const auto names = make_names();
+    gl::assets::InvTable table;
+    table.regenerate_chance = 1.0;
+    table.chance_decrease = 1.0;
+    table.quantity_decrease = 1.0;
+    table.items = {make_item("F", 0, 100, 100, 1, 1)};
+
+    MsvcRandom rng(1);
+    const NpcLoot loot = NpcLootGenerator::generate(table, 11, names, lookup, rng);
+
+    check_items(loot.hot, {{106, 1, 6, 0x04u, 9}});
+    check_items(loot.main, {{106, 1, 6, 0x84u, 9}});
+    CHECK(rng.next() == 26500u);
 }
 
 TEST_CASE("npc_loot: zero divisor guards skip pass 2") {

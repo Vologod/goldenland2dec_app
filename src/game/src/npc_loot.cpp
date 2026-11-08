@@ -23,15 +23,14 @@ std::int32_t scaled_bound(std::int32_t value, float scale) {
 }
 
 void append_chunks(std::vector<LootItem> &out, std::uint32_t item_id, std::int32_t quantity,
-                   const ItemTemplate &item_template) {
+                   const ItemTemplate &item_template, std::uint32_t flags) {
     if (item_template.max_stack == 0)
         return;
     std::int32_t remaining = quantity;
     while (remaining > 0) {
         const std::int32_t chunk =
             std::min(remaining, static_cast<std::int32_t>(item_template.max_stack));
-        out.push_back(
-            LootItem{item_id, chunk, item_template.type, item_template.flags, item_template.style});
+        out.push_back(LootItem{item_id, chunk, item_template.type, flags, item_template.style});
         remaining -= chunk;
     }
 }
@@ -71,7 +70,8 @@ NpcLoot NpcLootGenerator::generate(const gl::assets::InvTable &table, std::int32
         const auto resolved = resolve(item, names, item_template);
         if (!resolved)
             continue;
-        append_chunks(loot.hot, resolved->first, quantity, resolved->second);
+        append_chunks(loot.hot, resolved->first, quantity, resolved->second,
+                      resolved->second.flags & ~0x80u);
     }
 
     if (table.chance_decrease == 0.0 || table.quantity_decrease == 0.0)
@@ -96,7 +96,8 @@ NpcLoot NpcLootGenerator::generate(const gl::assets::InvTable &table, std::int32
         const auto resolved = resolve(item, names, item_template);
         if (!resolved)
             continue;
-        append_chunks(loot.main, resolved->first, quantity, resolved->second);
+        append_chunks(loot.main, resolved->first, quantity, resolved->second,
+                      resolved->second.flags);
     }
 
     return loot;
