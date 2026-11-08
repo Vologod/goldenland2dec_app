@@ -452,7 +452,9 @@ Hero не затрагивается. `money()` после переноса = 0 
 
 1. `transfer_item(from,to,tech,count)`:
    - same person → `true`; отсутствующая/неизвестная персона/контейнер →
-     `false`/no-op (deviation от AV для `TransferAll`/missing container);
+     `false`/no-op; для `transfer_item` это совпадает с оригиналом (`0`),
+     для `TransferAll` missing person — deviation от AV (null
+     `entity+0x10`); missing container в обоих хелперах — оригинал `0`;
    - `count == 0` → `true`, без изменений; `count < 0` → лимит
      `1 000 000`; положительный `count` при отсутствии предмета →
      `false`;
@@ -461,7 +463,8 @@ Hero не затрагивается. `money()` после переноса = 0 
      вернуть `true`.
 2. `transfer_all(from,to)`: все main-записи source → dest в slot order;
    dest add/merge; source очищается; пустой source/тот же контейнер →
-   `true`; missing person/container → `false`/no-op (deviation от AV).
+   `true`; missing person → `false`/no-op (deviation от AV — null
+   `entity+0x10`); missing container → `0` как в оригинале.
 3. Dest-запись создаётся из **ITM-шаблона** порта
    (`ItemTemplateLookup`): `type/flags/style/max_stack`, а не копия
    source-record (spec §3.2/§5.1 требует правки в Task 2).

@@ -30,10 +30,15 @@
   (preload `Hero.QST_1_0_3=1`, ответы `0,0`): `Hero 0`, `P387 1`,
   `P387.QST_1_0_5=1`, `L1_Svetlograd_n3_GetElexir=5`, `plotnik_povtor=2`;
   control без preload не переносит (`plotnik_povtor=1`).
-- **Отклонения/guards (D-056):** missing person/container → `false`/
-  no-op (в оригинале AV); `transfer_all` abort при unmapped source/
-  `max_stack == 0` (оригинал add-ошибку не проверяет); `transfer_item`
-  template guard (positive → false, zero/negative → true); `count` —
+- **Отклонения/guards (D-056):** `transfer_all` missing person → `false`/
+  no-op (в оригинале AV — null `entity+0x10`); `transfer_item` missing
+  person/container и missing container в обоих хелперах → `0`/false как
+  в оригинале (не deviation); `transfer_all`: source без ITM-шаблона →
+  false без мутаций (оригинал продолжает с непроверенной add-ошибкой),
+  `max_stack == 0` → false (оригинальный creation-loop не завершается);
+  `transfer_item`: missing template → positive false/zero-negative true
+  (add-ошибка не проверяется), `max_stack == 0` → positive false/
+  zero-negative true (creation-loop); `count` —
   `as_int` (усечение) vs оригинальный `(int)ROUND`; append vs первый
   свободный слот. Не моделируются notify `FUN_140482e8`, container
   `+0x18`, `entity+0x4dc`; save не пишется.
@@ -163,8 +168,8 @@
   `tests/game/test_inventory_runtime_real.cpp`.
 - **Task 5 (docs/parity/regression, done 2026-11-08):** D-055 записан;
   parity-matrix `P3b-1..P3b-5` + пересчёт (163 строки: verified 49,
-  partial 63, unverified 22, missing 17, contradicted 2, superseded 10);
-  PROJECT/plan обновлены.
+  partial 63, unverified 22, missing 17, contradicted 2, superseded 10 —
+  на момент 1b2b2b); PROJECT/plan обновлены.
 - **Проверка (фактический вывод 2026-11-08, `GL_GAME_DIR=I:\Games\Златогорье-2`):**
   - `cmake --build build` — exit 0.
   - targeted `ctest --test-dir build --output-on-failure -R "gl_script_tests|gl_script_real_tests|gl_game_tests|gl_assets_tests|gl_assets_real_tests|glgame_screenshot_tests|glview_screenshot_tests|level_click_tests"`

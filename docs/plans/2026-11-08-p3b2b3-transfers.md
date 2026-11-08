@@ -120,7 +120,9 @@ verify glgame dialog path (no extra per-dialog state).
 
 - [x] **Step 3: Smoke** `glgame --level l1_1 --click-npc 13 --screenshot` exit 0.
 
-- [x] **Step 4: Commit** `feat(tools): wire inventory transfers into dialogs`.
+- [x] **Step 4: Commit** `test(inventory): cover real transfer dialog`
+  (`692c9c5`; plan originally said `feat(tools): wire inventory transfers
+  into dialogs`; Task 2 fix `a76add9`).
 
 ---
 

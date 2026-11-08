@@ -82,8 +82,10 @@ bool transfer_all(std::string_view from, std::string_view to);
   `FUN_1404cd28`); source runtime-поля не копируются. Merge в
   существующую dest-запись сохраняет flags этой записи.
 - Merge в dest по item_id; порядок записей — append (как в 1b2b1).
-- Отсутствующая персона/контейнер: `false`/no-op; в оригинале для
-  `TransferAll` и missing container это AV — deviation, D-056. Both
+- Отсутствующая персона/контейнер: `false`/no-op; в оригинале
+  `TransferItem` missing person/container и missing container в обоих
+  хелперах дают `0`; AV только `TransferAll` при missing person (null
+  `entity+0x10`) — deviation, D-056. Both
   containers резолвятся до short-circuit `from == to`, поэтому
   одинаковые имена отсутствующей персоны → `false`.
 - Порт-guard: `transfer_all` при хотя бы одной source-записи без ITM
