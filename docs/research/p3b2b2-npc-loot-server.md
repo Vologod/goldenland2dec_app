@@ -738,9 +738,9 @@ person-объекта. `FUN_140233d4`/`FUN_14023aa0` — init-методы др�
 загружается в `decompiled.c:35638` внутри `FUN_1403210c` (RVA `0x3210c`),
 а не в `FUN_1402fdc0`. Роль `FUN_1402fdc0` (`0x2fdc0`) другая: он
 обнуляет `+0x26c4` при инициализации (`decompiled.c:33982`) и там же
-сеет RNG (`decompiled.c:34129`, §9.1). Смысл поля `+0x26c4` (уровень
-мира/сессии vs игрока) — `unverified`; для порта нужен этот глобальный
-счётчик.
+сеет RNG (`decompiled.c:34129`, §9.1). Смысл поля `+0x26c4` —
+**resolved в §15.1**: сохранённый средний уровень партии (party level),
+`loot level = value + 1`.
 
 ### 10.2 Restock/догрузка и `chance_decrease`/`quantity_decrease`
 
@@ -842,8 +842,9 @@ person-объекта. `FUN_140233d4`/`FUN_14023aa0` — init-методы др�
    (`(0,1)`/`(0,3)`) — восстановлены не полностью.
 4. **`BT_RGINF` (`+0x26c0`)**: точная семантика гейта
    `.inv`-генерации.
-5. **`+0x26c4`**: точное имя/смысл поля `BT_INFO` (уровень мира vs
-   игрока); используется как `level = +0x26c4 + 1`.
+5. **`+0x26c4`**: точное имя/смысл поля `BT_INFO` — **resolved в
+   §15.1**: сохранённый средний уровень партии; используется как
+   `level = +0x26c4 + 1`.
 6. **Триггер `FUN_1402a2a4`** (вызывает restock `FUN_14048fac`):
    callers=0/vtable; расписание (тик/загрузка уровня) не установлено.
 7. **`FUN_1404b1c0`**: полная последовательность фаз и роль
@@ -853,6 +854,10 @@ person-объекта. `FUN_140233d4`/`FUN_14023aa0` — init-методы др�
    `.inv`.
 
 ## 13. Вердикт
+
+> **Update 2026-11-08 (Phase 1b2b2b Task 1):** для scoped core вердикт —
+> `implementable`; `+0x26c4`, prerequisites и порядок RNG доказаны в §15.
+> Полный паритет (specials, restock, live-оракул) остаётся `blocked`.
 
 **Статус: алгоритм восстановлен (`recovered`), но полный паритет
 `blocked`.** Ядро генерации само по себе ещё не `implementable` в
@@ -944,6 +949,273 @@ research-задача по special DB (`DAT_14088df4`) и item type allow-list;
 #   49902 (FUN_14048fac -> parser), 51126 (FUN_1404b1c0 -> parser)
 
 # gl::game::MsvcRandom: next/coin ok; range uses nearbyint (differs)
+```
+
+Документ: UTF-8 без BOM, `nul=0`.
+
+## 15. Phase 1b2b2b Task 1 — level source, prerequisites, RNG order (2026-11-08)
+
+Research-only; production-код не менялся. Дополняет §1–§14 и закрывает
+gate 1b2b2b. Источник — тот же `Server.dll`
+(SHA-256 `418E256063748F2E90DB35AE7C6ABE6EAC401FB86908CB5F27EBF565A21CC837`),
+`saves` и `.itm` из `items.pak`.
+
+### 15.1 `BT_INFO +0x26c4` — источник уровня (доказано)
+
+**Вывод: `+0x26c4` — сохранённый средний уровень партии (party level),
+а не номер главы/уровня и не «уровень мира».** Loot level в генераторе —
+`party_level + 1`.
+
+Доказательства:
+
+1. **Обновление в мире.** `FUN_1402a2a4` (RVA `0x2a2a4`,
+   `decompiled.c:30434-…`) в `30577-30580` вызывает
+   `FUN_140254bc(world)` и при `0 < v < 0x65` пишет
+   `param_1[0x9b1] = v`, т.е. byte offset `+0x26c4`.
+2. **Формула.** `FUN_140254bc` (RVA `0x254bc`,
+   `decompiled.c:27488-27578`) идёт по списку party-членов
+   (`world+0x1cf4/+0x1cf8/+0x1cfc`), берёт только сущности с
+   `entity+0x14 & 2`, суммирует `FUN_1400cbc0(person)` (уровень из EXP,
+   `decompiled.c:9835-9860`) и добавляет `+5`, если
+   `SKILL_SCOUT (0x0f) > 9`, и `+5`, если
+   `SKILL_IDENTIFY (0x17) > 4`; возвращает целое среднее `sum/count`
+   (`27524-27527`), `0` — если членов нет.
+3. **Save round-trip.** Writer `FUN_14031b64` (RVA `0x31b64`) пишет
+   `this+0x26c4` в `BT_INFO` (`decompiled.c:35395`; asm
+   `0x14031d0a: pushl 0x26c4(%eax)`). Reader `FUN_1403210c`
+   (RVA `0x3210c`) читает его в `decompiled.c:35637-35638`. Init
+   `FUN_1402fdc0` (RVA `0x2fdc0`) обнуляет поле
+   (`decompiled.c:33982`).
+4. **Потребитель.** `level = *(int*)(DAT_14088dc4 + 0x26c4) + 1` —
+   `decompiled.c:49517` (то же в `49929`, `51149`, `48518`).
+5. **Реальные save: 28/28 совпадений (0 расхождений).** Для всех 28
+   `slot*.sav` значение `+0x26c4` равно уровню героя, вычисленному из
+   `BT_HERO` EXP (`body+0x02C`) по `FUN_1400cbc0`. По одному значению
+   нельзя отличить одиночного героя от партии равного уровня; бонусы
+   Scout/Identify в этих сейвах не проявились.
+   `slot0`: `L93_4`, EXP `81099` → hero level `40`, `+0x26c4 = 40`.
+   `slot2`: `L6_3`, EXP `65133` → `36`, `+0x26c4 = 36`.
+   `slot21`: `L1_1`, EXP `0` → `1`, `+0x26c4 = 1`.
+   Полная таблица — в отчёте Task 1; расхождений `0/28`.
+6. **Следствие для порта.** При загрузке save сохранённое значение —
+   авторитетно: оригинал восстанавливает `+0x26c4` до спавна сущностей.
+   На новом старте поле `0` (init) до первого world update, поэтому
+   первый уровень грузится с loot level `1`. В идущей сессии —
+   текущий party level (`FUN_140254bc`). Для одиночного героя
+   `party_level = FUN_1400cbc0(EXP) + (Scout>9 ? 5 : 0) +
+   (Identify>4 ? 5 : 0)`; в порте допустимо брать `+0x26c4` из save,
+   а при его отсутствии — `0` (new game) или runtime-значение.
+
+#### Контейнер save и точные смещения `BT_INFO`
+
+- Файл save: 104-байтный header (`0x00-0x67`), затем
+  `u32 uncompressed_size` (`0x68`), `u32 compressed_size` (`0x6C`),
+  zlib-поток с `0x70` (`112`). `decode_save_body` порта (header `112`)
+  корректен: `0x68 + 8 = 0x70`.
+- Разжатый payload — конкатенация блоков
+  `[8-byte tag][u32 size][payload]`.
+- Тег `BT_INFO ` = `42 54 5F 49 4E 46 4F 20`. Во всех 28 save он лежит
+  по decompressed offset `0xB71C4` (потому что `BT_SCRN` всегда
+  `0xB71B8`), но искать нужно по тегу, не по константе.
+- Payload `BT_INFO` (reader `35628-35639`, writer `35386-35396`), строго
+  по порядку:
+
+| # | Поле | Размер | Смещение в payload |
+|---|---|---|---:|---|
+| 1 | username (`cl_username`; writer `35387` = `DAT_1407fcc8+4`) | u32 len + bytes | `0x00` |
+| 2 | `+0x218` (режим мира; `0/1`) | u32 | после username |
+| 3 | world-state blob (`DAT_14088e14` vtable `+0x18/+0x1c`) | `0x20` | после #2 |
+| 4 | caption/title (reader отбрасывает, `35635`) | u32 len + bytes | после #3 |
+| 5 | level name (`L93_4`, `L6_3`, …), идёт в `FUN_140325fc` | u32 len + bytes | после #4 |
+| 6 | **`+0x26c4` (party level)** | u32 | после #5 |
+| 7 | `+0x26c8/+0x26cc` (init `-1`; ushort на `30864`) | 8 bytes | после #6 |
+
+Точное смещение поля в payload:
+`4 + len(user) + 4 + 0x20 + (4 + len(caption)) + (4 + len(level))`.
+Абсолютный decompressed offset = `tag + 12 + это смещение`.
+
+| save | tag | size | payload | user len | caption len | level len | `+0x26c4` payload | abs | value | level |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| slot0 | `0xB71C4` | 100 | `0xB71D0` | 6 | 29 | 5 | `0x58` | `0xB7228` | **40** | `L93_4` |
+| slot2 | `0xB71C4` | 86 | `0xB71D0` | 6 | 16 | 4 | `0x4A` | `0xB721A` | **36** | `L6_3` |
+| slot21 | `0xB71C4` | 87 | `0xB71D0` | 6 | 17 | 4 | `0x4B` | `0xB721B` | **1** | `L1_1` |
+
+Read-only алгоритм (без записи в save):
+
+```
+tag     = find("BT_INFO ")
+size    = u32le(data, tag + 8)
+p       = tag + 12
+user    = string(p); p += 4 + len(user)
+v218    = u32(p);    p += 4
+blob    = data[p:p+0x20]; p += 0x20
+caption = string(p); p += 4 + len(caption)
+level   = string(p); p += 4 + len(level)
+party_level = u32(p); p += 4
+tail    = data[p:p+8]
+```
+
+`+0x218`, blob (`0x20`) и `+0x26c8/0x26cc` для лута не нужны; их
+семантика — `unverified` (blob идёт в `DAT_14088e14`, не в RNG-поток).
+
+### 15.2 Prerequisites генерации (ITM, merge, early exit, R1)
+
+#### ITM → прототип → runtime
+
+- ITM header (порт `src/assets/src/itm.cpp:20-24`): `magic=4`,
+  `description_id`, `type`, `flags`, `max_stack`; `style` =
+  `unknown_b[1]` (port `Item::unknown_b[1]`, подтверждено P5 на 22
+  equipped item, `0/N`).
+- Прототип в `Server.dll` (`FUN_1404f4fc`, RVA `0x4f4fc`,
+  `decompiled.c:54546-54558`) копирует:
+  `proto+0x04 → item+0x08` (type), `proto+0x08 → item+0x0c` (flags),
+  `proto+0x1c → item+0x20` (style), `proto+0x30 → item+0x34`
+  (max_stack). Генератор берёт `pinfo+0x30` как max_stack
+  (`49550-49553`), runtime-флаги — `item+0x0c` (`49560-49562`),
+  runtime max_stack — `item+0x34` (`53791`, merge), style
+  (`item+0x20`) ядром не используется.
+- Неизвестный TECH: `find_proto(name,-1)` → `get(id)`; `0` → запись
+  пропускается (`49544-49548`, release `49589-49591`).
+
+Реальные ITM (`items.pak`, 1848 файлов, `sdb/items/tech_names.sdb`):
+
+| TECH | id | type | flags | max_stack | style |
+|---|---:|---:|---|---:|---:|
+| `MON_1_0_1` | 812 | 18 | `0xC0000000` | 100000000 | 1 |
+| `SWR_1_02_2` | 533 | 0 | `0x84` | 1 | 2 |
+| `POT_1_00_1` | 927 | 19 | `0x4000000C` | 10000 | 1 |
+| `HLM_1_01_1` | 249 | 11 | `0x84` | 1 | 1 |
+| `ARM_1_08_2` | 307 | 12 | `0xC0000084` | 1 | 8 |
+| `MAT_1_2_1` | 423 | 23 | `0x40000008` | 10000 | 1 |
+
+Биты флагов ITM, важные генератору: `0x4` — 922 из 1848,
+`0x40` — 99, `0x80` — 565 (specials-ветка использует `&4`/`&0x40`;
+вне scope).
+
+#### Merge-path (важный квирк)
+
+`FUN_1404e3a4` (RVA `0x4e3a4`) при вставке ищет существующий инстанс
+того же прототипа (`item+0xa8`), и если `max_stack (+0x34) >= 2` и
+`current (+0xb0) < max`, **увеличивает существующий стек ровно на 1**
+(asm `0x1404e81c: addl $0x1,%edx`; `0x1404e81f: movl %edx,0xb0(%ecx)`)
+и возвращает его id (`0x1404e878`), независимо от запрошенного `chunk`
+(`decompiled.c:53790-53810`).
+
+При этом вызывающий генератор вычитает из `qty` **весь `chunk`**:
+`49585` / asm `0x14048d48: subl %esi,%edi` (`esi=chunk`, `edi=qty`).
+Следствие: при `chunk > 1` merge добавляет `+1`, но списывает `chunk`,
+т.е. `chunk-1` предметов «теряются». Это поведение оригинала, его нужно
+воспроизвести, а не «исправлять» (`count += chunk` неверно).
+
+#### Early exit и restock-метаданные (`FUN_140489ec`)
+
+После создания предмета: `cnt = FUN_14030f98(box+8)`; если `path != 0`
+и `cnt >= 4` (asm `0x14048cf7: cmpl $0x4,%eax; jae`), то
+`box+0x20 = record_index + 1`, `box+0x1c = 1`, путь копируется в
+`box+0x24` (до `0x103`), контейнер регистрируется в пуле менеджера
+(`+0x15c/+0x160/+0x168`) и функция возвращает id
+(`decompiled.c:49592-49653`; asm `0x14048e41-…`). Если `path == 0`,
+раннего выхода нет (`49593-49594`).
+
+#### R1
+
+`FUN_140489ec`: R1 = `FUN_14006288(this+0x40)` (`regenerate_chance`)
+**всегда** после создания контейнера (`49510`; asm
+`0x14048b42: pushl 0x40(%eax)`). Если R1=0 и контейнер непуст —
+контейнер сохраняется; иначе очищается и генерируется. Новый контейнер
+пуст → генерация идёт всегда; R1 потребляется в любом случае.
+`FUN_1404b1c0` (SEF-путь, §15.3) делает тот же R1 на `51141`; при
+`param_4=1` (SEF) всегда очищает/генерирует.
+
+### 15.3 Порядок RNG на спавне (доказано/расхождение)
+
+**Доказано:**
+
+- SEF-спавн: `FUN_1401edc4` (RVA `0x1edc4`) парсит `persons:` в порядке
+  файла (ключи `position`, `literary_name`, `direction`, `route_type`,
+  `route`, `radius`, `delay_min`, `delay_max`, `tribe`, `scr_dialog`,
+  `scr_inv`; `decompiled.c:22102-22722`). На `scr_inv`
+  (`22422-22455`) он создаёт контейнер `+0xc` и вызывает
+  `FUN_1404b1c0(DAT_14088df8, +0xc, +0x10, inv_name, 1)`.
+  Путь собирает сам `FUN_1404b1c0` из `param_3` (значение `scr_inv`,
+  сохранённое в `this+0x2aac`; формат `scripts\inventory\%s.inv`,
+  RVA `0x8e57c`; asm `0x1404b232-0x1404b239`). `this+0x388` — это
+  путь `inv_name` в `FUN_14023aa0` (script/иной источник), не SEF.
+- `FUN_1404b1c0` (RVA `0x4b1c0`): R1 `51141`; **два прохода**:
+  первый заполняет `param_1` (`51177-51211`) по обычной
+  window/chance/qty/chunk логике; второй — `param_2`
+  (`51318-51366`) с `chance/chance_decrease` (`51293`) и
+  `qty/quantity_decrease` (`51300-51313`). Оба прохода потребляют
+  R2/R3 (и R4/R5 для specials). Порог метаданных — `100000/99999`
+  (`51217`, `51373`), **не 4**. Полная семантика двух контейнеров —
+  `unverified` (§10.2/§12).
+- Движение: RNG-вызовы не в конструкторе, а в update-тиках:
+  `STAY_ROTATE rand(10,25)` — `FUN_1401c93c` `20759`;
+  `RANDOM/RANDOM_RADIUS range` — `FUN_1401c2a0` `20410-20411`;
+  `MOVED_FLIP coin` — `FUN_1401c93c` `20837`. В
+  `FUN_1401edc4`/`FUN_1404b1c0` до лута нет вызовов
+  `FUN_14006288`/`FUN_140061e4` для движения.
+- Итог: **лут потребляет RNG раньше движения**; порядок сущностей —
+  порядок `persons:` в SEF.
+
+**Детерминированный порядок для порта (рекомендация):**
+
+1. Один поток `MsvcRandom(seed)` на загрузку уровня; без reseed на NPC.
+2. Парсить `persons:` в порядке файла; для каждого `PersonInstance` с
+   непустым `scr_inv` генерировать лут (R1, R2, R3; specials не
+   рисовать) **до** создания `LevelSimulation`.
+3. Передать тот же продвинутый RNG-state в `LevelSimulation` (новый
+   API/параметр; не reseed), чтобы его начальные draw'ы шли после лута.
+4. Зафиксировать расхождения:
+   - SEF-путь оригинала — `FUN_1404b1c0` (два контейнера/прохода,
+     scaled второй проход, без 4-stack exit), а план Task 3 —
+     `FUN_140489ec` (один проход, 4-stack exit). Для паритета NPC SEF
+     нужен первый проход `FUN_1404b1c0` (и решение по второму);
+     иначе — запись в D-055.
+   - specials R4/R5/R6–R10 не вызываются — существующий
+     документированный RNG-desync (D-055).
+   - порт считает начальные movement-draw'ы в
+     `LevelSimulation::create`, оригинал — в первом update-тике;
+     точный tick-order не снят live (`unverified`).
+   - поток на уровень vs глобальный поток оригинала — уже
+     зафиксированное расхождение D-053.
+
+### 15.4 Вердикт Task 1
+
+**`implementable`** для scoped core (без specials/restock/live-oracle):
+источник уровня `+0x26c4` доказан, prerequisites §15.2 подтверждены,
+порядок RNG §15.3 зафиксирован. Tasks 2–5 могут продолжаться.
+
+Остаётся/вне scope: specials `FUN_14047284`/`DAT_14088df4`, restock
+`FUN_14048fac`/`FUN_1404b1c0` (полная фазовая трассировка), гейт
+`BT_RGINF`/`+0x26c0` (в SEF-пути `FUN_1401edc4` не проверяется; гейт
+есть в save/BT_ENTS-путях `FUN_1401e758` (`22083-22086`) и
+`FUN_140233d4` (`25998-26016`)), live-оракул.
+
+**Важно:** план Task 3/4 предполагает `FUN_140489ec`; фактический
+SEF-спавн NPC идёт через `FUN_1404b1c0` (§15.3). Это scope/design
+вопрос, а не блокер источника уровня; решение — реализовать первый
+проход `FUN_1404b1c0` или задокументировать расхождение в D-055.
+
+### 15.5 Проверка Task 1 (фактический вывод)
+
+```
+# 28 save: BT_INFO tag offset (decompressed) = {0xB71C4} (0/28 иначе)
+# 28 save: +0x26c4 == FUN_1400cbc0(BT_HERO EXP) -> 28/28 match
+slot0  tag=0xB71C4 size=100 off=0x58 value=40 level=L93_4  heroL=40
+slot2  tag=0xB71C4 size=86  off=0x4A value=36 level=L6_3   heroL=36
+slot21 tag=0xB71C4 size=87  off=0x4B value=1  level=L1_1   heroL=1
+
+# ITM (items.pak, 1848): MON_1_0_1 id=812 type=18 flags=0xC0000000
+#   max_stack=100000000 style=1; SWR_1_02_2 id=533 type=0 flags=0x84
+#   max_stack=1 style=2; bit counts 0x4=922, 0x40=99, 0x80=565.
+
+# objdump: 0x14048b42 pushl 0x40(%eax)          (R1)
+#          0x14048ca0..cad min(qty,pinfo+0x30)  (chunk)
+#          0x14048d48 subl %esi,%edi           (qty -= chunk)
+#          0x14048cf7 cmpl $0x4,%eax; jae      (early exit)
+#          0x1404e81c addl $0x1,%edx            (merge +1)
+#          0x14031d0a pushl 0x26c4(%eax)        (BT_INFO write)
 ```
 
 Документ: UTF-8 без BOM, `nul=0`.
