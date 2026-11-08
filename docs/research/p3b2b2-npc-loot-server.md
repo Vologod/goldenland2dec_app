@@ -783,8 +783,9 @@ person-объекта. `FUN_140233d4`/`FUN_14023aa0` — init-методы др�
 
 > **Update §15.2 (Task 1 fix, 2026-11-08):** для SEF NPC
 > `FUN_1404b1c0` использует `chance_decrease`/`quantity_decrease`
-> **уже в pass 2 при initial spawn** (не только restock). См. §15.2;
-> формулировка «только restock» к `FUN_1404b1c0` не относится.
+> **уже в pass 2 при initial spawn**, не ограничиваясь restock.
+> См. §15.2; старое restock-only описание к `FUN_1404b1c0` не
+> относится.
 
 ## 11. Записи контейнера, порядок, stacking
 
