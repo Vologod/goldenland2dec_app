@@ -146,6 +146,11 @@
 - **Коммиты:** `98cfa62` (parser), `ce6ccb8` (generator), `b7b188a`
   (flag 0x80 fix), `b2fd51b` (containers/level-load), `229ec13`
   (duplicate first-wins); docs — `docs: record core NPC loot`.
+- **Final review (2026-11-08):** Ready to merge = Yes; Critical/Important
+  нет. Отложенные minors: `max_stack` верхний clamp (защита от
+  нетерминирующего цикла; реальные данные < 2^31), oracle не покрывает
+  NPC после duplicate `P744`, merge/live-oracle residual, save/New Game
+  lifecycle, `--no-persons`/save activation gaps.
 
 ## P4 — RNG parity (D-053 implementation) (done 2026-11-08)
 
