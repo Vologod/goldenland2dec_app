@@ -1364,6 +1364,32 @@ R1, затем pass 1 и pass 2 в порядке записей файла. В�
 `tests/game/test_inventory_runtime_real.cpp` и воспроизводятся:
 `ctest -R gl_game_tests` (или `gl_game_tests.exe`) с `GL_GAME_DIR`.
 
+Точные входы референса/теста:
+- save slot `Saves/slot21.sav` (`L1_1`, hero level `1`) — только для
+  проверки, что Hero-инвентарь/деньги не меняются; NPC-лут от save не
+  зависит.
+- seed `1`; loot level `1`; оба прохода; 16 `persons` из
+  `levels/single/l1_1/l1_1.sef` в порядке файла.
+- вызов:
+  `generate_npc_inventories(runtime, level->persons, vfs, names,
+  catalog_lookup(catalog), 1, MsvcRandom(1))`.
+- ожидаемые значения: `P387 QST_1_0_5` = 1; `Kolbasens MON_1_0_1` =
+  174; `Crying_Guardian MON_1_0_1` = 218; `P711_citizen8 MON_1_0_1` =
+  323; `P678_citizen4` — пусто.
+
+Smoke-команда (`GL_GAME_DIR=I:\Games\Златогорье-2`) и вывод:
+
+```text
+build\bin\glgame.exe --level l1_1 --click-npc 13 --screenshot <out.png> --seed 1
+[info] npc inventory: level 'l1_1', loot level 1, populated 14/16
+[info] dialog: 'scripts/dialogs/l1_1/l1.p621_svet_3circusworkerv.d621.age.cs'
+[info] saved screenshot ... (1280x720)
+exit=0
+```
+
+С `--equip-save 21` (hero level `1`): loot level `2`, тот же
+`populated 14/16`.
+
 Дополнительно:
 - `L1_1.P387_Poison_Plotnik` — data-level оракул, не зависящий от RNG:
   `p387.inv` имеет `regenerate_chance 0`, одна запись `QST_1_0_5`

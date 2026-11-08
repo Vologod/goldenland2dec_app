@@ -43,13 +43,12 @@
     `20410-11`). Порт: один поток; оба прохода в SEF-порядке, main
     сохраняется, hot — если поддерживается (RNG pass 1 обязателен);
     затем `LevelSimulation` с тем же state; расхождения — §15.3.
-  - **Ревизия spec/plan:** target обновлён на `FUN_1404b1c0`
-    (main = pass 2, hot = pass 1; second pass **в scope** как main,
-    не non-goal). Task 2 можно начинать сейчас; Tasks 3–4 — после
-    этой ревизии (данный commit).
-- **Gate:** level source доказан; **Task 2 не blocked**, Tasks 3–4
-  разблокированы после ревизии spec/plan; implementation conditional
-  на эту ревизию.
+  - **Ревизия spec/plan (историческая запись Task 1):** target обновлён
+    на `FUN_1404b1c0` (main = pass 2, hot = pass 1; second pass **в
+    scope** как main, не non-goal). На момент Task 1 Task 2 можно было
+    начинать сразу; Tasks 3–4 — после ревизии (тот commit).
+- **Gate (историческая запись Task 1):** level source доказан; Task 2
+  не был blocked; Tasks 3–4 разблокированы после ревизии spec/plan.
 - **D-055:** записан в `DECISIONS.md` (2026-11-08).
 - **Критерии:** 238 `.inv` parse; generator tests (two passes, no
   4-stack, pass2 scaling); NPC main counts; full `ctest`;
