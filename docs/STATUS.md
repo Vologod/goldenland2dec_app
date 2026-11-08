@@ -1,6 +1,16 @@
 # STATUS
 
 Обновлено: 2026-11-08
+## Phase 1b2b3 — inventory transfers (in progress 2026-11-08)
+
+- **Задача:** `RS_PersonTransferItemI` (`0x5000001`) и
+  `RS_PersonTransferAllItemsI` (`0x5000003`) между Hero/NPC.
+- **Spec:** `docs/specs/2026-11-08-p3b2b3-transfers-design.md`.
+- **Plan:** `docs/plans/2026-11-08-p3b2b3-transfers.md`.
+- **Критерии:** семантика `FUN_14048790`/`FUN_14048518`; 2 ID →
+  supported (15/65); unit + real oracle; full `ctest`; D-056/parity.
+- **Вне scope:** trade-контейнеры/`PassToTradePanel`.
+
 ## Phase 1b2b2b — core NPC `.inv` loot (done 2026-11-08)
 
 - **Задача:** `parse_inv` + `NpcLootGenerator` + NPC-контейнеры в
