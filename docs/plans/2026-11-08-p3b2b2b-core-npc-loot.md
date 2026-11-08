@@ -18,7 +18,15 @@
 
 ---
 
+> **Revision 2026-11-08 (Task 1 fix):** реальный SEF-путь NPC —
+> `FUN_1404b1c0` (два прохода), не `FUN_140489ec`. Task 2 можно
+> начинать сразу; Tasks 3–4 переписаны ниже и стартуют после этой
+> ревизии spec/plan. Детали — research `p3b2b2-npc-loot-server.md` §15.
+
 ### Task 1: Research gate — level source and generation prerequisites
+
+**Status:** done 2026-11-08 (commit `637f184`); findings revised by
+`docs: revise NPC loot path to FUN_1404b1c0`.
 
 **Files:**
 - Modify: `docs/research/p3b2b2-npc-loot-server.md`
@@ -44,6 +52,8 @@ State `implementable` or `blocked`; commit `docs(research): pin NPC loot level a
 
 ### Task 2: `gl_assets::parse_inv` / `load_inv`
 
+**Status:** may proceed now (independent of the generator path).
+
 **Files:**
 - Create: `src/assets/include/gl/assets/inv_table.hpp`
 - Create: `src/assets/src/inv_table.cpp`
@@ -67,6 +77,8 @@ research (e.g. `inv001_swordsman.inv`).
 
 ### Task 3: `gl::game::NpcLootGenerator`
 
+**Status:** starts after this spec/plan revision.
+
 **Files:**
 - Create: `src/game/include/gl/game/npc_loot.hpp`
 - Create: `src/game/src/npc_loot.cpp`
@@ -76,14 +88,26 @@ research (e.g. `inv001_swordsman.inv`).
 
 - [ ] **Step 1: Failing tests (reference values)**
 
-Use a fixed seed/level and an `InvTable` built synthetically; hardcode
-expected items/counts derived from the research pseudocode (not from the
-implementation). Cover: window filtering, chance miss, qty range, split by
-max_stack, merge, early exit at 4 stacks, unknown ITM, empty table,
-R1 consumption.
+Fixed seed/level, synthetic `InvTable`; hardcode expected items/counts
+from research §15.3 (not from the implementation). Cover:
+- R1 `coin(regenerate_chance)` consumed always;
+- pass 1: window, `coin(0.01*n3)`, `range(n4,n5)`, force-new split by
+  `max_stack` (`FUN_1404e3a4(name,0,1)`, `this+4=1`, direct
+  `count=min(remaining,max)`), **no merge**, **no 4-stack exit**
+  (`100000` threshold effectively unreachable);
+- pass 2: `n3==0` → no chance coin; `n3>0` → `coin((0.01*n3)/
+  chance_decrease)`; qty `n4/n5 * (1/quantity_decrease)` with
+  trunc/`+1` → `range`; creation with `this+4=0`;
+- two-pass RNG order and `NpcLoot{hot, main}`;
+- unknown ITM, empty table.
+- Do **not** test `FUN_140489ec` merge `+1`/`qty -= chunk` here; that is
+  a different path (separate helper only if ever added).
 
-- [ ] **Step 2: Implement** the generator per research; specials not drawn;
-RNG calls only R1/R2/R3 (document the divergence).
+- [ ] **Step 2: Implement** `FUN_1404b1c0` initial spawn (two passes):
+- R1; SEF call uses `param_4=1`, so generation always proceeds;
+- pass 1 → `hot` (`+0xc`): force-new creation + direct count set;
+- pass 2 → `main` (`+0x10`): scaled chance/qty + creation;
+- specials R4/R5 not drawn; RNG desync documented (D-055, Task 5).
 
 - [ ] **Step 3: Run `gl_game_tests --test-case=*npc_loot*`; commit**
 `feat(game): generate core NPC loot`.
@@ -100,23 +124,29 @@ RNG calls only R1/R2/R3 (document the divergence).
 
 - [ ] **Step 1: Extend runtime**
 
-Add per-person containers (`Hero` + NPC names). Hero from save; NPC from
-`NpcLootGenerator`. `count`/`money` use the person's container; `Hero`
-behavior unchanged.
+Add per-person NPC containers (`Hero` + NPC names). Hero from save.
+For NPC store the **main** container (`+0x10`, pass 2) — it is what
+`TestPersonHasItem`/`GetItemCountI` read; store `hot` (`+0xc`, pass 1)
+too if the runtime supports two containers, otherwise discard hot after
+consuming its RNG draws (documented divergence). `count`/`money` use the
+person's main container; `Hero` behavior unchanged.
 
 - [ ] **Step 2: Generate at level load**
 
 For each `PersonInstance` with non-empty `inventory`, in SEF order:
-load `scripts/inventory/<name>.inv`, generate with the shared
-`MsvcRandom` (production seed/`--seed`) and level from Task 1; store in
-runtime. Keep a stable RNG source with `LevelSimulation` (do not reseed
-per NPC).
+load `scripts/inventory/<name>.inv`; generate both passes of
+`FUN_1404b1c0` from one shared `MsvcRandom` (production seed/`--seed`)
+with `loot_level = party_level + 1` (party level from Task 1: BT_INFO
+`+0x26c4` if a save is the source, else runtime/0); store `main`
+(and `hot` if supported). Run loot **before** `LevelSimulation` and pass
+the same advanced RNG state to it (do not reseed per NPC).
 
 - [ ] **Step 3: Tests**
 
-Real `l1_1`: at least one NPC has non-empty container; counts match the
-Task 1 oracle; Hero still from save. Smoke `glgame --level l1_1
---click-npc 13 --screenshot` exit 0.
+Real `l1_1`: at least one NPC main container is non-empty; counts match
+the revised Task 1 oracle (pass 2 / main); `TestPersonHasItem`/
+`GetItemCountI` see NPC items; Hero still from save. Smoke
+`glgame --level l1_1 --click-npc 13 --screenshot` exit 0.
 
 - [ ] **Step 4: Commit** `feat(game): generate NPC inventories on level load`.
 
@@ -129,9 +159,10 @@ Task 1 oracle; Hero still from save. Smoke `glgame --level l1_1
 - Modify: `docs/STATUS.md`, `docs/PROJECT.md`,
   `docs/research/parity-matrix.md`
 
-- [ ] **Step 1: D-055** — core loot implemented; specials skipped
-(RNG-desync documented); level source; initial spawn only; NPC add/remove
-still no-op; restock/trade out.
+- [ ] **Step 1: D-055** — core loot implemented via `FUN_1404b1c0`
+(two passes; main `+0x10`, hot `+0xc` policy); specials skipped
+(RNG-desync documented); level source `+0x26c4 + 1`; initial spawn only;
+no 4-stack exit; NPC add/remove still no-op; restock/trade out.
 
 - [ ] **Step 2: parity-matrix** — NPC loot rows: core verified/partial,
 specials blocked; recompute counts from the actual table.

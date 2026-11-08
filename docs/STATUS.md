@@ -7,36 +7,52 @@
   `InventoryRuntime`; specials не генерируются (documented RNG-desync).
 - **Spec:** `docs/specs/2026-11-08-p3b2b2b-core-npc-loot-design.md`.
 - **Plan:** `docs/plans/2026-11-08-p3b2b2b-core-npc-loot.md`.
-- **Task 1 (research gate, done 2026-11-08):** вердикт
-  **`implementable`**; Tasks 2–5 proceed. Research:
+- **Task 1 (research gate, done 2026-11-08; revised 2026-11-08):**
+  вердикт **`implementable`**. Research:
   `docs/research/p3b2b2-npc-loot-server.md` §15.
   - `BT_INFO +0x26c4` = сохранённый **средний уровень партии**
     (`FUN_140254bc`: среднее `FUN_1400cbc0(EXP)` по party-членам,
     `+5` за `SKILL_SCOUT>9`, `+5` за `SKILL_IDENTIFY>4`; update
-    `30577-30580`, save round-trip `35395`/`35637-38`, init `33982`).
-    Loot level = `value + 1` (`49517`). 28/28 save: value == hero level
-    (slot0=`40`/`L93_4`, slot2=`36`/`L6_3`, slot21=`1`/`L1_1`);
-    точные BT_INFO-смещения — §15.1.
-  - Prerequisites подтверждены: ITM `type/flags/max_stack/style`
-    (`proto+4/+8/+0x1c/+0x30` → runtime `+8/+0xc/+0x20/+0x34`);
-    merge `+1` (`0x1404e81c`), но caller вычитает весь `chunk`
-    (`0x14048d48`) — engine-квирк, воспроизводить; early-exit `>=4`
-    и restock-метаданные (`+0x20/+0x1c/+0x24`) в `FUN_140489ec`;
+    `30577-30580`, writer asm `0x14031d0a`, reader `35637-38`, init
+    `33982`). Loot level = `value + 1` (`49517`). 28/28 save:
+    value == hero level (slot0=`40`/`L93_4`, slot2=`36`/`L6_3`,
+    slot21=`1`/`L1_1`); Scout base max `2`, Identify max `0` (пороги
+    не превышены); точные BT_INFO-смещения — §15.1.
+  - Prerequisites: ITM `type/flags/max_stack/style`
+    (`proto+4/+8/+0x1c/+0x30` → runtime `+8/+0xc/+0x20/+0x34`).
     R1 `coin(regenerate_chance)` всегда (`49510`/`51141`).
+  - **Реальный SEF-путь — `FUN_1404b1c0` (два прохода), не
+    `FUN_140489ec`.** Pass 1 → hot `+0xc`: force-new
+    `FUN_1404e3a4(name,0,1)` (`this+4=1`), прямой
+    `count=min(remaining,max)`, без merge/chunk-loop. Pass 2 → main
+    `+0x10` (его читают `TestPersonHasItem`/`GetItemCountI`):
+    `coin((0.01*n3)/chance_decrease)` (при `n3==0` coin нет), qty
+    `1/quantity_decrease` (trunc/+1) → `range`, creation `this+4=0`.
+    RNG-порядок: R1, pass1 R2/R3, pass2 R2'/R3'. Порог метаданных
+    `100000` практически недостижим — **4-stack exit отсутствует**.
+  - Merge `+1`/`qty -= chunk`/early-exit `>=4` — квирк только
+    `FUN_140489ec` (hero/иной путь); **не** переносить на
+    `FUN_1404b1c0`.
   - RNG order: SEF `persons:` в порядке файла; `scr_inv` →
     `FUN_1401edc4` `22422-22455` → `FUN_1404b1c0`; лут потребляет RNG
     раньше движения (movement RNG — в update-тиках `20759`/
-    `20410-11`). Порт: один поток; лут в SEF-порядке, затем
-    `LevelSimulation` с тем же state; расхождения — §15.3.
-  - **Важное расхождение:** реальный SEF-спавн NPC идёт через
-    `FUN_1404b1c0` (два прохода/контейнера, scaled второй проход,
-    без 4-stack exit), а не через `FUN_140489ec` из плана. Task 3/4
-    должны реализовать первый проход `FUN_1404b1c0` либо зафиксировать
-    divergence в D-055.
-- **Gate:** закрыт — level source доказан; implementation не blocked.
-- **Критерии:** 238 `.inv` parse; generator tests; NPC counts; full
-  `ctest`; D-055/parity/STATUS.
-- **Коммит Task 1:** `docs(research): pin NPC loot level and order`.
+    `20410-11`). Порт: один поток; оба прохода в SEF-порядке, main
+    сохраняется, hot — если поддерживается (RNG pass 1 обязателен);
+    затем `LevelSimulation` с тем же state; расхождения — §15.3.
+  - **Ревизия spec/plan:** target обновлён на `FUN_1404b1c0`
+    (main = pass 2, hot = pass 1; second pass **в scope** как main,
+    не non-goal). Task 2 можно начинать сейчас; Tasks 3–4 — после
+    этой ревизии (данный commit).
+- **Gate:** level source доказан; **Task 2 не blocked**, Tasks 3–4
+  разблокированы после ревизии spec/plan; implementation conditional
+  на эту ревизию.
+- **D-055:** ещё не записан в `DECISIONS.md` — Task 5.
+- **Критерии:** 238 `.inv` parse; generator tests (two passes, no
+  4-stack, pass2 scaling); NPC main counts; full `ctest`;
+  D-055/parity/STATUS.
+- **Коммиты Task 1:** `637f184` (research), затем
+  `docs: revise NPC loot path to FUN_1404b1c0` (spec/plan/STATUS/
+  research fix).
 
 ## P4 — RNG parity (D-053 implementation) (done 2026-11-08)
 

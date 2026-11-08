@@ -19,11 +19,27 @@
   `quantity_decrease`, `level_offset`; строки `item "<TECH>" <minlvl>
   <maxlvl> <chance> <qty_min> <qty_max>`; 4-number строки пропускаются
   (362 в корпусе); `special` в реальных данных не активен.
-- Генератор `FUN_140489ec`: порядок записей файла, окно
-  `min+offset <= level <= max+offset`, `coin(0.01*chance)`,
-  `qty = range(qmin,qmax)`, split по `max_stack`, merge по item_id,
-  ранний выход при `>= 4` стеках с restock-метаданными, R1
-  `coin(regenerate_chance)` всегда.
+- **Реальный SEF-путь NPC — `FUN_1404b1c0`**, а не `FUN_140489ec`
+  (см. research §15). Один проход по таблице на контейнер, всего два
+  прохода:
+  - pass 1 → `+0xc` (hot): окно
+    `min+offset <= level <= max+offset`, R2 `coin(0.01*n3)`, R3
+    `range(n4,n5)`, force-new создание
+    (`FUN_1404e3a4(name,0,1)`, `this+4=1`) и прямая установка
+    `item+0xb0 = min(qty, max_stack)`; `remaining -= min`; без
+    merge/chunk-loop. Порог метаданных `100000` практически
+    недостижим — **4-stack exit отсутствует**.
+  - pass 2 → `+0x10` (**main**; его читают
+    `TestPersonHasItem`/`GetItemCountI`): chance
+    `(0.01*n3)/chance_decrease` (при `n3==0` coin не бросается),
+    qty `n4/n5`, масштабированные `1/quantity_decrease`
+    (trunc + `+1` при дробной части) → `range`; создание с
+    `this+4=0` и прямой установкой count; порог `100000`.
+  - R1 `coin(regenerate_chance)` — всегда (SEF вызывает с
+    `param_4=1`, поэтому R1 не отменяет генерацию).
+- `FUN_140489ec` (merge `+1`, `qty -= chunk`, early exit `>=4`) —
+  другой путь (hero/иные источники). Его merge-квирк **не
+  обобщается** на `FUN_1404b1c0`.
 - `level = *(DAT_14088dc4+0x26c4) + 1`; `+0x26c4` читается из `BT_INFO`
   save (`FUN_1403210c`, `decompiled.c:35638`).
 - Спец-модификаторы: `roll_special_count` (R4/R5) + `FUN_14047284`
@@ -64,7 +80,8 @@ Result<InvTable> load_inv(GameVfs&, std::string_view name);
 
 ### 3.2 Генератор
 
-`gl::game::NpcLootGenerator`:
+`gl::game::NpcLootGenerator` реализует initial spawn `FUN_1404b1c0`
+(два прохода, тот же порядок записей и RNG, что в оригинале):
 
 ```cpp
 struct LootItem {
@@ -72,25 +89,42 @@ struct LootItem {
     std::int32_t count;
     std::uint32_t type, flags, style;
 };
-std::vector<LootItem> generate(const gl::assets::InvTable&,
-                               std::int32_t level,
-                               const gl::assets::ItemNameIndex&,
-                               std::function<std::optional<ItemTemplate>(std::uint32_t)>,
-                               MsvcRandom&);
+struct NpcLoot {
+    std::vector<LootItem> hot;   // pass 1 -> +0xc
+    std::vector<LootItem> main;  // pass 2 -> +0x10 (queries)
+};
+NpcLoot generate(const gl::assets::InvTable&,
+                 std::int32_t loot_level,   // party_level + 1
+                 const gl::assets::ItemNameIndex&,
+                 std::function<std::optional<ItemTemplate>(std::uint32_t)>,
+                 MsvcRandom&);
 ```
 
-- R1 `coin(regenerate_chance)` всегда (даже для пустого контейнера).
-- Записи в порядке файла; окно уровней; `coin(0.01*chance)`;
-  `qty=range(qmin,qmax)`; `qty<1` — пропуск.
+- R1 `coin(regenerate_chance)` всегда; SEF вызывает с `param_4=1`,
+  поэтому R1 не отменяет генерацию. Контейнеры очищаются.
+- **Pass 1 (`hot`, `+0xc`)**: записи в порядке файла; окно уровней;
+  R2 `coin(0.01*n3)`; `n3==0` — пропуск (защитный дубль); R3
+  `range(n4,n5)`; `qty<1` — пропуск; цикл:
+  `FUN_1404e3a4(name,0,1)` с `this+4=1` (force-new), затем
+  `item+0xb0 = min(remaining, max_stack)`, `remaining -= min`.
+  Merge/chunk-loop нет. Раннего выхода `>=4` нет; порог метаданных
+  `100000` практически недостижим.
+- **Pass 2 (`main`, `+0x10`)**: окно уровней; если `n3==0` — chance
+  coin не бросается, иначе R2'
+  `coin((0.01*n3)/chance_decrease)`; R3' — `n4/n5`, умноженные на
+  `1/quantity_decrease`, trunc + `+1` при дробной части, затем
+  `range`; создание `FUN_1404e3a4(name,0,1)` с `this+4=0` (merge
+  разрешён) и прямой установкой `item+0xb0 = min(remaining,
+  max_stack)`; `remaining -= min`. Порог метаданных `100000`,
+  restock-флаг `+0x1c = 0`.
 - Прототип предмета: `type/flags/style/max_stack` из ITM; отсутствует —
   пропуск записи (документируется).
-- Split: `chunk = min(qty, max_stack)`; merge по item_id (count += chunk;
-  оригинальный merge-path +1 — исследовать/учесть в Task 1).
-- Ранний выход при `>=4` стеках: остановить генерацию и сохранить
-  restock-метаданные (путь/индекс) в NPC-контейнере; фактический restock
-  не реализуется (non-goal), но поведение первого поколения сохраняется.
 - Specials: **не вызывать** R4–R10. RNG-поток после первого
-  special-способного предмета расходится с оригиналом — D-055.
+  special-способного предмета расходится с оригиналом — запись в D-055
+  (Task 5).
+- `FUN_140489ec` (merge `+1`, `qty -= chunk`, early exit `>=4`) не
+  используется для NPC SEF; его квирк не переносится на
+  `FUN_1404b1c0`.
 
 ### 3.3 NPC-контейнеры
 
@@ -98,26 +132,40 @@ std::vector<LootItem> generate(const gl::assets::InvTable&,
   (Hero + NPC). Hero — из save; NPC — из генератора.
 - Генерация при загрузке уровня: для каждого `PersonInstance` с непустым
   `inventory` (SEF `scr_inv`) в порядке SEF; путь
-  `scripts/inventory/<inventory>.inv`; уровень — из `+0x26c4` (Task 1).
-- `TestPersonHasItem`/`GetItemCount` видят NPC-предметы.
+  `scripts/inventory/<inventory>.inv`; уровень — `party_level + 1`
+  (`+0x26c4 + 1`, Task 1).
+- **Контейнеры:** main (`+0x10`) — обязателен: именно его читают
+  `TestPersonHasItem`/`GetItemCountI` (research `p3b2a` §2.1/§2.2/§4.3).
+  Hot (`+0xc`) — pass 1; если runtime хранит только один контейнер,
+  hot допускается не сохранять, но **RNG pass 1 всё равно должен быть
+  выполнен** для выравнивания потока перед pass 2 (документируется как
+  divergence). Если runtime хранит оба — сохранять оба.
+- `TestPersonHasItem`/`GetItemCount` видят NPC-предметы из main.
 - `Add/Remove` для NPC остаются no-op (1b2b1 scope) — документируется.
 - Transfer/Trade — вне scope.
 
 ### 3.4 Уровень и seed
 
-- Task 1 обязан доказать `+0x26c4` (BT_INFO) и способ получить его из
-  save. Если не доказано — implementation **blocked**, код не пишется.
+- Task 1: `+0x26c4` доказан как сохранённый **party level**;
+  `loot_level = value + 1`. Источник: `BT_INFO` save (если save —
+  источник сессии), иначе runtime party level / `0` на новом старте.
 - RNG: тот же `MsvcRandom`, что у `LevelSimulation` (production seed
-  D-053; тесты — явный seed). Порядок потребления RNG до генерации
-  (movement init и т.п.) должен быть зафиксирован в Task 1; если точный
-  порядок недоказуем — генерировать детерминированно от seed и
+  D-053; тесты — явный seed). Лут (оба прохода `FUN_1404b1c0`)
+  потребляется в SEF-порядке до создания `LevelSimulation`; тот же
+  advanced state передаётся в симуляцию без reseed. Если точный
+  tick-order недоказуем — генерировать детерминированно от seed и
   документировать расхождение.
 
 ## 4. Non-goals
 
 - Specials-модификаторы (`FUN_14047284`/`DAT_14088df4`).
-- Restock/regenerate во времени (`regenerate_chance` после первого
-  поколения, `chance_decrease`, `quantity_decrease`).
+- Restock/regenerate во времени после первого поколения
+  (`regenerate_chance` в тиках); при этом `chance_decrease` и
+  `quantity_decrease` **в scope** — они применяются pass 2
+  `FUN_1404b1c0` уже при initial spawn.
+- Хранение hot-контейнера (`+0xc`, pass 1), если runtime хранит только
+  main; RNG pass 1 всё равно выполняется (см. §3.3).
+- `FUN_140489ec` (hero/иной путь) и его merge/early-exit квирки.
 - Transfer/Trade/PassToTradePanel.
 - Box/trigger контейнеры.
 - Точный pre-level RNG-order, если он недоказуем.
@@ -126,12 +174,17 @@ std::vector<LootItem> generate(const gl::assets::InvTable&,
 
 - `parse_inv`: все 238 реальных файлов; 4-number skip; комментарии;
   synthetic special.
-- Генератор: фиксированный seed/level, эталонные значения из псевдокода
-  (не из реализации); split/max_stack, merge, ранний выход, unknown ITM,
-  пустая таблица.
-- Real: один `.inv` + реальный уровень; ожидаемые item ids/counts
-  (hardcoded).
-- InventoryRuntime: NPC count/money; Hero не меняется.
+- Генератор: фиксированный seed/level, эталонные значения из
+  псевдокода (не из реализации); R1 всегда; pass 1 — force-new split
+  по `max_stack` без merge и без 4-stack exit; pass 2 — chance
+  `/chance_decrease`, qty `1/quantity_decrease` + trunc/`+1`,
+  `n3==0` без chance coin; порядок двух проходов и RNG; unknown ITM;
+  пустая таблица. Merge `+1`/`qty -= chunk` — только отдельный тест
+  для `FUN_140489ec` (вне NPC SEF), если такой helper появится.
+- Real: один `.inv` + реальный уровень; oracle — **main** (pass 2)
+  item ids/counts (hardcoded).
+- InventoryRuntime: NPC main count/money; hot — если хранится; Hero
+  не меняется.
 - E2E `glgame --level l1_1` без регрессии; real-data stability.
 - Full `ctest`.
 
@@ -146,9 +199,17 @@ std::vector<LootItem> generate(const gl::assets::InvTable&,
 
 ## 7. Риски
 
-- `+0x26c4` может зависеть от save/party; Task 1 gate.
-- Ранний выход при 4 стеках может давать мало предметов; следовать
-  research, не «улучшать».
-- Merge-path +1 и порядок вставки могут отличаться; Task 1 фиксирует.
-- RNG-desync specials влияет на последующие записи; документируется, не
-  маскируется.
+- `+0x26c4` зависит от save/party; Task 1 gate (доказан: средний
+  уровень партии).
+- **Нет 4-stack exit:** `FUN_1404b1c0` не останавливается на 4 стеках;
+  порог метаданных `100000` практически недостижим. Не добавлять
+  port-side cap, иначе количество предметов будет занижено.
+- Merge `+1` и `qty -= chunk` — квирк только `FUN_140489ec`; не
+  применять к `FUN_1404b1c0` (там force-new + прямая установка count).
+- **Контейнеры/второй проход:** main — `+0x10` (pass 2), hot — `+0xc`
+  (pass 1). Если runtime хранит только main, pass 1 RNG всё равно
+  обязателен; иначе pass 2 рассогласован. Проверять oracle по main.
+- Pass 2 использует `chance_decrease`/`quantity_decrease` уже на
+  spawn; это не restock.
+- RNG-desync specials влияет на последующие записи; документируется в
+  D-055 (Task 5), не маскируется.

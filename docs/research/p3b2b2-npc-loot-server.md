@@ -980,9 +980,10 @@ gate 1b2b2b. Источник — тот же `Server.dll`
    `SKILL_SCOUT (0x0f) > 9`, и `+5`, если
    `SKILL_IDENTIFY (0x17) > 4`; возвращает целое среднее `sum/count`
    (`27524-27527`), `0` — если членов нет.
-3. **Save round-trip.** Writer `FUN_14031b64` (RVA `0x31b64`) пишет
-   `this+0x26c4` в `BT_INFO` (`decompiled.c:35395`; asm
-   `0x14031d0a: pushl 0x26c4(%eax)`). Reader `FUN_1403210c`
+3. **Save round-trip.** Writer `FUN_14031b64` (RVA `0x31b64`):
+   asm `0x14031d0a: pushl 0x26c4(%eax)`; `decompiled.c:35395` — это
+   вызов `FUN_1400126c` с опущенным Ghidra аргументом. Reader
+   `FUN_1403210c`
    (RVA `0x3210c`) читает его в `decompiled.c:35637-35638`. Init
    `FUN_1402fdc0` (RVA `0x2fdc0`) обнуляет поле
    (`decompiled.c:33982`).
@@ -997,8 +998,16 @@ gate 1b2b2b. Источник — тот же `Server.dll`
    `slot2`: `L6_3`, EXP `65133` → `36`, `+0x26c4 = 36`.
    `slot21`: `L1_1`, EXP `0` → `1`, `+0x26c4 = 1`.
    Полная таблица — в отчёте Task 1; расхождений `0/28`.
+   Skill base values (`BT_HERO body 0x038+4*id`): Scout (0x0f) max `2`
+   (slot21), Identify (0x17) max `0` across 28 saves; ни один не
+   превышает пороги `>9`/`>4`. Effective skill добавляет item bonus
+   (`manager+0x198`, в `BT_HERO` не хранится), но равенство 28/28
+   подтверждает отсутствие net-бонуса на момент save.
 6. **Следствие для порта.** При загрузке save сохранённое значение —
-   авторитетно: оригинал восстанавливает `+0x26c4` до спавна сущностей.
+   авторитетно: reader ставит поле (`35637-35638`), затем
+   `FUN_140325fc` (`35640`) читает BT_ENTS (`35847-35915`) и создаёт
+   сущности — т.е. поле установлено до их создания (live-порядок не
+   снимался, `unverified`).
    На новом старте поле `0` (init) до первого world update, поэтому
    первый уровень грузится с loot level `1`. В идущей сессии —
    текущий party level (`FUN_140254bc`). Для одиночного героя
@@ -1058,7 +1067,7 @@ tail    = data[p:p+8]
 `+0x218`, blob (`0x20`) и `+0x26c8/0x26cc` для лута не нужны; их
 семантика — `unverified` (blob идёт в `DAT_14088e14`, не в RNG-поток).
 
-### 15.2 Prerequisites генерации (ITM, merge, early exit, R1)
+### 15.2 Prerequisites генерации (ITM, `FUN_1404b1c0`, quirk, R1)
 
 #### ITM → прототип → runtime
 
@@ -1070,10 +1079,11 @@ tail    = data[p:p+8]
   `decompiled.c:54546-54558`) копирует:
   `proto+0x04 → item+0x08` (type), `proto+0x08 → item+0x0c` (flags),
   `proto+0x1c → item+0x20` (style), `proto+0x30 → item+0x34`
-  (max_stack). Генератор берёт `pinfo+0x30` как max_stack
-  (`49550-49553`), runtime-флаги — `item+0x0c` (`49560-49562`),
-  runtime max_stack — `item+0x34` (`53791`, merge), style
-  (`item+0x20`) ядром не используется.
+  (max_stack). `FUN_1404b1c0` использует `pinfo+0x30` как cap в
+  `min(remaining, item+0x34)` (pass 1/2); `FUN_140489ec` — как chunk
+  (`49550-49553`). Runtime-флаги — `item+0x0c`; runtime max_stack —
+  `item+0x34`; merge-path `+1` — только `FUN_140489ec` (`53791`).
+  Style (`item+0x20`) ядром не используется.
 - Неизвестный TECH: `find_proto(name,-1)` → `get(id)`; `0` → запись
   пропускается (`49544-49548`, release `49589-49591`).
 
@@ -1092,40 +1102,76 @@ tail    = data[p:p+8]
 `0x40` — 99, `0x80` — 565 (specials-ветка использует `&4`/`&0x40`;
 вне scope).
 
-#### Merge-path (важный квирк)
+#### `FUN_1404b1c0` — точная RNG/creation семантика (SEF NPC)
 
-`FUN_1404e3a4` (RVA `0x4e3a4`) при вставке ищет существующий инстанс
-того же прототипа (`item+0xa8`), и если `max_stack (+0x34) >= 2` и
-`current (+0xb0) < max`, **увеличивает существующий стек ровно на 1**
-(asm `0x1404e81c: addl $0x1,%edx`; `0x1404e81f: movl %edx,0xb0(%ecx)`)
-и возвращает его id (`0x1404e878`), независимо от запрошенного `chunk`
-(`decompiled.c:53790-53810`).
+`FUN_1404b1c0` (RVA `0x4b1c0`) вызывается из SEF `scr_inv`
+(`FUN_1401edc4` `22451-22455`) с `param_1 = +0xc` (hot),
+`param_2 = +0x10` (main; его читают `TestPersonHasItem`/
+`GetItemCountI`, `p3b2a` §2.1/§2.2/§4.3), `param_4 = 1`.
+Оба контейнера очищаются (два `FUN_1404d724`; asm
+`0x1404b35a`/`0x1404b362`). RNG — строго в порядке:
 
-При этом вызывающий генератор вычитает из `qty` **весь `chunk`**:
-`49585` / asm `0x14048d48: subl %esi,%edi` (`esi=chunk`, `edi=qty`).
-Следствие: при `chunk > 1` merge добавляет `+1`, но списывает `chunk`,
-т.е. `chunk-1` предметов «теряются». Это поведение оригинала, его нужно
-воспроизвести, а не «исправлять» (`count += chunk` неверно).
+| # | Проход | Вызов | Аргумент | Где |
+|---|---|---|---|---|
+| R1 | до проходов, всегда | `coin` | `this+0x40` (`regenerate_chance`) | `51141`; asm `0x1404b328` |
+| R2 | pass 1 | `coin` | `0.01 * n3` | `51161`; asm `0x1404b3f1-401` |
+| R3 | pass 1 | `range` | `n4, n5` | `51171`; asm `0x1404b43f` |
+| R4/R5 | pass 1 | `coin` | specials | `51191-51203`; **out of scope** |
+| R2' | pass 2, только `n3 != 0` | `coin` | `(0.01*n3)/chance_decrease` | `51293`; asm `0x1404b6e7-6f8` |
+| R3' | pass 2 | `range` | scaled `n4,n5` | `51313`; asm `0x1404b7e3` |
+| R4/R5 | pass 2 | `coin` | specials | `51332-51358`; **out of scope** |
 
-#### Early exit и restock-метаданные (`FUN_140489ec`)
+Pass 1 (`param_1` = `+0xc` hot):
 
-После создания предмета: `cnt = FUN_14030f98(box+8)`; если `path != 0`
-и `cnt >= 4` (asm `0x14048cf7: cmpl $0x4,%eax; jae`), то
-`box+0x20 = record_index + 1`, `box+0x1c = 1`, путь копируется в
-`box+0x24` (до `0x103`), контейнер регистрируется в пуле менеджера
-(`+0x15c/+0x160/+0x168`) и функция возвращает id
-(`decompiled.c:49592-49653`; asm `0x14048e41-…`). Если `path == 0`,
-раннего выхода нет (`49593-49594`).
+- R1 всегда; при `R1=0 && param_4==0` — return без генерации; SEF
+  `param_4=1` → генерация всегда.
+- на запись в окне: R2; `n3==0` → skip; `R3 = range(n4,n5)`;
+  `qty<1` → skip.
+- creation loop: `this+4 = 1` (force-new) →
+  `FUN_1404e3a4(name,0,1)` (`decompiled.c:51177-51180`; asm
+  `0x1404b45e-0x1404b46c`) → `item = FUN_1404dbec(id)` →
+  `item+0xb0 = min(remaining, item+0x34)` (`51183-51187`; asm
+  `0x1404b4c7-0x1404b4d9`) → `remaining -= min` (`51210`; asm
+  `0x1404b4f4-0x1404b4fc`) → повтор, пока `remaining > 0`.
+  Merge/chunk-loop нет; каждый инстанс создаётся force-new.
+- метаданные (`+0x20`/`+0x1c=1`/`+0x24`/pool) только при
+  `count >= 100000` (`0x186a0`; asm `0x1404b496`), т.е. практически
+  недостижимы; **4-stack exit отсутствует**.
 
-#### R1
+Pass 2 (`param_2` = `+0x10` main):
 
-`FUN_140489ec`: R1 = `FUN_14006288(this+0x40)` (`regenerate_chance`)
-**всегда** после создания контейнера (`49510`; asm
-`0x14048b42: pushl 0x40(%eax)`). Если R1=0 и контейнер непуст —
-контейнер сохраняется; иначе очищается и генерируется. Новый контейнер
-пуст → генерация идёт всегда; R1 потребляется в любом случае.
-`FUN_1404b1c0` (SEF-путь, §15.3) делает тот же R1 на `51141`; при
-`param_4=1` (SEF) всегда очищает/генерирует.
+- окно то же; если `n3 == 0.0f` — chance coin **не бросается**
+  (asm `0x1404b6e5: je 0x1404b716`), иначе R2'.
+- qty: `scale = 1/quantity_decrease` (`0x1404b724-0x1404b732`);
+  `n4*scale`, `n5*scale`; FPU trunc (RC=`0xC00`) + `+1.0`, если
+  truncated != product (asm `0x1404b743-0x1404b7da`) → effective
+  ceil for positive; затем `R3' = range(scaled_min, scaled_max)`.
+- creation: `this+4 = 0` (merge разрешён) →
+  `FUN_1404e3a4(name,0,1)` (`0x1404b7fb-0x1404b80c`) →
+  `item+0xb0 = min(remaining, item+0x34)` (`0x1404b857-0x1404b860`) →
+  `remaining -= min` (`0x1404b881-0x1404b885`). Merge-interaction
+  второго прохода полностью не трассирован (`unverified`).
+- метаданные при `count >= 100000` (`0x1404b829`), `+0x1c = 0`
+  (`0x1404b8a2`); 4-stack exit нет.
+
+R1 не отменяет генерацию при `param_4=1`, но R1 всё равно
+потребляется.
+
+#### `FUN_140489ec` (не SEF NPC) — merge/early-exit квирк
+
+`FUN_140489ec` (RVA `0x489ec`, `decompiled.c:49416-49667`) — другой
+путь (hero/иные источники), **не** SEF NPC. Только для него:
+
+- merge-path `FUN_1404e3a4` увеличивает существующий стек на `+1`
+  (asm `0x1404e81c-0x1404e81f`; `decompiled.c:53790-53810`) и
+  возвращает его id;
+- вызывающий вычитает из `qty` весь `chunk` (`49585`; asm
+  `0x14048d48: subl %esi,%edi`), поэтому при `chunk>1` merge теряет
+  `chunk-1` предметов;
+- early exit при `>=4` стеках (asm `0x14048cf7: cmpl $0x4,%eax; jae`)
+  с restock-метаданными `+0x20`/`+0x1c=1`/`+0x24`.
+
+Эти правила **не** применять к `FUN_1404b1c0`.
 
 ### 15.3 Порядок RNG на спавне (доказано/расхождение)
 
@@ -1141,14 +1187,21 @@ tail    = data[p:p+8]
   сохранённое в `this+0x2aac`; формат `scripts\inventory\%s.inv`,
   RVA `0x8e57c`; asm `0x1404b232-0x1404b239`). `this+0x388` — это
   путь `inv_name` в `FUN_14023aa0` (script/иной источник), не SEF.
-- `FUN_1404b1c0` (RVA `0x4b1c0`): R1 `51141`; **два прохода**:
-  первый заполняет `param_1` (`51177-51211`) по обычной
-  window/chance/qty/chunk логике; второй — `param_2`
-  (`51318-51366`) с `chance/chance_decrease` (`51293`) и
-  `qty/quantity_decrease` (`51300-51313`). Оба прохода потребляют
-  R2/R3 (и R4/R5 для specials). Порог метаданных — `100000/99999`
-  (`51217`, `51373`), **не 4**. Полная семантика двух контейнеров —
-  `unverified` (§10.2/§12).
+- `FUN_1404b1c0` (RVA `0x4b1c0`): `param_1 = +0xc` (hot),
+  `param_2 = +0x10` (main); R1 `51141`; pass 1 заполняет `+0xc`
+  (`51177-51211`) через `coin(0.01*n3)` + `range(n4,n5)` и force-new
+  creation + direct count (без merge/chunk-loop); pass 2 заполняет
+  `+0x10` (`51318-51366`) через `n3!=0` chance
+  `(0.01*n3)/chance_decrease`, qty `1/quantity_decrease` (trunc/+1)
+  + `range` и creation с `this+4=0`. Оба прохода потребляют R2/R3
+  (и R4/R5 для specials, out of scope). Порог метаданных `100000`
+  (`0x186a0`, `51217`/`51373`), **не 4**; 4-stack exit нет. Точная
+  таблица/asm — §15.2.
+- **Container mapping:** first pass → `+0xc` (hot), second → `+0x10`
+  (main). `RS_TestPersonHasItem`/`RS_GetItemCountI` читают
+  `entity+0x10` (`p3b2a` §2.1/§2.2/§4.3) — поэтому **main = pass 2**
+  обязателен; pass 1 (hot) можно не хранить, но его RNG обязан быть
+  выполнен.
 - Движение: RNG-вызовы не в конструкторе, а в update-тиках:
   `STAY_ROTATE rand(10,25)` — `FUN_1401c93c` `20759`;
   `RANDOM/RANDOM_RADIUS range` — `FUN_1401c2a0` `20410-20411`;
@@ -1162,18 +1215,21 @@ tail    = data[p:p+8]
 
 1. Один поток `MsvcRandom(seed)` на загрузку уровня; без reseed на NPC.
 2. Парсить `persons:` в порядке файла; для каждого `PersonInstance` с
-   непустым `scr_inv` генерировать лут (R1, R2, R3; specials не
-   рисовать) **до** создания `LevelSimulation`.
+   непустым `scr_inv` генерировать **оба прохода** `FUN_1404b1c0`
+   (pass 1 → hot `+0xc`, pass 2 → main `+0x10`; specials не рисовать)
+   **до** создания `LevelSimulation`.
 3. Передать тот же продвинутый RNG-state в `LevelSimulation` (новый
    API/параметр; не reseed), чтобы его начальные draw'ы шли после лута.
 4. Зафиксировать расхождения:
-   - SEF-путь оригинала — `FUN_1404b1c0` (два контейнера/прохода,
-     scaled второй проход, без 4-stack exit), а план Task 3 —
-     `FUN_140489ec` (один проход, 4-stack exit). Для паритета NPC SEF
-     нужен первый проход `FUN_1404b1c0` (и решение по второму);
-     иначе — запись в D-055.
-   - specials R4/R5/R6–R10 не вызываются — существующий
-     документированный RNG-desync (D-055).
+   - SEF-путь — `FUN_1404b1c0`, два прохода; main = pass 2 (`+0x10`),
+     его читают `TestPersonHasItem`/`GetItemCountI`; hot = pass 1
+     (`+0xc`). Если runtime хранит только main, pass 1 RNG всё равно
+     обязателен (иначе pass 2 рассогласован); хранение hot —
+     documented divergence. `FUN_140489ec` (merge `+1`,
+     `qty -= chunk`, 4-stack exit) — не SEF NPC.
+   - specials R4/R5/R6–R10 не вызываются — RNG-desync; **D-055
+     будет записан в Task 5** (сейчас в `DECISIONS.md` записи D-055
+     ещё нет).
    - порт считает начальные movement-draw'ы в
      `LevelSimulation::create`, оригинал — в первом update-тике;
      точный tick-order не снят live (`unverified`).
@@ -1184,18 +1240,21 @@ tail    = data[p:p+8]
 
 **`implementable`** для scoped core (без specials/restock/live-oracle):
 источник уровня `+0x26c4` доказан, prerequisites §15.2 подтверждены,
-порядок RNG §15.3 зафиксирован. Tasks 2–5 могут продолжаться.
+порядок RNG §15.3 зафиксирован. **Task 2 может начинаться сразу;
+Tasks 3–4 — после ревизии spec/plan (этот fix); Task 5 — после
+реализации.**
 
 Остаётся/вне scope: specials `FUN_14047284`/`DAT_14088df4`, restock
-`FUN_14048fac`/`FUN_1404b1c0` (полная фазовая трассировка), гейт
-`BT_RGINF`/`+0x26c0` (в SEF-пути `FUN_1401edc4` не проверяется; гейт
-есть в save/BT_ENTS-путях `FUN_1401e758` (`22083-22086`) и
-`FUN_140233d4` (`25998-26016`)), live-оракул.
+во времени (`FUN_14048fac`; initial spawn `FUN_1404b1c0` теперь в
+scope), гейт `BT_RGINF`/`+0x26c0` (в SEF-пути `FUN_1401edc4` не
+проверяется; гейт есть в save/BT_ENTS-путях `FUN_1401e758`
+(`22083-22086`) и `FUN_140233d4` (`25998-26016`)), live-оракул.
 
-**Важно:** план Task 3/4 предполагает `FUN_140489ec`; фактический
-SEF-спавн NPC идёт через `FUN_1404b1c0` (§15.3). Это scope/design
-вопрос, а не блокер источника уровня; решение — реализовать первый
-проход `FUN_1404b1c0` или задокументировать расхождение в D-055.
+**Важно:** реальный SEF-спавн NPC идёт через `FUN_1404b1c0` (два
+прохода). Main (`+0x10`, pass 2) обязателен для
+`TestPersonHasItem`/`GetItemCountI`; hot (`+0xc`, pass 1) можно не
+хранить, но его RNG обязан быть выполнен. План Task 3/4 обновлён на
+эту семантику; D-055 — Task 5.
 
 ### 15.5 Проверка Task 1 (фактический вывод)
 
@@ -1205,17 +1264,33 @@ SEF-спавн NPC идёт через `FUN_1404b1c0` (§15.3). Это scope/des
 slot0  tag=0xB71C4 size=100 off=0x58 value=40 level=L93_4  heroL=40
 slot2  tag=0xB71C4 size=86  off=0x4A value=36 level=L6_3   heroL=36
 slot21 tag=0xB71C4 size=87  off=0x4B value=1  level=L1_1   heroL=1
+skills: Scout(0x0f) base max=2 (slot21); Identify(0x17) base max=0;
+        0/28 above thresholds (>9 / >4)
 
 # ITM (items.pak, 1848): MON_1_0_1 id=812 type=18 flags=0xC0000000
 #   max_stack=100000000 style=1; SWR_1_02_2 id=533 type=0 flags=0x84
 #   max_stack=1 style=2; bit counts 0x4=922, 0x40=99, 0x80=565.
 
-# objdump: 0x14048b42 pushl 0x40(%eax)          (R1)
-#          0x14048ca0..cad min(qty,pinfo+0x30)  (chunk)
-#          0x14048d48 subl %esi,%edi           (qty -= chunk)
-#          0x14048cf7 cmpl $0x4,%eax; jae      (early exit)
-#          0x1404e81c addl $0x1,%edx            (merge +1)
-#          0x14031d0a pushl 0x26c4(%eax)        (BT_INFO write)
+# objdump (SEF NPC): FUN_1404b1c0
+#   0x1404b328 call coin                  (R1)
+#   0x1404b3f1..401 pass1 coin(0.01*n3)
+#   0x1404b43f call range                 (pass1 n4,n5)
+#   0x1404b45e..46c force-new this+4=1
+#   0x1404b4c7..4d9 item+0xb0=min(rem,max)
+#   0x1404b4f4..4fc remaining-=min
+#   0x1404b496 cmpl $0x186a0; jae         (metadata only >=100000)
+#   0x1404b6e5 je ...                     (pass2 n3==0 no chance coin)
+#   0x1404b6e7..6f8 pass2 coin((0.01*n3)/chance_decrease)
+#   0x1404b724..7da pass2 qty*(1/quantity_decrease) trunc/+1
+#   0x1404b7e3 call range                 (pass2 scaled)
+#   0x1404b7fb..80c pass2 creation this+4=0
+#   0x1404b829 cmpl $0x186a0; jae         (pass2 metadata)
+# FUN_140489ec (non-SEF path; scoped quirk)
+#   0x14048b42 pushl 0x40(%eax)           (R1)
+#   0x14048d48 subl %esi,%edi             (qty -= chunk)
+#   0x14048cf7 cmpl $0x4,%eax; jae        (early exit)
+#   0x1404e81c addl $0x1,%edx             (merge +1)
+#   0x14031d0a pushl 0x26c4(%eax)         (BT_INFO write)
 ```
 
 Документ: UTF-8 без BOM, `nul=0`.
