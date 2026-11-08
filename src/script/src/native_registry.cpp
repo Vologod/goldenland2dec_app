@@ -130,6 +130,31 @@ Value native_remove_item(std::span<const Value> args, NativeServices& services) 
     return double{0.0};
 }
 
+Value native_transfer_item(std::span<const Value> args, NativeServices& services) {
+    if (args.size() < 4 || !is_string(args[0]) || !is_string(args[1]) ||
+        !is_string(args[2]) || !is_numeric(args[3])) {
+        warn_native("script native RS_PersonTransferItemI: invalid arguments", services);
+        return double{0.0};
+    }
+    if (!services.inventory.transfer_item) return double{0.0};
+    const bool transferred =
+        services.inventory.transfer_item(as_string(args[0]), as_string(args[1]),
+                                         as_string(args[2]), as_int(args[3]));
+    return transferred ? double{1.0} : double{0.0};
+}
+
+Value native_transfer_all(std::span<const Value> args, NativeServices& services) {
+    if (args.size() < 2 || !is_string(args[0]) || !is_string(args[1])) {
+        warn_native("script native RS_PersonTransferAllItemsI: invalid arguments",
+                    services);
+        return double{0.0};
+    }
+    if (!services.inventory.transfer_all) return double{0.0};
+    const bool transferred =
+        services.inventory.transfer_all(as_string(args[0]), as_string(args[1]));
+    return transferred ? double{1.0} : double{0.0};
+}
+
 std::string_view first_string(std::span<const Value> args) {
     return args.empty() ? std::string_view{} : as_string(args.front());
 }
@@ -193,13 +218,16 @@ std::vector<NativeInfo> make_entries() {
         if (id != 0x4000000 && id != 0x4000001 && id != 0x400000c)
             add(id, NativeSupport::unsupported, "requires person runtime state");
     add(0x5000000, NativeSupport::supported, {}, &native_test_person_has_item, 2);
+    add(0x5000001, NativeSupport::supported, {}, &native_transfer_item, 4);
     add(0x5000002, NativeSupport::supported, {}, &native_get_item_count, 2);
+    add(0x5000003, NativeSupport::supported, {}, &native_transfer_all, 2);
     add(0x5000004, NativeSupport::supported, {}, &native_add_item, 3);
     add(0x5000005, NativeSupport::supported, {}, &native_remove_item, 3);
     add(0x5000008, NativeSupport::supported, {}, &native_get_money, 0);
     for (std::uint32_t id = 0x5000000; id <= 0x5000008; ++id)
-        if (id != 0x5000000 && id != 0x5000002 && id != 0x5000004 &&
-            id != 0x5000005 && id != 0x5000008)
+        if (id != 0x5000000 && id != 0x5000001 && id != 0x5000002 &&
+            id != 0x5000003 && id != 0x5000004 && id != 0x5000005 &&
+            id != 0x5000008)
             add(id, NativeSupport::unsupported, "requires item runtime state");
     for (std::uint32_t id = 0x6000000; id <= 0x6000003; ++id)
         add(id, NativeSupport::unsupported, "requires world clock");

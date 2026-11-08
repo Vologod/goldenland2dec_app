@@ -33,7 +33,8 @@ TEST_CASE("native registry classifies dialog and host natives") {
     for (std::uint32_t id : {0x4000000u, 0x4000001u, 0x400000cu})
         CHECK(NativeRegistry::find(id)->support == NativeSupport::supported);
     for (std::uint32_t id :
-         {0x5000000u, 0x5000002u, 0x5000004u, 0x5000005u, 0x5000008u})
+         {0x5000000u, 0x5000001u, 0x5000002u, 0x5000003u, 0x5000004u, 0x5000005u,
+          0x5000008u})
         CHECK(NativeRegistry::find(id)->support == NativeSupport::supported);
     CHECK(NativeRegistry::find(0xDEADBEEF) == nullptr);
 }

@@ -150,7 +150,7 @@ TEST_CASE("inventory native registry arities and support match Server.dll") {
     CHECK(add->handler != nullptr);
     CHECK(remove->handler != nullptr);
     CHECK(money->handler != nullptr);
-    for (std::uint32_t id : {0x5000001u, 0x5000003u, 0x5000006u, 0x5000007u}) {
+    for (std::uint32_t id : {0x5000006u, 0x5000007u}) {
         const auto* info = NativeRegistry::find(id);
         REQUIRE(info != nullptr);
         CHECK(info->support == NativeSupport::unsupported);

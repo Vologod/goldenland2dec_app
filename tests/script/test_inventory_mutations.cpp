@@ -171,7 +171,7 @@ TEST_CASE("mutation native registry arities and support match Server.dll") {
     CHECK(remove->arity == 3);
     CHECK(add->handler != nullptr);
     CHECK(remove->handler != nullptr);
-    for (std::uint32_t id : {0x5000001u, 0x5000003u, 0x5000006u, 0x5000007u}) {
+    for (std::uint32_t id : {0x5000006u, 0x5000007u}) {
         const auto* info = NativeRegistry::find(id);
         REQUIRE(info != nullptr);
         CHECK(info->support == NativeSupport::unsupported);
@@ -179,10 +179,10 @@ TEST_CASE("mutation native registry arities and support match Server.dll") {
     }
 }
 
-TEST_CASE("native registry reports 13 supported natives out of 65") {
+TEST_CASE("native registry reports 15 supported natives out of 65") {
     std::size_t supported = 0;
     for (const auto& entry : NativeRegistry::entries())
         if (entry.support == NativeSupport::supported) ++supported;
     CHECK(NativeRegistry::size() == 65);
-    CHECK(supported == 13);
+    CHECK(supported == 15);
 }
