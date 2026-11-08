@@ -7,6 +7,39 @@
   `RS_PersonTransferAllItemsI` (`0x5000003`) между Hero/NPC.
 - **Spec:** `docs/specs/2026-11-08-p3b2b3-transfers-design.md`.
 - **Plan:** `docs/plans/2026-11-08-p3b2b3-transfers.md`.
+- **Task 1 (research gate, done 2026-11-08):** вердикт
+  **`implementable`**. Research:
+  `docs/research/p3b2b3-transfers-server.md`.
+  - `RS_PersonTransferItemI` (`0x5000001`, RVA `0x401dc`,
+    sig `3,3,3,0`): `(source,dest,TECH,count)`; `FUN_14048790`
+    (RVA `0x48790`). Same container → `1`; missing source/dest
+    container → `0`; absent item при `count>0` → `0`; `count==0` → `1`
+    без изменений; `count<0` → лимит 1 000 000 (при absent item тоже
+    `1`); partial — decrement + add; exact/over — whole-record move
+    (`FUN_1404a04c` mode 0) + add, source-записи удаляются; возврат
+    `1.0`/`0.0`.
+  - `RS_PersonTransferAllItemsI` (`0x5000003`, RVA `0x40fb0`,
+    sig `3,3`): native mode 0; все used-записи source → dest в slot
+    order; empty source/same container → `1`; source очищается; dest
+    merge через `FUN_1404cd28`. `0x5000006/7` (trade `entity+0xC`) —
+    вне scope (подтверждено; transfer работает с `entity+0x10`).
+  - UID/id: `FUN_1404c690` TECH → item id, первая used-запись →
+    instance uid `+0xA4`; `+0xA8` item id; `+0xB0` count; uid →
+    глобальный пул.
+  - **Spec correction (Task 2):** dest-запись создаётся
+    `FUN_1404cd28` из ITM-шаблона (`type/flags/style/max_stack`), а
+    **не** копирует runtime-поля source (spec §3.2/§5.1).
+  - Real oracle slot0/slot2 + `l1_1` NPC (seed 1, main): точные
+    before/after таблицы — research §7. Real dialog
+    `l1_1.p387_poison_plotnik` (node 278, answers `0,0`):
+    preload `Hero.QST_1_0_3=1` → `Hero 0`, `P387 1`, `P387.QST_1_0_5=1`;
+    globals `L1_Svetlograd_n3_GetElexir=5`, `plotnik_povtor=2`.
+    Secondary: `old_test.age.cs` node 132 (answers `0,0`, `l57`
+    `L0.M3_Baga`).
+  - 284 реальных `TransferItemI` в 111 `.cs`; ни один не ветвится по
+    возврату (все → scratch `result`); `TransferAll` — 0 вызовов.
+- **Gate:** Task 2 может начинаться; Tasks 3–4 — после реализации
+  Task 2; Task 5 — после полного `ctest`.
 - **Критерии:** семантика `FUN_14048790`/`FUN_14048518`; 2 ID →
   supported (15/65); unit + real oracle; full `ctest`; D-056/parity.
 - **Вне scope:** trade-контейнеры/`PassToTradePanel`.
