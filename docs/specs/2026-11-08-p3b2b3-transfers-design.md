@@ -88,10 +88,11 @@ bool transfer_all(std::string_view from, std::string_view to);
   `entity+0x10`) — deviation, D-056. Both
   containers резолвятся до short-circuit `from == to`, поэтому
   одинаковые имена отсутствующей персоны → `false`.
-- Порт-guard: `transfer_all` при хотя бы одной source-записи без ITM
-  (`item_template` отсутствует или `max_stack == 0`) возвращает
-  `false` без мутаций (оригинал add-ошибки не проверяет и продолжил
-  бы) — deviation, D-056.
+- Порт-guard: `transfer_all` при source-записи без ITM template
+  возвращает `false` без мутаций (оригинал add-ошибку не проверяет и
+  продолжил бы) — deviation, D-056.
+- Порт-guard: `max_stack == 0` — `false`/no-op (в оригинале возможен
+  нетерминирующий цикл создания, research §9.7) — deviation, D-056.
 - `access()` расширяется callbacks (`transfer_item`, `transfer_all`).
 
 ### 5.2 `gl::script`

@@ -485,8 +485,9 @@ Hero не затрагивается. `money()` после переноса = 0 
    `TransferItem` (вероятно, AI/квест/trade-target), не установлен.
 2. Потребитель container `+0x18` и event-кодов notify `0xB4..0xB7`
    (p3b2b1 §5, §10) — не меняется.
-3. Живой прогон negative-count и missing-container (AV) не выполнялся;
-   все выводы — статический дикода + реальные данные.
+3. Живой прогон negative-count и TransferAll missing-person (AV) не
+   выполнялся; TransferItem missing person/container возвращает `0`
+   (без AV). Все выводы — статический дикода + реальные данные.
 4. Выбор сущности при **дубликате имени** (например, два `L0.M3_Baga`
    в `l57`) в `TransferItem`-скане не трассирован; порт использует
    first-wins контейнеров 1b2b2b.

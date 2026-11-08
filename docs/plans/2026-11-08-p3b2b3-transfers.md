@@ -72,7 +72,8 @@ Partial/full/over/absent(+/-/0)/zero/negative/same person; merge;
 NPC↔Hero; Hero↔NPC; source record removal. New dest record fields come
 from the ITM template (`type/flags/style/max_stack`), not the source
 record; merging into an existing dest record keeps that record's flags.
-Missing person/container → false/no-op (port deviation from AV, D-056).
+TransferItem missing person/container → false (matches original 0);
+TransferAll missing person → false (port deviation from AV, D-056).
 
 - [x] **Step 2: Implement** per research.
 
