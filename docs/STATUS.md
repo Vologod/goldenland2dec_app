@@ -1,62 +1,58 @@
 # STATUS
 
 Обновлено: 2026-11-08
-## Phase 1b2b3 — inventory transfers (in progress 2026-11-08)
+## Phase 1b2b3 — inventory transfers (done 2026-11-08)
 
 - **Задача:** `RS_PersonTransferItemI` (`0x5000001`) и
   `RS_PersonTransferAllItemsI` (`0x5000003`) между Hero/NPC.
 - **Spec:** `docs/specs/2026-11-08-p3b2b3-transfers-design.md`.
 - **Plan:** `docs/plans/2026-11-08-p3b2b3-transfers.md`.
-- **Task 1 (research gate, done 2026-11-08):** вердикт
-  **`implementable`**. Research:
-  `docs/research/p3b2b3-transfers-server.md`.
-  - `RS_PersonTransferItemI` (`0x5000001`, RVA `0x401dc`,
-    sig `3,3,3,0`): `(source,dest,TECH,count)`; `FUN_14048790`
-    (RVA `0x48790`). Same container → `1`; missing source/dest
-    container → `0`; absent item при `count>0` → `0`; `count==0` → `1`
-    без изменений; `count<0` → лимит 1 000 000 (при absent item тоже
-    `1`); partial — decrement + add; exact/over — whole-record move
-    (`FUN_1404a04c` mode 0) + add, source-записи удаляются; возврат
-    `1.0`/`0.0`.
-  - `RS_PersonTransferAllItemsI` (`0x5000003`, RVA `0x40fb0`,
-    sig `3,3`): native mode 0; все used-записи source → dest в slot
-    order; empty source/same container → `1`; source очищается; dest
-    merge через `FUN_1404cd28`. `0x5000006/7` (trade `entity+0xC`) —
-    вне scope (подтверждено; transfer работает с `entity+0x10`).
-  - UID/id: `FUN_1404c690` TECH → item id, первая used-запись →
-    instance uid `+0xA4`; `+0xA8` item id; `+0xB0` count; uid →
-    глобальный пул.
-  - **Spec correction (Task 2):** dest-запись создаётся
-    `FUN_1404cd28` из ITM-шаблона (`type/flags/style/max_stack`), а
-    **не** копирует runtime-поля source (spec §3.2/§5.1).
-  - Real oracle slot0/slot2 + `l1_1` NPC (seed 1, main): точные
-    before/after таблицы — research §7. Real dialog
-    `l1_1.p387_poison_plotnik` (node 278, answers `0,0`):
-    preload `Hero.QST_1_0_3=1` → `Hero 0`, `P387 1`, `P387.QST_1_0_5=1`;
-    globals `L1_Svetlograd_n3_GetElexir=5`, `plotnik_povtor=2`.
-    Secondary: `old_test.age.cs` node 132 (answers `0,0`, `l57`
-    `L0.M3_Baga`).
-  - 284 реальных `TransferItemI` в 111 `.cs`; ни один не ветвится по
-    возврату (все → scratch `result`); `TransferAll` — 0 вызовов.
-- **Task 2 (InventoryRuntime transfers, done 2026-11-08):**
-  `InventoryRuntime::transfer_item`/`transfer_all` + `InventoryAccess`
-  callbacks; Hero/NPC main контейнеры mutable, `add/remove` остаются
-  Hero-only. New dest-запись из ITM-шаблона, merge сохраняет flags
-  dest; absent item matrix (+ → false, 0/− → true), negative limit
-  1 000 000; missing person/container → false/no-op (AV deviation,
-  D-056). Unit matrix + 4 real oracle tests (slot0/slot2, fresh runtime
-  per row, `l1_1` NPC seed 1). **Fix round 1:** containers резолвятся
-  до `from == to`, поэтому same-name missing person → `false`;
-  `transfer_all` abort on unmapped/`max_stack==0` source documented;
-  unknown TECH negative quirk in spec. `gl_game_tests` **228/228,
-  558659 assertions, 0 failed** (with `GL_GAME_DIR`). Research flags
-  fix: `QST_1_0_3` `0xC0000028`, `QST_1_0_5` `0x40000028`.
-  Commits `feat(game): transfer items between persons`,
-  `fix(game): reject missing transfer persons`.
-- **Gate:** Tasks 3–4 — после Task 2; Task 5 — после полного `ctest`.
-- **Критерии:** семантика `FUN_14048790`/`FUN_14048518`; 2 ID →
-  supported (15/65); unit + real oracle; full `ctest`; D-056/parity.
-- **Вне scope:** trade-контейнеры/`PassToTradePanel`.
+- **Research (Task 1, done):** `docs/research/p3b2b3-transfers-server.md`.
+  `FUN_14048790` (RVA `0x48790`) / `FUN_14048518` (RVA `0x48518`);
+  handler RVA `0x401dc`/`0x40fb0`, sig `3,3,3,0`/`3,3`; UID/id
+  (`FUN_1404c690`, `+0xA4`/`+0xA8`/`+0xB0`); real oracle slot0/slot2
+  §7; real dialog `l1_1.p387_poison_plotnik`; 284 `TransferItemI` в
+  111 `.cs`, 0 `TransferAllItemsI`.
+- **Implementation (Tasks 2–4, done):** `InventoryRuntime::transfer_item`/
+  `transfer_all` + `InventoryAccess` callbacks; handlers в
+  `native_registry.cpp`; Hero/NPC main контейнеры mutable, `add/remove`
+  остаются Hero-only. Registry: **15/65 supported** (3 vm_internal, 47
+  unsupported). Commits `feat(game): transfer items between persons` +
+  fix `fix(game): reject missing transfer persons`,
+  `feat(script): implement inventory transfer natives`,
+  `test(inventory): cover real transfer dialog`.
+- **Tested semantics:** same container → true; `count == 0` → true;
+  `count < 0` → лимит 1 000 000; absent item (+ → false, 0/− → true);
+  partial/over; source-записи удаляются; merge в dest по item_id; новая
+  dest-запись `type/flags/style/max_stack` из ITM-шаблона, merge
+  сохраняет flags dest; transfer_all — все main-записи в slot order,
+  source очищается; missing person/container → false/no-op; real P387
+  (preload `Hero.QST_1_0_3=1`, ответы `0,0`): `Hero 0`, `P387 1`,
+  `P387.QST_1_0_5=1`, `L1_Svetlograd_n3_GetElexir=5`, `plotnik_povtor=2`;
+  control без preload не переносит (`plotnik_povtor=1`).
+- **Отклонения/guards (D-056):** missing person/container → `false`/
+  no-op (в оригинале AV); `transfer_all` abort при unmapped source/
+  `max_stack == 0` (оригинал add-ошибку не проверяет); `transfer_item`
+  template guard (positive → false, zero/negative → true); `count` —
+  `as_int` (усечение) vs оригинальный `(int)ROUND`; append vs первый
+  свободный слот. Не моделируются notify `FUN_140482e8`, container
+  `+0x18`, `entity+0x4dc`; save не пишется.
+- **Проверка (`GL_GAME_DIR=I:\Games\Златогорье-2`):** `cmake --build
+  build` exit 0; targeted `ctest` (`gl_script_tests|gl_script_real_tests|
+  gl_game_tests|gl_assets_tests|gl_assets_real_tests|
+  glgame_screenshot_tests|glview_screenshot_tests|level_click_tests`)
+  **8/8 passed**, 1094.72 s, exit 0; full `ctest` **18/18 passed**,
+  1093.75 s, exit 0.
+- **Docs:** D-056; parity-matrix 166 строк (`verified` 50, `partial` 65,
+  `unverified` 22, `missing` 17, `contradicted` 2, `superseded` 10);
+  PROJECT P3/P5/parity summary обновлены.
+- **Ограничения:** нет live-оракула (save scan + Python NPC-loot
+  reference + real `.cs`); trade-контейнер `+0xC`/`0x5000006`/`7`/
+  `RS_PassToTradePanel` вне scope; specials/restock NPC blocked; save
+  payload не читается/не пишется.
+- **Дальше:** trade/`RS_PassToTradePanel` (`0x5000006`/`0x5000007`),
+  research specials R4–R10 (`FUN_14047284`/`DAT_14088df4`), затем save
+  payload (`P2-15`), затем 35 Гц.
 
 ## Phase 1b2b2b — core NPC `.inv` loot (done 2026-11-08)
 

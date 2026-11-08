@@ -9,6 +9,7 @@ production-код не менялся). Источник истины — `Serve
 | Файл | SHA-256 |
 |---|---|
 | `I:\Games\Златогорье-2\Server.dll` | `418E256063748F2E90DB35AE7C6ABE6EAC401FB86908CB5F27EBF565A21CC837` |
+| `I:\Games\Златогорье-2\Data\scripts.pak` | `25C2CF44DC3B45B6A1CC5CF0FF768EFA9B4B76032FA590BC99018E6DAA5AAB46` |
 | `I:\Games\Златогорье-2\Saves\slot0.sav` | `8AC545FE9715EF11C68B1CCA8617BEB03003ECA360F07F71C26E3FC5E5C73442` |
 | `I:\Games\Златогорье-2\Saves\slot2.sav` | `5DB504F57BDFFB66A8B977256AD53EE8E1D6D283E1EDFCD75092FFFD3DB30296` |
 | `I:\Games\Златогорье-2\Saves\slot21.sav` | `2544BDBC8C9271478F39D38350A242D795269D107641AF9D6D1C720FBFE934A4` |
@@ -298,8 +299,11 @@ trade/use, к нативам не относятся.
 ### 6.2 Рекомендуемый real-диалог: `l1_1.p387_poison_plotnik`
 
 Файл: `scripts/dialogs/l1_1/l1_1.p387_poison_plotnik.d387.age.cs`
-(`glpak disasm-cs`). NPC `L1_1.P387_Poison_Plotnik` — из `l1_1` SEF,
-генерируется 1b2b2b (`p387.inv`: `regenerate_chance 0`, одна запись
+(из `Data\scripts.pak`, SHA-256
+`25C2CF44DC3B45B6A1CC5CF0FF768EFA9B4B76032FA590BC99018E6DAA5AAB46`;
+`glpak disasm-cs`). NPC `L1_1.P387_Poison_Plotnik` — из `l1_1` SEF,
+генерируется 1b2b2b (`.inv` — `scripts/inventory/p387.inv` в том же
+`scripts.pak`: `regenerate_chance 0`, одна запись
 `QST_1_0_5` 1..100 100% 1 1). Поэтому его main **точно**:
 `QST_1_0_5 = 1`, `QST_1_0_3 = 0`.
 
