@@ -8,8 +8,8 @@
 - **Spec:** `docs/specs/2026-11-07-p4-rng-parity-design.md`.
 - **Plan:** `docs/plans/2026-11-07-p4-rng-parity.md`.
 - **Сделано (Tasks 1–4):**
-  - `range(lo,hi)` = `lo + trunc(((hi-lo)+0.99999)*next()/32767)`;
-    `coin(p)` — float (`(float)next()/32767.0f < p`); `next()`/`fraction()`
+  - `range(lo,hi)` = `lo + trunc(((hi-lo)+0.99999)*next()*(1.0/32767.0))`;
+    `coin(p)` — float (`(float)next()*(1.0f/32767.0f) < p`); `next()`/`fraction()`
     без изменений.
   - `MsvcRandom::production_seed()` = `steady_clock` ms; `LevelScreen::load`
     использует его по умолчанию; `glgame`/`glview` — `--seed <n>`; тесты
@@ -20,7 +20,7 @@
     `SET_DIRECTION`).
 - **Проверено (2026-11-08, `GL_GAME_DIR=I:\Games\Златогорье-2`):**
   - build: `cmake --build build` → exit 0.
-  - targeted: `ctest -R "gl_script_tests|gl_script_real_tests|gl_game_tests|gl_assets_tests|gl_assets_real_tests|glgame_screenshot_tests|glview_screenshot_tests|level_click_tests"` → `100% tests passed out of 8`, `Total Test time (real) = 1152.24 sec`, exit 0.
+  - targeted: `ctest --test-dir build -R "gl_script_tests|gl_script_real_tests|gl_game_tests|gl_assets_tests|gl_assets_real_tests|glgame_screenshot_tests|glview_screenshot_tests|level_click_tests"` → `100% tests passed out of 8`, `Total Test time (real) = 1152.24 sec`, exit 0.
   - full: `ctest --test-dir build --output-on-failure` → `100% tests passed out of 18`, `Total Test time (real) = 1241.95 sec`, exit 0.
   - doctest-счётчики (прогон Task 3/4): `gl_game_tests` 185/185
     (558 021 assertions), `glgame_screenshot_tests` 26/26 (721),

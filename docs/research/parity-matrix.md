@@ -178,7 +178,7 @@ ID: `P4a-*`, `P4b-*`, `P4b2-*` — прежние A/B/C из аудита (пе�
 | P4b-6 | STAY | возврат к spawn | `level_simulation.cpp:260-316` | A4/D-035 | superseded | закрыто A4 | audit p4; D-035 |
 | P4b-7 | STAY_ROTATE | поворот на месте | `level_simulation.cpp:278-305` | A4/D-035; RNG D-053 (truncation/float), D-054 | partial | `rand(10,25)` truncation/seed verified; длительность `SET_DIRECTION` = 500 мс — порт; поток не непрерывен; NPC-loot specials blocked | audit p4; D-035; D-053; D-054 |
 | P4b-8 | delay | `<500` без паузы | `level_simulation.cpp:129-164` | live `FUN_1401c378` | partial | fallback 500 мс — порт | audit p4 |
-| P4b-9 | delay | `rand(min..max)` | `level_simulation.cpp:53-56` | live `FUN_140061e4`; D-053 (truncation, inclusive), D-054 | verified | формулы/seed verified; поток не непрерывен между уровнями; NPC-loot specials blocked | audit p4; D-053; D-054 |
+| P4b-9 | delay | `rand(min..max)` | `level_simulation.cpp:106,156,221-247` | live `FUN_140061e4`; D-053 (truncation, inclusive), D-054 | verified | формулы/seed verified; поток не непрерывен между уровнями; NPC-loot specials blocked | audit p4; D-053; D-054 |
 | P4b-10 | speed | `iso_speed*1000/(go*0.8)` | `level_simulation.cpp:180-182` | live; A5/D-033 | verified | 35 Гц интеграция | audit p4 |
 | P4b-11 | speed | изо-формула | `person_movement.cpp:88-94` | live | verified | — | audit p4 |
 | P4b-12 | arrival | `<4 px`, snap | `level_simulation.cpp:183-200` | live-замер | partial | extra `distance<=step` | audit p4 |

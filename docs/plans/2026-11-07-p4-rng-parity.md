@@ -1,6 +1,6 @@
 # P4 — RNG parity (implementation plan)
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Привести `MsvcRandom` к `Server.dll` (truncation + float coin) и clock-based production seed.
 
@@ -29,7 +29,7 @@
 - `bool coin(double probability) noexcept;`
 - `static std::uint32_t production_seed() noexcept;`
 
-- [ ] **Step 1: Failing tests**
+- [x] **Step 1: Failing tests**
 
 Add tests:
 ```cpp
@@ -51,7 +51,7 @@ TEST_CASE("production seed is available") {
 
 Compute expected values with the exact formula, not `nearbyint`.
 
-- [ ] **Step 2: Implement**
+- [x] **Step 2: Implement**
 
 `range`:
 ```cpp
@@ -74,9 +74,9 @@ const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
 return static_cast<std::uint32_t>(ms);
 ```
 
-- [ ] **Step 3: Run `gl_game_tests --test-case=*msvc_random*`**.
+- [x] **Step 3: Run `gl_game_tests --test-case=*MsvcRandom*`**.
 
-- [ ] **Step 4: Commit** `feat(game): match Server.dll RNG formulas`.
+- [x] **Step 4: Commit** `feat(game): match Server.dll RNG formulas`.
 
 ---
 
@@ -87,21 +87,21 @@ return static_cast<std::uint32_t>(ms);
 - Modify: `tests/game/test_person_movement.cpp` (if exists/affected)
 - Modify: `tests/game/test_stability.cpp` (if affected)
 
-- [ ] **Step 1: Run affected tests**
+- [x] **Step 1: Run affected tests**
 
 `build\bin\gl_game_tests.exe --test-case=*movement*` and the full binary.
 Record failures caused by truncation.
 
-- [ ] **Step 2: Recompute expected values**
+- [x] **Step 2: Recompute expected values**
 
 For every changed expectation, recompute with the reference formula
 (`lo + trunc(((hi-lo)+0.99999)*rand/32767)`) and the same seed; do not
 loosen assertions or skip cases. If a test's seed/stream order must change,
 document why.
 
-- [ ] **Step 3: Run full `gl_game_tests`**; report counts.
+- [x] **Step 3: Run full `gl_game_tests`**; report counts.
 
-- [ ] **Step 4: Commit** `test(game): update RNG expectations for truncation`.
+- [x] **Step 4: Commit** `test(game): update RNG expectations for truncation`.
 
 ---
 
@@ -116,24 +116,24 @@ document why.
 - Modify: `tests/render/test_glview_screenshot.cpp`
 - Modify: `tests/app/test_level_click.cpp`
 
-- [ ] **Step 1: Replace seed 1**
+- [x] **Step 1: Replace seed 1**
 
 `LevelScreen::load(..., std::optional<std::uint64_t> rng_seed = std::nullopt)`,
 create with `rng_seed.value_or(MsvcRandom::production_seed())`. Production
 without a seed stays clock-based.
 
-- [ ] **Step 2: Deterministic test hook**
+- [x] **Step 2: Deterministic test hook**
 
 Add `--seed <n>` to `glgame` and `glview`; parse and pass to
 `LevelScreen::load`. Test harnesses that compare screenshots/behavior across
 independent processes pass `--seed 1` (or an explicit seed for direct
 `LevelScreen::load`). `gl_game` tests keep their explicit seeds.
 
-- [ ] **Step 3: Smoke**
+- [x] **Step 3: Smoke**
 
 `glgame --level l1_1 --click-npc 13 --screenshot` and `glview` smoke exit 0.
 
-- [ ] **Step 4: Commit** `feat(app): seed NPC RNG from clock`.
+- [x] **Step 4: Commit** `feat(app): seed NPC RNG from clock`.
 
 ---
 
@@ -144,9 +144,9 @@ independent processes pass `--seed 1` (or an explicit seed for direct
 - Modify: `docs/STATUS.md`, `docs/PROJECT.md`,
   `docs/research/parity-matrix.md`
 
-- [ ] **Step 1: Targeted + full ctest** with `GL_GAME_DIR`; record counts/times/exit.
+- [x] **Step 1: Targeted + full ctest** with `GL_GAME_DIR`; record counts/times/exit.
 
-- [ ] **Step 2: D-054**
+- [x] **Step 2: D-054**
 
 D-054 was opened in Task 2 for the port-side anti-livelock guard
 (occupancy-abort resample + backoff; **not parity**). Extend that same entry:
@@ -155,15 +155,15 @@ limitations: original `timeGetTime` non-deterministic, RNG stream not continuous
 across levels, NPC loot specials still blocked; keep the anti-livelock guard
 explicitly marked as a port robustness deviation.
 
-- [ ] **Step 3: parity-matrix**
+- [x] **Step 3: parity-matrix**
 
 Update RNG rows (P4b-3/P4b-7/P4b-9/P4b-15): formula/seed status and
 remaining NPC-loot blockers; keep D-053 reference.
 
-- [ ] **Step 4: STATUS/PROJECT**
+- [x] **Step 4: STATUS/PROJECT**
 
 Record task, exact test output, next step (1b2b2b or Trade).
 
-- [ ] **Step 5: Encoding check** (`bom=False nul=False`).
+- [x] **Step 5: Encoding check** (`bom=False nul=False`).
 
-- [ ] **Step 6: Commit** `docs: record RNG parity fix`.
+- [x] **Step 6: Commit** `docs: record RNG parity fix`.
