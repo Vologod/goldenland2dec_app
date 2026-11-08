@@ -5,6 +5,10 @@
 #include "gl/assets/item_catalog.hpp"
 #include "gl/assets/item_name_index.hpp"
 #include "gl/assets/vfs.hpp"
+#include "gl/game/level.hpp"
+#include "gl/game/msvc_random.hpp"
+#include "gl/game/npc_loot.hpp"
+#include "gl/game/person.hpp"
 
 #include <doctest/doctest.h>
 
@@ -26,6 +30,18 @@ gl::assets::Bytes read_save(int slot) {
     return gl::assets::Bytes(std::istreambuf_iterator<char>(file), {});
 }
 
+gl::game::InventoryRuntime::ItemTemplateLookup
+catalog_lookup(const gl::assets::ItemCatalog &catalog) {
+    return [&catalog](std::uint32_t item_id) -> std::optional<gl::game::ItemTemplate> {
+        const gl::assets::ItemCatalogEntry *entry = catalog.find(item_id);
+        if (entry == nullptr)
+            return std::nullopt;
+        return gl::game::ItemTemplate{static_cast<std::uint32_t>(entry->item.type),
+                                      entry->item.flags, entry->item.unknown_b[1],
+                                      entry->item.max_stack};
+    };
+}
+
 gl::game::InventoryRuntime make_runtime(const gl::assets::GameVfs &vfs, int slot,
                                         const gl::assets::ItemCatalog &catalog) {
     auto body = gl::assets::decode_save_body(read_save(slot));
@@ -34,17 +50,8 @@ gl::game::InventoryRuntime make_runtime(const gl::assets::GameVfs &vfs, int slot
     REQUIRE(inventory.has_value());
     auto names = gl::assets::ItemNameIndex::load(vfs);
     REQUIRE(names.has_value());
-    auto item_template = [&catalog](std::uint32_t item_id)
-        -> std::optional<gl::game::ItemTemplate> {
-        const gl::assets::ItemCatalogEntry *entry = catalog.find(item_id);
-        if (entry == nullptr)
-            return std::nullopt;
-        return gl::game::ItemTemplate{static_cast<std::uint32_t>(entry->item.type),
-                                      entry->item.flags, entry->item.unknown_b[1],
-                                      entry->item.max_stack};
-    };
     return gl::game::InventoryRuntime::create(inventory.value(), names.value(),
-                                              item_template);
+                                              catalog_lookup(catalog));
 }
 
 void check_slot(int slot, std::int32_t money, std::int32_t non_money_count,
@@ -87,4 +94,35 @@ TEST_CASE("real data: inventory_runtime slot0 oracle" * doctest::skip(!game_dir_
 
 TEST_CASE("real data: inventory_runtime slot2 oracle" * doctest::skip(!game_dir_available())) {
     check_slot(2, 122008, 1, 25);
+}
+
+TEST_CASE("real data: l1_1 npc inventories match the pass-2 reference" *
+          doctest::skip(!game_dir_available())) {
+    auto vfs = gl::assets::GameVfs::mount(std::getenv("GL_GAME_DIR"));
+    REQUIRE(vfs.has_value());
+    auto catalog = gl::assets::ItemCatalog::load(vfs.value());
+    REQUIRE(catalog.has_value());
+    auto names = gl::assets::ItemNameIndex::load(vfs.value());
+    REQUIRE(names.has_value());
+    auto level = gl::game::load_level(vfs.value(), "l1_1");
+    REQUIRE(level.has_value());
+    REQUIRE(level->persons.size() == 16);
+
+    auto runtime = make_runtime(vfs.value(), 21, catalog.value());
+    const std::int32_t hero_money = runtime.money();
+    const std::int32_t hero_rgt = runtime.count("Hero", "RGT_1_0_8");
+
+    gl::game::MsvcRandom rng(1);
+    gl::game::generate_npc_inventories(runtime, level->persons, vfs.value(), names.value(),
+                                       catalog_lookup(catalog.value()), 1, rng);
+
+    CHECK(runtime.count("L1_1.P387_Poison_Plotnik", "QST_1_0_5") == 1);
+    CHECK(runtime.count("L0.P7_Kolbasens_Rodstvennik1", "MON_1_0_1") == 174);
+    CHECK(runtime.count("L1_1.P389_Crying_Guardian", "MON_1_0_1") == 218);
+    CHECK(runtime.count("L0.P711_citizen8", "MON_1_0_1") == 323);
+    CHECK(runtime.person_items("L0.P678_citizen4").empty());
+
+    CHECK(runtime.count("Hero", "RGT_1_0_8") == hero_rgt);
+    CHECK(runtime.money() == hero_money);
+    CHECK(runtime.count("Hero", "MON_1_0_1") == hero_money);
 }

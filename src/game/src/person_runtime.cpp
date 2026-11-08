@@ -209,6 +209,8 @@ void set_reputation(PersonState &state, double value) {
 }
 } // namespace
 
+int hero_level_from_experience(double experience) { return level_from_experience(experience); }
+
 PersonRuntime PersonRuntime::create(const std::vector<PersonInstance> &persons,
                                     const std::optional<gl::assets::HeroStats> &hero) {
     PersonRuntime runtime;

@@ -5,8 +5,11 @@
 
 #include <cstdint>
 #include <functional>
+#include <map>
 #include <optional>
+#include <string>
 #include <string_view>
+#include <vector>
 
 namespace gl::game {
 struct ItemTemplate {
@@ -28,10 +31,14 @@ class InventoryRuntime {
     std::int32_t count(std::string_view person, std::string_view tech_name) const;
     std::int32_t money() const;
     const gl::assets::HeroInventory &hero_inventory() const;
+    const std::vector<gl::assets::InventoryItem> &person_items(std::string_view person) const;
+    void set_person_items(std::string name, std::vector<gl::assets::InventoryItem> items);
+    void clear_persons();
     gl::script::InventoryAccess access();
 
   private:
     gl::assets::HeroInventory hero_inventory_;
+    std::map<std::string, std::vector<gl::assets::InventoryItem>, std::less<>> persons_;
     gl::assets::ItemNameIndex names_;
     ItemTemplateLookup item_template_;
 };

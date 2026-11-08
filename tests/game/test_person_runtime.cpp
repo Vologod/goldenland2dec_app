@@ -227,6 +227,15 @@ TEST_CASE("person runtime clamps positive energy to the computed maximum") {
     CHECK(runtime.get_parameter("L1.P1", PersonParameter::energy) == doctest::Approx(0.0));
 }
 
+TEST_CASE("hero level from experience matches FUN_1400cbc0") {
+    CHECK(gl::game::hero_level_from_experience(0.0) == 1);
+    CHECK(gl::game::hero_level_from_experience(99.0) == 1);
+    CHECK(gl::game::hero_level_from_experience(100.0) == 2);
+    CHECK(gl::game::hero_level_from_experience(9485.0) == 14);
+    CHECK(gl::game::hero_level_from_experience(65133.0) == 36);
+    CHECK(gl::game::hero_level_from_experience(81099.0) == 40);
+}
+
 TEST_CASE("person runtime clamps experience and life") {
     auto person = make_person("L1.P1", "L1.P1");
     person.def.values["experience_value"] = "600000";

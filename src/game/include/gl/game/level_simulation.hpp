@@ -27,7 +27,10 @@ struct PersonMovement {
 class LevelSimulation {
   public:
     static LevelSimulation create(const Level &level, std::uint64_t seed);
+    static LevelSimulation create(const Level &level, MsvcRandom rng);
     void advance(double dt_seconds);
+    MsvcRandom &rng() { return rng_; }
+    const MsvcRandom &rng() const { return rng_; }
     const std::vector<PersonMovement> &persons() const { return persons_; }
     // Test/utility seam: teleports the person and resets movement/goal only.
     void place_person(std::size_t index, Tile tile);

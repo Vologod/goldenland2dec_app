@@ -1,7 +1,11 @@
 #include "gl/game/npc_loot.hpp"
 
+#include "gl/assets/log.hpp"
+
 #include <algorithm>
+#include <map>
 #include <optional>
+#include <string>
 #include <utility>
 
 namespace gl::game {
@@ -101,5 +105,39 @@ NpcLoot NpcLootGenerator::generate(const gl::assets::InvTable &table, std::int32
     }
 
     return loot;
+}
+
+void generate_npc_inventories(InventoryRuntime &runtime, const std::vector<PersonInstance> &persons,
+                              gl::assets::GameVfs &vfs, const gl::assets::ItemNameIndex &names,
+                              InventoryRuntime::ItemTemplateLookup item_template,
+                              std::int32_t loot_level, MsvcRandom &rng) {
+    runtime.clear_persons();
+    std::map<std::string, std::optional<gl::assets::InvTable>, std::less<>> cache;
+    for (const PersonInstance &person : persons) {
+        if (person.inventory.empty() || person.name == "Hero")
+            continue;
+        auto cached = cache.find(person.inventory);
+        if (cached == cache.end()) {
+            auto table = gl::assets::load_inv(vfs, person.inventory);
+            if (!table) {
+                gl::log(gl::LogLevel::warning, "npc inventory: cannot load '" + person.inventory +
+                                                   "': " + table.error().message);
+                cached = cache.emplace(person.inventory, std::nullopt).first;
+            } else {
+                cached = cache.emplace(person.inventory, std::move(table.value())).first;
+            }
+        }
+        if (!cached->second)
+            continue;
+        const NpcLoot loot =
+            NpcLootGenerator::generate(*cached->second, loot_level, names, item_template, rng);
+        std::vector<gl::assets::InventoryItem> main;
+        main.reserve(loot.main.size());
+        for (const LootItem &item : loot.main) {
+            main.push_back({item.item_id, static_cast<std::uint32_t>(item.count), item.flags,
+                            item.type, item.style});
+        }
+        runtime.set_person_items(person.name, std::move(main));
+    }
 }
 } // namespace gl::game

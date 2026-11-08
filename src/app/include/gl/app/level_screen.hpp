@@ -14,6 +14,7 @@
 #include <gl/render/texture.hpp>
 
 #include <cstdint>
+#include <functional>
 #include <map>
 #include <optional>
 #include <span>
@@ -85,10 +86,14 @@ ClickTarget click_target(std::span<const PersonHitTarget> persons,
 
 class LevelScreen {
 public:
+    using LevelLoadedHook =
+        std::function<void(const gl::game::Level&, gl::game::MsvcRandom&)>;
+
     static Result<LevelScreen> load(SDL_Renderer* renderer, gl::assets::GameVfs& vfs,
                                     std::string_view level_name, bool load_persons = true,
                                     const gl::game::HeroOutfit* hero_outfit = nullptr,
-                                    std::optional<std::uint64_t> rng_seed = std::nullopt);
+                                    std::optional<std::uint64_t> rng_seed = std::nullopt,
+                                    const LevelLoadedHook& on_level_loaded = {});
 
     LevelScreen(LevelScreen&& other) noexcept;
 

@@ -12,6 +12,7 @@
 #include <vector>
 
 using namespace gl::game;
+using gl::assets::InventoryItem;
 
 namespace {
 std::optional<ItemTemplate> template_for(std::uint32_t item_id) {
@@ -372,4 +373,65 @@ TEST_CASE("inventory_runtime access callbacks observe mutations") {
     REQUIRE(runtime.remove_item("Hero", "MON_1_0_1", 100));
     CHECK(access.item_count("Hero", "MON_1_0_1") == 500);
     CHECK(access.money() == 500);
+}
+
+TEST_CASE("inventory_runtime stores npc main containers by exact name") {
+    auto runtime = InventoryRuntime::create(make_inventory(), make_names());
+
+    runtime.set_person_items("L0.P1",
+                             {InventoryItem{1101, 4, 0, 0, 0}, InventoryItem{812, 250, 0, 18, 0}});
+
+    CHECK(runtime.count("L0.P1", "QST_1_0_159") == 4);
+    CHECK(runtime.count("L0.P1", "MON_1_0_1") == 250);
+    CHECK(runtime.count("l0.p1", "QST_1_0_159") == 0);
+    CHECK(runtime.count("L0.P2", "QST_1_0_159") == 0);
+    REQUIRE(runtime.person_items("L0.P1").size() == 2);
+    CHECK(runtime.person_items("L0.P1")[0].item_id == 1101);
+    CHECK(runtime.person_items("L0.P2").empty());
+}
+
+TEST_CASE("inventory_runtime npc money does not change hero money") {
+    auto runtime = InventoryRuntime::create(make_inventory(), make_names());
+
+    runtime.set_person_items("L0.P1", {InventoryItem{812, 250, 0, 18, 0}});
+
+    CHECK(runtime.money() == 500);
+    CHECK(runtime.count("Hero", "MON_1_0_1") == 500);
+}
+
+TEST_CASE("inventory_runtime ignores set_person_items for Hero") {
+    auto runtime = InventoryRuntime::create(make_inventory(), make_names());
+
+    runtime.set_person_items("Hero", {InventoryItem{1101, 99, 0, 0, 0}});
+
+    CHECK(runtime.count("Hero", "QST_1_0_159") == 2);
+    CHECK(runtime.count("Hero", "MON_1_0_1") == 500);
+    REQUIRE(runtime.hero_inventory().items.size() == 3);
+    CHECK(runtime.person_items("Hero").size() == 3);
+}
+
+TEST_CASE("inventory_runtime npc add and remove remain no-ops") {
+    auto runtime = InventoryRuntime::create(make_inventory(), make_names(), template_for);
+    runtime.set_person_items("L0.P1", {InventoryItem{1101, 4, 0, 0, 0}});
+
+    CHECK_FALSE(runtime.add_item("L0.P1", "QST_1_0_159", 1));
+    CHECK_FALSE(runtime.remove_item("L0.P1", "QST_1_0_159", 1));
+    CHECK(runtime.count("L0.P1", "QST_1_0_159") == 4);
+
+    REQUIRE(runtime.add_item("Hero", "QST_1_0_159", 1));
+    CHECK(runtime.count("Hero", "QST_1_0_159") == 3);
+}
+
+TEST_CASE("inventory_runtime clear_persons keeps Hero") {
+    auto runtime = InventoryRuntime::create(make_inventory(), make_names());
+    runtime.set_person_items("L0.P1", {InventoryItem{1101, 4, 0, 0, 0}});
+    runtime.set_person_items("L0.P2", {InventoryItem{812, 10, 0, 18, 0}});
+
+    runtime.clear_persons();
+
+    CHECK(runtime.count("L0.P1", "QST_1_0_159") == 0);
+    CHECK(runtime.count("L0.P2", "MON_1_0_1") == 0);
+    CHECK(runtime.person_items("L0.P1").empty());
+    CHECK(runtime.count("Hero", "MON_1_0_1") == 500);
+    CHECK(runtime.money() == 500);
 }

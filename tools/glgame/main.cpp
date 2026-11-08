@@ -23,6 +23,7 @@
 #include <gl/game/game_script_host.hpp>
 #include <gl/game/hero_outfit_resolver.hpp>
 #include <gl/game/inventory_runtime.hpp>
+#include <gl/game/npc_loot.hpp>
 #include <gl/game/person_runtime.hpp>
 #include <gl/platform/sdl_context.hpp>
 #include <gl/render/font.hpp>
@@ -778,6 +779,37 @@ class Game {
         gl::log(gl::LogLevel::info,
                 "inventory runtime: Hero money=" +
                     std::to_string(inventory_runtime_.money()));
+    }
+
+    std::int32_t loot_level() const {
+        if (!pending_hero_stats_)
+            return 1;
+        return gl::game::hero_level_from_experience(pending_hero_stats_->experience) + 1;
+    }
+
+    void generate_npc_inventories(const gl::game::Level& level, gl::game::MsvcRandom& rng) {
+        const gl::assets::ItemNameIndex empty_names;
+        const gl::assets::ItemNameIndex& names = item_names_ ? *item_names_ : empty_names;
+        const auto item_template =
+            [this](std::uint32_t id) -> std::optional<gl::game::ItemTemplate> {
+            const gl::assets::ItemCatalogEntry* entry = item_catalog_.find(id);
+            if (entry == nullptr) return std::nullopt;
+            return gl::game::ItemTemplate{static_cast<std::uint32_t>(entry->item.type),
+                                          entry->item.flags, entry->item.unknown_b[1],
+                                          entry->item.max_stack};
+        };
+        gl::game::generate_npc_inventories(inventory_runtime_, level.persons, vfs_, names,
+                                           item_template, loot_level(), rng);
+        std::size_t populated = 0;
+        for (const gl::game::PersonInstance& person : level.persons) {
+            if (!inventory_runtime_.person_items(person.name).empty())
+                ++populated;
+        }
+        gl::log(gl::LogLevel::info,
+                "npc inventory: level '" + level.name + "', loot level " +
+                    std::to_string(loot_level()) + ", populated " +
+                    std::to_string(populated) + "/" +
+                    std::to_string(level.persons.size()));
     }
 
     void open_inventory() {
@@ -1578,9 +1610,11 @@ class Game {
                 hero_outfit = make_naked_outfit();
             }
         }
-        auto screen = gl::app::LevelScreen::load(window_.renderer(), vfs_, name,
-                                                 !options_.no_persons, &hero_outfit,
-                                                 options_.seed);
+        auto screen = gl::app::LevelScreen::load(
+            window_.renderer(), vfs_, name, !options_.no_persons, &hero_outfit, options_.seed,
+            [this](const gl::game::Level& level, gl::game::MsvcRandom& rng) {
+                generate_npc_inventories(level, rng);
+            });
         if (!screen) {
             gl::log(gl::LogLevel::error, screen.error().message);
             console_print("cannot load level: " + screen.error().message);

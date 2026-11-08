@@ -3,11 +3,16 @@
 #include "gl/assets/item_name_index.hpp"
 #include "gl/game/inventory_runtime.hpp"
 #include "gl/game/msvc_random.hpp"
+#include "gl/game/person.hpp"
 
 #include <cstdint>
 #include <functional>
 #include <optional>
 #include <vector>
+
+namespace gl::assets {
+class GameVfs;
+}
 
 namespace gl::game {
 struct LootItem {
@@ -30,4 +35,9 @@ struct NpcLootGenerator {
                             const gl::assets::ItemNameIndex &names,
                             ItemTemplateLookup item_template, MsvcRandom &rng);
 };
+
+void generate_npc_inventories(InventoryRuntime &runtime, const std::vector<PersonInstance> &persons,
+                              gl::assets::GameVfs &vfs, const gl::assets::ItemNameIndex &names,
+                              InventoryRuntime::ItemTemplateLookup item_template,
+                              std::int32_t loot_level, MsvcRandom &rng);
 } // namespace gl::game

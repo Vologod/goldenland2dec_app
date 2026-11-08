@@ -85,15 +85,13 @@ bool InventoryRuntime::remove_item(std::string_view person, std::string_view tec
     return changed;
 }
 
-std::int32_t InventoryRuntime::count(std::string_view person,
-                                     std::string_view tech_name) const {
-    if (!is_hero(person))
-        return 0;
+std::int32_t InventoryRuntime::count(std::string_view person, std::string_view tech_name) const {
     const auto item_id = names_.find(tech_name);
     if (!item_id)
         return 0;
+    const std::vector<gl::assets::InventoryItem> &items = person_items(person);
     std::int64_t total = 0;
-    for (const gl::assets::InventoryItem &item : hero_inventory_.items) {
+    for (const gl::assets::InventoryItem &item : items) {
         if (item.item_id == *item_id)
             total += item.count;
     }
@@ -112,6 +110,24 @@ std::int32_t InventoryRuntime::money() const {
 const gl::assets::HeroInventory &InventoryRuntime::hero_inventory() const {
     return hero_inventory_;
 }
+
+const std::vector<gl::assets::InventoryItem> &
+InventoryRuntime::person_items(std::string_view person) const {
+    static const std::vector<gl::assets::InventoryItem> empty;
+    if (is_hero(person))
+        return hero_inventory_.items;
+    const auto it = persons_.find(person);
+    return it == persons_.end() ? empty : it->second;
+}
+
+void InventoryRuntime::set_person_items(std::string name,
+                                        std::vector<gl::assets::InventoryItem> items) {
+    if (is_hero(name))
+        return;
+    persons_.insert_or_assign(std::move(name), std::move(items));
+}
+
+void InventoryRuntime::clear_persons() { persons_.clear(); }
 
 gl::script::InventoryAccess InventoryRuntime::access() {
     gl::script::InventoryAccess access;

@@ -1448,7 +1448,7 @@ TEST_CASE("glgame --no-persons hides NPC sprites") {
     CHECK(different > 1000);
 }
 
-TEST_CASE("glgame NPCs move between t=0 and t=10s") {
+TEST_CASE("glgame NPCs move between t=0 and t=20s") {
     const char* game_dir = std::getenv("GL_GAME_DIR");
     REQUIRE(game_dir != nullptr);
     TempDir temp;
@@ -1464,13 +1464,13 @@ TEST_CASE("glgame NPCs move between t=0 and t=10s") {
                              {"--level", "l1_1", "--sim-ms", "0"}),
         log);
     const int later_code = run_glgame(screenshot_arguments(
-        game_dir, config, later_png, {"--level", "l1_1", "--sim-ms", "10000"}));
+        game_dir, config, later_png, {"--level", "l1_1", "--sim-ms", "20000"}));
     const int first_plain_code = run_glgame(screenshot_arguments(
         game_dir, config, first_plain_png,
         {"--level", "l1_1", "--sim-ms", "0", "--no-persons"}));
     const int later_plain_code = run_glgame(screenshot_arguments(
         game_dir, config, later_plain_png,
-        {"--level", "l1_1", "--sim-ms", "10000", "--no-persons"}));
+        {"--level", "l1_1", "--sim-ms", "20000", "--no-persons"}));
     CAPTURE(first_code);
     CAPTURE(later_code);
     CAPTURE(first_plain_code);

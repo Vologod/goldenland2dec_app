@@ -12,6 +12,8 @@
 #include <vector>
 
 namespace gl::game {
+int hero_level_from_experience(double experience);
+
 struct PersonState {
     std::string name;
     std::array<double, 12> values{};

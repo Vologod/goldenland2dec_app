@@ -31,8 +31,12 @@ bool is_route_requiring(RouteType type) {
 } // namespace
 
 LevelSimulation LevelSimulation::create(const Level &level, std::uint64_t seed) {
+    return create(level, MsvcRandom(static_cast<std::uint32_t>(seed)));
+}
+
+LevelSimulation LevelSimulation::create(const Level &level, MsvcRandom rng) {
     LevelSimulation sim;
-    sim.rng_ = MsvcRandom(static_cast<std::uint32_t>(seed));
+    sim.rng_ = std::move(rng);
     sim.width_ = static_cast<float>(level.width);
     sim.height_ = static_cast<float>(level.height);
     sim.level_name_ = level.name;
