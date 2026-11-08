@@ -1,6 +1,6 @@
 # Phase 1b2b2b — core NPC `.inv` loot (implementation plan)
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Реализовать парсер `.inv`, генератор базового NPC-лута и NPC-контейнеры; specials — вне scope (documented RNG-desync).
 
@@ -53,7 +53,7 @@ State `implementable` or `blocked`; commit `docs(research): pin NPC loot level a
 
 ### Task 2: `gl_assets::parse_inv` / `load_inv`
 
-**Status:** may proceed now (independent of the generator path).
+**Status:** done 2026-11-08 (commit `98cfa62`).
 
 **Files:**
 - Create: `src/assets/include/gl/assets/inv_table.hpp`
@@ -62,23 +62,23 @@ State `implementable` or `blocked`; commit `docs(research): pin NPC loot level a
 - Create: `tests/assets/test_inv_table.cpp`
 - Modify: `tests/assets/CMakeLists.txt`
 
-- [ ] **Step 1: Failing tests**
+- [x] **Step 1: Failing tests**
 
 Synthetic: header fields, 5-number item, 4-number skip, comments, quotes,
 `special` ignore, malformed header. Real: all 238 `.inv` load; counts match
 research (e.g. `inv001_swordsman.inv`).
 
-- [ ] **Step 2: Implement** `parse_inv`/`load_inv` (Sdb not needed; raw text).
+- [x] **Step 2: Implement** `parse_inv`/`load_inv` (Sdb not needed; raw text).
 4-number `item` → skip + one warning per file. `special` → ignore.
 
-- [ ] **Step 3: Run `gl_assets_tests` + targeted real; commit**
+- [x] **Step 3: Run `gl_assets_tests` + targeted real; commit**
 `feat(assets): parse .inv loot tables`.
 
 ---
 
 ### Task 3: `gl::game::NpcLootGenerator`
 
-**Status:** starts after this spec/plan revision.
+**Status:** done 2026-11-08 (commit `ce6ccb8`; flag fix `b7b188a`).
 
 **Files:**
 - Create: `src/game/include/gl/game/npc_loot.hpp`
@@ -87,7 +87,7 @@ research (e.g. `inv001_swordsman.inv`).
 - Create: `tests/game/test_npc_loot.cpp`
 - Modify: `tests/game/CMakeLists.txt`
 
-- [ ] **Step 1: Failing tests (reference values)**
+- [x] **Step 1: Failing tests (reference values)**
 
 Fixed seed/level, synthetic `InvTable`; hardcode expected items/counts
 from research §15.3 (not from the implementation). Cover:
@@ -109,7 +109,7 @@ from research §15.3 (not from the implementation). Cover:
   unguarded; real corpus has no zeros; behavior at 0 is
   `unverified`/D-055.
 
-- [ ] **Step 2: Implement** `FUN_1404b1c0` initial spawn (two passes):
+- [x] **Step 2: Implement** `FUN_1404b1c0` initial spawn (two passes):
 - R1; SEF call uses `param_4=1`, so generation always proceeds;
 - pass 1 → `hot` (`+0xc`): creation + direct count set; merge
   possible/`unverified`; `this+4=1` only clears item flag `0x80`;
@@ -117,12 +117,14 @@ from research §15.3 (not from the implementation). Cover:
   possible/`unverified`; division-by-0 unverified/D-055;
 - specials R4/R5 not drawn; RNG desync documented (D-055, Task 5).
 
-- [ ] **Step 3: Run `gl_game_tests --test-case=*npc_loot*`; commit**
+- [x] **Step 3: Run `gl_game_tests --test-case=*npc_loot*`; commit**
 `feat(game): generate core NPC loot`.
 
 ---
 
 ### Task 4: NPC containers in `InventoryRuntime` + level-load generation
+
+**Status:** done 2026-11-08 (commit `b2fd51b`; duplicates fix `229ec13`).
 
 **Files:**
 - Modify: `src/game/include/gl/game/inventory_runtime.hpp`
@@ -130,7 +132,7 @@ from research §15.3 (not from the implementation). Cover:
 - Modify: `src/app/src/level_screen.cpp` (or the actual level-load path)
 - Modify: `tools/glgame/main.cpp` if runtime construction lives there
 
-- [ ] **Step 1: Extend runtime**
+- [x] **Step 1: Extend runtime**
 
 Add per-person NPC containers (`Hero` + NPC names). Hero from save.
 For NPC store the **main** container (`+0x10`, pass 2) — it is what
@@ -139,7 +141,7 @@ too if the runtime supports two containers, otherwise discard hot after
 consuming its RNG draws (documented divergence). `count`/`money` use the
 person's main container; `Hero` behavior unchanged.
 
-- [ ] **Step 2: Generate at level load**
+- [x] **Step 2: Generate at level load**
 
 For each `PersonInstance` with non-empty `inventory`, in SEF order:
 load `scripts/inventory/<name>.inv`; generate both passes of
@@ -149,34 +151,36 @@ with `loot_level = party_level + 1` (party level from Task 1: BT_INFO
 (and `hot` if supported). Run loot **before** `LevelSimulation` and pass
 the same advanced RNG state to it (do not reseed per NPC).
 
-- [ ] **Step 3: Tests**
+- [x] **Step 3: Tests**
 
 Real `l1_1`: at least one NPC main container is non-empty; counts match
 the revised Task 1 oracle (pass 2 / main); `TestPersonHasItem`/
 `GetItemCountI` see NPC items; Hero still from save. Smoke
 `glgame --level l1_1 --click-npc 13 --screenshot` exit 0.
 
-- [ ] **Step 4: Commit** `feat(game): generate NPC inventories on level load`.
+- [x] **Step 4: Commit** `feat(game): generate NPC inventories on level load`.
 
 ---
 
 ### Task 5: Docs, parity, full regression
+
+**Status:** done 2026-11-08.
 
 **Files:**
 - Modify: `docs/DECISIONS.md` (D-055)
 - Modify: `docs/STATUS.md`, `docs/PROJECT.md`,
   `docs/research/parity-matrix.md`
 
-- [ ] **Step 1: D-055** — core loot implemented via `FUN_1404b1c0`
+- [x] **Step 1: D-055** — core loot implemented via `FUN_1404b1c0`
 (two passes; main `+0x10`, hot `+0xc` policy); specials skipped
 (RNG-desync documented); level source `+0x26c4 + 1`; initial spawn only;
 no 4-stack exit; NPC add/remove still no-op; restock/trade out.
 
-- [ ] **Step 2: parity-matrix** — NPC loot rows: core verified/partial,
+- [x] **Step 2: parity-matrix** — NPC loot rows: core verified/partial,
 specials blocked; recompute counts from the actual table.
 
-- [ ] **Step 3: STATUS/PROJECT** — done section, exact test output, next.
+- [x] **Step 3: STATUS/PROJECT** — done section, exact test output, next.
 
-- [ ] **Step 4: Full ctest** with `GL_GAME_DIR`; record counts/times/exit.
+- [x] **Step 4: Full ctest** with `GL_GAME_DIR`; record counts/times/exit.
 
-- [ ] **Step 5: Encoding check; commit** `docs: record core NPC loot`.
+- [x] **Step 5: Encoding check; commit** `docs: record core NPC loot`.

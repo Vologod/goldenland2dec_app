@@ -1316,4 +1316,63 @@ skills: Scout(0x0f) base max=2 (slot21); Identify(0x17) base max=0;
 #   0x14031d0a pushl 0x26c4(%eax)         (BT_INFO write)
 ```
 
+### 15.6 Real `l1_1` oracle (Task 4/5, 2026-11-08)
+
+Оракул — **main** (pass 2), `seed = 1`, `loot level = 1` (path
+`gl::game::generate_npc_inventories(..., loot_level=1, MsvcRandom(1))`).
+SEF-файл `levels/single/l1_1/l1_1.sef` (v1.1) содержит 16 persons в
+порядке ниже; `scr_inv` задаёт таблицу:
+
+| # | person | `scr_inv` |
+|---:|---|---|
+| 1 | `L1_1.P387_Poison_Plotnik` | `p387` |
+| 2 | `L0.P678_citizen4` | `inv012_rich_civil` |
+| 3 | `L0.P7_Kolbasens_Rodstvennik1` | `inv018_garbage_reagent` |
+| 4 | `L1_1.P389_Crying_Guardian` | `inv001_swordsman` |
+| 5 | `L1_2.P404_Sister_Of_Mercy2` | `inv011_caster` |
+| 6 | `L0.P785_witch3` | `inv011_caster` |
+| 7 | `L1_2.P403_Sister_Of_Mercy1` | `inv014_money` |
+| 8 | `L0.P693_citizen6` | `inv018_food_potion` |
+| 9 | `L0.P711_citizen8` | `inv014_money` |
+| 10 | `L0.P692_citizen5` | `inv012_civil` |
+| 11 | `L0.P744_oficer1` | `inv001_swordsman` |
+| 12 | `L0.P744_oficer1` (дубликат) | `inv001_swordsman` |
+| 13 | `L0.P640_children2` | `inv018_garbage_reagent` |
+| 14 | `L1.P621_Svet_3CircusWorkerV` | `inv012_civil` |
+| 15 | `L0.P733_artist1` | `inv012_civil` |
+| 16 | `L1.P620_Svet_3CircusWorker2` | `inv012_civil` |
+
+| person | container query | expected (main) |
+|---|---|---:|
+| `L1_1.P387_Poison_Plotnik` | `QST_1_0_5` | 1 |
+| `L0.P7_Kolbasens_Rodstvennik1` | `MON_1_0_1` | 174 |
+| `L1_1.P389_Crying_Guardian` | `MON_1_0_1` | 218 |
+| `L0.P711_citizen8` | `MON_1_0_1` | 323 |
+| `L0.P678_citizen4` | any | empty (pass 2 produced nothing) |
+| `L0.P744_oficer1` (первый) | — | item ids `263`, `371`; `MON_1_0_1` = 0 |
+
+**Derivation/provenance.** Значения получены независимым Python 3
+референсом (вне репозитория), который реализует только формулы §15.2:
+MSVC LCG `state = state*0x343FD + 0x269EC3`, `(state>>16)&0x7FFF`;
+`coin(p)` в float32 (`p<=0 → false`, `p>1 → true`, иначе
+`float32(rand) * float32(1/32767) < float32(p)`); `range(lo,hi)` =
+`lo + trunc(((hi-lo)+0.99999)*rand/32767)`, без draw при `hi<=lo`;
+R1, затем pass 1 и pass 2 в порядке записей файла. Входные данные —
+`.inv` из `scripts/inventory`, `sdb/items/tech_names.sdb` и ITM-заголовки
+(`type/flags/max_stack/style`), разобранные напрямую. Значения **не**
+выведены из C++-портации. Они захардкожены в
+`tests/game/test_inventory_runtime_real.cpp` и воспроизводятся:
+`ctest -R gl_game_tests` (или `gl_game_tests.exe`) с `GL_GAME_DIR`.
+
+Дополнительно:
+- `L1_1.P387_Poison_Plotnik` — data-level оракул, не зависящий от RNG:
+  `p387.inv` имеет `regenerate_chance 0`, одна запись `QST_1_0_5`
+  уровней 1..100, chance 100%, quantity 1 → pass 2 всегда даёт 1 предмет.
+- Дубликат `L0.P744_oficer1` (два инстанса в SEF): runtime хранит
+  **первый** main (item ids `263`/`371`, money `0`); второй
+  игнорируется с warning, но RNG для него всё равно потребляется.
+- `glgame` smoke: `populated 14/16` (два `l1_1` main пусты легально).
+  Без save loot level = `0 + 1 = 1`; `--equip-save 21` (hero level `1`)
+  даёт loot level `2` и тот же `populated 14/16`.
+
 Документ: UTF-8 без BOM, `nul=0`.

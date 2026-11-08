@@ -7,8 +7,10 @@
 (D-051); Phase 1b2b1 добавила мутации Hero inventory (D-052); Phase 1b2b2a
 (NPC `.inv` loot research, docs-only) переоткрыла RNG-строки под D-053
 (D-030 superseded); P4 RNG parity (2026-11-08, D-053/D-054) закрыла
-формулы/seed RNG-строк, но оставила документированные ограничения потока
-и NPC-loot specials.
+формулы/seed RNG-строк, но оставила документированные ограничения потока;
+Phase 1b2b2b (core NPC `.inv` loot, D-055) добавила парсер, генератор
+`FUN_1404b1c0` (два прохода) и NPC-main-контейнеры; specials и restock
+остаются blocked.
 
 Матрица — единый источник истины о покрытии паритета. Строка без evidence не
 считается подтверждённой. Источники: `parity-audit-p0-p1.md`,
@@ -132,7 +134,7 @@ ID: `P4a-*`, `P4b-*`, `P4b2-*` — прежние A/B/C из аудита (пе�
 | P3-6 | VM | assign coercion | `script_vm.cpp:254-287` | research §4: `0x32` `0x3a036`, string dest `0x3a09f-0x3a0b7`; numeric match, D-025 | partial | string-приёмник `unverified` (string-переменных в данных нет) | Phase 1a Task 2/5 |
 | P3-7 | VM | limits/errors | `script_vm.hpp:38-40` | research §4: деление/модуль на 0 → `1e10` без ошибки (`0x3a2d8`/`0x3a28f`); sticky errors D-025 | partial | eval budget 100k/limits — решение порта, не извлечено | Phase 1a Task 2/5 |
 | P3-8 | VM | dialog data/answer index | `script_vm.cpp:163-201` | research §5: `D_Say` `0x3fc10`, `D_Answer` `0x3fc9c`, `D_CloseDialog` `0x3fc60`; real `2684/2686/2696` | partial | 0-based answer index — порт D-024, `Server.dll` не пинит | Phase 1a Task 2 |
-| P3-9 | нативы | dispatch/host | `native_registry.cpp`, `game_script_host.cpp`, `person_runtime.cpp`, `hero_stats.cpp`, `inventory_runtime.cpp`, `item_name_index.cpp` | `NativeRegistry` 65/65; supported 13/65 (`Exit`/`Signal`/`Console`/`Cmd`/`D_PlaySound`, `RS_GetPersonParameterI`/`RS_SetPersonParameterI`/`RS_GetPersonSkillI`, `RS_TestPersonHasItem` (`0x5000000`)/`RS_GetItemCountI` (`0x5000002`)/`RS_GetMoney` (`0x5000008`), `RS_PersonAddItem` (`0x5000004`)/`RS_PersonRemoveItem` (`0x5000005`)), vm_internal 3, unsupported 49; три person-ID backed `PersonRuntime` + `parse_hero_stats`; три inventory-ID backed `InventoryRuntime` + `ItemNameIndex` (Hero: `BT_HERO` container `0x10`, деньги = type 18); два mutation-ID мутируют mutable `InventoryRuntime` (add/remove: stacking/`max_stack` из ITM, type/flags/style из ITM, деньги — обычная запись `MON_1_0_1`); `GameScriptHost` one-shot log | partial | 49 unsupported ID требуют подсистем (lifecycle/party/остаток inventory/quests/time/world); 3 vm_internal — внутренние ID VM; inventory — только Hero: mutation-нативы — Hero-only, NPC/`0x10`/box контейнеры → no-op; NPC (`.inv`) и entity type `0x10` (`EF_TRIGGER`, не `EF_INVCONTAINER` = type `8`) fallback-контейнеры не моделируются и возвращают 0 до 1b2b/c; нет Transfer/Trade/PassToTradePanel; `Signal`/`D_PlaySound` — service-level stubs, не поведенческий паритет | Phase 1a Task 3/4/6; Phase 1b1 Task 2–5; Phase 1b2a Task 2–5; Phase 1b2b1 Task 2–5; D-051/D-052 |
+| P3-9 | нативы | dispatch/host | `native_registry.cpp`, `game_script_host.cpp`, `person_runtime.cpp`, `hero_stats.cpp`, `inventory_runtime.cpp`, `item_name_index.cpp`, `npc_loot.cpp`, `inv_table.cpp` | `NativeRegistry` 65/65; supported 13/65 (`Exit`/`Signal`/`Console`/`Cmd`/`D_PlaySound`, `RS_GetPersonParameterI`/`RS_SetPersonParameterI`/`RS_GetPersonSkillI`, `RS_TestPersonHasItem` (`0x5000000`)/`RS_GetItemCountI` (`0x5000002`)/`RS_GetMoney` (`0x5000008`), `RS_PersonAddItem` (`0x5000004`)/`RS_PersonRemoveItem` (`0x5000005`)), vm_internal 3, unsupported 49; три person-ID backed `PersonRuntime` + `parse_hero_stats`; три inventory-ID backed `InventoryRuntime` + `ItemNameIndex` (Hero: `BT_HERO` container `0x10`, деньги = type 18); два mutation-ID мутируют mutable `InventoryRuntime` (add/remove: stacking/`max_stack` из ITM, type/flags/style из ITM, деньги — обычная запись `MON_1_0_1`); `GameScriptHost` one-shot log; NPC main-контейнеры из `.inv` (pass 2) генерируются при загрузке уровня в SEF-порядке на общем `MsvcRandom` | partial | 49 unsupported ID требуют подсистем (lifecycle/party/остаток inventory/quests/time/world); 3 vm_internal — внутренние ID VM; inventory — Hero + NPC main: `RS_TestPersonHasItem`/`RS_GetItemCountI` читают NPC-main (`.inv`, pass 2) из `InventoryRuntime`; mutation-нативы остаются Hero-only (NPC/`0x10`/box → no-op); specials/restock NPC не генерируются (D-055); entity type `0x10` (`EF_TRIGGER`, не `EF_INVCONTAINER` = type `8`) fallback-контейнеры не моделируются и возвращают 0; нет Transfer/Trade/PassToTradePanel; `Signal`/`D_PlaySound` — service-level stubs, не поведенческий паритет | Phase 1a Task 3/4/6; Phase 1b1 Task 2–5; Phase 1b2a Task 2–5; Phase 1b2b1 Task 2–5; Phase 1b2b2b Task 2–5; D-051/D-052/D-055 |
 | P3-10 | globals | типы/парсинг `.scr` | `globals.cpp:100-182` | real `zlato_vars.scr` | partial | неизвестные типы/кавычки | audit p2-p3 |
 | P3-11 | диалоги | DialogSession | `dialog_session.cpp:12-73` | real demon | partial | покрыт один диалог | audit p2-p3 |
 | P3-12 | диалоги | экран/клавиши/панель | `main.cpp:545-583` | screenshot tests | unverified | UI-раскладка порта | audit p2-p3 |
@@ -143,6 +145,16 @@ ID: `P4a-*`, `P4b-*`, `P4b2-*` — прежние A/B/C из аудита (пе�
 | P3-17 | шрифт | fallback | `font.cpp:539-562` | screenshot tests | partial | Windows-only; Android нужен TTF | audit p2-p3 |
 | P3-18 | cp1251 | строки CS/SDB | `cs.cpp:33-41`; `sdb.cpp:24` | real Cyrillic | verified | undefined bytes не важны | audit p2-p3 |
 | P3-19 | persons | параметры/навыки персоны, Hero stat-блок | `PersonRuntime`; `parse_hero_stats` | research §2–§7: 12 параметров/getter/setter RVA, skill id `0..26`, `BT_HERO` body `0x00C` + `0x128`/`0x12C`/`0x130`; unit + real `old_test.age.cs` (get/set reputation `40→38`) | partial | identity-кривая модификаторов (рантайм-таблица не загружена), `gate=0` default, `+0xF58` undead-gate не моделируются; 52 non-supported натива вне scope | Phase 1b1 Task 1–5; D-050 |
+
+## P3b — NPC `.inv` loot (Phase 1b2b2b, 2026-11-08)
+
+| ID | Подсистема | Пункт | Реализация | Evidence | Статус | Пробел/задача | Источник |
+|---|---|---|---|---|---|---|---|
+| P3b-1 | `.inv` | парсер таблиц | `inv_table.cpp` | 238/238 реальных файлов, 11 543 item, 362 four-number skip в 10 файлах, 0 failures; грамматика §3 | verified | synthetic-строгость (незакрытая кавычка, длина токена, перепроверка header) — minor | STATUS 1b2b2b; D-055; research §3–§5 |
+| P3b-2 | генератор | core initial spawn `FUN_1404b1c0` | `npc_loot.cpp` | research §15.2 (RVA/asm), независимый Python-референс, unit 11/11, real `l1_1` oracle | partial | нет live-оракула; merge `+1` (`FUN_1404e3a4`) `unverified`; zero-divisor/`max_stack==0` — guards; уровень — EXP-эквивалент `+0x26c4` без Scout/Identify; specials не рисуются | research §15.2–§15.6; D-055 |
+| P3b-3 | контейнеры/запросы | NPC main `+0x10` + генерация при загрузке | `inventory_runtime.cpp`, `level_screen.cpp`, `main.cpp` | main = pass 2 читается `RS_TestPersonHasItem`/`RS_GetItemCountI`; SEF-порядок; тот же RNG в `LevelSimulation`; real 174/218/323; Hero не изменён | partial | hot `+0xc` отброшен (RNG pass 1 выполняется); дубликаты first-wins; NPC add/remove no-op; save на уже загруженном уровне не перегенерирует; нет live-оракула | research §15.3/§15.6; D-055 |
+| P3b-4 | specials | R4–R10 модификаторы | не реализовано | `FUN_14047284`/`DAT_14088df4` не извлечены | missing | blocked: specials используют общий RNG, документированный desync после special-способного предмета | research §9.4/§15.4; D-055 |
+| P3b-5 | restock | regenerate во времени | не реализовано | `FUN_14048fac`; initial spawn только | missing | blocked: restock/regenerate после первого поколения вне scope | research §10.2; D-055 |
 
 ## P4a — PAD/person/SEF/отрисовка NPC
 
@@ -282,15 +294,16 @@ ID: `P4a-*`, `P4b-*`, `P4b2-*` — прежние A/B/C из аудита (пе�
 
 ## Итог
 
-Всего строк: **158**. По статусам: `verified` 48, `partial` 61,
-`unverified` 22, `missing` 15, `contradicted` 2, `superseded` 10.
+Всего строк: **163**. По статусам: `verified` 49, `partial` 63,
+`unverified` 22, `missing` 17, `contradicted` 2, `superseded` 10.
 
 Native dispatch infrastructure (Phase 1a): `NativeRegistry` 65/65 +
 `GameScriptHost`. Phase 1b1 добавляет три person-натива, Phase 1b2a — три
 inventory-натива (queries), Phase 1b2b1 — два mutation-натива: итого
 13 supported, 3 vm_internal, 49 unsupported. Из 52 non-supported 49
-unsupported требуют подсистем (Hero-inventory закрыт; NPC/box — 1b2b/c);
-3 vm_internal — внутренние ID VM.
+unsupported требуют подсистем (Hero-inventory закрыт; NPC core `.inv`
+loot — Phase 1b2b2b, specials/restock/box — blocked); 3 vm_internal —
+внутренние ID VM.
 
 `contradicted`: `P1-3` (ADSC) и `P2-9` (60 Гц vs `sv_fps=35`).
 `missing` включает новые системы P5b2+ и отсутствующие P4d/P5a-состояния.
@@ -301,7 +314,8 @@ unsupported требуют подсистем (Hero-inventory закрыт; NPC/
    (lifecycle/party/остаток inventory/quests/time/world); 3 `vm_internal` —
    внутренние ID VM; VM-часть закрыта Phase 1a, person-параметры — Phase 1b1,
    Hero-inventory queries — Phase 1b2a, Hero-inventory mutations — Phase
-   1b2b1 (Transfer/Trade/PassToTradePanel — нет); NPC/box inventory — 1b2b/c.
+   1b2b1 (Transfer/Trade/PassToTradePanel — нет); NPC core `.inv` loot —
+   Phase 1b2b2b (specials/restock/box — blocked, D-055).
 2. `P2-15`: save payload/write/load.
 3. `P2-9`/`P4b-16`: 35 Гц vs 60 Гц.
 4. `P1-3`: ADSC `number/name`.

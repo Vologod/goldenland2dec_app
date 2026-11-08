@@ -1,7 +1,7 @@
 # STATUS
 
 Обновлено: 2026-11-08
-## Phase 1b2b2b — core NPC `.inv` loot (in progress 2026-11-08)
+## Phase 1b2b2b — core NPC `.inv` loot (done 2026-11-08)
 
 - **Задача:** `parse_inv` + `NpcLootGenerator` + NPC-контейнеры в
   `InventoryRuntime`; specials не генерируются (documented RNG-desync).
@@ -50,7 +50,7 @@
 - **Gate:** level source доказан; **Task 2 не blocked**, Tasks 3–4
   разблокированы после ревизии spec/plan; implementation conditional
   на эту ревизию.
-- **D-055:** ещё не записан в `DECISIONS.md` — Task 5.
+- **D-055:** записан в `DECISIONS.md` (2026-11-08).
 - **Критерии:** 238 `.inv` parse; generator tests (two passes, no
   4-stack, pass2 scaling); NPC main counts; full `ctest`;
   D-055/parity/STATUS.
@@ -84,7 +84,69 @@
     ASCII-only `tech_name`, отсутствие лимита длины токена,
     незакрытая кавычка → format error (synthetic-тест), skip-count
     только в warning.
-- **Следующая задача:** Task 3 `gl::game::NpcLootGenerator`.
+- **Task 3 (`NpcLootGenerator`, done 2026-11-08; code `ce6ccb8`, flag fix
+  `b7b188a`):** `gl::game::NpcLootGenerator::generate` реализует initial
+  spawn `FUN_1404b1c0`: R1 `coin(regenerate_chance)` всегда; pass 1 →
+  `hot` (R2 `coin(0.01*n3)`, R3 `range(n4,n5)`, split `min(rem,max)`,
+  item-флаг `0x80` очищен), pass 2 → `main` (chance
+  `(0.01*n3)/chance_decrease`, qty `1/quantity_decrease` trunc/+1,
+  `n3==0` без coin, флаг `0x80` сохранён); 4-stack exit нет; merge не
+  моделируется (`unverified`); zero-divisor и `max_stack==0` — guards.
+  Unit: `test_npc_loot.cpp` 11/11 (242 assertions).
+- **Task 4 (NPC-контейнеры + level-load, done 2026-11-08; code `b2fd51b`,
+  duplicates fix `229ec13`):** `InventoryRuntime` хранит NPC main
+  (`+0x10`, pass 2) по точному имени; first-wins + warning для
+  дубликатов; hot только для RNG и отбрасывается. `LevelScreen::load`
+  hook генерирует лут в SEF-порядке до `LevelSimulation` на общем
+  `MsvcRandom` и передаёт тот же advanced state в симуляцию;
+  `--no-persons` генерацию пропускает. Real `l1_1` main counts:
+  `L0.P7_Kolbasens_Rodstvennik1` `MON_1_0_1`=174,
+  `L1_1.P389_Crying_Guardian`=218, `L0.P711_citizen8`=323,
+  `L1_1.P387_Poison_Plotnik` `QST_1_0_5`=1; `L0.P678_citizen4` пуст;
+  `L0.P744_oficer1` first-wins (ids 263/371, money 0); Hero не изменён.
+  **Oracle provenance:** значения выведены независимым Python-референсом
+  (MSVC LCG, float32 `coin`, truncating `range`, оба прохода,
+  `.inv`/`tech_names.sdb`/ITM), не из C++-портации; derivation/SEF-порядок —
+  `docs/research/p3b2b2-npc-loot-server.md` §15.6; захардкожены в
+  `tests/game/test_inventory_runtime_real.cpp`.
+- **Task 5 (docs/parity/regression, done 2026-11-08):** D-055 записан;
+  parity-matrix `P3b-1..P3b-5` + пересчёт (163 строки: verified 49,
+  partial 63, unverified 22, missing 17, contradicted 2, superseded 10);
+  PROJECT/plan обновлены.
+- **Проверка (фактический вывод 2026-11-08, `GL_GAME_DIR=I:\Games\Златогорье-2`):**
+  - `cmake --build build` — exit 0.
+  - targeted `ctest --test-dir build --output-on-failure -R "gl_script_tests|gl_script_real_tests|gl_game_tests|gl_assets_tests|gl_assets_real_tests|glgame_screenshot_tests|glview_screenshot_tests|level_click_tests"`
+    — **8/8 passed**, `Total Test time (real) = 1135.51 sec`, exit 0:
+    `gl_assets_tests` 5.41, `gl_assets_real_tests` 537.14,
+    `gl_game_tests` 58.72, `gl_script_tests` 0.43,
+    `gl_script_real_tests` 9.92, `glview_screenshot_tests` 102.52,
+    `glgame_screenshot_tests` 410.06, `level_click_tests` 10.55.
+  - full `ctest --test-dir build --output-on-failure` — **18/18 passed**,
+    `Total Test time (real) = 1210.51 sec`, exit 0:
+    `gl_assets_tests` 4.08, `gl_assets_real_tests` 421.18,
+    `gl_game_tests` 55.65, `gl_core_tests` 0.11,
+    `gl_core_real_tests` 0.02, `gl_script_tests` 0.40,
+    `gl_script_real_tests` 9.00, `glpak_cli_tests` 0.07,
+    `gl_cs_tools_tests` 6.50, `camera_tests` 0.03, `utf8_tests` 0.02,
+    `font_tests` 1.21, `glview_screenshot_tests` 95.88,
+    `glgame_screenshot_tests` 580.28, `person_render_tests` 4.27,
+    `level_click_tests` 16.14, `dialog_overlay_tests` 0.76,
+    `inventory_overlay_tests` 12.63.
+- **Ограничения (D-055):** specials R4–R10
+  (`FUN_14047284`/`DAT_14088df4`) не генерируются — документированный
+  RNG-desync после special-способного предмета; нет live-оракула;
+  merge `+1` `unverified`; нулевые `chance_decrease`/`quantity_decrease`
+  и `max_stack==0` — безопасные guards, не паритет; loot level — EXP-
+  эквивалент `+0x26c4`, средний уровень партии без Scout/Identify;
+  hot отбрасывается; NPC add/remove — no-op; restock/Transfer/Trade/
+  PassToTradePanel — вне scope; активация save на уже загруженном уровне
+  не перегенерирует NPC-контейнеры до следующего `load_level`;
+  `--no-persons` генерацию пропускает.
+- **Следующее:** research specials (`FUN_14047284`/`DAT_14088df4`) или
+  Transfer/Trade/`PassToTradePanel`, либо `P2-15` (save payload).
+- **Коммиты:** `98cfa62` (parser), `ce6ccb8` (generator), `b7b188a`
+  (flag 0x80 fix), `b2fd51b` (containers/level-load), `229ec13`
+  (duplicate first-wins); docs — `docs: record core NPC loot`.
 
 ## P4 — RNG parity (D-053 implementation) (done 2026-11-08)
 
