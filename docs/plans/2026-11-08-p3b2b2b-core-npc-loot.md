@@ -26,7 +26,8 @@
 ### Task 1: Research gate — level source and generation prerequisites
 
 **Status:** done 2026-11-08 (commit `637f184`); findings revised by
-`docs: revise NPC loot path to FUN_1404b1c0`.
+`12a7a57`, `7774e07`, and `docs: align merge and restock semantics`
+(range `637f184..HEAD`).
 
 **Files:**
 - Modify: `docs/research/p3b2b2-npc-loot-server.md`

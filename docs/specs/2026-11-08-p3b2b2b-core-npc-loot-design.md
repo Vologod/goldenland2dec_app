@@ -128,9 +128,10 @@ NpcLoot generate(const gl::assets::InvTable&,
 - Specials: **не вызывать** R4–R10. RNG-поток после первого
   special-способного предмета расходится с оригиналом — запись в D-055
   (Task 5).
-- `FUN_140489ec` (merge `+1`, `qty -= chunk`, early exit `>=4`) не
-  используется для NPC SEF; его квирк не переносится на
-  `FUN_1404b1c0`.
+- `FUN_140489ec` (caller-квирки `qty -= chunk`, early exit `>=4`) не
+  используется для NPC SEF; merge `+1` — shared `FUN_1404e3a4`,
+  pass merge `unverified`; caller-квирки на `FUN_1404b1c0` не
+  переносить.
 
 ### 3.3 NPC-контейнеры
 
@@ -171,7 +172,9 @@ NpcLoot generate(const gl::assets::InvTable&,
   `FUN_1404b1c0` уже при initial spawn.
 - Хранение hot-контейнера (`+0xc`, pass 1), если runtime хранит только
   main; RNG pass 1 всё равно выполняется (см. §3.3).
-- `FUN_140489ec` (hero/иной путь) и его merge/early-exit квирки.
+- `FUN_140489ec` (hero/иной путь) и его caller-квирки
+  (`qty -= chunk`, early exit `>=4`); merge `+1` — shared
+  `FUN_1404e3a4`, pass merge `unverified`.
 - Transfer/Trade/PassToTradePanel.
 - Box/trigger контейнеры.
 - Точный pre-level RNG-order, если он недоказуем.
@@ -186,8 +189,9 @@ NpcLoot generate(const gl::assets::InvTable&,
   pass 2 — chance `/chance_decrease`, qty `1/quantity_decrease` +
   trunc/`+1`, `n3==0` без chance coin; порядок двух проходов и RNG;
   unknown ITM; пустая таблица. Caller-квирки (`qty -= chunk`,
-  4-stack) — отдельный тест для `FUN_140489ec`; shared merge `+1`
-  тестировать в pass-семантике.
+  4-stack) — отдельный тест для `FUN_140489ec`. Merge behavior
+  (pass 1/2) is `unverified` — не утверждать/не тестировать; тесты
+  покрывают только proven R1/R2/R3, split/count set.
 - Real: один `.inv` + реальный уровень; oracle — **main** (pass 2)
   item ids/counts (hardcoded).
 - InventoryRuntime: NPC main count/money; hot — если хранится; Hero

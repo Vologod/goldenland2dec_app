@@ -54,9 +54,9 @@
 - **Критерии:** 238 `.inv` parse; generator tests (two passes, no
   4-stack, pass2 scaling); NPC main counts; full `ctest`;
   D-055/parity/STATUS.
-- **Коммиты Task 1:** `637f184` (research), затем
-  `docs: revise NPC loot path to FUN_1404b1c0` (spec/plan/STATUS/
-  research fix).
+- **Коммиты Task 1:** `637f184` (research) + `12a7a57`, `7774e07` и
+  `docs: align merge and restock semantics` (fixes); range
+  `637f184..HEAD`.
 
 ## P4 — RNG parity (D-053 implementation) (done 2026-11-08)
 
@@ -129,8 +129,10 @@
     chunking `min(qty, max_stack)` (чанки `max_stack`, остаток в
     конце), порядок, ранний выход при `>= 4` стеках; отдельного
     money-ролла нет (записи `MON_*` — обычные `.inv`-предметы);
-    `chance_decrease`/`quantity_decrease` используются только
-    restock-функциями (§10.2), не первичной генерацией.
+    `chance_decrease`/`quantity_decrease` используются
+    restock-функциями (§10.2); **уточнение 1b2b2b:** `FUN_1404b1c0`
+    pass 2 использует их и при initial spawn (§15.2) — см. текущую
+    секцию 1b2b2b (эта запись superseded).
   - RNG: `_rand` — MSVC LCG `0x343FD/0x269EC3`,
     `(state>>16)&0x7FFF`; seed — `FUN_1406c092(timeGetTime())`
     (`decompiled.c:34129`); `FUN_14006288` — coin; `FUN_140061e4` —

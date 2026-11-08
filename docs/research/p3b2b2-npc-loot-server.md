@@ -446,8 +446,9 @@ each followed by: test eax,eax ; jne 0x14047f4a      (skip record)
 
 **`FUN_140489ec` не читает `chance_decrease` (`+0x38`) и
 `quantity_decrease` (`+0x3c`).** Проверка по телу функции: вхождений
-`+ 0x38`/`+ 0x3c` — 0. Эти поля использует только restock/догрузка
-(§10.2), а не первичная генерация.
+`+ 0x38`/`+ 0x3c` — 0. Эти поля использует restock/догрузка
+(§10.2), а также `FUN_1404b1c0` pass 2 при initial spawn (§15.2);
+первичная генерация `FUN_140489ec` их не использует.
 
 ### 8.1 Псевдокод
 
@@ -770,12 +771,12 @@ person-объекта. `FUN_140233d4`/`FUN_14023aa0` — init-методы др�
   (в т.ч. по ключу `scr_inv`, `decompiled.c:22422`). Роллит
   `regenerate_chance` (`51141`), при 0 и `param_4==0` оставляет
   контейнер (`51142-51145`), иначе чистит (`51146-51147`) и
-  заполняет/догружает. В restock-ветке — `p = 0.01*rec.n3 /
-  chance_decrease` (`51293`, `51583`), количество `/
-  quantity_decrease` (`51300`, `51593`); спец-логика как в
-  `FUN_140489ec` (`51206-51208`, `51361-51363`). Полная трассировка
-  всех трёх фаз (fill/top-up/второй контейнер) не доведена —
-  `unverified`.
+  заполняет. Pass 2 (initial spawn для SEF NPC и restock) использует
+  `p = 0.01*rec.n3 / chance_decrease` (`51293`; в restock-ветке также
+  `51583`) и количество `/ quantity_decrease` (`51300`; `51593`);
+  спец-логика как в `FUN_140489ec` (`51206-51208`, `51361-51363`).
+  Initial-spawn two-pass семантика — §15.2; restock/top-up во
+  времени и pass-2 merge — `unverified`.
 
 Итог: для `FUN_140489ec` это не множители первичной генерации; для
 `FUN_14048fac`/restock-веток — множители догрузки/рестока.
@@ -853,7 +854,7 @@ person-объекта. `FUN_140233d4`/`FUN_14023aa0` — init-методы др�
    callers=0/vtable; расписание (тик/загрузка уровня) не установлено.
 7. **`FUN_1404b1c0`**: initial-spawn two-pass семантика восстановлена
    в §15.2 (R1, pass 1/2, два `FUN_1404d724`, `param_4`). Restock/
-   top-up фазы во времени и merge-interaction в pass 2 — `unverified`.
+   top-up фазы во времени и pass-1/pass-2 merge — `unverified`.
 8. **Stacking** в shared `FUN_1404e3a4`: точное условие слияния;
    pass-1/pass-2 merge в `FUN_1404b1c0` — `unverified`.
 9. **Live-оракул не снимался** — все выводы статические + реальные
@@ -1245,8 +1246,9 @@ Merge/stacking `+1` — в **shared** `FUN_1404e3a4`
      его читают `TestPersonHasItem`/`GetItemCountI`; hot = pass 1
      (`+0xc`). Если runtime хранит только main, pass 1 RNG всё равно
      обязателен (иначе pass 2 рассогласован); хранение hot —
-     documented divergence. `FUN_140489ec` (merge `+1`,
-     `qty -= chunk`, 4-stack exit) — не SEF NPC.
+     documented divergence. `FUN_140489ec` (caller-квирки
+     `qty -= chunk`, 4-stack exit) — не SEF NPC; merge `+1` — shared
+     `FUN_1404e3a4`, pass merge `unverified`.
    - specials R4/R5/R6–R10 не вызываются — RNG-desync; **D-055
      будет записан в Task 5** (сейчас в `DECISIONS.md` записи D-055
      ещё нет).
