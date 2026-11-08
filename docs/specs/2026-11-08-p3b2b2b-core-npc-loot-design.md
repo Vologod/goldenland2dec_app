@@ -66,9 +66,9 @@ struct InvItem {
     std::int32_t qty_max = 0;
 };
 struct InvTable {
-    double regenerate_chance = 0.0;
-    double chance_decrease = 0.0;
-    double quantity_decrease = 0.0;
+    double regenerate_chance = 1.0;
+    double chance_decrease = 1.0;
+    double quantity_decrease = 1.0;
     std::int32_t level_offset = 0;
     std::vector<InvItem> items;
 };
@@ -76,9 +76,31 @@ Result<InvTable> parse_inv(std::span<const std::uint8_t>);
 Result<InvTable> load_inv(GameVfs&, std::string_view name);
 ```
 
-- 4-number `item` — пропуск (как оригинал), warning один раз.
+- Defaults — из clear `FUN_140471cc` (`decompiled.c:48322-48327`):
+  `+0x38/+0x3c/+0x40 = 1.0f`, `+0x44 = 0`. Отсутствующий/битый
+  header оставляет их. (Ранняя версия spec ошибочно указывала `0.0`;
+  исправлено по research §3–§4.)
+- `regenerate_chance` хранится уже масштабированным (`value * 0.01`,
+  оригинал `+0x40 = value * 0.01`); `chance_percent` — сырой `n3`.
+- `tech_name` — ASCII (в корпусе 238/238 только байты `<= 0x7f`);
+  cp1251-декодирование не выполняется.
+- Double-токен проверяется по charset `0-9 + - .` с полным
+  потреблением (`strtod`); это строже atof-подобного оригинала
+  (`FUN_140031b8`), но на реальных данных расхождений нет.
+- Header-скан после невалидного значения перепроверяет токен значения
+  как возможный ключ (контраст с потреблением токена в оригинале);
+  мелкое расхождение на контрайвед-входе, реальный header всегда
+  валиден.
+- Незакрытая кавычка — `ErrorCode::format` для файла (в корпусе нет;
+  synthetic-тест фиксирует поведение).
+- Лексер не накладывает лимит длины токена (`0x3ff`, значение
+  `0x103` в оригинале); в корпусе таких токенов нет.
+- 4-number `item` — пропуск (как оригинал); счётчик не выставляется в
+  API, warning один раз на файл. Реальный корпус (log-verified):
+  362 записи в 10 файлах.
 - `special` — читается и игнорируется (в данных нет); без догадок.
-- Комментарии `//` (whitespace-separated) и кавычки — как в оригинале.
+- Комментарии `//` (в т.ч. attached-склейка токена, как в
+  `FUN_14002af0`) и кавычки — как в оригинале.
 
 ### 3.2 Генератор
 
@@ -181,8 +203,9 @@ NpcLoot generate(const gl::assets::InvTable&,
 
 ## 5. Тестирование
 
-- `parse_inv`: все 238 реальных файлов; 4-number skip; комментарии;
-  synthetic special.
+- `parse_inv`: все 238 реальных файлов (11 543 принятых записи;
+  362 skip в 10 файлах, log-verified); 4-number skip; комментарии;
+  synthetic special; незакрытая кавычка → format error.
 - Генератор: фиксированный seed/level, эталонные значения из
   псевдокода (не из реализации); R1 всегда; pass 1 — split по
   `max_stack` (merge shared-helper `unverified`) без 4-stack exit;

@@ -57,6 +57,34 @@
 - **Коммиты Task 1:** `637f184` (research) + `12a7a57`, `7774e07` и
   `docs: align merge and restock semantics` (fixes); range
   `637f184..HEAD`.
+- **Task 2 (`.inv` parser, done 2026-11-08, code commit `98cfa62`):**
+  - `gl_assets::InvTable`/`InvItem`, `parse_inv`, `load_inv` →
+    `scripts/inventory/<name>.inv` (lowercase, forward slashes).
+  - Defaults `1.0/1.0/1.0/0` из clear `FUN_140471cc`
+    (`decompiled.c:48322-48327`); spec §3.1 исправлен (ранее ошибочно
+    `0.0`). `regenerate_chance` хранится масштабированным (`*0.01`),
+    `chance_percent` — сырой `n3`.
+  - Грамматика/лексер по research §2–§5: `//`-комментарии (включая
+    attached-склейку), кавычки, произвольный whitespace, заголовки в
+    любом порядке; 4-number `item` — skip + один warning на файл;
+    `special` игнорируется.
+  - **Проверено:** `gl_assets_tests` — 200/200 cases, 1344/1344
+    assertions (из них `inv_table` 9/50); targeted
+    `gl_assets_real_tests --test-case=*inv_table*` — 2/2 cases, 50/50
+    assertions; реальные данные **238/238** файлов, **11 543** item,
+    **0** failures, **362** skip в 10 файлах (log-verified;
+    `boxes/iron.inv` — 0 записей). `inv001_swordsman.inv` — 165
+    записей, header `75/2/1/4`.
+  - **Full `ctest`** (с `GL_GAME_DIR`): **18/18 passed**, exit 0,
+    `Total Test time (real) = 1882.64 sec`
+    (`gl_assets_real_tests` 672.94 s, `glgame_screenshot_tests`
+    822.39 s).
+  - Minors задокументированы в spec §3.1: повторная проверка
+    невалидного header-значения как ключа, строгий charset double,
+    ASCII-only `tech_name`, отсутствие лимита длины токена,
+    незакрытая кавычка → format error (synthetic-тест), skip-count
+    только в warning.
+- **Следующая задача:** Task 3 `gl::game::NpcLootGenerator`.
 
 ## P4 — RNG parity (D-053 implementation) (done 2026-11-08)
 

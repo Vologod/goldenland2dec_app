@@ -112,3 +112,9 @@ TEST_CASE("inv_table: empty input yields defaults and no items") {
     CHECK(table->level_offset == 0);
     CHECK(table->items.empty());
 }
+
+TEST_CASE("inv_table: unterminated quote is a format error") {
+    auto table = parse("item \"OPEN 1 2 3 4 5\n");
+    REQUIRE_FALSE(table.has_value());
+    CHECK(table.error().code == gl::ErrorCode::format);
+}
