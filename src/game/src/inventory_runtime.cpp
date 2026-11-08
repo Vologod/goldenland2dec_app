@@ -95,12 +95,12 @@ bool InventoryRuntime::remove_item(std::string_view person, std::string_view tec
 
 bool InventoryRuntime::transfer_item(std::string_view from, std::string_view to,
                                      std::string_view tech_name, std::int32_t count) {
-    if (from == to)
-        return true;
     std::vector<gl::assets::InventoryItem> *source = mutable_items(from);
     std::vector<gl::assets::InventoryItem> *dest = mutable_items(to);
     if (source == nullptr || dest == nullptr)
         return false;
+    if (from == to)
+        return true;
 
     std::uint32_t remaining = count < 0 ? 1000000u : static_cast<std::uint32_t>(count);
     if (remaining == 0)
@@ -133,12 +133,12 @@ bool InventoryRuntime::transfer_item(std::string_view from, std::string_view to,
 }
 
 bool InventoryRuntime::transfer_all(std::string_view from, std::string_view to) {
-    if (from == to)
-        return true;
     std::vector<gl::assets::InventoryItem> *source = mutable_items(from);
     std::vector<gl::assets::InventoryItem> *dest = mutable_items(to);
     if (source == nullptr || dest == nullptr)
         return false;
+    if (from == to)
+        return true;
 
     for (const gl::assets::InventoryItem &item : *source) {
         if (!item_template_)

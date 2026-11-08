@@ -41,7 +41,8 @@ Registry: 2 ID → `supported` (15/65).
 ### 3.2 Семантика
 
 - Person lookup — точное имя; Hero и NPC.
-- TECH — exact case-sensitive; неизвестный → `0.0`.
+- TECH — exact case-sensitive; неизвестный: `count > 0` → `0.0`;
+  `count == 0` / `count < 0` → `1.0` (absent-item quirk, без изменений).
 - TransferItem:
   - `count == 0` → успех без изменений (`1.0`);
   - `count < 0` → до 1 000 000 (все);
@@ -82,7 +83,13 @@ bool transfer_all(std::string_view from, std::string_view to);
   существующую dest-запись сохраняет flags этой записи.
 - Merge в dest по item_id; порядок записей — append (как в 1b2b1).
 - Отсутствующая персона/контейнер: `false`/no-op; в оригинале для
-  `TransferAll` и missing container это AV — deviation, D-056.
+  `TransferAll` и missing container это AV — deviation, D-056. Both
+  containers резолвятся до short-circuit `from == to`, поэтому
+  одинаковые имена отсутствующей персоны → `false`.
+- Порт-guard: `transfer_all` при хотя бы одной source-записи без ITM
+  (`item_template` отсутствует или `max_stack == 0`) возвращает
+  `false` без мутаций (оригинал add-ошибки не проверяет и продолжил
+  бы) — deviation, D-056.
 - `access()` расширяется callbacks (`transfer_item`, `transfer_all`).
 
 ### 5.2 `gl::script`

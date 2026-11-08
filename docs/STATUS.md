@@ -45,10 +45,14 @@
   dest; absent item matrix (+ → false, 0/− → true), negative limit
   1 000 000; missing person/container → false/no-op (AV deviation,
   D-056). Unit matrix + 4 real oracle tests (slot0/slot2, fresh runtime
-  per row, `l1_1` NPC seed 1): `gl_game_tests` **227/227,
-  558646 assertions, 0 failed** (with `GL_GAME_DIR`). Research flags
+  per row, `l1_1` NPC seed 1). **Fix round 1:** containers резолвятся
+  до `from == to`, поэтому same-name missing person → `false`;
+  `transfer_all` abort on unmapped/`max_stack==0` source documented;
+  unknown TECH negative quirk in spec. `gl_game_tests` **228/228,
+  558659 assertions, 0 failed** (with `GL_GAME_DIR`). Research flags
   fix: `QST_1_0_3` `0xC0000028`, `QST_1_0_5` `0x40000028`.
-  Commit `feat(game): transfer items between persons`.
+  Commits `feat(game): transfer items between persons`,
+  `fix(game): reject missing transfer persons`.
 - **Gate:** Tasks 3–4 — после Task 2; Task 5 — после полного `ctest`.
 - **Критерии:** семантика `FUN_14048790`/`FUN_14048518`; 2 ID →
   supported (15/65); unit + real oracle; full `ctest`; D-056/parity.

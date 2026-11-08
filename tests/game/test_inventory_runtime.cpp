@@ -499,7 +499,7 @@ TEST_CASE("inventory_runtime transfer_item same person is a no-op true") {
 
     CHECK(runtime.transfer_item("Hero", "Hero", "MON_1_0_1", 100));
     CHECK(runtime.count("Hero", "MON_1_0_1") == 500);
-    CHECK(runtime.transfer_item("L0.Missing", "L0.Missing", "MON_1_0_1", 100));
+    CHECK_FALSE(runtime.transfer_item("L0.Missing", "L0.Missing", "MON_1_0_1", 100));
 }
 
 TEST_CASE("inventory_runtime transfer_item merges into an existing dest stack") {
@@ -571,6 +571,8 @@ TEST_CASE("inventory_runtime transfer_item missing person is false and unchanged
     CHECK_FALSE(runtime.transfer_item("Hero", "L0.Missing", "MON_1_0_1", 100));
     CHECK_FALSE(runtime.transfer_item("L0.Missing", "Hero", "MON_1_0_1", 100));
     CHECK_FALSE(runtime.transfer_item("Hero", "L0.Missing", "MON_1_0_1", 0));
+    CHECK_FALSE(runtime.transfer_item("L0.Missing", "L0.Missing", "MON_1_0_1", 100));
+    CHECK_FALSE(runtime.transfer_all("L0.Missing", "L0.Missing"));
     CHECK(runtime.count("Hero", "MON_1_0_1") == 500);
     CHECK(runtime.person_items("L0.Missing").empty());
 }
@@ -580,8 +582,36 @@ TEST_CASE("inventory_runtime transfer_item missing template keeps both sides unc
     runtime.set_person_items("L0.P1", {});
 
     CHECK_FALSE(runtime.transfer_item("Hero", "L0.P1", "MON_1_0_1", 100));
+    CHECK(runtime.transfer_item("Hero", "L0.P1", "MON_1_0_1", 0));
+    CHECK(runtime.transfer_item("Hero", "L0.P1", "MON_1_0_1", -1));
     CHECK(runtime.count("Hero", "MON_1_0_1") == 500);
     CHECK(runtime.count("L0.P1", "MON_1_0_1") == 0);
+}
+
+TEST_CASE("inventory_runtime transfer_all aborts when a source record has no usable template") {
+    gl::assets::HeroInventory inventory;
+    inventory.items.push_back({1101, 2, 0, 0, 0});
+    inventory.items.push_back({999, 1, 0, 0, 0});
+    auto runtime = InventoryRuntime::create(inventory, make_names(), template_for);
+    runtime.set_person_items("L0.P1", {});
+
+    CHECK_FALSE(runtime.transfer_all("Hero", "L0.P1"));
+    CHECK(runtime.hero_inventory().items.size() == 2);
+    CHECK(runtime.count("Hero", "QST_1_0_159") == 2);
+    CHECK(runtime.person_items("L0.P1").empty());
+
+    auto zero_stack = [](std::uint32_t item_id) -> std::optional<ItemTemplate> {
+        if (item_id == 1101)
+            return ItemTemplate{26, 0, 0, 0};
+        return std::nullopt;
+    };
+    gl::assets::HeroInventory other;
+    other.items.push_back({1101, 2, 0, 0, 0});
+    auto runtime2 = InventoryRuntime::create(other, make_names(), zero_stack);
+    runtime2.set_person_items("L0.P2", {});
+    CHECK_FALSE(runtime2.transfer_all("Hero", "L0.P2"));
+    CHECK(runtime2.hero_inventory().items.size() == 1);
+    CHECK(runtime2.person_items("L0.P2").empty());
 }
 
 TEST_CASE("inventory_runtime transfer_all moves every source record and clears source") {
