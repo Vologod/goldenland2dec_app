@@ -32,19 +32,19 @@
 - Modify: `docs/research/p3b2b2-npc-loot-server.md`
 - Modify: `docs/STATUS.md` (verdict/blockers)
 
-- [ ] **Step 1: `+0x26c4`**
+- [x] **Step 1: `+0x26c4`**
 
 Prove what BT_INFO field `+0x26c4` is (`FUN_1403210c`, `decompiled.c:35638`): save layout/offset, semantics (player level? world level?), and how to obtain it from `Saves/*.sav` read-only. If not provable, verdict `blocked` and stop Tasks 2–5.
 
-- [ ] **Step 2: Prototype/merge/early exit**
+- [x] **Step 2: Prototype/merge/early exit**
 
 Confirm from ITM: max_stack/type/flags/style; merge-path `+1` behavior; early-exit `>=4` stacks and restock metadata; initial R1 `coin(regenerate_chance)`.
 
-- [ ] **Step 3: RNG order**
+- [x] **Step 3: RNG order**
 
 Record the order of RNG consumers before/at level spawn (movement init vs loot generation) as far as provable; if not, state the deterministic port order and the documented divergence.
 
-- [ ] **Step 4: Verdict/commit**
+- [x] **Step 4: Verdict/commit**
 
 State `implementable` or `blocked`; commit `docs(research): pin NPC loot level and order`.
 
@@ -91,22 +91,29 @@ research (e.g. `inv001_swordsman.inv`).
 Fixed seed/level, synthetic `InvTable`; hardcode expected items/counts
 from research §15.3 (not from the implementation). Cover:
 - R1 `coin(regenerate_chance)` consumed always;
-- pass 1: window, `coin(0.01*n3)`, `range(n4,n5)`, force-new split by
-  `max_stack` (`FUN_1404e3a4(name,0,1)`, `this+4=1`, direct
-  `count=min(remaining,max)`), **no merge**, **no 4-stack exit**
-  (`100000` threshold effectively unreachable);
+- pass 1: window, `coin(0.01*n3)`, `range(n4,n5)`, split by
+  `max_stack` (`FUN_1404e3a4(name,0,1)`, `this+4=1` only clears item
+  flag `0x80`, direct `count=min(remaining,max)`); merge possible via
+  shared helper (`unverified`); **no 4-stack exit** (`100000`
+  threshold effectively unreachable);
 - pass 2: `n3==0` → no chance coin; `n3>0` → `coin((0.01*n3)/
   chance_decrease)`; qty `n4/n5 * (1/quantity_decrease)` with
   trunc/`+1` → `range`; creation with `this+4=0`;
 - two-pass RNG order and `NpcLoot{hot, main}`;
 - unknown ITM, empty table.
-- Do **not** test `FUN_140489ec` merge `+1`/`qty -= chunk` here; that is
-  a different path (separate helper only if ever added).
+- Merge `+1` is in shared `FUN_1404e3a4`; pass-1/2 merge is
+  `unverified`. Only caller quirks (`qty -= chunk`, 4-stack exit) are
+  scoped to `FUN_140489ec` (separate helper only if ever added).
+- Division by `chance_decrease == 0` / `quantity_decrease == 0` is
+  unguarded; real corpus has no zeros; behavior at 0 is
+  `unverified`/D-055.
 
 - [ ] **Step 2: Implement** `FUN_1404b1c0` initial spawn (two passes):
 - R1; SEF call uses `param_4=1`, so generation always proceeds;
-- pass 1 → `hot` (`+0xc`): force-new creation + direct count set;
-- pass 2 → `main` (`+0x10`): scaled chance/qty + creation;
+- pass 1 → `hot` (`+0xc`): creation + direct count set; merge
+  possible/`unverified`; `this+4=1` only clears item flag `0x80`;
+- pass 2 → `main` (`+0x10`): scaled chance/qty + creation; merge
+  possible/`unverified`; division-by-0 unverified/D-055;
 - specials R4/R5 not drawn; RNG desync documented (D-055, Task 5).
 
 - [ ] **Step 3: Run `gl_game_tests --test-case=*npc_loot*`; commit**

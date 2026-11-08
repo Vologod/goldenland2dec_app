@@ -22,17 +22,21 @@
     (`proto+4/+8/+0x1c/+0x30` → runtime `+8/+0xc/+0x20/+0x34`).
     R1 `coin(regenerate_chance)` всегда (`49510`/`51141`).
   - **Реальный SEF-путь — `FUN_1404b1c0` (два прохода), не
-    `FUN_140489ec`.** Pass 1 → hot `+0xc`: force-new
-    `FUN_1404e3a4(name,0,1)` (`this+4=1`), прямой
-    `count=min(remaining,max)`, без merge/chunk-loop. Pass 2 → main
+    `FUN_140489ec`.** Pass 1 → hot `+0xc`:
+    `FUN_1404e3a4(name,0,1)` (`this+4=1` только очищает item-флаг
+    `0x80`, не gate merge), прямой `count=min(remaining,max)`;
+    merge возможен/`unverified`; chunk-loop нет. Pass 2 → main
     `+0x10` (его читают `TestPersonHasItem`/`GetItemCountI`):
     `coin((0.01*n3)/chance_decrease)` (при `n3==0` coin нет), qty
-    `1/quantity_decrease` (trunc/+1) → `range`, creation `this+4=0`.
-    RNG-порядок: R1, pass1 R2/R3, pass2 R2'/R3'. Порог метаданных
-    `100000` практически недостижим — **4-stack exit отсутствует**.
-  - Merge `+1`/`qty -= chunk`/early-exit `>=4` — квирк только
-    `FUN_140489ec` (hero/иной путь); **не** переносить на
-    `FUN_1404b1c0`.
+    `1/quantity_decrease` (trunc/+1) → `range`, creation `this+4=0`;
+    merge возможен/`unverified`. RNG-порядок: R1, pass1 R2/R3,
+    pass2 R2'/R3'. Порог метаданных `100000` практически недостижим —
+    **4-stack exit отсутствует**. Деление на
+    `chance_decrease`/`quantity_decrease` не защищено; в корпусе нулей
+    нет, behavior at 0 — `unverified`/D-055.
+  - Merge `+1` — shared `FUN_1404e3a4`; caller-квирки `qty -= chunk`/
+    early-exit `>=4` — только `FUN_140489ec` (hero/иной путь). К
+    `FUN_1404b1c0` эти caller-квирки **не** применять.
   - RNG order: SEF `persons:` в порядке файла; `scr_inv` →
     `FUN_1401edc4` `22422-22455` → `FUN_1404b1c0`; лут потребляет RNG
     раньше движения (movement RNG — в update-тиках `20759`/

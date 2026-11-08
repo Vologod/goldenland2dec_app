@@ -24,11 +24,12 @@
   прохода:
   - pass 1 → `+0xc` (hot): окно
     `min+offset <= level <= max+offset`, R2 `coin(0.01*n3)`, R3
-    `range(n4,n5)`, force-new создание
-    (`FUN_1404e3a4(name,0,1)`, `this+4=1`) и прямая установка
-    `item+0xb0 = min(qty, max_stack)`; `remaining -= min`; без
-    merge/chunk-loop. Порог метаданных `100000` практически
-    недостижим — **4-stack exit отсутствует**.
+    `range(n4,n5)`, создание `FUN_1404e3a4(name,0,1)` и прямая
+    установка `item+0xb0 = min(qty, max_stack)`; `remaining -= min`.
+    `this+4=1` только очищает item-флаг `0x80` (`53919-53921`), не
+    гейтит merge; pass-1 merge возможен/`unverified`. Chunk-loop нет.
+    Порог метаданных `100000` практически недостижим — **4-stack exit
+    отсутствует**.
   - pass 2 → `+0x10` (**main**; его читают
     `TestPersonHasItem`/`GetItemCountI`): chance
     `(0.01*n3)/chance_decrease` (при `n3==0` coin не бросается),
@@ -37,9 +38,10 @@
     `this+4=0` и прямой установкой count; порог `100000`.
   - R1 `coin(regenerate_chance)` — всегда (SEF вызывает с
     `param_4=1`, поэтому R1 не отменяет генерацию).
-- `FUN_140489ec` (merge `+1`, `qty -= chunk`, early exit `>=4`) —
-  другой путь (hero/иные источники). Его merge-квирк **не
-  обобщается** на `FUN_1404b1c0`.
+- `FUN_140489ec` (caller-квирки `qty -= chunk`, early exit `>=4`) —
+  другой путь (hero/иные источники); merge `+1` — shared
+  `FUN_1404e3a4` (pass-1/2 merge `unverified`). Caller-квирки к
+  `FUN_1404b1c0` **не** применять.
 - `level = *(DAT_14088dc4+0x26c4) + 1`; `+0x26c4` читается из `BT_INFO`
   save (`FUN_1403210c`, `decompiled.c:35638`).
 - Спец-модификаторы: `roll_special_count` (R4/R5) + `FUN_14047284`
@@ -105,18 +107,22 @@ NpcLoot generate(const gl::assets::InvTable&,
 - **Pass 1 (`hot`, `+0xc`)**: записи в порядке файла; окно уровней;
   R2 `coin(0.01*n3)`; `n3==0` — пропуск (защитный дубль); R3
   `range(n4,n5)`; `qty<1` — пропуск; цикл:
-  `FUN_1404e3a4(name,0,1)` с `this+4=1` (force-new), затем
-  `item+0xb0 = min(remaining, max_stack)`, `remaining -= min`.
-  Merge/chunk-loop нет. Раннего выхода `>=4` нет; порог метаданных
+  `FUN_1404e3a4(name,0,1)` с `this+4=1` (только clears item-флаг
+  `0x80`, не gate merge), затем `item+0xb0 = min(remaining,
+  max_stack)`, `remaining -= min`. Merge возможен/`unverified`;
+  chunk-loop нет. Раннего выхода `>=4` нет; порог метаданных
   `100000` практически недостижим.
 - **Pass 2 (`main`, `+0x10`)**: окно уровней; если `n3==0` — chance
   coin не бросается, иначе R2'
   `coin((0.01*n3)/chance_decrease)`; R3' — `n4/n5`, умноженные на
   `1/quantity_decrease`, trunc + `+1` при дробной части, затем
-  `range`; создание `FUN_1404e3a4(name,0,1)` с `this+4=0` (merge
-  разрешён) и прямой установкой `item+0xb0 = min(remaining,
-  max_stack)`; `remaining -= min`. Порог метаданных `100000`,
-  restock-флаг `+0x1c = 0`.
+  `range`; создание `FUN_1404e3a4(name,0,1)` с `this+4=0` (item-флаг
+  `0x80` сохраняется, merge search от него не зависит) и прямой
+  установкой `item+0xb0 = min(remaining, max_stack)`;
+  `remaining -= min`. Merge возможен/`unverified`. Порог метаданных
+  `100000`, restock-флаг `+0x1c = 0`. Деление на
+  `chance_decrease`/`quantity_decrease` не защищено; в корпусе нулей
+  нет, поведение при 0 — `unverified`/D-055.
 - Прототип предмета: `type/flags/style/max_stack` из ITM; отсутствует —
   пропуск записи (документируется).
 - Specials: **не вызывать** R4–R10. RNG-поток после первого
@@ -175,12 +181,13 @@ NpcLoot generate(const gl::assets::InvTable&,
 - `parse_inv`: все 238 реальных файлов; 4-number skip; комментарии;
   synthetic special.
 - Генератор: фиксированный seed/level, эталонные значения из
-  псевдокода (не из реализации); R1 всегда; pass 1 — force-new split
-  по `max_stack` без merge и без 4-stack exit; pass 2 — chance
-  `/chance_decrease`, qty `1/quantity_decrease` + trunc/`+1`,
-  `n3==0` без chance coin; порядок двух проходов и RNG; unknown ITM;
-  пустая таблица. Merge `+1`/`qty -= chunk` — только отдельный тест
-  для `FUN_140489ec` (вне NPC SEF), если такой helper появится.
+  псевдокода (не из реализации); R1 всегда; pass 1 — split по
+  `max_stack` (merge shared-helper `unverified`) без 4-stack exit;
+  pass 2 — chance `/chance_decrease`, qty `1/quantity_decrease` +
+  trunc/`+1`, `n3==0` без chance coin; порядок двух проходов и RNG;
+  unknown ITM; пустая таблица. Caller-квирки (`qty -= chunk`,
+  4-stack) — отдельный тест для `FUN_140489ec`; shared merge `+1`
+  тестировать в pass-семантике.
 - Real: один `.inv` + реальный уровень; oracle — **main** (pass 2)
   item ids/counts (hardcoded).
 - InventoryRuntime: NPC main count/money; hot — если хранится; Hero
@@ -204,8 +211,11 @@ NpcLoot generate(const gl::assets::InvTable&,
 - **Нет 4-stack exit:** `FUN_1404b1c0` не останавливается на 4 стеках;
   порог метаданных `100000` практически недостижим. Не добавлять
   port-side cap, иначе количество предметов будет занижено.
-- Merge `+1` и `qty -= chunk` — квирк только `FUN_140489ec`; не
-  применять к `FUN_1404b1c0` (там force-new + прямая установка count).
+- Merge `+1` — shared `FUN_1404e3a4`; caller-квирки (`qty -= chunk`,
+  4-stack exit) — только `FUN_140489ec`. Pass-1/2 merge в
+  `FUN_1404b1c0` — `unverified`; не добавлять port-side force-new.
+- Деление на `chance_decrease`/`quantity_decrease` не защищено; в
+  корпусе нулей нет, поведение при 0 — `unverified`/D-055 (Task 5).
 - **Контейнеры/второй проход:** main — `+0x10` (pass 2), hot — `+0xc`
   (pass 1). Если runtime хранит только main, pass 1 RNG всё равно
   обязателен; иначе pass 2 рассогласован. Проверять oracle по main.

@@ -777,9 +777,13 @@ person-объекта. `FUN_140233d4`/`FUN_14023aa0` — init-методы др�
   всех трёх фаз (fill/top-up/второй контейнер) не доведена —
   `unverified`.
 
-Итог: `chance_decrease`/`quantity_decrease` — это множители
-**догрузки/рестока** (уменьшают шанс и количество при повторном
-наполнении), а не первичной генерации `FUN_140489ec`.
+Итог: для `FUN_140489ec` это не множители первичной генерации; для
+`FUN_14048fac`/restock-веток — множители догрузки/рестока.
+
+> **Update §15.2 (Task 1 fix, 2026-11-08):** для SEF NPC
+> `FUN_1404b1c0` использует `chance_decrease`/`quantity_decrease`
+> **уже в pass 2 при initial spawn** (не только restock). См. §15.2;
+> формулировка «только restock» к `FUN_1404b1c0` не относится.
 
 ## 11. Записи контейнера, порядок, stacking
 
@@ -847,9 +851,11 @@ person-объекта. `FUN_140233d4`/`FUN_14023aa0` — init-методы др�
    `level = +0x26c4 + 1`.
 6. **Триггер `FUN_1402a2a4`** (вызывает restock `FUN_14048fac`):
    callers=0/vtable; расписание (тик/загрузка уровня) не установлено.
-7. **`FUN_1404b1c0`**: полная последовательность фаз и роль
-   `param_3`/`param_4`/двух `FUN_1404d724` не доведены.
-8. **Stacking** в `FUN_1404e3a4`: точное условие слияния.
+7. **`FUN_1404b1c0`**: initial-spawn two-pass семантика восстановлена
+   в §15.2 (R1, pass 1/2, два `FUN_1404d724`, `param_4`). Restock/
+   top-up фазы во времени и merge-interaction в pass 2 — `unverified`.
+8. **Stacking** в shared `FUN_1404e3a4`: точное условие слияния;
+   pass-1/pass-2 merge в `FUN_1404b1c0` — `unverified`.
 9. **Live-оракул не снимался** — все выводы статические + реальные
    `.inv`.
 
@@ -1082,8 +1088,9 @@ tail    = data[p:p+8]
   (max_stack). `FUN_1404b1c0` использует `pinfo+0x30` как cap в
   `min(remaining, item+0x34)` (pass 1/2); `FUN_140489ec` — как chunk
   (`49550-49553`). Runtime-флаги — `item+0x0c`; runtime max_stack —
-  `item+0x34`; merge-path `+1` — только `FUN_140489ec` (`53791`).
-  Style (`item+0x20`) ядром не используется.
+  `item+0x34`. Merge `+1` живёт в shared `FUN_1404e3a4`
+  (`53790-53810`); caller-квирки (`qty -= chunk`, 4-stack exit) —
+  только `FUN_140489ec`. Style (`item+0x20`) ядром не используется.
 - Неизвестный TECH: `find_proto(name,-1)` → `get(id)`; `0` → запись
   пропускается (`49544-49548`, release `49589-49591`).
 
@@ -1127,13 +1134,17 @@ Pass 1 (`param_1` = `+0xc` hot):
   `param_4=1` → генерация всегда.
 - на запись в окне: R2; `n3==0` → skip; `R3 = range(n4,n5)`;
   `qty<1` → skip.
-- creation loop: `this+4 = 1` (force-new) →
+- creation loop: `this+4 = 1` — это **не** force-new: единственное
+  чтение `DAT_14088df8+4` в `FUN_1404e3a4` очищает item-флаг `0x80`
+  (`decompiled.c:53919-53921`), merge search не гейтит. Далее
   `FUN_1404e3a4(name,0,1)` (`decompiled.c:51177-51180`; asm
   `0x1404b45e-0x1404b46c`) → `item = FUN_1404dbec(id)` →
   `item+0xb0 = min(remaining, item+0x34)` (`51183-51187`; asm
   `0x1404b4c7-0x1404b4d9`) → `remaining -= min` (`51210`; asm
   `0x1404b4f4-0x1404b4fc`) → повтор, пока `remaining > 0`.
-  Merge/chunk-loop нет; каждый инстанс создаётся force-new.
+  Merge search общий для pass 1/2; pass-1 merge возможен и
+  `unverified` (при merge счётчик затем перезаписывается `min`).
+  Chunk-loop нет.
 - метаданные (`+0x20`/`+0x1c=1`/`+0x24`/pool) только при
   `count >= 100000` (`0x186a0`; asm `0x1404b496`), т.е. практически
   недостижимы; **4-stack exit отсутствует**.
@@ -1146,32 +1157,40 @@ Pass 2 (`param_2` = `+0x10` main):
   `n4*scale`, `n5*scale`; FPU trunc (RC=`0xC00`) + `+1.0`, если
   truncated != product (asm `0x1404b743-0x1404b7da`) → effective
   ceil for positive; затем `R3' = range(scaled_min, scaled_max)`.
-- creation: `this+4 = 0` (merge разрешён) →
-  `FUN_1404e3a4(name,0,1)` (`0x1404b7fb-0x1404b80c`) →
-  `item+0xb0 = min(remaining, item+0x34)` (`0x1404b857-0x1404b860`) →
-  `remaining -= min` (`0x1404b881-0x1404b885`). Merge-interaction
-  второго прохода полностью не трассирован (`unverified`).
+- деление на `chance_decrease`/`quantity_decrease` не защищено.
+  В реальном корпусе нулей нет (`chance_decrease` ∈
+  {0.001,1,2,5,10,50,100}, `quantity_decrease` ∈ {1,3,10}, §5.1);
+  поведение при 0 — `unverified`, зафиксировать в D-055 (Task 5).
+- creation: `this+4 = 0` (item-флаг `0x80` сохраняется; merge search
+  от него не зависит) → `FUN_1404e3a4(name,0,1)`
+  (`0x1404b7fb-0x1404b80c`) → `item+0xb0 = min(remaining,
+  item+0x34)` (`0x1404b857-0x1404b860`) → `remaining -= min`
+  (`0x1404b881-0x1404b885`). Pass-2 merge возможен и полностью не
+  трассирован (`unverified`).
 - метаданные при `count >= 100000` (`0x1404b829`), `+0x1c = 0`
   (`0x1404b8a2`); 4-stack exit нет.
 
 R1 не отменяет генерацию при `param_4=1`, но R1 всё равно
 потребляется.
 
-#### `FUN_140489ec` (не SEF NPC) — merge/early-exit квирк
+#### Shared `FUN_1404e3a4` merge и caller-квирки `FUN_140489ec`
 
-`FUN_140489ec` (RVA `0x489ec`, `decompiled.c:49416-49667`) — другой
-путь (hero/иные источники), **не** SEF NPC. Только для него:
+Merge/stacking `+1` — в **shared** `FUN_1404e3a4`
+(asm `0x1404e81c-0x1404e81f`; `decompiled.c:53790-53810`): при
+существующем инстансе того же прототипа, `max_stack>=2`,
+`current<max` — `+1` и возврат id. Это доступно и `FUN_1404b1c0`
+(pass 1/2 merge — `unverified`).
 
-- merge-path `FUN_1404e3a4` увеличивает существующий стек на `+1`
-  (asm `0x1404e81c-0x1404e81f`; `decompiled.c:53790-53810`) и
-  возвращает его id;
-- вызывающий вычитает из `qty` весь `chunk` (`49585`; asm
+Только caller-квирки `FUN_140489ec` (RVA `0x489ec`,
+`decompiled.c:49416-49667`; hero/иной путь, **не** SEF NPC):
+
+- вычитание из `qty` всего `chunk` (`49585`; asm
   `0x14048d48: subl %esi,%edi`), поэтому при `chunk>1` merge теряет
   `chunk-1` предметов;
 - early exit при `>=4` стеках (asm `0x14048cf7: cmpl $0x4,%eax; jae`)
   с restock-метаданными `+0x20`/`+0x1c=1`/`+0x24`.
 
-Эти правила **не** применять к `FUN_1404b1c0`.
+К `FUN_1404b1c0` эти caller-квирки **не** применять.
 
 ### 15.3 Порядок RNG на спавне (доказано/расхождение)
 
@@ -1183,14 +1202,15 @@ R1 не отменяет генерацию при `param_4=1`, но R1 всё �
   `scr_inv`; `decompiled.c:22102-22722`). На `scr_inv`
   (`22422-22455`) он создаёт контейнер `+0xc` и вызывает
   `FUN_1404b1c0(DAT_14088df8, +0xc, +0x10, inv_name, 1)`.
-  Путь собирает сам `FUN_1404b1c0` из `param_3` (значение `scr_inv`,
-  сохранённое в `this+0x2aac`; формат `scripts\inventory\%s.inv`,
+  Путь собирает сам `FUN_1404b1c0` из `param_3` (буфер `scr_inv` в
+  `this+0x2aac`, строка с `this+0x2ab0`; вызов передаёт `this+0x2ab0`,
+  `decompiled.c:22454`; формат `scripts\inventory\%s.inv`,
   RVA `0x8e57c`; asm `0x1404b232-0x1404b239`). `this+0x388` — это
   путь `inv_name` в `FUN_14023aa0` (script/иной источник), не SEF.
 - `FUN_1404b1c0` (RVA `0x4b1c0`): `param_1 = +0xc` (hot),
   `param_2 = +0x10` (main); R1 `51141`; pass 1 заполняет `+0xc`
-  (`51177-51211`) через `coin(0.01*n3)` + `range(n4,n5)` и force-new
-  creation + direct count (без merge/chunk-loop); pass 2 заполняет
+  (`51177-51211`) через `coin(0.01*n3)` + `range(n4,n5)`, creation
+  и direct count (merge возможен/`unverified`, chunk-loop нет); pass 2 заполняет
   `+0x10` (`51318-51366`) через `n3!=0` chance
   `(0.01*n3)/chance_decrease`, qty `1/quantity_decrease` (trunc/+1)
   + `range` и creation с `this+4=0`. Оба прохода потребляют R2/R3
@@ -1275,7 +1295,7 @@ skills: Scout(0x0f) base max=2 (slot21); Identify(0x17) base max=0;
 #   0x1404b328 call coin                  (R1)
 #   0x1404b3f1..401 pass1 coin(0.01*n3)
 #   0x1404b43f call range                 (pass1 n4,n5)
-#   0x1404b45e..46c force-new this+4=1
+#   0x1404b45e..46c this+4=1 (clears item flag 0x80; not merge gate)
 #   0x1404b4c7..4d9 item+0xb0=min(rem,max)
 #   0x1404b4f4..4fc remaining-=min
 #   0x1404b496 cmpl $0x186a0; jae         (metadata only >=100000)
