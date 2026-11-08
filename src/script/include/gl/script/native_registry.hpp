@@ -17,6 +17,10 @@ struct InventoryAccess {
         add_item;
     std::function<void(std::string_view person, std::string_view tech_name, std::int32_t count)>
         remove_item;
+    std::function<bool(std::string_view from, std::string_view to, std::string_view tech_name,
+                       std::int32_t count)>
+        transfer_item;
+    std::function<bool(std::string_view from, std::string_view to)> transfer_all;
 };
 
 struct NativeServices {

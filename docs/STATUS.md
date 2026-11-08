@@ -38,8 +38,18 @@
     `L0.M3_Baga`).
   - 284 реальных `TransferItemI` в 111 `.cs`; ни один не ветвится по
     возврату (все → scratch `result`); `TransferAll` — 0 вызовов.
-- **Gate:** Task 2 может начинаться; Tasks 3–4 — после реализации
-  Task 2; Task 5 — после полного `ctest`.
+- **Task 2 (InventoryRuntime transfers, done 2026-11-08):**
+  `InventoryRuntime::transfer_item`/`transfer_all` + `InventoryAccess`
+  callbacks; Hero/NPC main контейнеры mutable, `add/remove` остаются
+  Hero-only. New dest-запись из ITM-шаблона, merge сохраняет flags
+  dest; absent item matrix (+ → false, 0/− → true), negative limit
+  1 000 000; missing person/container → false/no-op (AV deviation,
+  D-056). Unit matrix + 4 real oracle tests (slot0/slot2, fresh runtime
+  per row, `l1_1` NPC seed 1): `gl_game_tests` **227/227,
+  558646 assertions, 0 failed** (with `GL_GAME_DIR`). Research flags
+  fix: `QST_1_0_3` `0xC0000028`, `QST_1_0_5` `0x40000028`.
+  Commit `feat(game): transfer items between persons`.
+- **Gate:** Tasks 3–4 — после Task 2; Task 5 — после полного `ctest`.
 - **Критерии:** семантика `FUN_14048790`/`FUN_14048518`; 2 ID →
   supported (15/65); unit + real oracle; full `ctest`; D-056/parity.
 - **Вне scope:** trade-контейнеры/`PassToTradePanel`.

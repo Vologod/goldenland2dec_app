@@ -3,6 +3,7 @@
 #include "gl/assets/log.hpp"
 
 #include <algorithm>
+#include <cstddef>
 #include <cstdint>
 #include <string_view>
 #include <utility>
@@ -12,6 +13,31 @@ namespace {
 constexpr std::uint32_t kMoneyType = 18;
 
 bool is_hero(std::string_view person) { return person == "Hero"; }
+
+bool append_items(std::vector<gl::assets::InventoryItem> &items, std::uint32_t item_id,
+                  const ItemTemplate &item_template, std::uint32_t count) {
+    if (item_template.max_stack == 0)
+        return false;
+    std::uint32_t remaining = count;
+    if (item_template.max_stack >= 2) {
+        for (gl::assets::InventoryItem &item : items) {
+            if (item.item_id != item_id || item.count >= item_template.max_stack)
+                continue;
+            const std::uint32_t added = std::min(remaining, item_template.max_stack - item.count);
+            item.count += added;
+            remaining -= added;
+            if (remaining == 0)
+                return true;
+        }
+    }
+    while (remaining != 0) {
+        const std::uint32_t added = std::min(remaining, item_template.max_stack);
+        items.push_back(
+            {item_id, added, item_template.flags, item_template.type, item_template.style});
+        remaining -= added;
+    }
+    return true;
+}
 } // namespace
 
 InventoryRuntime InventoryRuntime::create(const gl::assets::HeroInventory &hero,
@@ -32,30 +58,10 @@ bool InventoryRuntime::add_item(std::string_view person, std::string_view tech_n
     if (!item_id || !item_template_)
         return false;
     const auto item_template = item_template_(*item_id);
-    if (!item_template || item_template->max_stack == 0)
+    if (!item_template)
         return false;
-
-    std::uint32_t remaining = static_cast<std::uint32_t>(count);
-    const std::uint32_t max_stack = item_template->max_stack;
-    if (max_stack >= 2) {
-        for (gl::assets::InventoryItem &item : hero_inventory_.items) {
-            if (item.item_id != *item_id || item.count >= max_stack)
-                continue;
-            const std::uint32_t added = std::min(remaining, max_stack - item.count);
-            item.count += added;
-            remaining -= added;
-            if (remaining == 0)
-                return true;
-        }
-    }
-    while (remaining != 0) {
-        const std::uint32_t added = std::min(remaining, max_stack);
-        hero_inventory_.items.push_back(
-            {*item_id, added, item_template->flags, item_template->type,
-             item_template->style});
-        remaining -= added;
-    }
-    return true;
+    return append_items(hero_inventory_.items, *item_id, *item_template,
+                        static_cast<std::uint32_t>(count));
 }
 
 bool InventoryRuntime::remove_item(std::string_view person, std::string_view tech_name,
@@ -85,6 +91,71 @@ bool InventoryRuntime::remove_item(std::string_view person, std::string_view tec
             return changed;
     }
     return changed;
+}
+
+bool InventoryRuntime::transfer_item(std::string_view from, std::string_view to,
+                                     std::string_view tech_name, std::int32_t count) {
+    if (from == to)
+        return true;
+    std::vector<gl::assets::InventoryItem> *source = mutable_items(from);
+    std::vector<gl::assets::InventoryItem> *dest = mutable_items(to);
+    if (source == nullptr || dest == nullptr)
+        return false;
+
+    std::uint32_t remaining = count < 0 ? 1000000u : static_cast<std::uint32_t>(count);
+    if (remaining == 0)
+        return true;
+
+    const auto item_id = names_.find(tech_name);
+    if (!item_id || !item_template_)
+        return count < 0;
+    const auto item_template = item_template_(*item_id);
+    if (!item_template || item_template->max_stack == 0)
+        return count < 0;
+
+    while (remaining != 0) {
+        const auto it = std::find_if(
+            source->begin(), source->end(),
+            [&](const gl::assets::InventoryItem &item) { return item.item_id == *item_id; });
+        if (it == source->end())
+            return remaining != static_cast<std::uint32_t>(count);
+        const std::uint32_t available = it->count;
+        if (remaining < available) {
+            it->count = available - remaining;
+            append_items(*dest, *item_id, *item_template, remaining);
+            return true;
+        }
+        append_items(*dest, *item_id, *item_template, available);
+        remaining -= available;
+        source->erase(it);
+    }
+    return true;
+}
+
+bool InventoryRuntime::transfer_all(std::string_view from, std::string_view to) {
+    if (from == to)
+        return true;
+    std::vector<gl::assets::InventoryItem> *source = mutable_items(from);
+    std::vector<gl::assets::InventoryItem> *dest = mutable_items(to);
+    if (source == nullptr || dest == nullptr)
+        return false;
+
+    for (const gl::assets::InventoryItem &item : *source) {
+        if (!item_template_)
+            return false;
+        const auto item_template = item_template_(item.item_id);
+        if (!item_template || item_template->max_stack == 0)
+            return false;
+    }
+
+    std::size_t index = 0;
+    while (index < source->size()) {
+        const gl::assets::InventoryItem item = (*source)[index];
+        const auto item_template = item_template_(item.item_id);
+        append_items(*dest, item.item_id, *item_template, item.count);
+        source->erase(source->begin() + static_cast<std::ptrdiff_t>(index));
+    }
+    return true;
 }
 
 std::int32_t InventoryRuntime::count(std::string_view person, std::string_view tech_name) const {
@@ -135,6 +206,13 @@ void InventoryRuntime::set_person_items(std::string name,
 
 void InventoryRuntime::clear_persons() { persons_.clear(); }
 
+std::vector<gl::assets::InventoryItem> *InventoryRuntime::mutable_items(std::string_view person) {
+    if (is_hero(person))
+        return &hero_inventory_.items;
+    const auto it = persons_.find(person);
+    return it == persons_.end() ? nullptr : &it->second;
+}
+
 gl::script::InventoryAccess InventoryRuntime::access() {
     gl::script::InventoryAccess access;
     access.item_count = [this](std::string_view person, std::string_view tech_name) {
@@ -146,6 +224,13 @@ gl::script::InventoryAccess InventoryRuntime::access() {
     access.remove_item = [this](std::string_view person, std::string_view tech_name,
                                 std::int32_t item_count) {
         remove_item(person, tech_name, item_count);
+    };
+    access.transfer_item = [this](std::string_view from, std::string_view to,
+                                  std::string_view tech_name, std::int32_t item_count) {
+        return transfer_item(from, to, tech_name, item_count);
+    };
+    access.transfer_all = [this](std::string_view from, std::string_view to) {
+        return transfer_all(from, to);
     };
     return access;
 }

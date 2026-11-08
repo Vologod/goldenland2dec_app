@@ -28,6 +28,9 @@ class InventoryRuntime {
                                    ItemTemplateLookup item_template = {});
     bool add_item(std::string_view person, std::string_view tech_name, std::int32_t count);
     bool remove_item(std::string_view person, std::string_view tech_name, std::int32_t count);
+    bool transfer_item(std::string_view from, std::string_view to, std::string_view tech_name,
+                       std::int32_t count);
+    bool transfer_all(std::string_view from, std::string_view to);
     std::int32_t count(std::string_view person, std::string_view tech_name) const;
     std::int32_t money() const;
     const gl::assets::HeroInventory &hero_inventory() const;
@@ -37,6 +40,8 @@ class InventoryRuntime {
     gl::script::InventoryAccess access();
 
   private:
+    std::vector<gl::assets::InventoryItem> *mutable_items(std::string_view person);
+
     gl::assets::HeroInventory hero_inventory_;
     std::map<std::string, std::vector<gl::assets::InventoryItem>, std::less<>> persons_;
     gl::assets::ItemNameIndex names_;

@@ -337,7 +337,7 @@ trade/use, к нативам не относятся.
 | `L1_Svetlograd_n3_GetElexir` | 0 | **5** |
 | `plotnik_povtor` | 0 | **2** |
 
-`QST_1_0_3` = item id `973`, `type 25`, `flags 0xC0000008`,
+`QST_1_0_3` = item id `973`, `type 25`, `flags 0xC0000028`,
 `max_stack 1`, `style 15`; итоговая dest-запись берёт эти ITM-поля.
 
 Контроль без preload (Hero `QST_1_0_3 = 0`): ветка `1006` → `D_Answer
@@ -527,8 +527,8 @@ slot21: Hero money=1000 QST_1_0_51=1; main records=2
 ```
 
 ITM (id 973/975/1025/953/812/444): `QST_1_0_3` type 25 flags
-`0xC0000008` max_stack 1 style 15; `QST_1_0_5` type 25 flags
-`0x40000008` max_stack 1 style 15; `QST_1_0_57` type 25 flags
+`0xC0000028` max_stack 1 style 15; `QST_1_0_5` type 25 flags
+`0x40000028` max_stack 1 style 15; `QST_1_0_57` type 25 flags
 `0x28` max_stack 1 style 15; `POT_1_00_27` type 19 flags
 `0x8000000C` max_stack 10000; `MON_1_0_1` type 18 flags
 `0xC0000000` max_stack 100000000; `RGT_1_0_8` type 24 flags

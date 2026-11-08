@@ -447,3 +447,221 @@ TEST_CASE("inventory_runtime clear_persons keeps Hero") {
     CHECK(runtime.count("Hero", "MON_1_0_1") == 500);
     CHECK(runtime.money() == 500);
 }
+
+TEST_CASE("inventory_runtime transfer_item moves part of a stack to an npc") {
+    auto runtime = InventoryRuntime::create(make_inventory(), make_names(), template_for);
+    runtime.set_person_items("L0.P1", {});
+
+    REQUIRE(runtime.transfer_item("Hero", "L0.P1", "MON_1_0_1", 100));
+    CHECK(runtime.count("Hero", "MON_1_0_1") == 400);
+    CHECK(runtime.count("L0.P1", "MON_1_0_1") == 100);
+    CHECK(runtime.hero_inventory().items.size() == 3);
+}
+
+TEST_CASE("inventory_runtime transfer_item moves an exact stack and removes the source record") {
+    auto runtime = InventoryRuntime::create(make_inventory(), make_names(), template_for);
+    runtime.set_person_items("L0.P1", {});
+
+    REQUIRE(runtime.transfer_item("Hero", "L0.P1", "MON_1_0_1", 500));
+    CHECK(runtime.count("Hero", "MON_1_0_1") == 0);
+    CHECK(runtime.count("L0.P1", "MON_1_0_1") == 500);
+    REQUIRE(runtime.hero_inventory().items.size() == 2);
+    CHECK(runtime.hero_inventory().items[0].item_id == 1101);
+}
+
+TEST_CASE("inventory_runtime transfer_item over-move takes everything and returns true") {
+    auto runtime = InventoryRuntime::create(make_inventory(), make_names(), template_for);
+    runtime.set_person_items("L0.P1", {});
+
+    REQUIRE(runtime.transfer_item("Hero", "L0.P1", "MON_1_0_1", 600));
+    CHECK(runtime.count("Hero", "MON_1_0_1") == 0);
+    CHECK(runtime.count("L0.P1", "MON_1_0_1") == 500);
+    REQUIRE(runtime.hero_inventory().items.size() == 2);
+}
+
+TEST_CASE("inventory_runtime transfer_item absent item matrix") {
+    auto runtime = InventoryRuntime::create({}, make_names(), template_for);
+    runtime.set_person_items("L0.P1", {});
+
+    CHECK_FALSE(runtime.transfer_item("Hero", "L0.P1", "MON_1_0_1", 1));
+    CHECK(runtime.transfer_item("Hero", "L0.P1", "MON_1_0_1", 0));
+    CHECK(runtime.transfer_item("Hero", "L0.P1", "MON_1_0_1", -1));
+    CHECK(runtime.count("Hero", "MON_1_0_1") == 0);
+    CHECK(runtime.count("L0.P1", "MON_1_0_1") == 0);
+
+    CHECK_FALSE(runtime.transfer_item("Hero", "L0.P1", "NOPE", 1));
+    CHECK(runtime.transfer_item("Hero", "L0.P1", "NOPE", 0));
+    CHECK(runtime.transfer_item("Hero", "L0.P1", "NOPE", -1));
+}
+
+TEST_CASE("inventory_runtime transfer_item same person is a no-op true") {
+    auto runtime = InventoryRuntime::create(make_inventory(), make_names(), template_for);
+
+    CHECK(runtime.transfer_item("Hero", "Hero", "MON_1_0_1", 100));
+    CHECK(runtime.count("Hero", "MON_1_0_1") == 500);
+    CHECK(runtime.transfer_item("L0.Missing", "L0.Missing", "MON_1_0_1", 100));
+}
+
+TEST_CASE("inventory_runtime transfer_item merges into an existing dest stack") {
+    auto runtime = InventoryRuntime::create(make_inventory(), make_names(), template_for);
+    runtime.set_person_items("L0.P1", {InventoryItem{812, 50, 0x1234u, 7, 9}});
+
+    REQUIRE(runtime.transfer_item("Hero", "L0.P1", "MON_1_0_1", 100));
+    CHECK(runtime.count("L0.P1", "MON_1_0_1") == 150);
+    REQUIRE(runtime.person_items("L0.P1").size() == 1);
+    CHECK(runtime.person_items("L0.P1")[0].flags == 0x1234u);
+    CHECK(runtime.person_items("L0.P1")[0].type == 7);
+    CHECK(runtime.person_items("L0.P1")[0].style == 9);
+}
+
+TEST_CASE("inventory_runtime transfer_item new dest record uses the item template") {
+    gl::assets::HeroInventory inventory;
+    inventory.items.push_back({812, 500, 0x8000020Cu, 99, 77});
+    auto runtime = InventoryRuntime::create(inventory, make_names(), template_for);
+    runtime.set_person_items("L0.P1", {});
+
+    REQUIRE(runtime.transfer_item("Hero", "L0.P1", "MON_1_0_1", 10));
+    REQUIRE(runtime.person_items("L0.P1").size() == 1);
+    const InventoryItem &item = runtime.person_items("L0.P1")[0];
+    CHECK(item.item_id == 812);
+    CHECK(item.count == 10);
+    CHECK(item.type == 18);
+    CHECK(item.flags == 0xC0000000u);
+    CHECK(item.style == 1);
+}
+
+TEST_CASE("inventory_runtime transfer_item walks duplicate records in slot order") {
+    gl::assets::HeroInventory inventory;
+    inventory.items.push_back({1101, 2, 0, 0, 0});
+    inventory.items.push_back({1101, 3, 0, 0, 0});
+    auto runtime = InventoryRuntime::create(inventory, make_names(), template_for);
+    runtime.set_person_items("L0.P1", {});
+
+    REQUIRE(runtime.transfer_item("Hero", "L0.P1", "QST_1_0_159", 4));
+    CHECK(runtime.count("Hero", "QST_1_0_159") == 1);
+    CHECK(runtime.count("L0.P1", "QST_1_0_159") == 4);
+    REQUIRE(runtime.hero_inventory().items.size() == 1);
+    CHECK(runtime.hero_inventory().items[0].count == 1);
+}
+
+TEST_CASE("inventory_runtime transfer_item negative count is limited to one million") {
+    gl::assets::HeroInventory inventory;
+    inventory.items.push_back({812, 1000001, 0, 18, 1});
+    auto runtime = InventoryRuntime::create(inventory, make_names(), template_for);
+    runtime.set_person_items("L0.P1", {});
+
+    REQUIRE(runtime.transfer_item("Hero", "L0.P1", "MON_1_0_1", -1));
+    CHECK(runtime.count("Hero", "MON_1_0_1") == 1);
+    CHECK(runtime.count("L0.P1", "MON_1_0_1") == 1000000);
+}
+
+TEST_CASE("inventory_runtime transfer_item moves from npc to hero") {
+    auto runtime = InventoryRuntime::create(make_inventory(), make_names(), template_for);
+    runtime.set_person_items("L0.P1", {InventoryItem{812, 100, 0, 18, 0}});
+
+    REQUIRE(runtime.transfer_item("L0.P1", "Hero", "MON_1_0_1", 40));
+    CHECK(runtime.count("L0.P1", "MON_1_0_1") == 60);
+    CHECK(runtime.count("Hero", "MON_1_0_1") == 540);
+    CHECK(runtime.money() == 540);
+}
+
+TEST_CASE("inventory_runtime transfer_item missing person is false and unchanged") {
+    auto runtime = InventoryRuntime::create(make_inventory(), make_names(), template_for);
+
+    CHECK_FALSE(runtime.transfer_item("Hero", "L0.Missing", "MON_1_0_1", 100));
+    CHECK_FALSE(runtime.transfer_item("L0.Missing", "Hero", "MON_1_0_1", 100));
+    CHECK_FALSE(runtime.transfer_item("Hero", "L0.Missing", "MON_1_0_1", 0));
+    CHECK(runtime.count("Hero", "MON_1_0_1") == 500);
+    CHECK(runtime.person_items("L0.Missing").empty());
+}
+
+TEST_CASE("inventory_runtime transfer_item missing template keeps both sides unchanged") {
+    auto runtime = InventoryRuntime::create(make_inventory(), make_names());
+    runtime.set_person_items("L0.P1", {});
+
+    CHECK_FALSE(runtime.transfer_item("Hero", "L0.P1", "MON_1_0_1", 100));
+    CHECK(runtime.count("Hero", "MON_1_0_1") == 500);
+    CHECK(runtime.count("L0.P1", "MON_1_0_1") == 0);
+}
+
+TEST_CASE("inventory_runtime transfer_all moves every source record and clears source") {
+    auto runtime = InventoryRuntime::create(make_inventory(), make_names(), template_for);
+    runtime.set_person_items("L0.P1", {InventoryItem{1101, 1, 0, 0, 0}});
+
+    REQUIRE(runtime.transfer_all("Hero", "L0.P1"));
+    CHECK(runtime.hero_inventory().items.empty());
+    CHECK(runtime.money() == 0);
+    CHECK(runtime.count("L0.P1", "MON_1_0_1") == 500);
+    CHECK(runtime.count("L0.P1", "QST_1_0_159") == 3);
+    CHECK(runtime.count("L0.P1", "ARM_1_08_2") == 1);
+}
+
+TEST_CASE("inventory_runtime transfer_all empty source is true") {
+    auto runtime = InventoryRuntime::create(make_inventory(), make_names(), template_for);
+    runtime.set_person_items("L0.P1", {});
+
+    REQUIRE(runtime.transfer_all("L0.P1", "Hero"));
+    CHECK(runtime.count("Hero", "MON_1_0_1") == 500);
+    CHECK(runtime.count("L0.P1", "MON_1_0_1") == 0);
+}
+
+TEST_CASE("inventory_runtime transfer_all merges equal item ids") {
+    auto runtime = InventoryRuntime::create(make_inventory(), make_names(), template_for);
+    runtime.set_person_items("L0.P1", {InventoryItem{812, 50, 0, 18, 0}});
+
+    REQUIRE(runtime.transfer_all("Hero", "L0.P1"));
+    CHECK(runtime.count("L0.P1", "MON_1_0_1") == 550);
+    CHECK(runtime.count("L0.P1", "QST_1_0_159") == 2);
+    CHECK(runtime.count("L0.P1", "ARM_1_08_2") == 1);
+    CHECK(runtime.person_items("L0.P1").size() == 3);
+}
+
+TEST_CASE("inventory_runtime transfer_all splits by template max_stack") {
+    gl::assets::HeroInventory inventory;
+    inventory.items.push_back({1101, 7, 0, 0, 0});
+    auto lookup = [](std::uint32_t item_id) -> std::optional<ItemTemplate> {
+        if (item_id == 1101)
+            return ItemTemplate{26, 0, 0, 3};
+        return std::nullopt;
+    };
+    auto runtime = InventoryRuntime::create(inventory, make_names(), lookup);
+    runtime.set_person_items("L0.P1", {});
+
+    REQUIRE(runtime.transfer_all("Hero", "L0.P1"));
+    const auto &items = runtime.person_items("L0.P1");
+    REQUIRE(items.size() == 3);
+    CHECK(items[0].count == 3);
+    CHECK(items[1].count == 3);
+    CHECK(items[2].count == 1);
+}
+
+TEST_CASE("inventory_runtime transfer_all same person is a no-op true") {
+    auto runtime = InventoryRuntime::create(make_inventory(), make_names(), template_for);
+
+    CHECK(runtime.transfer_all("Hero", "Hero"));
+    CHECK(runtime.count("Hero", "MON_1_0_1") == 500);
+    CHECK(runtime.hero_inventory().items.size() == 3);
+}
+
+TEST_CASE("inventory_runtime transfer_all missing person is false and unchanged") {
+    auto runtime = InventoryRuntime::create(make_inventory(), make_names(), template_for);
+
+    CHECK_FALSE(runtime.transfer_all("Hero", "L0.Missing"));
+    CHECK_FALSE(runtime.transfer_all("L0.Missing", "Hero"));
+    CHECK(runtime.count("Hero", "MON_1_0_1") == 500);
+    CHECK(runtime.hero_inventory().items.size() == 3);
+}
+
+TEST_CASE("inventory_runtime access exposes transfer callbacks") {
+    auto runtime = InventoryRuntime::create(make_inventory(), make_names(), template_for);
+    runtime.set_person_items("L0.P1", {});
+    auto access = runtime.access();
+    REQUIRE(access.transfer_item);
+    REQUIRE(access.transfer_all);
+
+    CHECK(access.transfer_item("Hero", "L0.P1", "MON_1_0_1", 100));
+    CHECK(runtime.count("L0.P1", "MON_1_0_1") == 100);
+    CHECK(access.transfer_all("Hero", "L0.P1"));
+    CHECK(runtime.hero_inventory().items.empty());
+    CHECK(runtime.count("L0.P1", "MON_1_0_1") == 500);
+}

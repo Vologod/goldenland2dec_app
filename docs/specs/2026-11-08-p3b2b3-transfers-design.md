@@ -45,10 +45,14 @@ Registry: 2 ID → `supported` (15/65).
 - TransferItem:
   - `count == 0` → успех без изменений (`1.0`);
   - `count < 0` → до 1 000 000 (все);
-  - source без предмета → `0.0`;
+  - source без предмета (matrix из `FUN_14048790`): `count > 0` →
+    `0.0`; `count == 0` → `1.0`; `count < 0` → `1.0` (quirk:
+    `remaining = 1 000 000 != count`, изменений нет);
   - перенос до `count` единиц; partial при нехватке; origin пустые
-    записи удаляются; в dest merge по item_id (count += moved), иначе
-    новая запись с type/flags/style из source;
+    записи удаляются; в dest merge по item_id (count += moved); новая
+    запись создаётся из **ITM-шаблона** (`type/flags/style/max_stack`),
+    а не копирует source-запись; при merge в существующую запись
+    сохраняются её flags;
   - same person → `1.0` без изменений.
 - TransferAll:
   - перенос всех записей source → dest с merge; source очищается;
@@ -72,10 +76,14 @@ bool transfer_item(std::string_view from, std::string_view to,
 bool transfer_all(std::string_view from, std::string_view to);
 ```
 
-- Работает с контейнерами `from`/`to` (Hero/NPC); типы/флаги/стиль
-  переносятся из source-записи.
+- Работает с контейнерами `from`/`to` (Hero/NPC); новые dest-записи
+  берут `type/flags/style/max_stack` из ITM-шаблона (как
+  `FUN_1404cd28`); source runtime-поля не копируются. Merge в
+  существующую dest-запись сохраняет flags этой записи.
 - Merge в dest по item_id; порядок записей — append (как в 1b2b1).
-- `access()` расширяется callbacks.
+- Отсутствующая персона/контейнер: `false`/no-op; в оригинале для
+  `TransferAll` и missing container это AV — deviation, D-056.
+- `access()` расширяется callbacks (`transfer_item`, `transfer_all`).
 
 ### 5.2 `gl::script`
 
@@ -111,14 +119,17 @@ bool transfer_all(std::string_view from, std::string_view to);
 
 Unit:
 
-- TransferItem: partial/full/over/absent/zero/negative/same person;
-  merge; NPC↔Hero; Hero↔NPC; type/flags/style сохранены.
+- TransferItem: partial/full/over/absent(+/-/0)/zero/negative/same
+  person; merge; NPC↔Hero; Hero↔NPC; новая dest-запись берёт
+  type/flags/style из ITM-шаблона; merge сохраняет flags dest;
+  удаление опустевших source-записей.
 - TransferAll: все/пустой source/merge.
 - handlers: arity/типы/return; registry 15/65.
 
 Real:
 
-- slot0/slot2 Hero↔NPC oracle counts.
+- slot0/slot2 Hero↔NPC oracle counts; каждая строка oracle — свежий
+  `InventoryRuntime` в базовом состоянии, строки не накапливаются.
 - Реальный `.cs` (если найден) через production path.
 - `glgame --level l1_1 --click-npc 13 --screenshot` без регрессии.
 - Full `ctest`.

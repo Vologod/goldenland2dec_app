@@ -68,12 +68,16 @@ bool transfer_all(std::string_view from, std::string_view to);
 
 - [ ] **Step 1: Failing tests**
 
-Partial/full/over/absent/zero/negative/same person; merge; NPC↔Hero;
-Hero↔NPC; source record removal; type/flags/style preserved.
+Partial/full/over/absent(+/-/0)/zero/negative/same person; merge;
+NPC↔Hero; Hero↔NPC; source record removal. New dest record fields come
+from the ITM template (`type/flags/style/max_stack`), not the source
+record; merging into an existing dest record keeps that record's flags.
+Missing person/container → false/no-op (port deviation from AV, D-056).
 
 - [ ] **Step 2: Implement** per research.
 
-- [ ] **Step 3: Real oracle test** slot0/slot2.
+- [ ] **Step 3: Real oracle test** slot0/slot2; each row is a fresh
+  `InventoryRuntime` at base state (rows are not cumulative).
 
 - [ ] **Step 4: Run `gl_game_tests`; commit**
 `feat(game): transfer items between persons`.
