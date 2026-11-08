@@ -1,5 +1,7 @@
 #include "gl/game/inventory_runtime.hpp"
 
+#include "gl/assets/log.hpp"
+
 #include <algorithm>
 #include <cstdint>
 #include <string_view>
@@ -124,7 +126,11 @@ void InventoryRuntime::set_person_items(std::string name,
                                         std::vector<gl::assets::InventoryItem> items) {
     if (is_hero(name))
         return;
-    persons_.insert_or_assign(std::move(name), std::move(items));
+    const auto [it, inserted] = persons_.try_emplace(std::move(name), std::move(items));
+    if (!inserted) {
+        gl::log(gl::LogLevel::warning,
+                "inventory runtime: duplicate person name '" + it->first + "' ignored");
+    }
 }
 
 void InventoryRuntime::clear_persons() { persons_.clear(); }

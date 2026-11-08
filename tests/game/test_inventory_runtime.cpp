@@ -390,6 +390,18 @@ TEST_CASE("inventory_runtime stores npc main containers by exact name") {
     CHECK(runtime.person_items("L0.P2").empty());
 }
 
+TEST_CASE("inventory_runtime keeps the first npc container for duplicate names") {
+    auto runtime = InventoryRuntime::create(make_inventory(), make_names());
+
+    runtime.set_person_items("L0.P1", {InventoryItem{1101, 4, 0, 0, 0}});
+    runtime.set_person_items("L0.P1", {InventoryItem{812, 250, 0, 18, 0}});
+
+    CHECK(runtime.count("L0.P1", "QST_1_0_159") == 4);
+    CHECK(runtime.count("L0.P1", "MON_1_0_1") == 0);
+    REQUIRE(runtime.person_items("L0.P1").size() == 1);
+    CHECK(runtime.person_items("L0.P1")[0].item_id == 1101);
+}
+
 TEST_CASE("inventory_runtime npc money does not change hero money") {
     auto runtime = InventoryRuntime::create(make_inventory(), make_names());
 

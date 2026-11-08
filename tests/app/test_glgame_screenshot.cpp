@@ -1463,6 +1463,8 @@ TEST_CASE("glgame NPCs move between t=0 and t=20s") {
         screenshot_arguments(game_dir, config, first_png,
                              {"--level", "l1_1", "--sim-ms", "0"}),
         log);
+    // Loot now consumes the shared RNG before movement (research §15.3); at
+    // seed 1 the 20 s window keeps the unchanged >1000 presence-diff threshold.
     const int later_code = run_glgame(screenshot_arguments(
         game_dir, config, later_png, {"--level", "l1_1", "--sim-ms", "20000"}));
     const int first_plain_code = run_glgame(screenshot_arguments(

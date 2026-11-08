@@ -6,6 +6,7 @@
 #include "gl/assets/item_name_index.hpp"
 #include "gl/assets/vfs.hpp"
 #include "gl/game/level.hpp"
+#include "gl/game/level_simulation.hpp"
 #include "gl/game/msvc_random.hpp"
 #include "gl/game/npc_loot.hpp"
 #include "gl/game/person.hpp"
@@ -110,19 +111,40 @@ TEST_CASE("real data: l1_1 npc inventories match the pass-2 reference" *
 
     auto runtime = make_runtime(vfs.value(), 21, catalog.value());
     const std::int32_t hero_money = runtime.money();
+    const std::int32_t hero_mon = runtime.count("Hero", "MON_1_0_1");
     const std::int32_t hero_rgt = runtime.count("Hero", "RGT_1_0_8");
+    const std::int32_t hero_potion = runtime.count("Hero", "POT_1_00_27");
+    const std::size_t hero_records = runtime.hero_inventory().items.size();
 
     gl::game::MsvcRandom rng(1);
     gl::game::generate_npc_inventories(runtime, level->persons, vfs.value(), names.value(),
                                        catalog_lookup(catalog.value()), 1, rng);
+    const gl::game::MsvcRandom rng_after_loot = rng;
 
     CHECK(runtime.count("L1_1.P387_Poison_Plotnik", "QST_1_0_5") == 1);
     CHECK(runtime.count("L0.P7_Kolbasens_Rodstvennik1", "MON_1_0_1") == 174);
     CHECK(runtime.count("L1_1.P389_Crying_Guardian", "MON_1_0_1") == 218);
     CHECK(runtime.count("L0.P711_citizen8", "MON_1_0_1") == 323);
     CHECK(runtime.person_items("L0.P678_citizen4").empty());
+    CHECK(runtime.access().item_count("L1_1.P387_Poison_Plotnik", "QST_1_0_5") == 1);
 
+    REQUIRE(runtime.person_items("L0.P744_oficer1").size() == 2);
+    CHECK(runtime.person_items("L0.P744_oficer1")[0].item_id == 263);
+    CHECK(runtime.person_items("L0.P744_oficer1")[1].item_id == 371);
+    CHECK(runtime.count("L0.P744_oficer1", "MON_1_0_1") == 0);
+
+    gl::game::LevelSimulation loot_sim = gl::game::LevelSimulation::create(level.value(), rng);
+    gl::game::LevelSimulation loot_sim_copy =
+        gl::game::LevelSimulation::create(level.value(), rng_after_loot);
+    gl::game::LevelSimulation fresh_sim =
+        gl::game::LevelSimulation::create(level.value(), gl::game::MsvcRandom(1));
+    const std::uint32_t loot_next = loot_sim.rng().next();
+    CHECK(loot_next == loot_sim_copy.rng().next());
+    CHECK(loot_next != fresh_sim.rng().next());
+
+    CHECK(runtime.count("Hero", "MON_1_0_1") == hero_mon);
     CHECK(runtime.count("Hero", "RGT_1_0_8") == hero_rgt);
+    CHECK(runtime.count("Hero", "POT_1_00_27") == hero_potion);
+    CHECK(runtime.hero_inventory().items.size() == hero_records);
     CHECK(runtime.money() == hero_money);
-    CHECK(runtime.count("Hero", "MON_1_0_1") == hero_money);
 }
