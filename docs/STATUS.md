@@ -1,6 +1,17 @@
 # STATUS
 
 Обновлено: 2026-11-08
+## Phase 1b2b2b — core NPC `.inv` loot (in progress 2026-11-08)
+
+- **Задача:** `parse_inv` + `NpcLootGenerator` + NPC-контейнеры в
+  `InventoryRuntime`; specials не генерируются (documented RNG-desync).
+- **Spec:** `docs/specs/2026-11-08-p3b2b2b-core-npc-loot-design.md`.
+- **Plan:** `docs/plans/2026-11-08-p3b2b2b-core-npc-loot.md`.
+- **Gate:** Task 1 должен доказать `BT_INFO +0x26c4` (level source);
+  иначе implementation BLOCKED.
+- **Критерии:** 238 `.inv` parse; generator tests; NPC counts; full
+  `ctest`; D-055/parity/STATUS.
+
 ## P4 — RNG parity (D-053 implementation) (done 2026-11-08)
 
 - **Задача:** `MsvcRandom::range` — truncation, `coin` — float,
