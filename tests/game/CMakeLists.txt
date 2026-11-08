@@ -11,6 +11,7 @@ add_executable(gl_game_tests
     test_level_simulation.cpp
     test_mask_selection.cpp
     test_msvc_random.cpp
+    test_npc_loot.cpp
     test_pathfinder.cpp
     test_person_loader.cpp
     test_person_movement.cpp
