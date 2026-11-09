@@ -155,6 +155,15 @@ Value native_transfer_all(std::span<const Value> args, NativeServices& services)
     return transferred ? double{1.0} : double{0.0};
 }
 
+Value native_pass_to_trade_panel(std::span<const Value>, NativeServices& services) {
+    if (!services.trade_panel) {
+        warn_native("script native RS_PassToTradePanel: no trade panel handler", services);
+        return double{0.0};
+    }
+    services.trade_panel();
+    return double{0.0};
+}
+
 std::string_view first_string(std::span<const Value> args) {
     return args.empty() ? std::string_view{} : as_string(args.front());
 }
@@ -231,8 +240,10 @@ std::vector<NativeInfo> make_entries() {
             add(id, NativeSupport::unsupported, "requires item runtime state");
     for (std::uint32_t id = 0x6000000; id <= 0x6000003; ++id)
         add(id, NativeSupport::unsupported, "requires world clock");
+    add(0x700000d, NativeSupport::supported, {}, &native_pass_to_trade_panel, 0);
     for (std::uint32_t id = 0x7000000; id <= 0x7000010; ++id)
-        add(id, NativeSupport::unsupported, "requires quest/event runtime");
+        if (id != 0x700000d)
+            add(id, NativeSupport::unsupported, "requires quest/event runtime");
     add(0x7000013, NativeSupport::unsupported, "requires person runtime state");
     add(0x7000014, NativeSupport::unsupported, "requires world/level runtime");
 

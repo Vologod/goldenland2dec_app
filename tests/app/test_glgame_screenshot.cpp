@@ -907,6 +907,36 @@ TEST_CASE("glgame --dialog --equip-save populates inventory before the dialog st
     CHECK(output.compare(last_runtime_pos, money_marker.size(), money_marker) == 0);
 }
 
+TEST_CASE("glgame --trade-npc opens the boat trader overlay with real stock" *
+          doctest::skip(!font_available())) {
+    const char* game_dir = std::getenv("GL_GAME_DIR");
+    REQUIRE(game_dir != nullptr);
+
+    TempDir temp;
+    const fs::path config = write_test_config(temp.path);
+    const fs::path png = temp.path / "trade_boat.png";
+    std::string output;
+    const int code =
+        run_glgame_capture(screenshot_arguments(game_dir, config, png,
+                                                {"--level", "l13_1", "--equip-save", "0",
+                                                 "--trade-npc", "L13_1.P517_Boat_Trader"}),
+                           output);
+    CAPTURE(code);
+    CAPTURE(output);
+    REQUIRE(fs::exists(png));
+    CHECK(code == 0);
+    CHECK(output.find("trade: opened npc='L13_1.P517_Boat_Trader' npc_items=16 "
+                      "npc_money=42142") != std::string::npos);
+    CHECK(output.find("hero_money=43875") != std::string::npos);
+
+    int width = 0;
+    int height = 0;
+    const std::vector<unsigned char> pixels = read_png(png, width, height);
+    CHECK(width == 1280);
+    CHECK(height == 720);
+    CHECK_FALSE(pixels.empty());
+}
+
 TEST_CASE("glgame --inventory opens the selected save inventory" *
           doctest::skip(!font_available())) {
     const char* game_dir = std::getenv("GL_GAME_DIR");

@@ -4,6 +4,7 @@
 #include <gl/app/inventory_overlay.hpp>
 #include <gl/app/level_screen.hpp>
 #include <gl/app/pending_talk.hpp>
+#include <gl/app/trade_overlay.hpp>
 #include <gl/assets/cs.hpp>
 #include <gl/assets/hero_equipment.hpp>
 #include <gl/assets/hero_stats.hpp>
@@ -101,6 +102,8 @@ struct Options {
     bool equip_save_pending = false;
     bool inventory = false;
     std::optional<int> inventory_select;
+    std::string trade_npc;
+    bool has_trade_npc = false;
     std::optional<int> camera_x;
     std::optional<int> camera_y;
     bool walkable_overlay = false;
@@ -137,6 +140,7 @@ void print_usage() {
         "  --equip-save-pending Apply --equip-save on the next level load only\n"
         "  --inventory          Open the inventory overlay for the selected save\n"
         "  --inventory-select <n> Select bottom-strip slot <n> when the inventory opens\n"
+        "  --trade-npc <name>   Open the trade overlay for person <name> after loading\n"
         "  --camera-x <px>      World X of the left viewport edge (screenshot mode)\n"
         "  --camera-y <px>      World Y of the top viewport edge (screenshot mode)\n"
         "  --walkable-overlay   Draw blocked tiles in red on the level\n"
@@ -376,6 +380,13 @@ ParseStatus parse_args(int argc, char** argv, Options& options) {
                 return ParseStatus::error;
             }
             options.has_click_world = true;
+        } else if (arg == "--trade-npc") {
+            if (!next_value(arg, value) || value.empty()) {
+                std::fputs("glgame: --trade-npc requires a person name\n", stderr);
+                return ParseStatus::error;
+            }
+            options.trade_npc = std::string(value);
+            options.has_trade_npc = true;
         } else if (arg == "--list-saves") {
             options.list_saves = true;
         } else if (arg == "--screenshot") {
@@ -558,6 +569,7 @@ class Game {
             if (!load_level(level_name_)) return 3;
             if (!state_.transition(gl::core::AppState::level)) return 3;
             apply_cli_click();
+            if (options_.has_trade_npc) show_trade_panel(options_.trade_npc);
         }
 
         if (options_.equip_save && !options_.equip_save_pending)
@@ -654,7 +666,8 @@ class Game {
             if (state_.state() == gl::core::AppState::level && level_ &&
                 gl::app::level_input_enabled(dialog_ != nullptr || dialog_overlay_.active(),
                                              save_slots_, console_visible_,
-                                             inventory_overlay_.visible())) {
+                                             inventory_overlay_.visible(),
+                                             trade_overlay_.visible())) {
                 int move_x = 0;
                 int move_y = 0;
                 const Uint8* keys = SDL_GetKeyboardState(nullptr);
@@ -839,6 +852,40 @@ class Game {
         }
     }
 
+    void show_trade_panel(std::string_view npc) {
+        const std::vector<gl::assets::InventoryItem>& npc_items =
+            inventory_runtime_.trade_items(npc);
+        const std::int32_t npc_money = inventory_runtime_.trade_money(npc);
+        const std::vector<gl::assets::InventoryItem>& hero_items =
+            inventory_runtime_.hero_inventory().items;
+        const std::int32_t hero_money = inventory_runtime_.money();
+        trade_overlay_.open(vfs_, item_catalog_, std::string(npc), npc_items, npc_money, hero_items,
+                            hero_money);
+        trade_overlay_.set_font(inventory_font());
+        gl::log(gl::LogLevel::info, "trade: opened npc='" + std::string(npc) +
+                                        "' npc_items=" + std::to_string(npc_items.size()) +
+                                        " npc_money=" + std::to_string(npc_money) +
+                                        " hero_items=" + std::to_string(hero_items.size()) +
+                                        " hero_money=" + std::to_string(hero_money));
+    }
+
+    void request_trade_panel() {
+        if (!dialog_ || dialog_->speaker.empty()) {
+            gl::log(gl::LogLevel::warning,
+                    "trade: RS_PassToTradePanel without an active dialog speaker");
+            return;
+        }
+        pending_trade_npc_ = dialog_->speaker;
+    }
+
+    void maybe_open_pending_trade_panel() {
+        if (!pending_trade_npc_) return;
+        const std::string npc = std::move(*pending_trade_npc_);
+        pending_trade_npc_.reset();
+        close_dialog();
+        show_trade_panel(npc);
+    }
+
     gl::Result<void> open_dialog(std::string_view virtual_path, std::string_view speaker = {}) {
         const auto report = [&](const gl::Error& error) {
             gl::log(gl::LogLevel::error,
@@ -880,6 +927,7 @@ class Game {
         };
         context->host.services().person = person_runtime_.access();
         context->host.services().inventory = inventory_runtime_.access();
+        context->host.services().trade_panel = [this]() { request_trade_panel(); };
         context->path = std::string(virtual_path);
         context->speaker = std::string(speaker);
         context->sdb = std::move(sdb.value());
@@ -888,14 +936,20 @@ class Game {
         context->vm->set_globals(globals.value());
         context->session = std::make_unique<gl::script::DialogSession>(*context->vm, context->sdb);
 
-        const gl::Result<void> started = context->session->start();
+        dialog_ = std::move(context);
+        const gl::Result<void> started = dialog_->session->start();
         if (!started) {
             gl::log(gl::LogLevel::error,
-                    "dialog '" + context->path + "': " + started.error().message);
+                    "dialog '" + dialog_->path + "': " + started.error().message);
+            close_dialog();
             return started.error();
         }
 
-        dialog_ = std::move(context);
+        if (pending_trade_npc_) {
+            maybe_open_pending_trade_panel();
+            return {};
+        }
+
         refresh_dialog_overlay();
         gl::log(gl::LogLevel::info,
                 "dialog: '" + dialog_->path + "' speaker='" + dialog_->speaker + "' answers=" +
@@ -1007,6 +1061,10 @@ class Game {
         const std::size_t selected = dialog_overlay_.selected();
         if (answers.empty() || selected >= answers.size()) return;
         const gl::Result<void> chosen = dialog_->session->choose(selected);
+        if (pending_trade_npc_) {
+            maybe_open_pending_trade_panel();
+            return;
+        }
         if (!chosen) {
             gl::log(gl::LogLevel::error, "dialog: " + chosen.error().message);
             return;
@@ -1690,7 +1748,8 @@ class Game {
                 }
                 return;
             case SDL_FINGERDOWN: {
-                if (!inventory_overlay_.visible() || finger_id_ != -1) return;
+                if (finger_id_ != -1) return;
+                if (!inventory_overlay_.visible() && !trade_overlay_.visible()) return;
                 finger_id_ = event.tfinger.fingerId;
                 finger_start_x_ = static_cast<int>(
                     std::lround(event.tfinger.x * static_cast<float>(viewport_width_)));
@@ -1700,12 +1759,15 @@ class Game {
                 finger_last_y_ = finger_start_y_;
                 finger_scroll_accum_ = 0.0f;
                 finger_dragged_ = false;
-                inventory_overlay_.handle_mouse(finger_start_x_, finger_start_y_, false);
+                if (trade_overlay_.visible())
+                    trade_overlay_.handle_mouse(finger_start_x_, finger_start_y_, false);
+                else
+                    inventory_overlay_.handle_mouse(finger_start_x_, finger_start_y_, false);
                 return;
             }
             case SDL_FINGERMOTION: {
-                if (!inventory_overlay_.visible() || finger_id_ != event.tfinger.fingerId)
-                    return;
+                if (finger_id_ != event.tfinger.fingerId) return;
+                if (!inventory_overlay_.visible() && !trade_overlay_.visible()) return;
                 const int x = static_cast<int>(
                     std::lround(event.tfinger.x * static_cast<float>(viewport_width_)));
                 const int y = static_cast<int>(
@@ -1717,24 +1779,35 @@ class Game {
                 finger_last_x_ = x;
                 finger_last_y_ = y;
                 constexpr float kFingerScrollStep = 24.0f;
+                const bool trade = trade_overlay_.visible();
                 while (finger_scroll_accum_ >= kFingerScrollStep) {
-                    inventory_overlay_.handle_wheel(1, finger_start_x_, finger_start_y_);
+                    if (trade)
+                        trade_overlay_.handle_wheel(1, finger_start_x_, finger_start_y_);
+                    else
+                        inventory_overlay_.handle_wheel(1, finger_start_x_, finger_start_y_);
                     finger_scroll_accum_ -= kFingerScrollStep;
                 }
                 while (finger_scroll_accum_ <= -kFingerScrollStep) {
-                    inventory_overlay_.handle_wheel(-1, finger_start_x_, finger_start_y_);
+                    if (trade)
+                        trade_overlay_.handle_wheel(-1, finger_start_x_, finger_start_y_);
+                    else
+                        inventory_overlay_.handle_wheel(-1, finger_start_x_, finger_start_y_);
                     finger_scroll_accum_ += kFingerScrollStep;
                 }
                 return;
             }
             case SDL_FINGERUP: {
                 if (finger_id_ != event.tfinger.fingerId) return;
-                if (inventory_overlay_.visible() && !finger_dragged_) {
+                if ((inventory_overlay_.visible() || trade_overlay_.visible()) &&
+                    !finger_dragged_) {
                     const int x = static_cast<int>(
                         std::lround(event.tfinger.x * static_cast<float>(viewport_width_)));
                     const int y = static_cast<int>(
                         std::lround(event.tfinger.y * static_cast<float>(viewport_height_)));
-                    inventory_overlay_.handle_mouse(x, y, true);
+                    if (trade_overlay_.visible())
+                        trade_overlay_.handle_mouse(x, y, true);
+                    else
+                        inventory_overlay_.handle_mouse(x, y, true);
                 }
                 finger_id_ = -1;
                 finger_dragged_ = false;
@@ -1743,6 +1816,11 @@ class Game {
             }
             case SDL_MOUSEMOTION:
                 if (console_visible_) return;
+                if (trade_overlay_.visible()) {
+                    if (event.motion.which != SDL_TOUCH_MOUSEID)
+                        trade_overlay_.handle_mouse(event.motion.x, event.motion.y, false);
+                    return;
+                }
                 if (inventory_overlay_.visible()) {
                     if (event.motion.which != SDL_TOUCH_MOUSEID)
                         inventory_overlay_.handle_mouse(event.motion.x, event.motion.y, false);
@@ -1768,6 +1846,12 @@ class Game {
                 return;
             case SDL_MOUSEBUTTONDOWN:
                 if (console_visible_) return;
+                if (trade_overlay_.visible()) {
+                    if (event.button.which != SDL_TOUCH_MOUSEID)
+                        trade_overlay_.handle_mouse(event.button.x, event.button.y,
+                                                    event.button.button == SDL_BUTTON_LEFT);
+                    return;
+                }
                 if (inventory_overlay_.visible()) {
                     if (event.button.which != SDL_TOUCH_MOUSEID)
                         inventory_overlay_.handle_mouse(event.button.x, event.button.y,
@@ -1798,7 +1882,7 @@ class Game {
                 }
                 return;
             case SDL_MOUSEBUTTONUP:
-                if (inventory_overlay_.visible()) {
+                if (trade_overlay_.visible() || inventory_overlay_.visible()) {
                     mouse_down_ = false;
                     dragging_ = false;
                     return;
@@ -1816,20 +1900,25 @@ class Game {
                 dragging_ = false;
                 return;
             case SDL_MOUSEWHEEL: {
-                if (console_visible_ || state_.state() != gl::core::AppState::level ||
-                    !level_ || event.wheel.y == 0) {
+                if (console_visible_ || event.wheel.y == 0) {
                     return;
                 }
                 int mouse_x = 0;
                 int mouse_y = 0;
                 SDL_GetMouseState(&mouse_x, &mouse_y);
+                if (trade_overlay_.visible()) {
+                    trade_overlay_.handle_wheel(event.wheel.y, mouse_x, mouse_y);
+                    return;
+                }
+                if (state_.state() != gl::core::AppState::level || !level_) return;
                 if (inventory_overlay_.visible()) {
                     inventory_overlay_.handle_wheel(event.wheel.y, mouse_x, mouse_y);
                     return;
                 }
                 if (!gl::app::level_input_enabled(dialog_ != nullptr || dialog_overlay_.active(),
                                                   save_slots_, console_visible_,
-                                                  inventory_overlay_.visible())) {
+                                                  inventory_overlay_.visible(),
+                                                  trade_overlay_.visible())) {
                     return;
                 }
                 const float factor = event.wheel.y > 0 ? kZoomStep : 1.0f / kZoomStep;
@@ -1857,6 +1946,10 @@ class Game {
             raw_symbol == SDLK_AC_BACK ? SDLK_ESCAPE : raw_symbol;
         if (console_visible_) {
             handle_console_key(key);
+            return;
+        }
+        if (trade_overlay_.visible()) {
+            if (key.repeat == 0) trade_overlay_.handle_key(symbol);
             return;
         }
         if (inventory_overlay_.visible()) {
@@ -2195,6 +2288,11 @@ class Game {
                                       inventory_font());
         }
 
+        if (trade_overlay_.visible()) {
+            trade_overlay_.render(window_.renderer(), viewport_width_, viewport_height_,
+                                  inventory_font());
+        }
+
         if (console_visible_) render_console(now_ms);
     }
 
@@ -2417,6 +2515,8 @@ class Game {
     std::unique_ptr<DialogContext> dialog_;
     gl::app::DialogOverlay dialog_overlay_;
     gl::app::InventoryOverlay inventory_overlay_;
+    gl::app::TradeOverlay trade_overlay_;
+    std::optional<std::string> pending_trade_npc_;
     std::optional<std::size_t> pending_talk_;
     std::optional<gl::game::Tile> pending_talk_tile_;
     std::uint64_t level_animation_ms_ = 0;

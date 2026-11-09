@@ -29,6 +29,7 @@ struct NativeServices {
     std::function<void(std::string_view)> signal;
     std::function<void(std::int32_t)> exit;
     std::function<void(std::string_view)> play_sound;
+    std::function<void()> trade_panel;
     std::function<void(std::string_view)> log;
     PersonAccess person;
     InventoryAccess inventory;

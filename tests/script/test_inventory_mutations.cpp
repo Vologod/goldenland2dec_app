@@ -179,10 +179,10 @@ TEST_CASE("mutation native registry arities and support match Server.dll") {
     }
 }
 
-TEST_CASE("native registry reports 15 supported natives out of 65") {
+TEST_CASE("native registry reports 16 supported natives out of 65") {
     std::size_t supported = 0;
     for (const auto& entry : NativeRegistry::entries())
         if (entry.support == NativeSupport::supported) ++supported;
     CHECK(NativeRegistry::size() == 65);
-    CHECK(supported == 15);
+    CHECK(supported == 16);
 }

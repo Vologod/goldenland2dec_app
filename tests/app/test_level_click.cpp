@@ -125,6 +125,8 @@ TEST_CASE("level input is disabled while a dialog or save overlay owns input") {
     CHECK_FALSE(gl::app::level_input_enabled(true, true, false));
     CHECK_FALSE(gl::app::level_input_enabled(false, false, true));
     CHECK_FALSE(gl::app::level_input_enabled(false, false, false, true));
+    CHECK_FALSE(gl::app::level_input_enabled(false, false, false, false, true));
+    CHECK_FALSE(gl::app::level_input_enabled(false, false, false, true, true));
 }
 
 TEST_CASE("screen_to_tile maps camera and zoom") {

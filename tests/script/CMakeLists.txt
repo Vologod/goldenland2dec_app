@@ -9,6 +9,7 @@ add_executable(gl_script_tests
     test_inventory_natives.cpp
     test_inventory_mutations.cpp
     test_transfer_natives.cpp
+    test_trade_native.cpp
 )
 target_include_directories(gl_script_tests PRIVATE ${CMAKE_SOURCE_DIR}/third_party)
 target_link_libraries(gl_script_tests PRIVATE gl_script)
