@@ -1036,6 +1036,202 @@ TEST_CASE("glgame boat trader dialog answer opens the trade overlay" *
     }
 }
 
+TEST_CASE("glgame boat trader staged rows render at 1024x768" * doctest::skip(!font_available())) {
+    const char* game_dir = std::getenv("GL_GAME_DIR");
+    REQUIRE(game_dir != nullptr);
+
+    TempDir temp;
+    const fs::path config = write_test_config(temp.path);
+    const fs::path baseline_png = temp.path / "trade_staging_baseline.png";
+    const fs::path png = temp.path / "trade_staging.png";
+    const std::vector<std::string> common = {"--level", "l13_1", "--equip-save", "0",
+                                             "--width", "1024", "--height", "768"};
+    std::vector<std::string> baseline_args = common;
+    baseline_args.push_back("--seed");
+    baseline_args.push_back("1");
+    const int baseline_code =
+        run_glgame(screenshot_arguments(game_dir, config, baseline_png, baseline_args));
+    std::string output;
+    std::vector<std::string> staged_args = common;
+    const std::vector<std::string> stage = {
+        "--seed", "1", "--trade-npc", "L13_1.P517_Boat_Trader",
+        "--trade-buy", "POT_1_00_27", "--trade-sell", "POT_1_00_27"};
+    staged_args.insert(staged_args.end(), stage.begin(), stage.end());
+    const int code =
+        run_glgame_capture(screenshot_arguments(game_dir, config, png, staged_args), output);
+    CAPTURE(baseline_code);
+    CAPTURE(code);
+    CAPTURE(output);
+    REQUIRE(fs::exists(baseline_png));
+    REQUIRE(fs::exists(png));
+    CHECK(baseline_code == 0);
+    CHECK(code == 0);
+    CHECK(output.find("trade: opened npc='L13_1.P517_Boat_Trader' npc_items=16 "
+                      "npc_money=42142 hero_items=117 hero_money=43875") != std::string::npos);
+    CHECK(output.find("trade: hook stage buy id=953 count=14 buy=16800 sell=2912 result=ok") !=
+          std::string::npos);
+    CHECK(output.find("trade: hook stage sell id=953 count=51 buy=61200 sell=10608 result=ok") !=
+          std::string::npos);
+    CHECK(output.find("trade: hook exchange") == std::string::npos);
+
+    int width = 0;
+    int height = 0;
+    const std::vector<unsigned char> pixels = read_png(png, width, height);
+    int baseline_width = 0;
+    int baseline_height = 0;
+    const std::vector<unsigned char> baseline =
+        read_png(baseline_png, baseline_width, baseline_height);
+    CHECK(width == 1024);
+    CHECK(height == 768);
+    CHECK(baseline_width == width);
+    CHECK(baseline_height == height);
+    CHECK(count_differences(pixels, baseline) > 2000000);
+    CHECK(count_region_differences(pixels, baseline, width, height, 347, 208, 603, 55) > 20000);
+    CHECK(count_region_differences(pixels, baseline, width, height, 347, 478, 603, 55) > 20000);
+}
+
+TEST_CASE("glgame boat trader buy matches the research oracle" * doctest::skip(!font_available())) {
+    const char* game_dir = std::getenv("GL_GAME_DIR");
+    REQUIRE(game_dir != nullptr);
+
+    TempDir temp;
+    const fs::path config = write_test_config(temp.path);
+    const fs::path png = temp.path / "trade_buy.png";
+    std::string output;
+    const int code = run_glgame_capture(
+        screenshot_arguments(game_dir, config, png,
+                             {"--level", "l13_1", "--equip-save", "0", "--click-npc", "3",
+                              "--dialog-answer", "0", "--width", "1024", "--height", "768",
+                              "--seed", "1", "--trade-buy", "POT_1_00_27", "--trade-exchange"}),
+        output);
+    CAPTURE(code);
+    CAPTURE(output);
+    REQUIRE(fs::exists(png));
+    CHECK(code == 0);
+    CHECK(output.find("trade: opened npc='L13_1.P517_Boat_Trader' npc_items=16 "
+                      "npc_money=42142 hero_items=117 hero_money=43875") != std::string::npos);
+    CHECK(output.find("trade: hook stage buy id=953 count=14 buy=16800 sell=2912 result=ok") !=
+          std::string::npos);
+    CHECK(output.find("trade: hook exchange result=ok net=-16800 buy=16800 sell=0 "
+                      "npc_money=58942 hero_money=27075") != std::string::npos);
+    CHECK(output.find("trade: hook stock id=953 npc=0 hero=65") != std::string::npos);
+
+    int width = 0;
+    int height = 0;
+    read_png(png, width, height);
+    CHECK(width == 1024);
+    CHECK(height == 768);
+}
+
+TEST_CASE("glgame boat trader sell and mixed trades match the research oracle" *
+          doctest::skip(!font_available())) {
+    const char* game_dir = std::getenv("GL_GAME_DIR");
+    REQUIRE(game_dir != nullptr);
+
+    TempDir temp;
+    const fs::path config = write_test_config(temp.path);
+    struct TradeCase {
+        const char* name;
+        const char* slot;
+        std::vector<std::string> hooks;
+        std::vector<std::string> expected;
+    };
+    const std::vector<TradeCase> cases = {
+        {"sell0",
+         "0",
+         {"--trade-sell", "POT_1_00_27", "--trade-exchange"},
+         {"trade: opened npc='L13_1.P517_Boat_Trader' npc_items=16 npc_money=42142 "
+          "hero_items=117 hero_money=43875",
+          "trade: hook stage sell id=953 count=51 buy=61200 sell=10608 result=ok",
+          "trade: hook exchange result=ok net=10608 buy=0 sell=10608 npc_money=31534 "
+          "hero_money=54483",
+          "trade: hook stock id=953 npc=65 hero=0"}},
+        {"mixed2",
+         "2",
+         {"--trade-buy", "POT_1_00_27", "--trade-sell", "POT_1_00_27", "--trade-exchange"},
+         {"trade: opened npc='L13_1.P517_Boat_Trader' npc_items=17 npc_money=48908 "
+          "hero_items=140 hero_money=122008",
+          "trade: hook stage buy id=953 count=17 buy=17000 sell=4250 result=ok",
+          "trade: hook stage sell id=953 count=25 buy=25000 sell=6250 result=ok",
+          "trade: hook exchange result=ok net=-10750 buy=17000 sell=6250 npc_money=59658 "
+          "hero_money=111258",
+          "trade: hook stock id=953 npc=25 hero=17"}},
+    };
+    for (const TradeCase& trade : cases) {
+        CAPTURE(trade.name);
+        const fs::path png = temp.path / (std::string("trade_") + trade.name + ".png");
+        std::vector<std::string> arguments = {
+            "--level", "l13_1", "--equip-save", trade.slot, "--width", "1024",
+            "--height", "768", "--seed", "1", "--trade-npc", "L13_1.P517_Boat_Trader"};
+        arguments.insert(arguments.end(), trade.hooks.begin(), trade.hooks.end());
+        std::string output;
+        const int code =
+            run_glgame_capture(screenshot_arguments(game_dir, config, png, arguments), output);
+        CAPTURE(code);
+        CAPTURE(output);
+        REQUIRE(fs::exists(png));
+        CHECK(code == 0);
+        for (const std::string& expected : trade.expected)
+            CHECK(output.find(expected) != std::string::npos);
+    }
+}
+
+TEST_CASE("glgame boat trader insufficient hero money is atomic" *
+          doctest::skip(!font_available())) {
+    const char* game_dir = std::getenv("GL_GAME_DIR");
+    REQUIRE(game_dir != nullptr);
+
+    TempDir temp;
+    const fs::path config = write_test_config(temp.path);
+    const fs::path png = temp.path / "trade_nomoney.png";
+    std::string output;
+    const int code = run_glgame_capture(
+        screenshot_arguments(game_dir, config, png,
+                             {"--level", "l13_1", "--equip-save", "0", "--width", "1024",
+                              "--height", "768", "--seed", "1", "--trade-npc",
+                              "L13_1.P517_Boat_Trader", "--trade-buy", "POT_1_00_27",
+                              "--trade-buy", "POT_1_00_30", "--trade-buy", "POT_1_00_26",
+                              "--trade-buy", "POT_1_00_28", "--trade-exchange"}),
+        output);
+    CAPTURE(code);
+    CAPTURE(output);
+    REQUIRE(fs::exists(png));
+    CHECK(code == 0);
+    CHECK(output.find("trade: hook exchange result=ok") == std::string::npos);
+    CHECK(output.find("trade: hook exchange result=failed net=-49560 buy=49560 sell=0 "
+                      "npc_money=42142 hero_money=43875") != std::string::npos);
+    CHECK(output.find("not enough money for this exchange") != std::string::npos);
+    CHECK(output.find("trade: hook stock id=953 npc=14 hero=51") != std::string::npos);
+    CHECK(output.find("trade: hook stock id=956 npc=16 hero=0") != std::string::npos);
+}
+
+TEST_CASE("glgame boat trader insufficient npc stock is atomic" *
+          doctest::skip(!font_available())) {
+    const char* game_dir = std::getenv("GL_GAME_DIR");
+    REQUIRE(game_dir != nullptr);
+
+    TempDir temp;
+    const fs::path config = write_test_config(temp.path);
+    const fs::path png = temp.path / "trade_stock.png";
+    std::string output;
+    const int code = run_glgame_capture(
+        screenshot_arguments(game_dir, config, png,
+                             {"--level", "l13_1", "--equip-save", "0", "--width", "1024",
+                              "--height", "768", "--seed", "1", "--trade-npc",
+                              "L13_1.P517_Boat_Trader", "--trade-buy", "POT_1_00_27",
+                              "--trade-exchange", "--trade-buy", "POT_1_00_27"}),
+        output);
+    CAPTURE(code);
+    CAPTURE(output);
+    REQUIRE(fs::exists(png));
+    CHECK(code == 0);
+    CHECK(output.find("trade: hook exchange result=ok net=-16800") != std::string::npos);
+    CHECK(output.find("trade: hook stock id=953 npc=0 hero=65") != std::string::npos);
+    CHECK(output.find("trade: item 953 is not in the npc trade list") != std::string::npos);
+    CHECK(output.find("trade: hook stage buy id=953 count=0 result=failed error='item is not "
+                      "in the trade list'") != std::string::npos);
+}
+
 TEST_CASE("glgame --level l1_1 --click-npc opens the circus worker dialog" *
           doctest::skip(!font_available())) {
     const char* game_dir = std::getenv("GL_GAME_DIR");

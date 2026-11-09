@@ -81,6 +81,13 @@ constexpr float kDialogMargin = 32.0f;
 constexpr float kDialogAnswerGap = 8.0f;
 constexpr int kBaseMenuItems = 3;
 
+enum class TradeHookKind { buy, sell, exchange };
+
+struct TradeHook {
+    TradeHookKind kind = TradeHookKind::buy;
+    std::string tech;
+};
+
 struct Options {
     fs::path game_dir;
     fs::path config_path;
@@ -104,6 +111,7 @@ struct Options {
     std::optional<int> inventory_select;
     std::string trade_npc;
     bool has_trade_npc = false;
+    std::vector<TradeHook> trade_hooks;
     std::optional<int> dialog_answer;
     std::optional<int> camera_x;
     std::optional<int> camera_y;
@@ -142,6 +150,9 @@ void print_usage() {
         "  --inventory          Open the inventory overlay for the selected save\n"
         "  --inventory-select <n> Select bottom-strip slot <n> when the inventory opens\n"
         "  --trade-npc <name>   Open the trade overlay for person <name> after loading\n"
+        "  --trade-buy <tech>   Headless: stage the whole NPC stack for item <tech>\n"
+        "  --trade-sell <tech>  Headless: stage the whole Hero stack for item <tech>\n"
+        "  --trade-exchange     Headless: run Exchange for the staged trade rows\n"
         "  --dialog-answer <n>  Headless: choose dialog answer <n> when it opens\n"
         "  --camera-x <px>      World X of the left viewport edge (screenshot mode)\n"
         "  --camera-y <px>      World Y of the top viewport edge (screenshot mode)\n"
@@ -389,6 +400,20 @@ ParseStatus parse_args(int argc, char** argv, Options& options) {
             }
             options.trade_npc = std::string(value);
             options.has_trade_npc = true;
+        } else if (arg == "--trade-buy") {
+            if (!next_value(arg, value) || value.empty()) {
+                std::fputs("glgame: --trade-buy requires an item tech name\n", stderr);
+                return ParseStatus::error;
+            }
+            options.trade_hooks.push_back(TradeHook{TradeHookKind::buy, std::string(value)});
+        } else if (arg == "--trade-sell") {
+            if (!next_value(arg, value) || value.empty()) {
+                std::fputs("glgame: --trade-sell requires an item tech name\n", stderr);
+                return ParseStatus::error;
+            }
+            options.trade_hooks.push_back(TradeHook{TradeHookKind::sell, std::string(value)});
+        } else if (arg == "--trade-exchange") {
+            options.trade_hooks.push_back(TradeHook{TradeHookKind::exchange, {}});
         } else if (arg == "--dialog-answer") {
             if (!next_value(arg, value)) return ParseStatus::error;
             int answer = 0;
@@ -511,6 +536,15 @@ void erase_last_utf8(std::string& text) {
     std::size_t index = text.size() - 1;
     while (index > 0 && (static_cast<unsigned char>(text[index]) & 0xC0) == 0x80) --index;
     text.erase(index);
+}
+
+std::int64_t count_item(const std::vector<gl::assets::InventoryItem>& items,
+                        std::uint32_t item_id) {
+    std::int64_t total = 0;
+    for (const gl::assets::InventoryItem& item : items) {
+        if (item.item_id == item_id) total += item.count;
+    }
+    return total;
 }
 
 struct DialogContext {
@@ -876,14 +910,54 @@ class Game {
         const std::vector<gl::assets::InventoryItem>& hero_items =
             inventory_runtime_.hero_inventory().items;
         const std::int32_t hero_money = inventory_runtime_.money();
-        trade_overlay_.open(vfs_, item_catalog_, std::string(npc), npc_items, npc_money, hero_items,
-                            hero_money);
+        current_trade_npc_ = std::string(npc);
+        trade_overlay_.open(vfs_, item_catalog_, current_trade_npc_, npc_items, npc_money,
+                            hero_items, hero_money);
         trade_overlay_.set_font(inventory_font());
-        gl::log(gl::LogLevel::info, "trade: opened npc='" + std::string(npc) +
+        trade_overlay_.set_price_provider(
+            [this](const gl::assets::InventoryItem& item)
+                -> std::optional<gl::game::TradePrice> {
+                const gl::assets::ItemCatalogEntry* entry = item_catalog_.find(item.item_id);
+                if (entry == nullptr)
+                    return std::nullopt;
+                const double skill = person_runtime_.get_skill("Hero", "SKILL_TRADE");
+                gl::game::TradePriceInput input{};
+                input.item_id = item.item_id;
+                input.item_price = entry->item.price;
+                input.durability = item.durability;
+                input.flags = item.flags;
+                input.mod_count = item.mod_count;
+                input.skill_trade =
+                    static_cast<std::uint32_t>(std::max(0.0, std::min(skill, 15.0)));
+                input.count = item.count;
+                input.assume_pc53 = true;
+                return gl::game::compute_trade_price(input);
+            });
+        trade_overlay_.set_exchange_handler(
+            [this](const std::vector<gl::game::TradePrice>& buy_items,
+                   const std::vector<gl::game::TradePrice>& sell_items) {
+                gl::app::TradeExchangeResult result;
+                result.snapshot.npc_items = trade_overlay_.npc_items();
+                result.snapshot.hero_items = trade_overlay_.hero_items();
+                result.snapshot.npc_money = trade_overlay_.npc_money();
+                result.snapshot.hero_money = trade_overlay_.hero_money();
+                result.status = inventory_runtime_.exchange_trade(current_trade_npc_, "Hero",
+                                                                  buy_items, sell_items);
+                if (result.status == gl::game::TradeStatus::ok) {
+                    result.snapshot.npc_items =
+                        inventory_runtime_.trade_items(current_trade_npc_);
+                    result.snapshot.hero_items = inventory_runtime_.hero_inventory().items;
+                    result.snapshot.npc_money = inventory_runtime_.trade_money(current_trade_npc_);
+                    result.snapshot.hero_money = inventory_runtime_.money();
+                }
+                return result;
+            });
+        gl::log(gl::LogLevel::info, "trade: opened npc='" + current_trade_npc_ +
                                         "' npc_items=" + std::to_string(npc_items.size()) +
                                         " npc_money=" + std::to_string(npc_money) +
                                         " hero_items=" + std::to_string(hero_items.size()) +
                                         " hero_money=" + std::to_string(hero_money));
+        run_trade_hooks();
     }
 
     void request_trade_panel() {
@@ -901,6 +975,96 @@ class Game {
         pending_trade_npc_.reset();
         close_dialog();
         show_trade_panel(npc);
+    }
+
+    std::optional<std::uint32_t> trade_item_id(std::string_view tech) const {
+        if (item_names_) {
+            const std::optional<std::uint32_t> id = item_names_->find(tech);
+            if (id) return id;
+        }
+        std::uint32_t parsed = 0;
+        const auto [ptr, error] =
+            std::from_chars(tech.data(), tech.data() + tech.size(), parsed);
+        if (error == std::errc{} && ptr == tech.data() + tech.size()) return parsed;
+        return std::nullopt;
+    }
+
+    void run_trade_hooks() {
+        if (options_.trade_hooks.empty() || trade_hooks_run_) return;
+        if (!trade_overlay_.visible()) {
+            gl::log(gl::LogLevel::warning,
+                    "trade: --trade-* hooks ignored (no trade panel open)");
+            return;
+        }
+        trade_hooks_run_ = true;
+        std::vector<std::uint32_t> touched;
+        const auto remember = [&touched](std::uint32_t id) {
+            if (std::find(touched.begin(), touched.end(), id) == touched.end())
+                touched.push_back(id);
+        };
+        for (const TradeHook& hook : options_.trade_hooks) {
+            if (hook.kind == TradeHookKind::exchange) {
+                const std::int64_t buy_total = trade_overlay_.buy_total();
+                const std::int64_t sell_total = trade_overlay_.sell_total();
+                const bool ok = trade_overlay_.run_exchange();
+                const std::string totals =
+                    " net=" + std::to_string(sell_total - buy_total) +
+                    " buy=" + std::to_string(buy_total) +
+                    " sell=" + std::to_string(sell_total) +
+                    " npc_money=" + std::to_string(trade_overlay_.npc_money()) +
+                    " hero_money=" + std::to_string(trade_overlay_.hero_money());
+                if (ok) {
+                    gl::log(gl::LogLevel::info, "trade: hook exchange result=ok" + totals);
+                } else {
+                    gl::log(gl::LogLevel::info,
+                            "trade: hook exchange result=failed" + totals + " error='" +
+                                trade_overlay_.last_error() + "'");
+                }
+                for (const std::uint32_t id : touched) {
+                    gl::log(gl::LogLevel::info,
+                            "trade: hook stock id=" + std::to_string(id) +
+                                " npc=" +
+                                std::to_string(count_item(
+                                    inventory_runtime_.trade_items(current_trade_npc_), id)) +
+                                " hero=" +
+                                std::to_string(count_item(
+                                    inventory_runtime_.hero_inventory().items, id)));
+                }
+                continue;
+            }
+            const bool buy = hook.kind == TradeHookKind::buy;
+            const gl::app::TradeOrigin origin =
+                buy ? gl::app::TradeOrigin::npc : gl::app::TradeOrigin::hero;
+            const std::optional<std::uint32_t> item_id = trade_item_id(hook.tech);
+            if (!item_id) {
+                gl::log(gl::LogLevel::warning, "trade: hook " +
+                                                   std::string(buy ? "buy" : "sell") +
+                                                   " unknown item tech '" + hook.tech + "'");
+                continue;
+            }
+            remember(*item_id);
+            const std::vector<gl::assets::InventoryItem>& source =
+                buy ? trade_overlay_.npc_items() : trade_overlay_.hero_items();
+            const std::int64_t count = count_item(source, *item_id);
+            const bool staged = trade_overlay_.stage_item_by_id(origin, *item_id);
+            if (!staged) {
+                gl::log(gl::LogLevel::info,
+                        "trade: hook stage " + std::string(buy ? "buy" : "sell") +
+                            " id=" + std::to_string(*item_id) + " count=" +
+                            std::to_string(count) + " result=failed error='" +
+                            trade_overlay_.last_error() + "'");
+                continue;
+            }
+            const std::vector<gl::app::StagedTradeItem>& staged_items =
+                buy ? trade_overlay_.buy_staged_items() : trade_overlay_.sell_staged_items();
+            gl::game::TradePrice price;
+            if (!staged_items.empty()) price = staged_items.back().price;
+            gl::log(gl::LogLevel::info,
+                    "trade: hook stage " + std::string(buy ? "buy" : "sell") +
+                        " id=" + std::to_string(price.item_id) + " count=" +
+                        std::to_string(price.count) + " buy=" + std::to_string(price.buy) +
+                        " sell=" + std::to_string(price.sell) + " result=ok");
+        }
     }
 
     gl::Result<void> open_dialog(std::string_view virtual_path, std::string_view speaker = {}) {
@@ -2555,6 +2719,8 @@ class Game {
     gl::app::DialogOverlay dialog_overlay_;
     gl::app::InventoryOverlay inventory_overlay_;
     gl::app::TradeOverlay trade_overlay_;
+    std::string current_trade_npc_;
+    bool trade_hooks_run_ = false;
     std::optional<std::string> pending_trade_npc_;
     std::optional<std::size_t> pending_talk_;
     std::optional<gl::game::Tile> pending_talk_tile_;

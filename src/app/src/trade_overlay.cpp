@@ -224,6 +224,31 @@ void TradeOverlay::set_exchange_handler(TradeExchangeHandler handler) {
     exchange_handler_ = std::move(handler);
 }
 
+bool TradeOverlay::stage_item_by_id(TradeOrigin origin, std::uint32_t item_id) {
+    const std::vector<gl::assets::InventoryItem> &items =
+        origin == TradeOrigin::npc ? npc_items_ : hero_items_;
+    for (std::size_t index = 0; index < items.size(); ++index) {
+        if (items[index].item_id != item_id)
+            continue;
+        return stage_item(origin, index);
+    }
+    last_error_ = "item is not in the trade list";
+    gl::log(gl::LogLevel::warning, "trade: item " + std::to_string(item_id) + " is not in the " +
+                                       (origin == TradeOrigin::npc ? "npc" : "hero") +
+                                       " trade list");
+    return false;
+}
+
+bool TradeOverlay::run_exchange() {
+    if (buy_staged_.empty() && sell_staged_.empty()) {
+        last_error_ = "nothing to exchange";
+        gl::log(gl::LogLevel::warning, "trade: nothing to exchange");
+        return false;
+    }
+    exchange();
+    return last_error_.empty();
+}
+
 std::int64_t TradeOverlay::buy_total() const {
     std::int64_t total = 0;
     for (const StagedTradeItem &staged : buy_staged_)

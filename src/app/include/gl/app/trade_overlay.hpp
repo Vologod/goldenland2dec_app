@@ -181,6 +181,13 @@ class TradeOverlay {
     void set_price_provider(TradePriceProvider provider);
     void set_exchange_handler(TradeExchangeHandler handler);
 
+    // Headless/test seams: stage the first source record with `item_id`
+    // (the same path as clicking the row) and run Exchange through the
+    // configured handler. They return false on failure; `last_error()`
+    // carries the reason. Both go through the normal staging/exchange code.
+    bool stage_item_by_id(TradeOrigin origin, std::uint32_t item_id);
+    bool run_exchange();
+
     TradeRegion hit_test(int x, int y) const;
     const TradeLayout &layout() const { return layout_; }
     const std::string &npc_name() const { return npc_name_; }
