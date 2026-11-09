@@ -27,6 +27,7 @@ enum class TradeStatus {
     insufficient_stock,
     insufficient_money,
     unsupported_price,
+    not_available,
 };
 
 class InventoryRuntime {

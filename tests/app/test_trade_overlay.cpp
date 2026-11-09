@@ -251,19 +251,29 @@ TEST_CASE("trade layout reports money and row geometry") {
     CHECK(gl::app::TradeLayout::max_scroll(7, 10) == 0);
 }
 
-TEST_CASE("trade layout hit-tests the staging row, exchange and staging scroll") {
+TEST_CASE("trade layout hit-tests both staging rows, exchange and row scroll") {
     gl::app::TradeLayout layout;
 
     CHECK(gl::app::TradeLayout::kStagingY == 208);
+    CHECK(gl::app::TradeLayout::kSellStagingY == 478);
     CHECK(gl::app::TradeLayout::kTotalsY == 386);
-    CHECK(layout.staging_slot_at(347.0f, 208.0f) == std::optional<std::size_t>{0});
-    CHECK(layout.staging_slot_at(895.0f + 54.0f, 208.0f + 54.0f) == std::optional<std::size_t>{9});
-    CHECK_FALSE(layout.staging_slot_at(346.0f, 208.0f).has_value());
+    CHECK(gl::app::TradeLayout::kTotalsX == 562.0f);
+    CHECK(layout.buy_staging_slot_at(347.0f, 208.0f) == std::optional<std::size_t>{0});
+    CHECK(layout.buy_staging_slot_at(895.0f + 54.0f, 208.0f + 54.0f) ==
+          std::optional<std::size_t>{9});
+    CHECK_FALSE(layout.buy_staging_slot_at(346.0f, 208.0f).has_value());
+    CHECK(layout.sell_staging_slot_at(347.0f, 478.0f) == std::optional<std::size_t>{0});
+    CHECK(layout.sell_staging_slot_at(895.0f + 54.0f, 478.0f + 54.0f) ==
+          std::optional<std::size_t>{9});
+    CHECK_FALSE(layout.sell_staging_slot_at(346.0f, 478.0f).has_value());
 
-    CHECK(layout.hit_test(350.0f, 210.0f) == gl::app::TradeRegion::staging_slot);
+    CHECK(layout.hit_test(350.0f, 210.0f) == gl::app::TradeRegion::buy_staging_slot);
+    CHECK(layout.hit_test(350.0f, 480.0f) == gl::app::TradeRegion::sell_staging_slot);
     CHECK(layout.hit_test(600.0f, 340.0f) == gl::app::TradeRegion::exchange);
-    CHECK(layout.hit_test(325.0f, 230.0f) == gl::app::TradeRegion::staging_scroll_left);
-    CHECK(layout.hit_test(967.0f, 230.0f) == gl::app::TradeRegion::staging_scroll_right);
+    CHECK(layout.hit_test(325.0f, 230.0f) == gl::app::TradeRegion::buy_staging_scroll_left);
+    CHECK(layout.hit_test(967.0f, 230.0f) == gl::app::TradeRegion::buy_staging_scroll_right);
+    CHECK(layout.hit_test(325.0f, 500.0f) == gl::app::TradeRegion::sell_staging_scroll_left);
+    CHECK(layout.hit_test(967.0f, 500.0f) == gl::app::TradeRegion::sell_staging_scroll_right);
     CHECK(layout.hit_test(500.0f, 300.0f) == gl::app::TradeRegion::none);
 }
 
@@ -319,7 +329,7 @@ TEST_CASE("trade overlay npc filter narrows the visible list and clamps scroll")
 
     std::vector<gl::assets::InventoryItem> npc;
     for (std::uint32_t i = 0; i < 10; ++i)
-        npc.push_back(make_item(500 + i, 25));
+        npc.push_back(make_item(500 + i, 21));
     for (std::uint32_t i = 0; i < 15; ++i)
         npc.push_back(make_item(600 + i, 11));
 
@@ -442,7 +452,7 @@ TEST_CASE("trade overlay selects npc and hero items read-only") {
     CHECK(overlay.selected_npc() == std::optional<std::size_t>{0});
 }
 
-TEST_CASE("trade overlay stages whole npc and hero stacks and returns them") {
+TEST_CASE("trade overlay stages whole npc and hero stacks in separate rows") {
     gl::assets::GameVfs vfs;
     gl::assets::ItemCatalog catalog;
     gl::app::TradeOverlay overlay;
@@ -455,30 +465,31 @@ TEST_CASE("trade overlay stages whole npc and hero stacks and returns them") {
 
     CHECK(overlay.handle_mouse(360, 40, true));
     CHECK(overlay.npc_items().empty());
-    REQUIRE(overlay.staged_items().size() == 1);
-    CHECK(overlay.staged_items()[0].origin == gl::app::TradeOrigin::npc);
-    CHECK(overlay.staged_items()[0].item.count == 14);
+    REQUIRE(overlay.buy_staged_items().size() == 1);
+    CHECK(overlay.buy_staged_items()[0].item.count == 14);
+    CHECK(overlay.sell_staged_items().empty());
     CHECK(overlay.buy_total() == 1400);
     CHECK(overlay.sell_total() == 0);
     CHECK(overlay.net_total() == -1400);
 
     CHECK(overlay.handle_mouse(150, 710, true));
     CHECK(overlay.hero_items().empty());
-    REQUIRE(overlay.staged_items().size() == 2);
-    CHECK(overlay.staged_items()[1].origin == gl::app::TradeOrigin::hero);
-    CHECK(overlay.staged_items()[1].item.count == 51);
+    REQUIRE(overlay.sell_staged_items().size() == 1);
+    CHECK(overlay.sell_staged_items()[0].item.count == 51);
+    CHECK(overlay.buy_staged_items().size() == 1);
     CHECK(overlay.sell_total() == 2550);
     CHECK(overlay.net_total() == 1150);
 
     CHECK(overlay.handle_mouse(360, 210, true));
-    REQUIRE(overlay.staged_items().size() == 1);
+    CHECK(overlay.buy_staged_items().empty());
+    REQUIRE(overlay.sell_staged_items().size() == 1);
     REQUIRE(overlay.npc_items().size() == 1);
     CHECK(overlay.npc_items()[0].item_id == 953);
     CHECK(overlay.npc_items()[0].count == 14);
     CHECK(overlay.buy_total() == 0);
 
-    CHECK(overlay.handle_mouse(360, 210, true));
-    CHECK(overlay.staged_items().empty());
+    CHECK(overlay.handle_mouse(360, 480, true));
+    CHECK(overlay.sell_staged_items().empty());
     REQUIRE(overlay.hero_items().size() == 1);
     CHECK(overlay.hero_items()[0].count == 51);
     CHECK(overlay.sell_total() == 0);
@@ -502,16 +513,18 @@ TEST_CASE("trade overlay exchange settles staging and updates lists and money") 
         return exchange_runtime(runtime, buy, sell);
     });
 
-    REQUIRE(overlay.handle_mouse(407, 26, true));
-    REQUIRE(overlay.handle_mouse(201, 703, true));
-    REQUIRE(overlay.staged_items().size() == 2);
+    REQUIRE(overlay.handle_mouse(347, 26, true));
+    REQUIRE(overlay.handle_mouse(140, 703, true));
+    REQUIRE(overlay.buy_staged_items().size() == 1);
+    REQUIRE(overlay.sell_staged_items().size() == 1);
     CHECK(overlay.buy_total() == 16800);
     CHECK(overlay.sell_total() == 10608);
 
     CHECK(overlay.hit_test(600, 340) == gl::app::TradeRegion::exchange);
     CHECK(overlay.handle_mouse(600, 340, true));
     CHECK(overlay.last_error().empty());
-    CHECK(overlay.staged_items().empty());
+    CHECK(overlay.buy_staged_items().empty());
+    CHECK(overlay.sell_staged_items().empty());
     CHECK(overlay.npc_items().size() == 2);
     CHECK(overlay.hero_items().size() == 2);
     CHECK(overlay.npc_money() == 48334);
@@ -536,10 +549,11 @@ TEST_CASE("trade overlay exchange error keeps staging and state") {
         return exchange_runtime(runtime, buy, sell);
     });
 
-    REQUIRE(overlay.handle_mouse(407, 26, true));
+    REQUIRE(overlay.handle_mouse(347, 26, true));
     CHECK(overlay.handle_mouse(600, 340, true));
     CHECK_FALSE(overlay.last_error().empty());
-    CHECK(overlay.staged_items().size() == 1);
+    CHECK(overlay.buy_staged_items().size() == 1);
+    CHECK(overlay.sell_staged_items().empty());
     CHECK(overlay.npc_items().size() == 1);
     CHECK(overlay.npc_money() == 42142);
     CHECK(overlay.hero_money() == 1000);
@@ -559,8 +573,87 @@ TEST_CASE("trade overlay rejects an unpriced item without staging") {
 
     CHECK(overlay.handle_mouse(347, 26, true));
     CHECK_FALSE(overlay.last_error().empty());
-    CHECK(overlay.staged_items().empty());
+    CHECK(overlay.buy_staged_items().empty());
+    CHECK(overlay.sell_staged_items().empty());
     CHECK(overlay.npc_items().size() == 1);
+}
+
+TEST_CASE("trade overlay hides money and quest records from both source rows") {
+    gl::assets::GameVfs vfs;
+    gl::assets::ItemCatalog catalog;
+    gl::app::TradeOverlay overlay;
+    const std::vector<gl::assets::InventoryItem> npc{make_item(812, 18, 42142),
+                                                     make_item(975, 25, 1), make_item(953, 19, 14)};
+    const std::vector<gl::assets::InventoryItem> hero{
+        make_item(812, 18, 43875), make_item(976, 25, 1), make_item(953, 19, 51)};
+    REQUIRE(overlay.open(vfs, catalog, "npc", npc, 42142, hero, 43875));
+
+    REQUIRE(overlay.visible_npc_indices().size() == 1);
+    REQUIRE(overlay.visible_hero_indices().size() == 1);
+    CHECK(overlay.visible_npc_indices()[0] == 2);
+    CHECK(overlay.visible_hero_indices()[0] == 2);
+}
+
+TEST_CASE("trade overlay tracks buy and sell staging rows independently") {
+    gl::assets::GameVfs vfs;
+    gl::assets::ItemCatalog catalog;
+    gl::app::TradeOverlay overlay;
+    REQUIRE(
+        overlay.open(vfs, catalog, "npc", make_items(20, 400, 19), 0, make_items(20, 900, 19), 0));
+    overlay.set_price_provider([](const gl::assets::InventoryItem &item) {
+        return std::optional<gl::game::TradePrice>{make_quote(item)};
+    });
+
+    for (int i = 0; i < 16; ++i)
+        CHECK(overlay.handle_mouse(347, 26, true));
+    CHECK(overlay.buy_staged_items().size() == 16);
+    CHECK(overlay.handle_mouse(347, 26, true));
+    CHECK(overlay.buy_staged_items().size() == 16);
+    CHECK_FALSE(overlay.last_error().empty());
+
+    for (int i = 0; i < 12; ++i)
+        CHECK(overlay.handle_mouse(140, 703, true));
+    CHECK(overlay.sell_staged_items().size() == 12);
+    CHECK(overlay.buy_staging_max_scroll() == 6);
+    CHECK(overlay.sell_staging_max_scroll() == 2);
+
+    CHECK(overlay.handle_mouse(967, 230, true));
+    CHECK(overlay.buy_staging_scroll() == 1);
+    CHECK(overlay.sell_staging_scroll() == 0);
+    CHECK(overlay.handle_mouse(967, 500, true));
+    CHECK(overlay.buy_staging_scroll() == 1);
+    CHECK(overlay.sell_staging_scroll() == 1);
+}
+
+TEST_CASE("trade exchange result defaults to a non-ok status") {
+    gl::app::TradeExchangeResult result;
+    CHECK(result.status == gl::game::TradeStatus::not_available);
+    CHECK(result.status != gl::game::TradeStatus::ok);
+}
+
+TEST_CASE("trade overlay does not wipe lists when the handler returns no result") {
+    gl::assets::GameVfs vfs;
+    gl::assets::ItemCatalog catalog;
+    gl::app::TradeOverlay overlay;
+    const std::vector<gl::assets::InventoryItem> npc{make_item(953, 19, 14, 0x8000000Cu)};
+    const std::vector<gl::assets::InventoryItem> hero{make_item(953, 19, 51, 0x8000000Cu)};
+    REQUIRE(overlay.open(vfs, catalog, "npc", npc, 42142, hero, 43875));
+    overlay.set_price_provider([](const gl::assets::InventoryItem &item) {
+        return std::optional<gl::game::TradePrice>{make_quote(item)};
+    });
+    overlay.set_exchange_handler(
+        [](const std::vector<gl::game::TradePrice> &, const std::vector<gl::game::TradePrice> &) {
+            return gl::app::TradeExchangeResult{};
+        });
+
+    REQUIRE(overlay.handle_mouse(347, 26, true));
+    CHECK(overlay.handle_mouse(600, 340, true));
+    CHECK_FALSE(overlay.last_error().empty());
+    CHECK(overlay.buy_staged_items().size() == 1);
+    CHECK(overlay.npc_items().empty());
+    CHECK(overlay.hero_items().size() == 1);
+    CHECK(overlay.npc_money() == 42142);
+    CHECK(overlay.hero_money() == 43875);
 }
 
 TEST_CASE("trade overlay exchange hit-test works on letterboxed screens") {
@@ -748,18 +841,6 @@ TEST_CASE("real slot0 trade overlay stages both stacks and renders exchange" *
     auto inventory = load_real_inventory(0);
     REQUIRE(inventory.has_value());
 
-    std::size_t hero_index = 0;
-    bool found = false;
-    for (std::size_t i = 0; i < inventory->items.size(); ++i) {
-        if (inventory->items[i].item_id == 953) {
-            hero_index = i;
-            found = true;
-            break;
-        }
-    }
-    REQUIRE(found);
-    REQUIRE(hero_index < gl::app::TradeLayout::kHeroX.size());
-
     std::vector<gl::assets::InventoryItem> npc{make_item(953, 19, 14, 0x8000000Cu)};
     std::vector<gl::assets::InventoryItem> hero(inventory->items.begin(), inventory->items.end());
 
@@ -789,9 +870,22 @@ TEST_CASE("real slot0 trade overlay stages both stacks and renders exchange" *
             return gl::game::compute_trade_price(input);
         });
 
+    std::size_t hero_slot = 0;
+    bool found = false;
+    for (std::size_t i = 0; i < overlay.visible_hero_indices().size(); ++i) {
+        if (hero[overlay.visible_hero_indices()[i]].item_id == 953) {
+            hero_slot = i;
+            found = true;
+            break;
+        }
+    }
+    REQUIRE(found);
+    REQUIRE(hero_slot < gl::app::TradeLayout::kHeroX.size());
+
     REQUIRE(overlay.handle_mouse(347, 26, true));
-    REQUIRE(overlay.handle_mouse(gl::app::TradeLayout::kHeroX[hero_index], 703, true));
-    REQUIRE(overlay.staged_items().size() == 2);
+    REQUIRE(overlay.handle_mouse(gl::app::TradeLayout::kHeroX[hero_slot], 703, true));
+    REQUIRE(overlay.buy_staged_items().size() == 1);
+    REQUIRE(overlay.sell_staged_items().size() == 1);
     CHECK(overlay.buy_total() == 16800);
     CHECK(overlay.sell_total() == 10608);
     CHECK(overlay.net_total() == -6192);
@@ -811,6 +905,7 @@ TEST_CASE("real slot0 trade overlay stages both stacks and renders exchange" *
     }
     CHECK(non_black > 100000);
     CHECK(count_pure_magenta(pixels, 347, 208, 55, 55) == 0);
+    CHECK(count_pure_magenta(pixels, 347, 478, 55, 55) == 0);
     CHECK(count_pure_magenta(pixels, 579, 320, 110, 43) == 0);
 
     gl::assets::Image image;
