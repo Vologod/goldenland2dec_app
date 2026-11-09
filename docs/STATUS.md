@@ -1,6 +1,16 @@
 # STATUS
 
-Обновлено: 2026-11-08
+Обновлено: 2026-11-09
+## Phase 1b2b4a — read-only trade overlay (in progress 2026-11-09)
+
+- **Задача:** `RS_PassToTradePanel` (`0x700000D`) → supported; overlay
+  NPC↔Hero items/деньги/фильтры (read-only).
+- **Spec:** `docs/specs/2026-11-09-p3b2b4a-trade-overlay-design.md`.
+- **Plan:** `docs/plans/2026-11-09-p3b2b4a-trade-overlay.md`.
+- **Gate:** research `engineres/trade` + Client.dll source/prices + real
+  trader oracle; иначе BLOCKED.
+- **Вне scope:** покупка/продажа, trade-контейнер `+0xC`, confirm.
+
 ## Phase 1b2b3 — inventory transfers (done 2026-11-08)
 
 - **Задача:** `RS_PersonTransferItemI` (`0x5000001`) и
