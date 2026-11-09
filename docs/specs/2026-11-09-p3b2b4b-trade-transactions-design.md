@@ -21,13 +21,23 @@
 
 ## 3. Scope
 
-### 3.1 Транзакции
+### 3.1 Транзакции (staging + Exchange)
 
+Оригинал: предметы (весь стек) перетаскиваются в buy/sell staging-ряды,
+затем **Exchange** (obj 44, `FUN_1206DBB0`) выполняет обмен и переводит
+**чистую разницу** денег; отдельного подтверждения нет.
+
+- `InventoryRuntime::exchange_trade(npc, hero, buy_items, sell_items)`:
+  - `buy_items` — записи NPC trade (`+0xC`), `sell_items` — Hero main;
+  - `buy_total`/`sell_total` по ценам (Task 1/2);
+  - если `buy <= sell`: NPC money ≥ `sell-buy`, delta NPC→Hero;
+  - иначе: Hero money + sell ≥ buy, delta Hero→NPC (отрицательный);
+  - перенести buy-items NPC trade → Hero main, sell-items Hero main →
+    NPC trade (весь стек, merge), затем net money;
+  - ошибка (нет денег/предмета/цены/модификатора) → без мутаций.
 - `InventoryRuntime::buy_trade(npc, hero, tech, price)` — **без
-  `count`**: одна операция переносит **весь выбранный стек** (count
-  берётся из runtime-записи источника). Проверить Hero money ≥ total и
-  NPC stock; NPC trade → Hero main; money Hero → NPC; вернуть
-  результат/ошибку.
+  `count`**: примитив, переносит весь стек NPC trade → Hero main и
+  money Hero→NPC (для staged/тестов).
 - `InventoryRuntime::sell_trade(...)`: весь стек Hero main → NPC trade;
   money NPC → Hero по sell-цене.
 - **Modifier guard:** если `mod_count != 0 && (flags&0x80)==0` —

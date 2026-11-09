@@ -76,19 +76,26 @@ register CMake.
 
 ---
 
-### Task 3: Interactive trade overlay
+### Task 3: Staging + Exchange (overlay + runtime)
 
 **Files:**
+- Modify: `src/game/include/gl/game/inventory_runtime.hpp`
+- Modify: `src/game/src/inventory_runtime.cpp`
 - Modify: `src/app/include/gl/app/trade_overlay.hpp`
 - Modify: `src/app/src/trade_overlay.cpp`
+- Modify: `tests/game/test_inventory_runtime.cpp`
 - Modify: `tests/app/test_trade_overlay.cpp`
 
-- [ ] **Step 1: Add price display/buy/sell controls** per research layout;
-read-only selection remains.
-- [ ] **Step 2: Callbacks** `buy`/`sell`/`price`; update snapshot after action;
-error message/log; no direct mutation.
-- [ ] **Step 3: Hit-test/input tests**; screenshots.
-- [ ] **Step 4: Commit** `feat(app): add trade buy/sell controls`.
+- [ ] **Step 1: `exchange_trade(npc, hero, buy_items, sell_items)`**
+(whole-stack, net money per research §2.3-2.5; error-atomic; tests for
+buy>sell/sell>buy/equal/insufficient NPC/hero money/unsupported).
+- [ ] **Step 2: Staging UI** — middle row: click NPC item stages buy,
+click Hero item stages sell, click staged returns; totals y=386; prices
+y=126/386/612; Exchange button obj 44 (`lbig2`, 579,320); no separate
+confirm.
+- [ ] **Step 3: Hit-test/input/totals tests**; screenshots; read-only
+state remains for un-staged lists.
+- [ ] **Step 4: Commit** `feat(app): add trade staging and exchange`.
 
 ---
 
