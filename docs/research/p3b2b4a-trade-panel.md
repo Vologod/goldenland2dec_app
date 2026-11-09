@@ -85,7 +85,7 @@ puppet, primaries, hot slots), правая/центральная — собс�
 | 8/100 | CONTAINER/BUTTON | 19,690,81×75 | `drop` | drop |
 | 9..15 | CHECK_BUTTON | y=672/673, 56×23, x=201/290/383/474/565/658/745 | `filter1..7` | hero main filters |
 | 16..29 | BUTTON | x=168/231, y=59..225, 26×26 | `lm1..7`/`lp1..7` | primaries |
-| 30..36 | CHECK_BUTTON | y=94/95, 52×20, x=350/439/531/621/713/806/893 | `afilter1..7` | NPC trade filters |
+| 30..36 | CHECK_BUTTON | per-id Y `{94,94,95,95,95,95,95}`, 52×20, x=350/439/531/621/713/806/893 | `afilter1..7` | NPC trade filters |
 | 37/38 | BUTTON | 312,28,27×55 / 954,26,27×55 | `left3`/`right3` | скролл верхнего trade-ряда |
 | 39/40 | BUTTON | 313,208 / 955,207, 27×55 | `left2`/`right2` | скролл среднего trade-ряда |
 | 41/42 | BUTTON | 314,477 / 955,477, 27×55 | `left1`/`right1` | скролл нижнего trade-ряда |
@@ -100,6 +100,12 @@ puppet, primaries, hot slots), правая/центральная — собс�
 
 Объекты 101/102/103 — placeholder-кнопки: деньги/итоги/подписи рисует
 код (`FUN_12071014`), в `trade.scr` их текста нет.
+
+Per-id Y NPC-фильтров снят из `scripts/ui/trade.scr`:
+obj 30 `OBJECT_TOP 94` (:514), obj 31 `:533`, obj 32 `:551`, obj 33 `:569`,
+obj 34 `:587`, obj 35 `:605`, obj 36 `:623` — итого
+`{94,94,95,95,95,95,95}`. `TradeLayout::kNpcFilters` использует эту
+раскладку; при общем y=94/95 (диапазон) id 32..36 не хит-тестятся.
 
 Имена контейнеров в скрипте («48 hero sel», «49 trader sel», «50 trader»)
 **не соответствуют** фактическому коду: ниже доказано, что верхний ряд
@@ -596,6 +602,8 @@ trade не используется.
    `FUN_1206EC98` (единственный writer `screen+0x198`) имеет `callers=0`,
    клиентский вызов/setter не трассирован. Для read-only источник задаётся
    server/native-контрактом; client binding остаётся `unverified`.
+   **Статус 1b2b4a (Task 5, 2026-11-09):** gap не закрыт; порт использует
+   pass-1 `entity+0xC` и не вызывает `FUN_1206EC98`.
 3. **Источник id `local_player+0x6F8/+0x6FC`** (staging A/B). Сеттер
    `0x120C33D8` найден; caller/сетевой пакет — нет. Для read-only
    верхнего ряда/hero main не нужен.

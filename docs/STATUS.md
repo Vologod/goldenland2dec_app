@@ -1,8 +1,35 @@
 # STATUS
 
 Обновлено: 2026-11-09
-## Phase 1b2b4a — read-only trade overlay (in progress 2026-11-09)
+## Phase 1b2b4a — read-only trade overlay (done 2026-11-09)
 
+- **Итог (Tasks 1–5, done):** `RS_PassToTradePanel` (`0x700000D`)
+  supported, registry **16/65** (3 vm_internal, 46 unsupported); callback
+  закрывает диалог и открывает read-only `TradeOverlay` со спикером.
+  Layout/assets — `engineres/trade` + `scripts/ui/trade.scr`; NPC-фильтры
+  obj 30..36 (`afilter1..7`) имеют per-id Y `{94,94,95,95,95,95,95}`
+  (id 30/31 `trade.scr:506-541`, id 32..36 `:543-631`). NPC trade list =
+  pass-1 hot `entity+0xC`, сохранённый в `InventoryRuntime::trade_items`;
+  Hero — main `entity+0x10` + `money()`; две money values (NPC y=126,
+  Hero y=612, x=562). Read-only: selection/filter/scroll/exit; нет
+  buy/sell/confirm и мутаций trade-контейнера; **цены не отображаются**
+  (price UI — 1b2b4b). Docs: D-057; parity 170 строк.
+- **Проверка (`GL_GAME_DIR=I:\Games\Златогорье-2`):**
+  `cmake --build build` exit 0; targeted `ctest` (`gl_script_tests|
+  gl_script_real_tests|gl_game_tests|gl_assets_tests|gl_assets_real_tests|
+  glgame_screenshot_tests|glview_screenshot_tests|level_click_tests|
+  trade_overlay_tests`) **9/9 passed**, 1721.92 s, exit 0; full `ctest`
+  **19/19 passed**, 1838.21 s, exit 0. Oracle slot0
+  `16/42142/117/43875`, slot2 `17/48908/140/122008`; asserted все NPC
+  trade items и первые 12 Hero main; screenshot 1024×768 diff > 2 MB
+  байт + top-region > 100000 px; regression `l1_1 --click-npc 13`.
+- **Ограничения:** client `FUN_1206EC98` invocation не трассирован
+  (server/native-level source only); NPC-фильтры visual/mask-only
+  (type→bit для trade не доказан); hero-row filtering — assumption;
+  exact exit command `0x2B` не трассирована; lists — снимок на момент
+  открытия; нет live-memory oracle; NPC specials не генерируются (D-055).
+- **Дальше:** Phase 1b2b4b buy/sell (цены, `0x5000006`/`0x5000007`,
+  confirm) или research specials / `P2-15` (save payload).
 - **Задача:** `RS_PassToTradePanel` (`0x700000D`) → supported; overlay
   NPC↔Hero items/деньги/фильтры (read-only).
 - **Spec:** `docs/specs/2026-11-09-p3b2b4a-trade-overlay-design.md`.
@@ -29,7 +56,7 @@
     (`FUN_14028404` hero `+0x4D4 = NPC+0xC` + `0x5000006/7`);
     клиентский setter `FUN_1206EC98` (callers=0) invocation
     **не трассирован** — client binding `unverified`. Порт 1b2b2b
-    сейчас отбрасывает pass 1 (`hot`) — Task 2 должен его сохранять;
+    на момент research отбрасывал pass 1 (`hot`); Task 2 сохранил его;
     pass 1 — единственный источник NPC-списка.
   - `RS_PassToTradePanel`: handler RVA `0x41558` (`-1`, return 0.0);
     `FUN_14028404` (RVA `0x28404`) добавляет hero action type 3 с
@@ -47,7 +74,7 @@
     `FUN_1206EC98` invocation downgraded; hot mode 99 removed;
     oracle reproducibility/seed/inputs + hero first 12 recorded;
     two money values; `trade.scr` 101/102/103 — code-drawn placeholders.
-    Parity-matrix не менялся.
+    Parity-matrix на момент fix round не менялся (Task 5 — 170 строк).
   - **Gate:** снят; Tasks 2–4 разблокированы. Остаётся unverified:
     item-type→filter-bit для trade-списков (кнопки/mask доказаны),
     client invocation `FUN_1206EC98`/источник `local_player+0x6F8/+0x6FC`,
@@ -79,7 +106,8 @@
   → `trade: opened npc='L13_1.P517_Boat_Trader' npc_items=16
   npc_money=42142 hero_items=117 hero_money=43875`. Smoke
   `l1_1 --click-npc 13` exit 0; unknown `--trade-npc` warns.
-- **Вне scope:** покупка/продажа, trade-мутации, confirm.
+- **Вне scope:** покупка/продажа, trade-мутации, confirm; цены в
+  read-only overlay не показываются (1b2b4b).
 
 ## Phase 1b2b3 — inventory transfers (done 2026-11-08)
 
