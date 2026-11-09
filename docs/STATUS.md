@@ -54,6 +54,15 @@
   трассирован; `gv_addon`/perks не моделируются; specials NPC-лута не
   генерируются (D-055); modifier-free NPC stock доказан только
   slot0/slot2; live FPU-CW не снят.
+- **Final review (2026-11-09):** With fixes (transfer metadata retention,
+  item_id+count stack match, guards/int32/docs) → final fix `19087a9`;
+  scoped re-review clean. Ready to merge = Yes; полный `ctest` после
+  fix не перезапускался (затронутые suites перепроверены: 289/289
+  gl_game, 25/25 trade_overlay, 8/8 trade screenshots).
+- **Состояние (2026-11-09 21:58, сессия остановлена):** коммиты
+  `4b5c1f8..19087a9` — **локальные, не запушены**; SDD ledger
+  `.superpowers/sdd/2026-11-09-p3b2b4b-trade-transactions/progress.md`.
+  Продолжить с: final STATUS note (этот), push, затем specials/P2-15.
 - **Дальше:** research specials NPC-лута (R4–R10) / `P2-15` (save
   payload) / 35 Гц (`P2-9`), затем остальные системы P5+/P6/P7.
 
