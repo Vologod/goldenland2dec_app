@@ -123,7 +123,7 @@ Real:
 2. Buy/sell работают в overlay; деньги/стоки обновляются; ошибки
    безопасны.
 3. Unit + real + screenshots; full `ctest`.
-4. D-058 (to be recorded)/parity/STATUS/PROJECT; UTF-8 без BOM/NUL.
+4. D-058/parity/STATUS/PROJECT; UTF-8 без BOM/NUL.
 5. Нет save-записи; specials/trade natives вне scope.
 
 ## 9. Риски

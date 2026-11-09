@@ -22,27 +22,27 @@
 **Files:**
 - Create: `docs/research/p3b2b4b-trade-transactions.md`
 
-- [ ] **Step 1: Transactions**
+- [x] **Step 1: Transactions**
 
 Read Client/Server buy/sell functions; record RVA/file:line: item transfer
 order, money movement, count, confirm, errors (no money/stock/slot),
 rounding.
 
-- [ ] **Step 2: Prices**
+- [x] **Step 2: Prices**
 
 Confirm price formula/inputs (ITM price, durability, SKILL_TRADE), min 1,
 buy/sell reciprocal, count multiply; record exact truncation.
 
-- [ ] **Step 3: Money/containers**
+- [x] **Step 3: Money/containers**
 
 Record NPC/Hero money item/container and mutations.
 
-- [ ] **Step 4: Real oracle**
+- [x] **Step 4: Real oracle**
 
 Boat trader slot0/slot2: selected item buy/sell prices, stock/money
 before/after; node path/answers.
 
-- [ ] **Step 5: Verdict/commit**
+- [x] **Step 5: Verdict/commit**
 
 `implementable`/`blocked`; UTF-8; commit `docs(research): record trade transactions`.
 
@@ -64,15 +64,15 @@ if the live FPU CW is not PC=53.
 - Modify: `src/game/src/inventory_runtime.cpp`
 - Create/modify: `tests/game/test_trade_price.cpp`, `test_inventory_runtime.cpp`
 
-- [ ] **Step 1: Failing price tests** from research (PC=53/double; min 1;
+- [x] **Step 1: Failing price tests** from research (PC=53/double; min 1;
 buy/sell reciprocal; modifier guard → unsupported); commit.
-- [ ] **Step 2: Failing whole-stack buy/sell tests** (success/insufficient
+- [x] **Step 2: Failing whole-stack buy/sell tests** (success/insufficient
 money/stock/merge/min1/no-mutation/invariants; no `count` parameter;
 conditional single-item path `count>1`+query `10|0xB` is a known case, not
 implemented/tested yet).
-- [ ] **Step 3: Implement** whole-stack price + transactions + guards;
+- [x] **Step 3: Implement** whole-stack price + transactions + guards;
 register CMake.
-- [ ] **Step 4: Run `gl_game_tests`; commit** `feat(game): add trade transactions`.
+- [x] **Step 4: Run `gl_game_tests`; commit** `feat(game): add trade transactions`.
 
 ---
 
@@ -86,16 +86,16 @@ register CMake.
 - Modify: `tests/game/test_inventory_runtime.cpp`
 - Modify: `tests/app/test_trade_overlay.cpp`
 
-- [ ] **Step 1: `exchange_trade(npc, hero, buy_items, sell_items)`**
+- [x] **Step 1: `exchange_trade(npc, hero, buy_items, sell_items)`**
 (whole-stack, net money per research §2.3-2.5; error-atomic; tests for
 buy>sell/sell>buy/equal/insufficient NPC/hero money/unsupported).
-- [ ] **Step 2: Staging UI** — middle row: click NPC item stages buy,
+- [x] **Step 2: Staging UI** — middle row: click NPC item stages buy,
 click Hero item stages sell, click staged returns; totals y=386; prices
 y=126/386/612; Exchange button obj 44 (`lbig2`, 579,320); no separate
 confirm.
-- [ ] **Step 3: Hit-test/input/totals tests**; screenshots; read-only
+- [x] **Step 3: Hit-test/input/totals tests**; screenshots; read-only
 state remains for un-staged lists.
-- [ ] **Step 4: Commit** `feat(app): add trade staging and exchange`.
+- [x] **Step 4: Commit** `feat(app): add trade staging and exchange`.
 
 ---
 
@@ -105,26 +105,26 @@ state remains for un-staged lists.
 - Modify: `tools/glgame/main.cpp`
 - Modify: `tests/app/test_glgame_screenshot.cpp`
 
-- [ ] **Step 1: Wire callbacks** to runtime; refresh overlay data after action.
-- [ ] **Step 2: E2E** boat trader slot0/slot2 whole-stack buy/sell via
+- [x] **Step 1: Wire callbacks** to runtime; refresh overlay data after action.
+- [x] **Step 2: E2E** boat trader slot0/slot2 whole-stack buy/sell via
 production path; assert money/stock/prices; errors. Before-state is
 real/validated; after-state oracle is analytic (computed under PC=53,
 not observed) — record that caveat.
-- [ ] **Step 3: Smoke** `l1_1 --click-npc 13`; screenshots.
-- [ ] **Step 4: Commit** `feat(tools): wire trade transactions`.
+- [x] **Step 3: Smoke** `l1_1 --click-npc 13`; screenshots.
+- [x] **Step 4: Commit** `feat(tools): wire trade transactions`.
 
 ---
 
 ### Task 5: Docs, parity, regression
 
 **Files:**
-- Modify: `docs/DECISIONS.md` (D-058 to be recorded)
+- Modify: `docs/DECISIONS.md` (D-058)
 - Modify: `docs/STATUS.md`, `docs/PROJECT.md`,
   `docs/research/parity-matrix.md`
 
-- [ ] **Step 1: D-058** — transaction/price semantics (PC=53/double),
+- [x] **Step 1: D-058** — transaction/price semantics (PC=53/double),
 whole-stack scope, modifier guard, errors, runtime-only, deviations.
-- [ ] **Step 2: parity** — trade rows; recompute counts.
-- [ ] **Step 3: STATUS/PROJECT** — done, exact tests, next.
-- [ ] **Step 4: Full ctest; encoding.**
-- [ ] **Step 5: Commit** `docs: record trade transactions`.
+- [x] **Step 2: parity** — trade rows; recompute counts.
+- [x] **Step 3: STATUS/PROJECT** — done, exact tests, next.
+- [x] **Step 4: Full ctest; encoding.**
+- [x] **Step 5: Commit** `docs: record trade transactions`.

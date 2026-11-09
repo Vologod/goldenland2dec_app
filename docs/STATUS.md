@@ -1,65 +1,56 @@
 # STATUS
 
 Обновлено: 2026-11-09
-## Phase 1b2b4b — trade transactions (in progress 2026-11-09)
+## Phase 1b2b4b — trade transactions (done 2026-11-09)
 
-- **Задача:** buy/sell в trade overlay: цены, деньги/стоки, confirm.
+- **Итог (Tasks 1–5, done):** trade overlay интерактивный: `TradePrice`
+  (buy/sell по research §4.3), whole-stack `buy_trade`/`sell_trade`,
+  `exchange_trade` (net money, atomic errors), staging/Exchange UI и
+  `glgame` wiring. Оригинальный flow — drag всего стека в buy staging
+  (средний y=208) / sell staging (нижний y=478), Exchange obj 44
+  (`lbig2`, 579,320) → net money; без отдельного confirm/quantity
+  selector. Modifier guard `mod_count != 0 && (flags & 0x80) == 0` →
+  `unsupported` для buy и sell; `gv_addon`/perks (`0x10/0x400`) не
+  моделируются. Цена считается в `double` под явной `assume_pc53`
+  (PC=53), TU с `-ffp-contract=off`.
 - **Spec:** `docs/specs/2026-11-09-p3b2b4b-trade-transactions-design.md`.
 - **Plan:** `docs/plans/2026-11-09-p3b2b4b-trade-transactions.md`.
-- **Gate:** research buy/sell/price semantics + real oracle; иначе BLOCKED.
-- **Вне scope:** quantity slider/selector (whole-stack per action),
-  trade natives `0x5000006/7`, save.
-- **Task 1 (research gate, done 2026-11-09):** вердикт **`implementable`
-  (scoped)**; research `docs/research/p3b2b4b-trade-transactions.md`.
-  - Транзакции серверные: drag → staging (`+0x1A4` sell / `+0x1A8` buy),
-    Exchange (obj 44) → `FUN_1206DBB0`; деньги проверяются клиентом
-    (Hero/NPC), затем одна команда `0x0E` (`FUN_120C7358`) →
-    `FUN_140294A0` case `0xE` → `FUN_1402F0A8(hero,1,delta)`; сервер
-    переносит `+0x4E8→hero main`, `+0x4E4→NPC trade (+0x4D4)`, затем
-    net-деньги `FUN_140484C8` (`MON_1_0_1`, Hero main `+0x10` ↔ NPC
-    `+0xC`); rollback `action 0xD` (`FUN_1402ABD8`). Ошибки: нет денег
-    Hero/NPC (клиент, команды нет), staging-строка >15 записей
-    (`0xa7`); stock/slot на confirm не проверяются.
-  - Цена `FUN_1206E8D0`: `base0=trunc((dur*0.0025+0.75)*ITM.price)`,
-    min `base0/3`, `f=2.5-0.1*SKILL_TRADE` (id 16, Hero; addon
-    perks `0x10/0x400`), buy `trunc(f*base)`, sell `trunc(base/f)`,
-    min 1, `*count`; per-unit UI = целочисл. деление на count.
-    Константы Client.dll `0x128FD0..0x129000`
-    (`0.85/-1/1/-0.1/2.5/0.0025/0.75`).
-  - **x87 PC=53/double:** `_controlfp`/`_control87` не импортируются
-    (Client/Server/GoldenLand.exe), Windows CW `0x027F` (PC=53);
-    `FUN_1206E8D0` ставит только RC=trunc (`or 0xC00`), PC не меняет.
-    `fstp qword` округляет store до double (nearest), `fistp` trunc;
-    порт считает IEEE double, не extended. Цена **implementable under
-    PC=53**; live FPU-CW verification обязателен; при PC!=53 — blocked.
-  - Real oracle `L13_1.P517_Boat_Trader` (`l13_1`, NPC 3, dialog
-    `D_Say(8868)` ответ 0 `3498` → `RS_PassToTradePanel`):
-    `POT_1_00_27` (953) slot0 NPC 14/Hero 51/skill 1, buy 1200/sell
-    208; slot2 NPC 17/Hero 25/skill 5, buy 1000/sell 250. Money
-    before/after: slot0 43875/42142 → buy 27075/58942, sell
-    54483/31534; slot2 122008/48908 → buy 105008/65908, sell
-    128258/42658; item totals сохраняются (65/42). **Before-state —
-    real/validated (real-тесты slot0 69/69, slot2 71/71 assertions);
-    after-state — analytic (computed under PC=53), not observed.**
-  - **Gate пройден scoped:** whole-stack per action (без count);
-    buy/sell точны при PC=53 и `mod_count==0`. **Buy guard:** при
-    `mod_count!=0` — `unsupported` (не только sell); `gv_addon`/perks
-    `0x10/0x400` снять до паритета; NPC-stock без модификаторов
-    доказан только slot0/slot2. **Остаётся `blocked`:** точный
-    buy/sell magic-предметов — modifier-блок (`+0x78!=0`,
-    `(flags&0x80)==0`) требует engine/magic-def таблиц
-    (`DAT_12110ed8`, host), не расшифрованы; затрагивает 25/29 Hero
-    main записей. До этого — `unsupported` (не угадывать, D-029).
-    Также unverified: клиентский setter staging id
-    `0x120C33D8`/packet order, `gv_addon` для слотов, точный
-    rollback-триггер, исходный `+8/+4`-quirk, нет live-оракула;
-    лимит слотов приёмного контейнера — inherited proof (p3b2b3).
-    D-058 — **to be recorded** (не существует).
-- **Следующее:** Task 2 scoped (`TradePrice` PC=53 + whole-stack
-  `buy_trade`/`sell_trade` без `count`, modifier guard buy+sell), либо
-  research magic-def (`DAT_12110ed8`/`GoldenLand.exe`) для полного
-  buy/sell-паритета; условный single-item путь (`count>1` + query
-  `10|0xB`) — known case, не реализовывать без подтверждения.
+- **Research:** `docs/research/p3b2b4b-trade-transactions.md`; D-058.
+  - Сделка: `buy <= sell` → NPC платит `sell-buy`; `buy > sell` → Hero
+    платит `buy-sell`; равно — no-op; предметы buy NPC trade → Hero
+    main, sell Hero main → NPC trade, затем net money (`MON_1_0_1`);
+    ошибки (`missing_person`/`missing_template`/`insufficient_stock`/
+    `insufficient_money`/`unsupported_price`) без мутаций.
+  - UI: отдельные buy/sell staging-ряды (per-row лимит 16, независимый
+    scroll), net-total только x=562/y=386, NPC/Hero money y=126/612,
+    типы 18/25 скрыты из source-рядов, ошибки рисуются; hooks
+    `--trade-buy/--trade-sell/--trade-exchange`.
+- **Проверка (`GL_GAME_DIR=I:\Games\Златогорье-2`):**
+  `cmake --build build` exit 0; targeted `ctest -R "gl_script_tests|
+  gl_script_real_tests|gl_game_tests|gl_assets_tests|
+  gl_assets_real_tests|glgame_screenshot_tests|glview_screenshot_tests|
+  level_click_tests|trade_overlay_tests"` **9/9 passed**, 3171.29 s,
+  exit 0; full `ctest` **19/19 passed**, 2723.07 s, exit 0.
+  `glgame_screenshot_tests --test-case="*trade*"` **8/8** (164
+  assertions, 27 skipped); `trade_overlay_tests` **24/24** (651);
+  `gl_game_tests --test-case="*trade*"` **56/56** (917, 229 skipped).
+- **Oracle / screenshots:** slot0 buy stack 16800 / sell 2912
+  (unit 1200/208), NPC/Hero money 42142/43875 → buy 58942/27075,
+  sell 31534/54483; mixed и sell-side insufficient. slot2 pure buy
+  **105008/65908**, sell **128258/42658**, mixed (unit 1000/250);
+  item totals сохраняются (65/42). Screenshot diffs на 1024×768
+  (`trade_staging*`, `trade_buy/sell0/2`, `trade_mixed2`,
+  `trade_nomoney/npcmoney/stock`). After-state — **analytic (PC=53),
+  not observed**; before-state real/validated.
+- **Ограничения:** no persistent server staging `+0x4E4/+0x4E8` и
+  rollback action `0xD` (staging = overlay quotes); save не пишется;
+  при дубликатах item id — first-matching record; net cap `uint32`;
+  unstage append в конец source; клиентский invocation staging id не
+  трассирован; `gv_addon`/perks не моделируются; specials NPC-лута не
+  генерируются (D-055); modifier-free NPC stock доказан только
+  slot0/slot2; live FPU-CW не снят.
+- **Дальше:** research specials NPC-лута (R4–R10) / `P2-15` (save
+  payload) / 35 Гц (`P2-9`), затем остальные системы P5+/P6/P7.
 
 ## Phase 1b2b4a — read-only trade overlay (done 2026-11-09)
 

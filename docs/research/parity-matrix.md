@@ -14,7 +14,10 @@ Phase 1b2b2b (core NPC `.inv` loot, D-055) добавила парсер, ген
 `transfer_item`/`transfer_all`, native handlers и real P387 test; Phase
 1b2b4a (read-only trade overlay, D-057) добавила pass-1 `entity+0xC` как
 NPC trade-список, `TradeOverlay` и `RS_PassToTradePanel` (`0x700000D`);
-buy/sell и trade-мутации остаются вне scope.
+Phase 1b2b4b (trade transactions, D-058) добавила `TradePrice`,
+whole-stack `buy_trade`/`sell_trade`/`exchange_trade`, staging/Exchange UI
+и `glgame` hooks; trade-нативы `0x5000006`/`0x5000007`, specials/restock
+и save остаются вне scope.
 
 Матрица — единый источник истины о покрытии паритета. Строка без evidence не
 считается подтверждённой. Источники: `parity-audit-p0-p1.md`,
@@ -55,7 +58,9 @@ ID: `P4a-*`, `P4b-*`, `P4b2-*` — прежние A/B/C из аудита (пе�
    `vm_internal` 3, `unsupported` 46; 46 unsupported натива требуют подсистем
    (lifecycle/party/остаток inventory/quests/time/world) → возвращают 0
    (`P3-9`); 3 `vm_internal` — внутренние ID VM, не подсистемные; id `0`
-   встречается 51 раз (`P3-3`).
+   встречается 51 раз (`P3-3`). Phase 1b2b4b добавила runtime/overlay
+   trade (`TradePrice`, buy/sell/Exchange), не новые нативы;
+   `0x5000006`/`0x5000007` остаются unsupported.
 3. **B3 save/load** — payload не читается и не пишется (`P2-15`).
 4. **B4 тайминг** — порт 60 Гц, оригинал `sv_fps=35` (`P2-9`, `P4b-16`).
 5. **C1 ADSC** — `number/name` игнорируются, анимации ломаются на 4 уровнях
@@ -179,6 +184,15 @@ ID: `P4a-*`, `P4b-*`, `P4b2-*` — прежние A/B/C из аудита (пе�
 | P3d-2 | UI/layout | trade panel 1024×768, assets, rows, filters, scroll, exit | `TradeLayout`/`TradeOverlay` (`src/app`) | `engineres/trade` (53 BMP), `scripts/ui/trade.scr`; per-id NPC filter Y `{94,94,95,95,95,95,95}`; unit + 1024×768 real screenshot (diff > 2 MB, top region > 100000 px) | partial | деньги/selected-name цвет/масштаб/позиция — invented UI values; средний/нижний ряды не интерактивны; GDI-текст оригинала не сверен | research §2/§4; D-057 |
 | P3d-3 | данные | NPC trade = pass-1 `entity+0xC`; Hero main `entity+0x10`; money | `InventoryRuntime::trade_items`/`trade_money`; `NpcLootGenerator` сохраняет `loot.hot` | real `l13_1` slot0 `16/42142/117/43875`, slot2 `17/48908/140/122008`; asserted все NPC items и первые 12 Hero main | partial | client `FUN_1206EC98` invocation не трассирован (server/native source only); нет live-memory oracle; specials NPC не генерируются (D-055) | research §4.1/§6; D-055/D-057 |
 | P3d-4 | поведение | selection/filter/scroll/exit; две money; read-only | `TradeOverlay` | unit hit-test/scroll/filter; real E2E dialog→overlay; regression `l1_1 --click-npc 13` | partial | нет buy/sell/confirm и цен (1b2b4b); NPC/hero-ряды фильтруются `gl::game::item_matches_filter` (inventory-группировка) — assumption, type→bit для trade не доказан; «all» не pressed при открытии; точная exit-команда `0x2B` не трассирована; списки — снимок на момент открытия | research §2.3/§4.4/§8; D-057 |
+
+## P3e — trade transactions (Phase 1b2b4b, 2026-11-09)
+
+| ID | Подсистема | Пункт | Реализация | Evidence | Статус | Пробел/задача | Источник |
+|---|---|---|---|---|---|---|---|
+| P3e-1 | цена | `TradePrice` buy/sell (ITM/durability/skill, min 1, reciprocal, count) | `trade_price.cpp` | research §4.3/§9.1; unit (boat-trader oracle, durability/trunc/min/guard) | partial | double под явной `assume_pc53`; live FPU-CW не снят; modifier guard → unsupported; `gv_addon`/perks не моделируются; NPC modifier-free proof только slot0/slot2 | research §4/§8; D-058 |
+| P3e-2 | buy/sell | whole-stack `buy_trade`/`sell_trade` | `InventoryRuntime` | research §3.2/§9; unit + real E2E | partial | нет persistent staging `+0x4E4/+0x4E8`; single-item path не реализован; first-matching duplicate; append-порядок; after-state analytic | research §2/§3; D-058 |
+| P3e-3 | Exchange | `exchange_trade` net money, atomic errors | `InventoryRuntime::exchange_trade`; `TradeOverlay` | research §2.4–§2.5/§3; unit + real E2E slot0/slot2 | partial | staging — overlay quotes, нет server staging/rollback `0xD`; `uint32` net cap; client staging invocation не трассирован | research §2/§3/§6; D-058 |
+| P3e-4 | UI/E2E | staging rows, net totals, hooks, screenshots | `TradeOverlay`; `glgame` | research §2.3/§4.6; `--trade-buy/--trade-sell/--trade-exchange`; screenshot diffs; E2E slot0/slot2 | partial | after-state analytic (PC=53); нет specials NPC-лута; save не пишется | research §6/§8; D-058 |
 
 ## P4a — PAD/person/SEF/отрисовка NPC
 
@@ -318,14 +332,15 @@ ID: `P4a-*`, `P4b-*`, `P4b2-*` — прежние A/B/C из аудита (пе�
 
 ## Итог
 
-Всего строк: **170**. По статусам: `verified` 51, `partial` 68,
+Всего строк: **174**. По статусам: `verified` 51, `partial` 72,
 `unverified` 22, `missing` 17, `contradicted` 2, `superseded` 10.
 
 Native dispatch infrastructure (Phase 1a): `NativeRegistry` 65/65 +
 `GameScriptHost`. Phase 1b1 добавляет три person-натива, Phase 1b2a — три
 inventory-натива (queries), Phase 1b2b1 — два mutation-натива, Phase
-1b2b3 — два transfer-натива, Phase 1b2b4a — `RS_PassToTradePanel`: итого
-16 supported, 3 vm_internal, 46 unsupported. Из 49 non-supported 46
+1b2b3 — два transfer-натива, Phase 1b2b4a — `RS_PassToTradePanel`;
+Phase 1b2b4b — trade transactions (runtime/overlay, новых нативов нет):
+итого 16 supported, 3 vm_internal, 46 unsupported. Из 49 non-supported 46
 unsupported требуют подсистем (Hero-inventory закрыт; NPC core `.inv`
 loot — Phase 1b2b2b, specials/restock/box — blocked); 3 vm_internal —
 внутренние ID VM.
@@ -339,9 +354,10 @@ loot — Phase 1b2b2b, specials/restock/box — blocked); 3 vm_internal —
    (lifecycle/party/остаток inventory/quests/time/world); 3 `vm_internal` —
    внутренние ID VM; VM-часть закрыта Phase 1a, person-параметры — Phase 1b1,
    Hero-inventory queries — Phase 1b2a, Hero-inventory mutations — Phase
-   1b2b1, inventory transfers — Phase 1b2b3, read-only trade — Phase 1b2b4a
-   (Trade/`PassToTradePanel` поддержан; buy/sell и `0x5000006`/
-   `0x5000007` — нет); NPC core `.inv` loot — Phase 1b2b2b
+   1b2b1, inventory transfers — Phase 1b2b3, read-only trade — Phase 1b2b4a,
+   trade transactions (buy/sell/Exchange) — Phase 1b2b4b
+   (Trade/`PassToTradePanel` и trade-обмен поддержаны; trade-нативы
+   `0x5000006`/`0x5000007` — нет); NPC core `.inv` loot — Phase 1b2b2b
    (specials/restock/box — blocked, D-055).
 2. `P2-15`: save payload/write/load.
 3. `P2-9`/`P4b-16`: 35 Гц vs 60 Гц.

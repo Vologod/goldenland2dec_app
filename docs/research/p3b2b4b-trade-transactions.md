@@ -250,8 +250,7 @@ return 1;
 - Если у src меньше `amount`, `FUN_1404cae8` удаляет найденное
   (p3b2b1 §3) → в теории возможно «создание» денег; в штатном UI
   недостижимо, потому что клиент проверяет деньги до команды (§2.4).
-  Это исходный quirk; порт добавляет guard — deviation D-058
-  (to be recorded).
+  Это исходный quirk; порт добавляет guard — deviation D-058.
 - Money item — обычный `MON_1_0_1` (type 18) в контейнерах:
   Hero main `+0x10`, NPC trade `+0x4D4 = NPC+0xC`.
 
@@ -462,7 +461,7 @@ Hero main (`FUN_1206FBC0`) → mode 1 (sell); equip/hot цену не счита
   - при недостатке денег клиент не посылает команду → мутаций нет.
 - Сервер не проверяет деньги/сток: add-then-remove с игнором ошибок;
   при недостатке src деньги могут «создаться» (недостижимо штатным UI).
-  Порт должен валидировать до мутации — D-058 (to be recorded).
+  Порт должен валидировать до мутации — D-058.
 
 ## 6. Реальный oracle: `L13_1.P517_Boat_Trader` (`l13_1`)
 
@@ -563,7 +562,7 @@ Hero-запись удаляется; NPC получает стек и слив�
 | staging-строка уже 16 записей | error-sound `0xa7`, запись не stage-ится |
 | money (type 18 / `0x12`) / quest (type 25 / `0x19`) | не рисуется/не выбирается |
 | повторный Exchange без staging | cache `+0x254 = 0` → no-op |
-| buy, когда NPC-запись уже удалена | сервер молча переносит что есть; порт — guard/no-op, D-058 (to be recorded) |
+| buy, когда NPC-запись уже удалена | сервер молча переносит что есть; порт — guard/no-op, D-058 |
 
 ## 7. Проверка (фактический вывод)
 
@@ -676,10 +675,9 @@ slot2 loot=37 skill=5 npc_953=17 hero_953=25 hero_money=122008 npc_money=48908
 7. **Исходный quirk `+8/+4`** в `FUN_1206DBB0`: при ошибке деньги
    кладутся в `screen+8/+4`, которые `FUN_12070DAC` (:75503) может
    отправить как `0x0E` на следующем input-событии. Порт не должен
-   воспроизводить этот баг; deviation — **D-058 (to be recorded)**.
+   воспроизводить этот баг; deviation — **D-058**.
 8. **Stock/деньги на сервере не валидируются**; add-then-remove с
-   игнором ошибок. Порт — guard до мутации; deviation — **D-058
-   (to be recorded)**.
+   игнором ошибок. Порт — guard до мутации; deviation — **D-058**.
 9. **Условный single-item путь** (`count>1` + query `10|0xB`,
    §2.2) — known case; в Task 2 не реализуется, пока не подтверждён.
 10. **Slot-limit claim (inherited proof).** Лимит staging-строки 16 —
@@ -723,7 +721,7 @@ slot2 loot=37 skill=5 npc_953=17 hero_953=25 hero_money=122008 npc_money=48908
 6. Не реализовывать: modifier-цены (buy+sell unsupported),
    `+8/+4`-quirk, серверный add-before-remove без проверки (в порту —
    guard), `RS_PersonAddItemToTrade/RemoveItemToTrade` (вне scope),
-   save. D-058 — **to be recorded** в Task 5.
+   save. D-058 — **recorded** (Task 5).
 
 ## 10. Приложение A. Python-референс (analytic, PC=53)
 
