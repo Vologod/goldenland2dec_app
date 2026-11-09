@@ -23,12 +23,20 @@
 
 ### 3.1 Транзакции
 
-- `InventoryRuntime::buy_trade(npc, hero, tech, count, price)`:
-  проверить Hero money ≥ price*count и NPC stock; перенести предмет
-  NPC trade → Hero main; перевести money Hero → NPC (или уменьшить
-  Hero money; точная форма — research); вернуть результат/ошибку.
-- `InventoryRuntime::sell_trade(...)`: Hero main → NPC trade; money
-  NPC → Hero по sell-цене.
+- `InventoryRuntime::buy_trade(npc, hero, tech, price)` — **без
+  `count`**: одна операция переносит **весь выбранный стек** (count
+  берётся из runtime-записи источника). Проверить Hero money ≥ total и
+  NPC stock; NPC trade → Hero main; money Hero → NPC; вернуть
+  результат/ошибку.
+- `InventoryRuntime::sell_trade(...)`: весь стек Hero main → NPC trade;
+  money NPC → Hero по sell-цене.
+- **Modifier guard:** если `mod_count != 0 && (flags&0x80)==0` —
+  `unsupported` для buy и sell (точная цена невозможна, research §8.2-
+  8.3). `gv_addon`/perks (`0x10/0x400`) снять до паритета; цена — только
+  при x87 PC=53 (research §4.3/§4.5).
+- **Количество:** общего quantity selector нет; whole-stack per action.
+  Условный single-item путь (`count>1` + query `10|0xB`, research §2.2) —
+  known case, не реализуется без подтверждения.
 - Инварианты: суммарное количество предмета/денег сохраняется между
   контейнерами; merge по item_id; source deletion; ошибки не мутируют.
 - Runtime-only: save не пишется.
@@ -36,22 +44,28 @@
 ### 3.2 Цены
 
 - `TradePrice { buy, sell }` из ITM/durability/skill по research;
-  min 1; count multiply; truncation/rounding — строго по research.
+  min 1; count multiply; truncation/rounding — строго по research
+  (PC=53/double; `fstp qword` округляет store, `fistp` truncates).
 - Конкретная формула и входы (durability, skill TRADE, NPC/hero)
   фиксируются Task 1; неподтверждённое остаётся `unsupported`/blocked.
 
 ### 3.3 UI
 
 - Выбор NPC/Hero предмета; цена (buy/sell) в панели; кнопки Buy/Sell
-  (или подтверждение — по research); обновление списков/денег после
-  транзакции; ошибки (нет денег/стока) — сообщение/лог, без мутации.
-- Количество: по умолчанию 1; quantity-выбор только если research
-  докажет оригинальный механизм, иначе вне scope.
+  (whole selected stack) или Exchange-подтверждение (по research);
+  обновление списков/денег после транзакции; ошибки (нет денег/стока) —
+  сообщение/лог, без мутации.
+- Количество: одна операция — **весь выбранный стек**; отдельного
+  quantity-выбора нет. Условный single-item путь (`count>1` + query
+  `10|0xB`, research §2.2) — known case, вне scope до подтверждения.
+- Цена: buy/sell только при PC=53 и `modn==0`; иначе «—»/`unsupported`
+  (modifier guard §3.1).
 - Read-only фильтры/скролл/exit сохраняются.
 
 ## 4. Non-goals
 
-- Quantity slider/negotiation/bargaining, trade-навык UI.
+- Quantity slider/selector/negotiation/bargaining, trade-навык UI
+  (одна операция — весь выбранный стек).
 - `RS_PersonAddItemToTrade`/`RemoveItemToTrade` natives.
 - Save, сеть, specials NPC-лута.
 - Полный оригинальный tooltip/анимации.
@@ -81,9 +95,10 @@
 
 Unit:
 
-- buy/sell success; insufficient money/stock; merge; price min 1;
-  count; no mutation on error; invariants.
-- Price formula per research (durability/skill cases).
+- buy/sell success (весь выбранный стек); insufficient money/stock;
+  merge; price min 1; no mutation on error; invariants.
+- Price formula per research (durability/skill cases) под PC=53/double;
+  modifier guard (buy и sell) → `unsupported`.
 
 Real:
 
@@ -98,13 +113,17 @@ Real:
 2. Buy/sell работают в overlay; деньги/стоки обновляются; ошибки
    безопасны.
 3. Unit + real + screenshots; full `ctest`.
-4. D-058/parity/STATUS/PROJECT; UTF-8 без BOM/NUL.
+4. D-058 (to be recorded)/parity/STATUS/PROJECT; UTF-8 без BOM/NUL.
 5. Нет save-записи; specials/trade natives вне scope.
 
 ## 9. Риски
 
 - Оригинальный trade UI может использовать staged-контейнер `+0x4D4`/
   `+0xC` и подтверждение; неточность → blocked.
-- Цена зависит от durability/skill/NPC; неподтверждённые входы нельзя
-  угадывать.
-- Покупка может требовать свободного слота/лимита; research gate.
+- Цена зависит от durability/skill/NPC и x87 PC; неподтверждённые входы
+  нельзя угадывать. Точная цена — только при PC=53/double; иначе
+  `unsupported`.
+- Modifier-предметы (`mod_count != 0`, `(flags&0x80)==0`) — `unsupported`
+  для buy и sell; NPC-stock без модификаторов доказан только slot0/slot2.
+- Покупка может требовать свободного слота/лимита; лимит слотов
+  приёмного контейнера — inherited proof (p3b2b3); research gate.

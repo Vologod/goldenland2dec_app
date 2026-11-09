@@ -7,7 +7,8 @@
 - **Spec:** `docs/specs/2026-11-09-p3b2b4b-trade-transactions-design.md`.
 - **Plan:** `docs/plans/2026-11-09-p3b2b4b-trade-transactions.md`.
 - **Gate:** research buy/sell/price semantics + real oracle; иначе BLOCKED.
-- **Вне scope:** quantity slider, trade natives `0x5000006/7`, save.
+- **Вне scope:** quantity slider/selector (whole-stack per action),
+  trade natives `0x5000006/7`, save.
 - **Task 1 (research gate, done 2026-11-09):** вердикт **`implementable`
   (scoped)**; research `docs/research/p3b2b4b-trade-transactions.md`.
   - Транзакции серверные: drag → staging (`+0x1A4` sell / `+0x1A8` buy),
@@ -22,29 +23,43 @@
   - Цена `FUN_1206E8D0`: `base0=trunc((dur*0.0025+0.75)*ITM.price)`,
     min `base0/3`, `f=2.5-0.1*SKILL_TRADE` (id 16, Hero; addon
     perks `0x10/0x400`), buy `trunc(f*base)`, sell `trunc(base/f)`,
-    min 1, `*count`; всё trunc (`RC=0xC00`); per-unit UI = целочисл.
-    деление на count. Константы Client.dll `0x128FD0..0x129000`
+    min 1, `*count`; per-unit UI = целочисл. деление на count.
+    Константы Client.dll `0x128FD0..0x129000`
     (`0.85/-1/1/-0.1/2.5/0.0025/0.75`).
+  - **x87 PC=53/double:** `_controlfp`/`_control87` не импортируются
+    (Client/Server/GoldenLand.exe), Windows CW `0x027F` (PC=53);
+    `FUN_1206E8D0` ставит только RC=trunc (`or 0xC00`), PC не меняет.
+    `fstp qword` округляет store до double (nearest), `fistp` trunc;
+    порт считает IEEE double, не extended. Цена **implementable under
+    PC=53**; live FPU-CW verification обязателен; при PC!=53 — blocked.
   - Real oracle `L13_1.P517_Boat_Trader` (`l13_1`, NPC 3, dialog
     `D_Say(8868)` ответ 0 `3498` → `RS_PassToTradePanel`):
     `POT_1_00_27` (953) slot0 NPC 14/Hero 51/skill 1, buy 1200/sell
     208; slot2 NPC 17/Hero 25/skill 5, buy 1000/sell 250. Money
     before/after: slot0 43875/42142 → buy 27075/58942, sell
     54483/31534; slot2 122008/48908 → buy 105008/65908, sell
-    128258/42658; item totals сохраняются (65/42). Подтверждено
-    real-тестами slot0 69/69, slot2 71/71 assertions.
-  - **Gate пройден** для buy + sell предметов без модификаторов.
-    **Остаётся `blocked`:** точный sell magic/модифицированных
-    предметов — modifier-блок (`+0x78 != 0`, `(flags&0x80)==0`)
-    требует engine/magic-def таблиц (`DAT_12110ed8`, host), не
-    расшифрованы; затрагивает 25/29 Hero main записей. До этого —
-    `unsupported` (не угадывать, D-029). Также unverified: клиентский
-    setter staging id `0x120C33D8`/packet order, `gv_addon` для
-    слотов, точный rollback-триггер, исходный `+8/+4`-quirk, нет
-    live-оракула.
-- **Следующее:** Task 2 scoped (`TradePrice` + `buy_trade`/`sell_trade`
-  для buy любого NPC-стека и sell `modn==0`), либо research magic-def
-  (`DAT_12110ed8`/`GoldenLand.exe`) для полного sell-паритета.
+    128258/42658; item totals сохраняются (65/42). **Before-state —
+    real/validated (real-тесты slot0 69/69, slot2 71/71 assertions);
+    after-state — analytic (computed under PC=53), not observed.**
+  - **Gate пройден scoped:** whole-stack per action (без count);
+    buy/sell точны при PC=53 и `mod_count==0`. **Buy guard:** при
+    `mod_count!=0` — `unsupported` (не только sell); `gv_addon`/perks
+    `0x10/0x400` снять до паритета; NPC-stock без модификаторов
+    доказан только slot0/slot2. **Остаётся `blocked`:** точный
+    buy/sell magic-предметов — modifier-блок (`+0x78!=0`,
+    `(flags&0x80)==0`) требует engine/magic-def таблиц
+    (`DAT_12110ed8`, host), не расшифрованы; затрагивает 25/29 Hero
+    main записей. До этого — `unsupported` (не угадывать, D-029).
+    Также unverified: клиентский setter staging id
+    `0x120C33D8`/packet order, `gv_addon` для слотов, точный
+    rollback-триггер, исходный `+8/+4`-quirk, нет live-оракула;
+    лимит слотов приёмного контейнера — inherited proof (p3b2b3).
+    D-058 — **to be recorded** (не существует).
+- **Следующее:** Task 2 scoped (`TradePrice` PC=53 + whole-stack
+  `buy_trade`/`sell_trade` без `count`, modifier guard buy+sell), либо
+  research magic-def (`DAT_12110ed8`/`GoldenLand.exe`) для полного
+  buy/sell-паритета; условный single-item путь (`count>1` + query
+  `10|0xB`) — known case, не реализовывать без подтверждения.
 
 ## Phase 1b2b4a — read-only trade overlay (done 2026-11-09)
 

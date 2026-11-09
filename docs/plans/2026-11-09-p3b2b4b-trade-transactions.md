@@ -50,6 +50,13 @@ before/after; node path/answers.
 
 ### Task 2: `TradePrice` + transaction methods
 
+**Interfaces:** `buy_trade(npc, hero, tech, price)` /
+`sell_trade(npc, hero, tech, price)` — one call moves the **whole
+selected stack** (count from the runtime record; no `count` parameter).
+`TradePrice` computes only under x87 PC=53/double and returns
+`unsupported` for `mod_count != 0 && (flags&0x80)==0` (buy and sell) or
+if the live FPU CW is not PC=53.
+
 **Files:**
 - Create: `src/game/include/gl/game/trade_price.hpp`
 - Create: `src/game/src/trade_price.cpp`
@@ -57,9 +64,14 @@ before/after; node path/answers.
 - Modify: `src/game/src/inventory_runtime.cpp`
 - Create/modify: `tests/game/test_trade_price.cpp`, `test_inventory_runtime.cpp`
 
-- [ ] **Step 1: Failing price tests** from research; commit.
-- [ ] **Step 2: Failing buy/sell tests** (success/insufficient/merge/min1/count/invariants).
-- [ ] **Step 3: Implement** price + transactions; register CMake.
+- [ ] **Step 1: Failing price tests** from research (PC=53/double; min 1;
+buy/sell reciprocal; modifier guard → unsupported); commit.
+- [ ] **Step 2: Failing whole-stack buy/sell tests** (success/insufficient
+money/stock/merge/min1/no-mutation/invariants; no `count` parameter;
+conditional single-item path `count>1`+query `10|0xB` is a known case, not
+implemented/tested yet).
+- [ ] **Step 3: Implement** whole-stack price + transactions + guards;
+register CMake.
 - [ ] **Step 4: Run `gl_game_tests`; commit** `feat(game): add trade transactions`.
 
 ---
@@ -87,8 +99,10 @@ error message/log; no direct mutation.
 - Modify: `tests/app/test_glgame_screenshot.cpp`
 
 - [ ] **Step 1: Wire callbacks** to runtime; refresh overlay data after action.
-- [ ] **Step 2: E2E** boat trader slot0/slot2 buy/sell via production path;
-assert money/stock/prices; errors.
+- [ ] **Step 2: E2E** boat trader slot0/slot2 whole-stack buy/sell via
+production path; assert money/stock/prices; errors. Before-state is
+real/validated; after-state oracle is analytic (computed under PC=53,
+not observed) — record that caveat.
 - [ ] **Step 3: Smoke** `l1_1 --click-npc 13`; screenshots.
 - [ ] **Step 4: Commit** `feat(tools): wire trade transactions`.
 
@@ -97,12 +111,12 @@ assert money/stock/prices; errors.
 ### Task 5: Docs, parity, regression
 
 **Files:**
-- Modify: `docs/DECISIONS.md` (D-058)
+- Modify: `docs/DECISIONS.md` (D-058 to be recorded)
 - Modify: `docs/STATUS.md`, `docs/PROJECT.md`,
   `docs/research/parity-matrix.md`
 
-- [ ] **Step 1: D-058** — transaction/price semantics, errors, runtime-only,
-quantity scope, deviations.
+- [ ] **Step 1: D-058** — transaction/price semantics (PC=53/double),
+whole-stack scope, modifier guard, errors, runtime-only, deviations.
 - [ ] **Step 2: parity** — trade rows; recompute counts.
 - [ ] **Step 3: STATUS/PROJECT** — done, exact tests, next.
 - [ ] **Step 4: Full ctest; encoding.**

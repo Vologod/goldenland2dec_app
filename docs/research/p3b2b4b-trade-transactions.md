@@ -14,23 +14,36 @@ production-код не менялся.
   Порядок: **сначала предметы, затем деньги**; деньги — единый net-delta.
 - Базовая цена, режимы 0/1 (buy/sell), skill `SKILL_TRADE` (id 16),
   durability, min 1, reciprocal, count-multiply, truncation и
-  per-unit-деление в UI — восстановлены точно.
+  per-unit-деление в UI — восстановлены. **Цена implementable under
+  x87 PC=53** (double); нужен live FPU-CW verification (§4.5/§8).
 - Реальный oracle (boat trader, `l13_1`, slot0/slot2) восстановлен:
   выбранный предмет `POT_1_00_27` (id 953), buy/sell цены, сток/деньги
   до/после, узел диалога/ответы и детерминированный путь — §6.
+  **Before-state — real/validated; after-state — analytic (computed),
+  not observed** (§6.4/§6.5/§7.5).
+- **x87 PC.** `_controlfp`/`_control87` не импортируются ни
+  `Client.dll`, ни `Server.dll`, ни `GoldenLand.exe`; Windows default
+  CW = `0x027F` (PC=53/double). `FUN_1206E8D0` ставит только RC=trunc
+  (`or 0xC00`), PC не меняет. Порт обязан считать в **IEEE double**
+  (не extended): `fstp qword` округляет до double (nearest), `fistp`
+  усекает. При другом PC/RC цена `blocked` (§4.3/§4.5).
 - **Ограничение scope:** modifier-блок цены (`rec+0x78 != 0` и
   `(flags & 0x80) == 0`) структурно декодирован, но значения множителей
   находятся в engine/magic-менеджере (`DAT_12110ed8`, передан хостом,
   не в `Client.dll`) и **не восстановлены**. Это затрагивает 25/29
   Hero main записей slot0/slot2 (у всех текущих modifier-записей
-  `0x80` снят); у NPC-стока `+0x78 = 0` всегда. Поэтому:
-  - **buy** (NPC-сток) — цена точная;
+  `0x80` снят). Поэтому:
+  - **buy** — цена точная только при PC=53 и `mod_count == 0`; при
+    `mod_count != 0` — `unsupported` (guard для buy и sell, §9).
+    NPC-сток без модификаторов доказан только для slot0/slot2.
   - **sell** предметов без модификаторов (например `POT_1_00_27`) —
-    цена точная;
+    цена точная (PC=53);
   - **sell** предметов с модификаторами — `unsupported` до расшифровки
     magic-def таблиц; **не угадывать** (D-029).
-  Полный sell-паритет для magic-предметов — `blocked` на этом пункте
-  (§8.1); транзакционный flow и oracle от этого не блокируются.
+  `gv_addon`/perks (`0x10/0x400`) должны быть сняты до заявки на
+  паритет. Полный buy/sell-паритет для magic-предметов — `blocked` на
+  этом пункте (§8.1); транзакционный flow и oracle от этого не
+  блокируются.
 
 ## 1. Provenance / метод
 
@@ -63,10 +76,10 @@ RVA − `0xC000`.
 
 | screen field | источник | смысл |
 |---|---|---|
-| `+0x190` | selected person entity `+0x10` | Hero main |
+| `+0x190` | local-player Hero entity `+0x10` | **Hero main** (local player) |
 | `+0x194` | `local_player+0x66C` | Hero equip |
 | `+0x198` | selected person `entity+0xC` (через `FUN_1206EC98`, callers=0) | NPC stock/trade |
-| `+0x1A0` | selected person `entity+0xC` | Hero hot |
+| `+0x1A0` | local-player Hero entity `+0xC` | **Hero hot** (local player) |
 | `+0x1A4` | `local_player+0x6F8` | **sell staging** (низ) |
 | `+0x1A8` | `local_player+0x6FC` | **buy staging** (середина) |
 | `+0x700` | `local_player+0x700` | третья staging-ёмкость (в transaction не участвует) |
@@ -100,6 +113,14 @@ srcId, dstId, count); `count` = вся запись (`+0xB0`), т.е. **пере
 `FUN_120a38e8`/`FUN_120a2b04` не трассирована (та же категория gap, что
 `FUN_1206EC98` в 1b2b4a), но id staging-контейнеров приходят с сервера.
 
+**Условный single-item путь (known case):** если `count > 1` и
+UI-запрос `(*(DAT_12110f48+0x0C))(10)` или `(0xB)` возвращает
+nonzero, `FUN_120a38e8` уходит в pending-capture ветку
+(`this+0x68 = 1`, `FUN_1209a03c`, `return 1`) вместо постановки
+full-stack move (:107119-107136). Это **не** общий quantity selector:
+по умолчанию переносится весь стек; условный путь (10/0xB) — отдельный
+known case, в Task 2 пока не реализуется (research-only note).
+
 Ошибки staging:
 
 - **Строка заполнена:** перед переносом проверяется число used-записей
@@ -115,7 +136,8 @@ srcId, dstId, count); `count` = вся запись (`+0xB0`), т.е. **пере
 
 ### 2.3 Итоги и cache `+0x254`
 
-`FUN_12071014` (RVA `0x71014`, :75790-75875):
+`FUN_12071014` (RVA `0x71014`, function start :75577; totals
+:75825-75875):
 
 - `+0x24C` = Σ `price(uid, 0)` по **buy staging** (mode 0);
 - `+0x250` = Σ `price(uid, 1)` по **sell staging** (mode 1);
@@ -130,7 +152,7 @@ srcId, dstId, count); `count` = вся запись (`+0xB0`), т.е. **пере
 
 Кнопка obj **44** (`trade.scr` `lbig2`, центр 579,320) → GUI-команда
 `uVar8 == 0x27`, `*param_1 == 0x2C` (:81268-81273) →
-`FUN_1206dbb0` (RVA `0x6DBB0`, :72318-72357):
+`FUN_1206dbb0` (RVA `0x6DBB0`, :72319-72357):
 
 ```
 if (+0x254 == 0) return;                 // нечего обменивать
@@ -165,8 +187,9 @@ pending-команду в `DAT_12110f28`: `+0x424 = type`, `+0x428 = arg0`,
 - **Stock**: на confirm не проверяется (предметы уже в staging;
   сервер делает transfer-all того, что там есть).
 - **Нет слота**: проверяется только лимит staging-строки (16 записей,
-  §2.2); у приёмного контейнера лимита слотов нет (динамический
-  add/merge/split по `max_stack`).
+  `FUN_1205b9cc`, §2.2). У приёмного контейнера лимита слотов нет —
+  **inherited proof** из p3b2b3 §3.2 (динамический add/merge/split по
+  `max_stack`), live не перепроверялось.
 - **Тип 0x12/0x19**: не отображаются/не stage-ятся (money/quest).
 
 ## 3. Server: исполнение транзакции
@@ -227,7 +250,8 @@ return 1;
 - Если у src меньше `amount`, `FUN_1404cae8` удаляет найденное
   (p3b2b1 §3) → в теории возможно «создание» денег; в штатном UI
   недостижимо, потому что клиент проверяет деньги до команды (§2.4).
-  Это исходный quirk, не deviation порта (в порт — guard, D-058).
+  Это исходный quirk; порт добавляет guard — deviation D-058
+  (to be recorded).
 - Money item — обычный `MON_1_0_1` (type 18) в контейнерах:
   Hero main `+0x10`, NPC trade `+0x4D4 = NPC+0xC`.
 
@@ -303,13 +327,23 @@ RVA `0x1FAB4`, :24195). Значение в save: `BT_HERO body+0x038+4*16`
 `0x129010/0x129014` — unsigned-int→float correction (`0.0f`/`2^32f`),
 не часть формулы.
 
-### 4.3 Формула (точная)
+### 4.3 Формула (PC=53)
 
-Asm `0x1206E967-0x1206EC5C`; арифметика x87 (double), все `fistp`
-выполняются с `fldcw` `or 0xC00` (**truncation toward zero**).
-`ITM.price` и `durability` трактуются как unsigned int.
+Asm `0x1206E967-0x1206EC5C`; арифметика x87. **Точное integer-значение
+зависит от x87 precision control (PC).** `Client.dll`, `Server.dll` и
+`GoldenLand.exe` не импортируют `_controlfp`/`_control87` (0 вхождений
+в импортах и строках), поэтому действует Windows default CW = `0x027F`:
+PC=53 (double), RC=nearest. `FUN_1206E8D0` перед каждым `fistp` делает
+`fnstcw; or 0xC00; fldcw` (это ставит RC=trunc и **не меняет PC**), затем
+восстанавливает CW. Значит промежуточные значения — IEEE double (не
+extended): `fstp qword` округляет до double (nearest), `fistp` усекает.
+`ITM.price` и `durability` трактуются как unsigned int. При PC=64
+промежуточные были бы extended и могли бы изменить trunc на границе;
+поэтому PC обязателен. Цена **implementable under PC=53**; live FPU-CW
+verification — §4.5/§8.
 
 ```
+// PC=53: промежуточные — IEEE double; fstp qword rounds, fistp trunc
 base0 = trunc( (durability * 0.0025 + 0.75) * ITM.price )
 base  = base0
 if ((flags & 0x80) == 0 && mod_count != 0) {
@@ -338,6 +372,9 @@ return unit * count
   целочисленное, после trunc.
 - Reciprocal **не точен**: buy 1200 / sell 208 при base 500 (skill 1);
   1000 / 250 (skill 5).
+- Порт обязан считать в C++ `double` (не `long double`/extended);
+  окончательное int-преобразование — trunc; double-store (`fstp qword`)
+  округляет к nearest. При live PC != 53 цена `blocked` (§4.5/§8).
 
 ### 4.4 Modifier-блок (частично декодирован; значения — missing)
 
@@ -359,8 +396,12 @@ def = (*DAT_12110ed8 + 0x1c)(mod.id);           // engine magic manager
 cls = mod.flags & 0x1c0; typ = mod.flags & 0x3f;
 classMul = [def+0x74, def+0x84, def+0x94][index of cls in {def+0x68,def+0x78,def+0x88}] else 0.0
 typeMul  = [def+0x14,0x24,0x34,0x44,0x54,0x64][index of typ in {def+0x08,0x18,0x28,0x38,0x48,0x58}] else 0.0
-base = trunc(base + trunc(mod.value * classMul * typeMul))
+base = trunc(base + mod.value * classMul * typeMul)   // один fistp
 ```
+
+Внутреннего trunc нет: произведение `mod.value*classMul*typeMul`
+складывается с `base` в x87 (PC=53/double) и только затем один `fistp`
+с RC=trunc на итерацию.
 
 **Чего не хватает:** содержимого def-таблиц (`classMul`/`typeMul`) и
 семантики селекторов. `DAT_12110ed8` приходит из host API
@@ -375,13 +416,22 @@ base = trunc(base + trunc(mod.value * classMul * typeMul))
 записей (modifier-блок не выполняется). Примеры: item 953 `modn=0`;
 item 411 `modn=1` (`id=7,value=1,flags=0x1`); item 932 `modn=9`.
 
-### 4.5 Округление
+### 4.5 Округление / FPU control word
 
 - `base0`, `base` после каждого модификатора, `unit` — `fistp` с
   RC=trunc (`or 0xC00` перед каждым `fistp`).
+- `f` — double; reciprocal перед trunc. `fstp qword [esp+0x20]`
+  сохраняет `f` в double с RC=nearest (default CW) — это округление
+  **store**, не финального int.
 - `base0/3` — integer division (asm magic `0x55555556`), trunc.
-- `f` — double; reciprocal перед trunc.
-- Никакого round-to-nearest в price нет.
+- Round-to-nearest на **финальном int-преобразовании нет** (там trunc),
+  но double-store (`fstp qword`) округляет к nearest, а промежуточная
+  арифметика — IEEE double только при **PC=53**.
+- **Live FPU-CW verification (обязательный шаг):** при открытии trade
+  прочитать CW; ожидается PC=53 (bits 8-9 = `10`) и RC=nearest **до**
+  входа в `FUN_1206E8D0`; функция ставит только RC=trunc и
+  восстанавливает CW. Если live PC/RC иные — цена `blocked` (не
+  считать, не угадывать).
 
 ### 4.6 Per-unit и UI
 
@@ -412,7 +462,7 @@ Hero main (`FUN_1206FBC0`) → mode 1 (sell); equip/hot цену не счита
   - при недостатке денег клиент не посылает команду → мутаций нет.
 - Сервер не проверяет деньги/сток: add-then-remove с игнором ошибок;
   при недостатке src деньги могут «создаться» (недостижимо штатным UI).
-  Порт должен валидировать до мутации (D-058).
+  Порт должен валидировать до мутации — D-058 (to be recorded).
 
 ## 6. Реальный oracle: `L13_1.P517_Boat_Trader` (`l13_1`)
 
@@ -449,7 +499,8 @@ Hero main (`FUN_1206FBC0`) → mode 1 (sell); equip/hot цену не счита
 | NPC records / Hero main records | 16 / 117 | 17 / 140 |
 | gv_addon | не снят; oracle — 0 (retail default) | то же |
 
-Проверено принятым real-тестом `tests/game/test_inventory_runtime_real.cpp`
+**Before-state — real/validated** (save + принятый NPC-loot + ITM),
+проверено real-тестом `tests/game/test_inventory_runtime_real.cpp`
 (slot0 69 assertions, slot2 71 assertions, pass) и `glgame --trade-npc`
 (`npc_items=16/42142`, `17/48908`).
 
@@ -457,7 +508,8 @@ Hero main (`FUN_1206FBC0`) → mode 1 (sell); equip/hot цену не счита
 
 `POT_1_00_27` (id 953): type 19, flags `0x8000000C`, `max_stack 10000`,
 `ITM price = 500`, durability 100, `modn = 0` — modifier-блок не
-участвует, цена точная.
+участвует. Цены ниже — **analytic (computed) under PC=53/double**;
+live FPU-CW verification ещё не снят (§4.5/§8).
 
 | | slot0 (skill 1) | slot2 (skill 5) |
 |---|---:|---:|
@@ -468,6 +520,10 @@ Hero main (`FUN_1206FBC0`) → mode 1 (sell); equip/hot цену не счита
 | sell whole stack | 51×208 = **10608** | 25×250 = **6250** |
 
 ### 6.4 Buy (весь NPC-стек 953)
+
+**After-state — analytic (computed), not observed.** Строки «до ...» —
+real/validated before-state; «после» и суммы — расчёт по формуле §4.3
+(PC=53) и модели переноса §3.2, не чтение памяти игры.
 
 | | slot0 | slot2 |
 |---|---:|---:|
@@ -482,6 +538,9 @@ Merge: Hero 51+14 (slot0) / 25+17 (slot2) в одну запись (max_stack
 10000); NPC-запись удаляется (count 0).
 
 ### 6.5 Sell (весь Hero-стек 953)
+
+**After-state — analytic (computed), not observed.** Before-state —
+real/validated; «после»/суммы — расчёт (PC=53), не live-наблюдение.
 
 | | slot0 | slot2 |
 |---|---:|---:|
@@ -504,7 +563,7 @@ Hero-запись удаляется; NPC получает стек и слив�
 | staging-строка уже 16 записей | error-sound `0xa7`, запись не stage-ится |
 | money (type 18 / `0x12`) / quest (type 25 / `0x19`) | не рисуется/не выбирается |
 | повторный Exchange без staging | cache `+0x254 = 0` → no-op |
-| buy, когда NPC-запись уже удалена | сервер молча переносит что есть; порт — guard/no-op (D-058) |
+| buy, когда NPC-запись уже удалена | сервер молча переносит что есть; порт — guard/no-op, D-058 (to be recorded) |
 
 ## 7. Проверка (фактический вывод)
 
@@ -517,6 +576,12 @@ Server.dll 418E256063748F2E90DB35AE7C6ABE6EAC401FB86908CB5F27EBF565A21CC837
 0x10DFE8 -0.1   0x10DFF0 2.5    0x10DFF8 0.0025
 0x10E000 0.75   0x10E008 0.0
 ```
+
+FPU: byte-scan Client.dll/Server.dll/GoldenLand.exe —
+`_controlfp`/`_control87`/`control87`/`controlfp` = 0 вхождений;
+`FUN_1206E8D0` меняет только RC (`or 0xC00`), PC не меняет. Windows
+default CW `0x027F` (PC=53/double, RC=nearest). Live CW в игре не
+снят — обязательный шаг верификации (§4.5/§8.1).
 
 ### 7.2 ITM / save
 
@@ -556,6 +621,10 @@ glscript: dialogs: 8868 3498 4214 / answers: 2 / status: end
 
 ### 7.5 Python-референс цены/сделки
 
+**Analytic (computed), not observed.** Before-state — real/validated
+(§6.2); after-state — расчёт по §4.3 под PC=53/double. Live FPU-CW не
+снят; Python `float` — IEEE double, что соответствует PC=53.
+
 ```
 slot0 loot=41 skill=1 npc_953=14 hero_953=51 hero_money=43875 npc_money=42142
   base=500 buy_unit=1200 sell_unit=208 buy_total=16800 sell_total=10608
@@ -573,63 +642,90 @@ slot2 loot=37 skill=5 npc_953=17 hero_953=25 hero_money=122008 npc_money=48908
 
 ## 8. Unverified / missing evidence
 
-1. **Modifier-цены (главный gap).** `classMul`/`typeMul` и def-таблицы
+1. **x87 PC/CW (price gate).** Точное integer-значение цены зависит от
+   x87 PC. `_controlfp`/`_control87` нигде не импортируются; Windows
+   default CW = `0x027F` (PC=53/double, RC=nearest), функция цены
+   меняет только RC (`or 0xC00`) и восстанавливает CW. Цена
+   **implementable under PC=53**; нужен live FPU-CW verification
+   (§4.5). Если live PC != 53 (или RC/PC иные до входа) — цена
+   `blocked`, не считать.
+2. **Modifier-цены (главный gap).** `classMul`/`typeMul` и def-таблицы
    magic-менеджера (`DAT_12110ed8`, engine/host, `vtable+0x1c`,
    `def+0x14/+0x74`) не расшифрованы. Затрагивает 25/29 Hero main
-   записей; NPC-сток — 0. Без этого точный **sell** magic-предметов
-   невозможен. Нужно: реверс magic-def менеджера в `GoldenLand.exe`
-   (или загрузчика magic-данных) + live/память-оракул. До этого —
+   записей. Без этого точный **sell** magic-предметов невозможен.
+   Нужно: реверс magic-def менеджера в `GoldenLand.exe` (или
+   загрузчика magic-данных) + live/память-оракул. До этого —
    `unsupported` (не угадывать).
-2. **Клиентская привязка staging id.** `local_player+0x6F8/+0x6FC`
+3. **Buy scope / modifier guard.** Buy тоже должен возвращать
+   `unsupported` при `mod_count != 0` (и `(flags&0x80)==0`), не только
+   sell. NPC-сток без модификаторов доказан **только для slot0/slot2**
+   (`L13_1.P517_Boat_Trader`); другие уровни/торговцы не сканировались.
+   `gv_addon`/perks (`0x10/0x400`) должны быть сняты до заявки на
+   паритет.
+4. **Клиентская привязка staging id.** `local_player+0x6F8/+0x6FC`
    пишет vtable-setter `0x120C33D8` (asm), но caller/сетевой пакет и
    точный порядок трёх id (`+0x4E4/+0x4E8/+0x4EC`) не трассированы.
    Роли контейнеров доказаны на сервере (+0x4E4→NPC, +0x4E8→Hero) и
    на клиенте по totals (mode 1/0), поэтому на transaction не влияет.
-3. **`gv_addon`** (`DAT_12106bc0+0x8C`): значение для slot0/slot2 не
+5. **`gv_addon`** (`DAT_12106bc0+0x8C`): значение для slot0/slot2 не
    снято (в retail ожидается 0); при `!=0` включаются perk-модификаторы
-   `0x10/0x400`. Oracle — для `gv_addon=0` (или Hero без этих perks).
-4. **Точный триггер rollback `action 0xD`** и клиентская команда
+   `0x10/0x400`. Oracle — для `gv_addon=0` (или Hero без этих perks);
+   до capture паритет не заявлять.
+6. **Точный триггер rollback `action 0xD`** и клиентская команда
    закрытия/отмены не трассированы; сам rollback доказан.
-5. **Исходный quirk `+8/+4`** в `FUN_1206DBB0`: при ошибке деньги
+7. **Исходный quirk `+8/+4`** в `FUN_1206DBB0`: при ошибке деньги
    кладутся в `screen+8/+4`, которые `FUN_12070DAC` (:75503) может
    отправить как `0x0E` на следующем input-событии. Порт не должен
-   воспроизводить этот баг; это deviation (D-058).
-6. **Stock/деньги на сервере не валидируются**; add-then-remove с
-   игнором ошибок. Порт — guard до мутации (D-058).
-7. **Live-оракул** (память запущенной игры) не снимался; oracle —
-   save + принятый NPC-loot 1b2b4a + ITM + реальный `.cs` + Python.
-8. **`+0x4EC`** третья staging-ёмкость и её роль в других action
-   (drop/loot) не исследована; в trade не используется.
+   воспроизводить этот баг; deviation — **D-058 (to be recorded)**.
+8. **Stock/деньги на сервере не валидируются**; add-then-remove с
+   игнором ошибок. Порт — guard до мутации; deviation — **D-058
+   (to be recorded)**.
+9. **Условный single-item путь** (`count>1` + query `10|0xB`,
+   §2.2) — known case; в Task 2 не реализуется, пока не подтверждён.
+10. **Slot-limit claim (inherited proof).** Лимит staging-строки 16 —
+    из `FUN_1205b9cc` (re-proven по коду); отсутствие лимита слотов у
+    приёмного контейнера — **inherited proof** из p3b2b3 §3.2
+    (dynamic add/merge/split по max_stack), live не перепроверялось.
+11. **Live-оракул** (память запущенной игры) не снимался; oracle —
+    save + принятый NPC-loot 1b2b4a + ITM + реальный `.cs` + Python;
+    after-state — analytic, не observed.
+12. **`+0x4EC`** третья staging-ёмкость и её роль в других action
+    (drop/loot) не исследована; в trade не используется.
 
 ## 9. Следствия для Task 2
 
-1. `TradePrice`:
+1. `TradePrice` (только при PC=53/double):
    - `base0 = trunc((dur*0.0025+0.75)*price)`;
    - `f = 2.5 − 0.1*skill`, `gv_addon`/perks, clamp 1;
    - buy `unit = trunc(f*base)`, sell `unit = trunc(base/f)`, min 1;
    - total = `unit * count`; per-unit UI = `total / count` (integer).
-   - **Если `mod_count != 0 && (flags&0x80)==0`** → вернуть
-     `unsupported`/`unpriced`, не считать modifier-блок. UI: показать
-     «—», запретить sell (и buy, если когда-либо появится modded NPC
-     item).
-2. `InventoryRuntime::buy_trade(npc, tech, count=whole stack)`:
+   - **guard (buy и sell):** если `mod_count != 0 && (flags&0x80)==0`
+     → `unsupported`/`unpriced`, не считать modifier-блок; UI «—», без
+     транзакции. `gv_addon`/perks снять до паритета.
+   - если live FPU CW даёт PC != 53 (или RC/PC иные до входа) →
+     `unsupported`/blocked; не считать.
+2. `InventoryRuntime::buy_trade(npc, tech, price)` — **без `count`**:
+   - одна операция переносит **весь выбранный стек**; count берётся из
+     runtime-записи (источника);
    - проверить Hero money ≥ total, NPC stock ≥ count;
    - NPC trade → Hero main (add/merge по max_stack), Hero money →
      NPC trade;
    - ошибки не мутируют.
-3. `InventoryRuntime::sell_trade(...)`: Hero main → NPC trade, NPC
-   money → Hero main; зеркально; modifier-free only.
-4. Количество: оригинал переносит **весь стек** per drag; отдельного
-   quantity нет. Кнопки Buy/Sell (атомарно) эквивалентны stage+Exchange
-   для одного стека; staging-строки/лимит 16 — UI-деталь, не менять
+3. `InventoryRuntime::sell_trade(...)`: весь стек Hero main → NPC trade,
+   NPC money → Hero main; зеркально; только `modn==0` и PC=53.
+4. Количество: whole-stack per action — подтверждено человеком; общего
+   quantity selector нет. Условный single-item путь (`count>1` + query
+   `10|0xB`, §2.2) — known case, в Task 2 не реализуется, пока не
+   подтверждён. Staging-строки/лимит 16 — UI-деталь, не менять
    деньги/стоки.
 5. Деньги — net-delta для стадии; для атомарной кнопки — просто
    `total` в одну сторону.
-6. Не реализовывать: modifier-цены (unsupported), `+8/+4`-quirk,
-   серверный add-before-remove без проверки (в порту — guard),
-   `RS_PersonAddItemToTrade/RemoveItemToTrade` (вне scope), save.
+6. Не реализовывать: modifier-цены (buy+sell unsupported),
+   `+8/+4`-quirk, серверный add-before-remove без проверки (в порту —
+   guard), `RS_PersonAddItemToTrade/RemoveItemToTrade` (вне scope),
+   save. D-058 — **to be recorded** в Task 5.
 
-## 10. Приложение A. Python-референс (использован для §7.5)
+## 10. Приложение A. Python-референс (analytic, PC=53)
 
 ```python
 def trunc(x): return int(x)  # toward zero
@@ -643,6 +739,12 @@ def unit_price(itm_price, durability, skill, mode):
     return max(u, 1)
 ```
 
-(Полный скрипт — в отчёте Task 1; он не входит в репозиторий.)
+**Analytic (computed), not observed.** Python `float` — IEEE double;
+это соответствует PC=53, но live FPU-CW в игре не снят (§4.5/§8.1).
+Референс не учитывает modifier-блок (только `modn==0`); buy/sell
+modifier-предметов — `unsupported` (guard §9.1), `gv_addon`/perks
+(`0x10/0x400`) не моделируются. NPC-stock без модификаторов доказан
+только slot0/slot2. Полный скрипт — в отчёте Task 1; он не входит в
+репозиторий.
 
 Документ: UTF-8 без BOM, `nul=0`.
