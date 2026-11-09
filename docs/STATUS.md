@@ -24,10 +24,15 @@
   trade items и первые 12 Hero main; screenshot 1024×768 diff > 2 MB
   байт + top-region > 100000 px; regression `l1_1 --click-npc 13`.
 - **Ограничения:** client `FUN_1206EC98` invocation не трассирован
-  (server/native-level source only); NPC-фильтры visual/mask-only
-  (type→bit для trade не доказан); hero-row filtering — assumption;
-  exact exit command `0x2B` не трассирована; lists — снимок на момент
-  открытия; нет live-memory oracle; NPC specials не генерируются (D-055).
+  (server/native-level source only); NPC/hero-фильтры применяют
+  inventory-grouping как assumption (type→bit для trade не доказан,
+  P3d-4 partial); exact exit command `0x2B` не трассирована; lists —
+  снимок на момент открытия; нет live-memory oracle; NPC specials не
+  генерируются (D-055).
+- **Final review (2026-11-09):** Ready to merge = Yes после fix wave
+  `9406f15` (NPC list filtering + minors); Critical/Important нет.
+  Отложенные minors: unknown-person `--trade-npc` test, trade E2E seed
+  дублируется, duplicate trade names first-wins (P451 documented).
 - **Дальше:** Phase 1b2b4b buy/sell (цены, `0x5000006`/`0x5000007`,
   confirm) или research specials / `P2-15` (save payload).
 - **Задача:** `RS_PassToTradePanel` (`0x700000D`) → supported; overlay
