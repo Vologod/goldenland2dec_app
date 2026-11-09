@@ -43,6 +43,12 @@
   (icon/name/price), две money (count `MON_1_0_1` в NPC trade и hero main).
 - Read-only: клик по предмету только выделяет (детали/подсказка), покупка/
   продажа/подтверждение отсутствуют.
+- NPC- и Hero-ряды фильтруются через `gl::game::item_matches_filter`
+  (inventory-группировка P5b1: type 18 всегда, биты `0x01..0x20`) для
+  видимого списка, clamp скролла и hit-test — **assumption** для P3d-4
+  (partial), не доказанный trade-паритет (type→bit для trade не извлечён,
+  research §8.1). mask 0 = «без фильтра»; «all» (mask 0) не подсвечивается
+  до явного выбора.
 - Ввод: клавиатура/мышь/тач как в `InventoryOverlay`; Esc/exit закрывает
   панель и возвращает в уровень.
 
@@ -103,6 +109,9 @@ Unit:
 - `InventoryRuntime` сохраняет `loot.hot` (pass 1) и отдаёт
   `trade_items(name)`/`trade_money(name)`; RNG main не меняется.
 - `TradeLayout`/hit-test/filters/scroll (синтетические списки).
+- NPC-фильтр меняет видимый список, сбрасывает и зажимает scroll, а
+  hit-test выбирает предмет по отфильтрованному списку; геройский фильтр
+  работает; «all» не pressed при открытии.
 - Overlay render snapshot (1024×768) с реальными ассетами;
   `npc_money` и `hero_money` отображаются раздельно.
 - Native `PassToTradePanel`: callback вызван, return 0.0, registry 16/65.

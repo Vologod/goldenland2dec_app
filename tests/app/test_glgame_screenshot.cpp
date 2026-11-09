@@ -928,12 +928,13 @@ TEST_CASE("glgame --trade-npc opens the boat trader overlay with real stock" *
     const fs::path baseline_png = temp.path / "trade_level.png";
     const fs::path png = temp.path / "trade_boat.png";
     const int baseline_code = run_glgame(screenshot_arguments(
-        game_dir, config, baseline_png, {"--level", "l13_1", "--equip-save", "0"}));
+        game_dir, config, baseline_png, {"--level", "l13_1", "--equip-save", "0", "--seed", "1"}));
     std::string output;
     const int code =
         run_glgame_capture(screenshot_arguments(game_dir, config, png,
                                                 {"--level", "l13_1", "--equip-save", "0",
-                                                 "--trade-npc", "L13_1.P517_Boat_Trader"}),
+                                                 "--seed", "1", "--trade-npc",
+                                                 "L13_1.P517_Boat_Trader"}),
                            output);
     CAPTURE(baseline_code);
     CAPTURE(code);
@@ -993,13 +994,13 @@ TEST_CASE("glgame boat trader dialog answer opens the trade overlay" *
         const int baseline_code = run_glgame(screenshot_arguments(
             game_dir, config, baseline_png,
             {"--level", "l13_1", "--equip-save", slot.slot, "--width", "1024",
-             "--height", "768"}));
+             "--height", "768", "--seed", "1"}));
         std::string output;
         const int code = run_glgame_capture(
             screenshot_arguments(game_dir, config, png,
                                  {"--level", "l13_1", "--equip-save", slot.slot,
                                   "--click-npc", "3", "--dialog-answer", "0", "--width",
-                                  "1024", "--height", "768"}),
+                                  "1024", "--height", "768", "--seed", "1"}),
             output);
         CAPTURE(baseline_code);
         CAPTURE(code);

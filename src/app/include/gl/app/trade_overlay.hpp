@@ -139,6 +139,8 @@ class TradeOverlay {
     std::int32_t hero_money() const { return hero_money_; }
     std::uint32_t npc_filter() const { return npc_filter_; }
     std::uint32_t hero_filter() const { return hero_filter_; }
+    const std::optional<std::size_t> &npc_filter_index() const { return npc_filter_index_; }
+    const std::optional<std::size_t> &hero_filter_index() const { return hero_filter_index_; }
     std::size_t npc_scroll() const { return npc_scroll_; }
     std::size_t hero_scroll() const { return hero_scroll_; }
     std::size_t npc_max_scroll() const;
@@ -147,12 +149,14 @@ class TradeOverlay {
     const std::optional<std::size_t> &selected_npc() const { return selected_npc_; }
     const std::optional<std::size_t> &selected_hero() const { return selected_hero_; }
     std::string selected_name() const;
+    const std::vector<std::size_t> &visible_npc_indices() const { return npc_visible_; }
     const std::vector<std::size_t> &visible_hero_indices() const { return hero_visible_; }
 
     static float native_icon_offset(float target, float texture_size);
     static void apply_magenta_key(gl::assets::Image &image);
 
   private:
+    void rebuild_npc_visible();
     void rebuild_hero_visible();
     void clear_selection();
     void update_transform(int screen_w, int screen_h);
@@ -181,12 +185,15 @@ class TradeOverlay {
     std::string npc_name_;
     std::vector<gl::assets::InventoryItem> npc_items_;
     std::vector<gl::assets::InventoryItem> hero_items_;
+    std::vector<std::size_t> npc_visible_;
     std::vector<std::size_t> hero_visible_;
     std::int32_t npc_money_ = 0;
     std::int32_t hero_money_ = 0;
 
     std::uint32_t npc_filter_ = 0;
     std::uint32_t hero_filter_ = 0;
+    std::optional<std::size_t> npc_filter_index_;
+    std::optional<std::size_t> hero_filter_index_;
     std::size_t npc_scroll_ = 0;
     std::size_t hero_scroll_ = 0;
 

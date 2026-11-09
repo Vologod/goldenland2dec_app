@@ -597,7 +597,11 @@ trade не используется.
    доказаны; item-type → bit для NPC-ряда не найден (inventory-группировка
    `FUN_120626F4` — только кандидат). Read-only overlay может показывать
    все товары; фильтры — rendering/selection по доказанным маскам, без
-   паритетного скрытия типов до доказательства.
+   паритетного скрытия типов до доказательства. **Статус 1b2b4a fix
+   (2026-11-09):** порт всё же применяет inventory-группировку
+   `gl::game::item_matches_filter` к NPC- и hero-ряду как явную
+   **assumption** (D-057, P3d-4 partial); это не доказательство
+   trade type→bit.
 2. **Client-side источник верхнего ряда (`FUN_1206EC98`).** Server/
    native-level `entity+0xC` proven (`FUN_14028404`, `0x5000006/7`);
    `FUN_1206EC98` (единственный writer `screen+0x198`) имеет `callers=0`,

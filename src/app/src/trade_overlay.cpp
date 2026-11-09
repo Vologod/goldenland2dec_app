@@ -152,6 +152,8 @@ bool TradeOverlay::open(const gl::assets::GameVfs &vfs, const gl::assets::ItemCa
     hero_money_ = hero_money;
     npc_filter_ = 0;
     hero_filter_ = 0;
+    npc_filter_index_.reset();
+    hero_filter_index_.reset();
     npc_scroll_ = 0;
     hero_scroll_ = 0;
     clear_selection();
@@ -160,6 +162,7 @@ bool TradeOverlay::open(const gl::assets::GameVfs &vfs, const gl::assets::ItemCa
     screen_h_ = 768;
     update_transform(screen_w_, screen_h_);
     reset_texture_cache(nullptr);
+    rebuild_npc_visible();
     rebuild_hero_visible();
     return true;
 }
@@ -170,6 +173,17 @@ void TradeOverlay::clear_selection() {
     selection_ = TradeSelection::none;
     selected_npc_.reset();
     selected_hero_.reset();
+}
+
+void TradeOverlay::rebuild_npc_visible() {
+    build_visible_hero(npc_items_, npc_filter_, npc_visible_);
+    const std::size_t max_scroll = npc_max_scroll();
+    if (npc_scroll_ > max_scroll)
+        npc_scroll_ = max_scroll;
+    if (selected_npc_.has_value() && std::find(npc_visible_.begin(), npc_visible_.end(),
+                                               *selected_npc_) == npc_visible_.end()) {
+        clear_selection();
+    }
 }
 
 void TradeOverlay::rebuild_hero_visible() {
@@ -303,7 +317,7 @@ std::string TradeOverlay::selected_name() const {
 }
 
 std::size_t TradeOverlay::npc_max_scroll() const {
-    return TradeLayout::max_scroll(npc_items_.size(), TradeLayout::npc_row_size());
+    return TradeLayout::max_scroll(npc_visible_.size(), TradeLayout::npc_row_size());
 }
 
 std::size_t TradeOverlay::hero_max_scroll() const {
@@ -373,11 +387,12 @@ void TradeOverlay::draw_row(SDL_Renderer *renderer,
 }
 
 void TradeOverlay::draw_filters(SDL_Renderer *renderer) {
-    for (const TradeFilterSpec &filter : TradeLayout::kNpcFilters) {
+    for (std::size_t i = 0; i < TradeLayout::kNpcFilters.size(); ++i) {
+        const TradeFilterSpec &filter = TradeLayout::kNpcFilters[i];
         const std::string path = "engineres/trade/afilter" + std::to_string(filter.sprite) + ".bmp";
         if (gl::render::Texture *texture = load_texture(path); texture != nullptr)
             draw_rect(renderer, *texture, filter.rect);
-        if (npc_filter_ == filter.mask) {
+        if (npc_filter_index_ == std::optional<std::size_t>{i}) {
             SDL_SetRenderDrawColor(renderer, 18, 16, 12, 110);
             const SDL_FRect pressed{filter.rect.x, filter.rect.y, filter.rect.w, filter.rect.h};
             SDL_RenderFillRectF(renderer, &pressed);
@@ -385,11 +400,12 @@ void TradeOverlay::draw_filters(SDL_Renderer *renderer) {
             SDL_RenderDrawRectF(renderer, &pressed);
         }
     }
-    for (const TradeFilterSpec &filter : TradeLayout::kHeroFilters) {
+    for (std::size_t i = 0; i < TradeLayout::kHeroFilters.size(); ++i) {
+        const TradeFilterSpec &filter = TradeLayout::kHeroFilters[i];
         const std::string path = "engineres/trade/filter" + std::to_string(filter.sprite) + ".bmp";
         if (gl::render::Texture *texture = load_texture(path); texture != nullptr)
             draw_rect(renderer, *texture, filter.rect);
-        if (hero_filter_ == filter.mask) {
+        if (hero_filter_index_ == std::optional<std::size_t>{i}) {
             SDL_SetRenderDrawColor(renderer, 18, 16, 12, 110);
             const SDL_FRect pressed{filter.rect.x, filter.rect.y, filter.rect.w, filter.rect.h};
             SDL_RenderFillRectF(renderer, &pressed);
@@ -469,7 +485,7 @@ void TradeOverlay::render(SDL_Renderer *renderer, int screen_w, int screen_h,
     npc_scroll_ = std::min(npc_scroll_, npc_max_scroll());
     hero_scroll_ = std::min(hero_scroll_, hero_max_scroll());
 
-    draw_row(renderer, npc_items_, nullptr, TradeLayout::kNpcX.data(), TradeLayout::kNpcY,
+    draw_row(renderer, npc_items_, &npc_visible_, TradeLayout::kNpcX.data(), TradeLayout::kNpcY,
              npc_scroll_, static_cast<int>(TradeLayout::npc_row_size()));
     draw_row(renderer, hero_items_, &hero_visible_, TradeLayout::kHeroX.data(), TradeLayout::kHeroY,
              hero_scroll_, static_cast<int>(TradeLayout::hero_row_size()));
@@ -535,12 +551,15 @@ bool TradeOverlay::handle_mouse(int x, int y, bool click) {
         break;
     case TradeRegion::npc_filter:
         if (const auto index = layout_.npc_filter_at(logical_x, logical_y); index.has_value()) {
+            npc_filter_index_ = index;
             npc_filter_ = TradeLayout::kNpcFilters[*index].mask;
             npc_scroll_ = 0;
+            rebuild_npc_visible();
         }
         break;
     case TradeRegion::hero_filter:
         if (const auto index = layout_.hero_filter_at(logical_x, logical_y); index.has_value()) {
+            hero_filter_index_ = index;
             hero_filter_ = TradeLayout::kHeroFilters[*index].mask;
             hero_scroll_ = 0;
             rebuild_hero_visible();
@@ -549,9 +568,9 @@ bool TradeOverlay::handle_mouse(int x, int y, bool click) {
     case TradeRegion::npc_slot:
         if (const auto slot = layout_.npc_slot_at(logical_x, logical_y); slot.has_value()) {
             const std::size_t index = npc_scroll_ + *slot;
-            if (index < npc_items_.size()) {
+            if (index < npc_visible_.size()) {
                 selection_ = TradeSelection::npc;
-                selected_npc_ = index;
+                selected_npc_ = npc_visible_[index];
                 selected_hero_.reset();
             } else {
                 clear_selection();

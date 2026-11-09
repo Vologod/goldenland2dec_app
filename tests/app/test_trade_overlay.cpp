@@ -209,7 +209,66 @@ TEST_CASE("trade overlay opens visible with money and both lists") {
     CHECK(overlay.hero_scroll() == 0);
     CHECK(overlay.npc_filter() == 0);
     CHECK(overlay.hero_filter() == 0);
+    CHECK_FALSE(overlay.npc_filter_index().has_value());
+    CHECK_FALSE(overlay.hero_filter_index().has_value());
+    CHECK(overlay.visible_npc_indices().size() == 16);
     CHECK(overlay.selection() == gl::app::TradeSelection::none);
+}
+
+TEST_CASE("trade overlay leaves the all-filters unpressed until selected") {
+    gl::assets::GameVfs vfs;
+    gl::assets::ItemCatalog catalog;
+    gl::app::TradeOverlay overlay;
+    REQUIRE(overlay.open(vfs, catalog, "npc", make_items(16, 400), 0, make_items(20, 900), 0));
+
+    CHECK(overlay.npc_filter() == 0);
+    CHECK(overlay.hero_filter() == 0);
+    CHECK_FALSE(overlay.npc_filter_index().has_value());
+    CHECK_FALSE(overlay.hero_filter_index().has_value());
+
+    CHECK(overlay.handle_mouse(893 + 26, 95 + 10, true));
+    CHECK(overlay.npc_filter() == 0);
+    CHECK(overlay.npc_filter_index() == std::optional<std::size_t>{6});
+
+    CHECK(overlay.handle_mouse(745 + 28, 672 + 11, true));
+    CHECK(overlay.hero_filter() == 0);
+    CHECK(overlay.hero_filter_index() == std::optional<std::size_t>{6});
+}
+
+TEST_CASE("trade overlay npc filter narrows the visible list and clamps scroll") {
+    gl::assets::GameVfs vfs;
+    gl::assets::ItemCatalog catalog;
+    gl::app::TradeOverlay overlay;
+
+    std::vector<gl::assets::InventoryItem> npc;
+    for (std::uint32_t i = 0; i < 10; ++i)
+        npc.push_back(make_item(500 + i, 25));
+    for (std::uint32_t i = 0; i < 15; ++i)
+        npc.push_back(make_item(600 + i, 11));
+
+    REQUIRE(overlay.open(vfs, catalog, "npc", npc, 0, make_items(20, 900), 0));
+    CHECK(overlay.visible_npc_indices().size() == 25);
+    CHECK(overlay.npc_max_scroll() == 15);
+
+    for (int i = 0; i < 100; ++i)
+        CHECK(overlay.handle_mouse(967, 53, true));
+    CHECK(overlay.npc_scroll() == 15);
+
+    CHECK(overlay.handle_mouse(439 + 26, 94 + 10, true));
+    CHECK(overlay.npc_filter() == 2);
+    CHECK(overlay.npc_filter_index() == std::optional<std::size_t>{1});
+    REQUIRE(overlay.visible_npc_indices().size() == 15);
+    CHECK(overlay.visible_npc_indices().front() == 10);
+    CHECK(overlay.npc_max_scroll() == 5);
+    CHECK(overlay.npc_scroll() == 0);
+
+    for (int i = 0; i < 100; ++i)
+        CHECK(overlay.handle_mouse(967, 53, true));
+    CHECK(overlay.npc_scroll() == 5);
+
+    CHECK(overlay.handle_mouse(347, 26, true));
+    CHECK(overlay.selection() == gl::app::TradeSelection::npc);
+    CHECK(overlay.selected_npc() == std::optional<std::size_t>{15});
 }
 
 TEST_CASE("trade overlay npc scroll steps, clamps and resets on filter") {
@@ -256,6 +315,7 @@ TEST_CASE("trade overlay hero scroll steps, clamps and filters by proven mask") 
 
     CHECK(overlay.handle_mouse(229, 683, true));
     CHECK(overlay.hero_filter() == 1);
+    CHECK(overlay.hero_filter_index() == std::optional<std::size_t>{0});
     CHECK(overlay.hero_scroll() == 0);
     CHECK(overlay.hero_max_scroll() == 8);
 
@@ -263,6 +323,7 @@ TEST_CASE("trade overlay hero scroll steps, clamps and filters by proven mask") 
     REQUIRE(masked.open(vfs, catalog, "npc", {}, 0, make_items(20, 900, 0), 0));
     CHECK(masked.handle_mouse(299, 683, true));
     CHECK(masked.hero_filter() == 2);
+    CHECK(masked.hero_filter_index() == std::optional<std::size_t>{1});
     CHECK(masked.hero_max_scroll() == 0);
     CHECK(masked.handle_mouse(167, 730, true));
     CHECK(masked.selection() == gl::app::TradeSelection::none);

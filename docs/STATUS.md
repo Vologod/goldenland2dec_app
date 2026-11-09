@@ -105,7 +105,22 @@
   and real dialog answer 0 → **`RS_PassToTradePanel`** → dialog closed once
   → `trade: opened npc='L13_1.P517_Boat_Trader' npc_items=16
   npc_money=42142 hero_items=117 hero_money=43875`. Smoke
-  `l1_1 --click-npc 13` exit 0; unknown `--trade-npc` warns.
+  `l1_1 --click-npc 13` exit 0; `--trade-npc` with empty stock warns
+  (empty-list warning, not an unknown-person check).
+- **Final fix (2026-11-09, review):** NPC trade row now filters through
+  `gl::game::item_matches_filter` (same grouping as hero row/inventory
+  P5b1) for visible list, scroll clamp and hit-test — **assumption** for
+  P3d-4 (partial), not proven trade parity (type→bit for trade lists still
+  unverified, research §8.1). «All» filter (mask 0) is no longer drawn as
+  pressed on open until explicitly selected (separate
+  `npc_filter_index`/`hero_filter_index`); `run_headless_click` stops when
+  the trade overlay is visible; a failed `DialogSession::start()` resets
+  state without logging `dialog: closed`; trade E2E passes explicit
+  `--seed 1`; `--trade-npc` warning is empty-stock only. Tests (`GL_GAME_DIR`):
+  `trade_overlay_tests` **13/13** (488), `gl_game_tests` **236/236**
+  (558842), `gl_script_tests` **123/123** (961),
+  `glgame_screenshot_tests --test-case=*trade*` **2/2** (61, 27 filtered).
+  Commit `fix(app): filter NPC trade list`.
 - **Вне scope:** покупка/продажа, trade-мутации, confirm; цены в
   read-only overlay не показываются (1b2b4b).
 

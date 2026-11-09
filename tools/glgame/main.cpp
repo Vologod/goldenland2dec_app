@@ -958,7 +958,7 @@ class Game {
         if (!started) {
             gl::log(gl::LogLevel::error,
                     "dialog '" + dialog_->path + "': " + started.error().message);
-            close_dialog();
+            reset_dialog();
             return started.error();
         }
 
@@ -978,6 +978,10 @@ class Game {
     void close_dialog() {
         if (dialog_)
             gl::log(gl::LogLevel::info, "dialog: closed '" + dialog_->path + "'");
+        reset_dialog();
+    }
+
+    void reset_dialog() {
         dialog_.reset();
         dialog_overlay_.clear();
         pending_trade_npc_.reset();
@@ -1270,14 +1274,14 @@ class Game {
     }
 
     void run_headless_click() {
-        if (!level_ || dialog_) return;
+        if (!level_ || dialog_ || trade_overlay_.visible()) return;
         constexpr double kStepSeconds = 0.05;
         const double limit_seconds = options_.sim_ms > 0
                                          ? static_cast<double>(options_.sim_ms) / 1000.0
                                          : 60.0;
         for (double elapsed = 0.0; elapsed < limit_seconds; elapsed += kStepSeconds) {
             advance_scene(kStepSeconds);
-            if (dialog_ || !level_->hero().hero().has_goal) break;
+            if (dialog_ || trade_overlay_.visible() || !level_->hero().hero().has_goal) break;
         }
     }
 
