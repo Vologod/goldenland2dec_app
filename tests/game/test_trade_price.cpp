@@ -9,14 +9,15 @@ using namespace gl::game;
 
 namespace {
 TradePriceInput boat_trader_input(std::uint32_t skill, std::uint32_t count) {
-    TradePriceInput input;
+    TradePriceInput input{};
+    input.item_id = 953;
     input.item_price = 500;
     input.durability = 100;
     input.flags = 0x8000000Cu;
     input.mod_count = 0;
     input.skill_trade = skill;
     input.count = count;
-    input.fpu_pc53 = true;
+    input.assume_pc53 = true;
     return input;
 }
 } // namespace
@@ -106,9 +107,36 @@ TEST_CASE("trade_price rejects an undecoded modifier block for buy and sell") {
     CHECK(compute_trade_price(input).has_value());
 }
 
-TEST_CASE("trade_price rejects a non PC=53 live FPU state") {
+TEST_CASE("trade_price carries the quoted item id") {
+    const auto price = compute_trade_price(boat_trader_input(1, 1));
+    REQUIRE(price.has_value());
+    CHECK(price->item_id == 953);
+}
+
+TEST_CASE("trade_price rejects a non-opted-in PC=53 assumption") {
     TradePriceInput input = boat_trader_input(1, 1);
-    input.fpu_pc53 = false;
+    input.assume_pc53 = false;
+    CHECK_FALSE(compute_trade_price(input).has_value());
+}
+
+TEST_CASE("trade_price rejects invalid caller inputs") {
+    TradePriceInput input = boat_trader_input(1, 1);
+
+    input.item_price = 0;
+    CHECK_FALSE(compute_trade_price(input).has_value());
+
+    input = boat_trader_input(1, 1);
+    input.durability = 101;
+    CHECK_FALSE(compute_trade_price(input).has_value());
+
+    input = boat_trader_input(1, 1);
+    input.count = 0;
+    CHECK_FALSE(compute_trade_price(input).has_value());
+}
+
+TEST_CASE("trade_price rejects a whole-stack total that would overflow int64") {
+    TradePriceInput input = boat_trader_input(0, 0xFFFFFFFFu);
+    input.item_price = 0xFFFFFFFFu;
     CHECK_FALSE(compute_trade_price(input).has_value());
 }
 

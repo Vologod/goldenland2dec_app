@@ -68,7 +68,7 @@ class InventoryRuntime {
                               std::vector<gl::assets::InventoryItem> &item_dest,
                               std::vector<gl::assets::InventoryItem> &money_source,
                               std::vector<gl::assets::InventoryItem> &money_dest,
-                              std::uint32_t item_id, std::int64_t total, std::uint32_t price_count);
+                              std::uint32_t item_id, const TradePrice &price, std::int64_t total);
 
     gl::assets::HeroInventory hero_inventory_;
     std::map<std::string, std::vector<gl::assets::InventoryItem>, std::less<>> persons_;

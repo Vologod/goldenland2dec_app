@@ -96,14 +96,15 @@ InventoryRuntime make_trade_runtime(std::uint32_t hero_money, std::uint32_t hero
 }
 
 TradePrice whole_stack_price(std::uint32_t skill, std::uint32_t count) {
-    TradePriceInput input;
+    TradePriceInput input{};
+    input.item_id = 953;
     input.item_price = 500;
     input.durability = 100;
     input.flags = 0x8000000Cu;
     input.mod_count = 0;
     input.skill_trade = skill;
     input.count = count;
-    input.fpu_pc53 = true;
+    input.assume_pc53 = true;
     return compute_trade_price(input).value();
 }
 
@@ -1127,4 +1128,107 @@ TEST_CASE("inventory_runtime sell_trade moves the first matching source record o
     CHECK(trade_item_count(runtime, 953) == 20);
     REQUIRE(runtime.person_items("Hero").size() == 2);
     CHECK(runtime.person_items("Hero")[1].count == 31);
+}
+
+TEST_CASE("inventory_runtime buy_trade copies the moved record metadata to a new destination") {
+    gl::assets::HeroInventory inventory;
+    inventory.items.push_back({812, 43875, 0, 18, 0});
+    auto runtime = InventoryRuntime::create(inventory, make_trade_names(), trade_template_for);
+    runtime.set_person_items(std::string(kTradeNpc), {});
+    runtime.set_person_trade_items(
+        std::string(kTradeNpc),
+        {InventoryItem{812, 42142, 0, 18, 0}, InventoryItem{953, 14, 0xDEADBEEFu, 19, 3}});
+
+    CHECK(runtime.buy_trade(kTradeNpc, "Hero", "POT_1_00_27", whole_stack_price(1, 14)) ==
+          TradeStatus::ok);
+
+    const auto &hero = runtime.person_items("Hero");
+    REQUIRE(hero.size() == 2);
+    CHECK(hero[1].item_id == 953);
+    CHECK(hero[1].count == 14);
+    CHECK(hero[1].type == 19);
+    CHECK(hero[1].flags == 0xDEADBEEFu);
+    CHECK(hero[1].style == 3);
+}
+
+TEST_CASE("inventory_runtime buy_trade removes money across split source records") {
+    gl::assets::HeroInventory inventory;
+    inventory.items.push_back({812, 20000, 0, 18, 0});
+    inventory.items.push_back({812, 23875, 0, 18, 0});
+    inventory.items.push_back({953, 51, 0x8000000Cu, 19, 0});
+    auto runtime = InventoryRuntime::create(inventory, make_trade_names(), trade_template_for);
+    runtime.set_person_items(std::string(kTradeNpc), {});
+    runtime.set_person_trade_items(
+        std::string(kTradeNpc),
+        {InventoryItem{812, 42142, 0, 18, 0}, InventoryItem{953, 14, 0x8000000Cu, 19, 0}});
+
+    CHECK(runtime.buy_trade(kTradeNpc, "Hero", "POT_1_00_27", whole_stack_price(1, 14)) ==
+          TradeStatus::ok);
+
+    const auto &hero = runtime.person_items("Hero");
+    REQUIRE(hero.size() == 3);
+    CHECK(hero[0].item_id == 812);
+    CHECK(hero[0].count == 3200);
+    CHECK(hero[1].item_id == 812);
+    CHECK(hero[1].count == 23875);
+    CHECK(hero[2].item_id == 953);
+    CHECK(hero[2].count == 65);
+    CHECK(runtime.money() == 27075);
+}
+
+TEST_CASE("inventory_runtime sell_trade creates a new hero money record") {
+    gl::assets::HeroInventory inventory;
+    inventory.items.push_back({953, 51, 0x8000000Cu, 19, 0});
+    auto runtime = InventoryRuntime::create(inventory, make_trade_names(), trade_template_for);
+    runtime.set_person_items(std::string(kTradeNpc), {});
+    runtime.set_person_trade_items(std::string(kTradeNpc), {InventoryItem{812, 42142, 0, 18, 0}});
+
+    CHECK(runtime.sell_trade(kTradeNpc, "Hero", "POT_1_00_27", whole_stack_price(1, 51)) ==
+          TradeStatus::ok);
+
+    const auto &hero = runtime.person_items("Hero");
+    REQUIRE(hero.size() == 1);
+    CHECK(hero[0].item_id == 812);
+    CHECK(hero[0].count == 10608);
+    CHECK(hero[0].type == 18);
+    CHECK(hero[0].flags == 0xC0000000u);
+    CHECK(hero[0].style == 1);
+    CHECK(trade_item_count(runtime, 953) == 51);
+    CHECK(runtime.trade_money(kTradeNpc) == 31534);
+}
+
+TEST_CASE("inventory_runtime sell_trade merge keeps the npc record flags") {
+    gl::assets::HeroInventory inventory;
+    inventory.items.push_back({812, 43875, 0, 18, 0});
+    inventory.items.push_back({953, 51, 0x8000000Cu, 19, 0});
+    auto runtime = InventoryRuntime::create(inventory, make_trade_names(), trade_template_for);
+    runtime.set_person_items(std::string(kTradeNpc), {});
+    runtime.set_person_trade_items(
+        std::string(kTradeNpc),
+        {InventoryItem{812, 42142, 0, 18, 0}, InventoryItem{953, 14, 0xABCDEF01u, 19, 7}});
+
+    CHECK(runtime.sell_trade(kTradeNpc, "Hero", "POT_1_00_27", whole_stack_price(1, 51)) ==
+          TradeStatus::ok);
+
+    const auto &trade = runtime.trade_items(kTradeNpc);
+    REQUIRE(trade.size() == 2);
+    CHECK(trade[1].item_id == 953);
+    CHECK(trade[1].count == 65);
+    CHECK(trade[1].flags == 0xABCDEF01u);
+    CHECK(trade[1].type == 19);
+    CHECK(trade[1].style == 7);
+}
+
+TEST_CASE("inventory_runtime trade rejects a quote for a different item id") {
+    auto runtime = make_trade_runtime(43875, 51, 42142, 14);
+    const auto hero_before = runtime.person_items("Hero");
+    const auto trade_before = runtime.trade_items(kTradeNpc);
+    TradePrice price = whole_stack_price(1, 14);
+    price.item_id = 1101;
+
+    CHECK(runtime.buy_trade(kTradeNpc, "Hero", "POT_1_00_27", price) ==
+          TradeStatus::unsupported_price);
+
+    check_items_equal(runtime.person_items("Hero"), hero_before);
+    check_items_equal(runtime.trade_items(kTradeNpc), trade_before);
 }

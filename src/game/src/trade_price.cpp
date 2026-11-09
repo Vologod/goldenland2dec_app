@@ -1,14 +1,20 @@
 #include "gl/game/trade_price.hpp"
 
+#include <cassert>
 #include <cmath>
 #include <cstdint>
+#include <limits>
+
+#if defined(__clang__)
+#pragma clang fp contract(off)
+#endif
 
 namespace gl::game {
 
 std::optional<TradePrice> compute_trade_price(const TradePriceInput &input) {
-    if (!input.fpu_pc53)
+    if (!input.assume_pc53)
         return std::nullopt;
-    if (input.count == 0)
+    if (input.item_price == 0 || input.durability > 100 || input.count == 0)
         return std::nullopt;
     if (input.mod_count != 0 && (input.flags & 0x80u) == 0)
         return std::nullopt;
@@ -36,10 +42,18 @@ std::optional<TradePrice> compute_trade_price(const TradePriceInput &input) {
     if (sell_unit < 1)
         sell_unit = 1;
 
+    const std::int64_t max_total = std::numeric_limits<std::int64_t>::max();
+    if (buy_unit > max_total / static_cast<std::int64_t>(input.count))
+        return std::nullopt;
+    if (sell_unit > max_total / static_cast<std::int64_t>(input.count))
+        return std::nullopt;
+
     TradePrice price;
+    price.item_id = input.item_id;
     price.buy = buy_unit * static_cast<std::int64_t>(input.count);
     price.sell = sell_unit * static_cast<std::int64_t>(input.count);
     price.count = input.count;
+    assert(price.buy >= 0 && price.sell >= 0);
     return price;
 }
 
