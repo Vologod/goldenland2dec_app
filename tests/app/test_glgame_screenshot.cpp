@@ -1012,6 +1012,11 @@ TEST_CASE("glgame boat trader dialog answer opens the trade overlay" *
         CHECK(count_occurrences(output, "dialog: closed '") == 1);
         CHECK(count_occurrences(output, "trade: opened npc='L13_1.P517_Boat_Trader'") == 1);
         CHECK(output.find(expected_trade) != std::string::npos);
+        const std::size_t closed_pos = output.find("dialog: closed '");
+        const std::size_t trade_pos = output.find("trade: opened npc='L13_1.P517_Boat_Trader'");
+        REQUIRE(closed_pos != std::string::npos);
+        REQUIRE(trade_pos != std::string::npos);
+        CHECK(closed_pos < trade_pos);
 
         int width = 0;
         int height = 0;
@@ -1024,21 +1029,28 @@ TEST_CASE("glgame boat trader dialog answer opens the trade overlay" *
         CHECK(height == 768);
         CHECK(baseline_width == width);
         CHECK(baseline_height == height);
-        CHECK(count_differences(pixels, baseline) > 100000);
+        CHECK(count_differences(pixels, baseline) > 2000000);
+        CHECK(count_region_differences(pixels, baseline, width, height, 0, 0, 1024, 200) >
+              100000);
     }
 }
 
-TEST_CASE("glgame --level l1_1 --click-npc 13 opens the circus worker dialog" *
+TEST_CASE("glgame --level l1_1 --click-npc opens the circus worker dialog" *
           doctest::skip(!font_available())) {
     const char* game_dir = std::getenv("GL_GAME_DIR");
     REQUIRE(game_dir != nullptr);
+    const std::optional<std::size_t> person =
+        level_person_index(game_dir, "L1.P621_Svet_3CircusWorkerV");
+    REQUIRE(person.has_value());
+    CAPTURE(*person);
 
     TempDir temp;
     const fs::path config = write_test_config(temp.path);
-    const fs::path png = temp.path / "l1_1_click_npc_13.png";
+    const fs::path png = temp.path / "l1_1_click_npc.png";
     std::string output;
     const int code = run_glgame_capture(
-        screenshot_arguments(game_dir, config, png, {"--level", "l1_1", "--click-npc", "13"}),
+        screenshot_arguments(game_dir, config, png,
+                             {"--level", "l1_1", "--click-npc", std::to_string(*person)}),
         output);
     CAPTURE(code);
     CAPTURE(output);
