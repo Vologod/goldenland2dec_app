@@ -966,32 +966,89 @@ TEST_CASE("glgame boat trader dialog answer opens the trade overlay" *
 
     TempDir temp;
     const fs::path config = write_test_config(temp.path);
-    const fs::path png = temp.path / "trade_dialog.png";
+    const std::string dialog_marker =
+        "dialog: 'scripts/dialogs/l13_1/l13_1.p517_boat_trader.d517.age.cs'";
+    struct SlotCase {
+        const char* slot;
+        int npc_items;
+        int npc_money;
+        int hero_items;
+        int hero_money;
+    };
+    const SlotCase cases[] = {
+        {"0", 16, 42142, 117, 43875},
+        {"2", 17, 48908, 140, 122008},
+    };
+    for (const SlotCase& slot : cases) {
+        CAPTURE(slot.slot);
+        const std::string suffix = std::string("_slot") + slot.slot;
+        const fs::path baseline_png = temp.path / ("trade_baseline" + suffix + ".png");
+        const fs::path png = temp.path / ("trade_dialog" + suffix + ".png");
+        const std::string expected_trade =
+            "trade: opened npc='L13_1.P517_Boat_Trader' npc_items=" +
+            std::to_string(slot.npc_items) + " npc_money=" + std::to_string(slot.npc_money) +
+            " hero_items=" + std::to_string(slot.hero_items) +
+            " hero_money=" + std::to_string(slot.hero_money);
+
+        const int baseline_code = run_glgame(screenshot_arguments(
+            game_dir, config, baseline_png,
+            {"--level", "l13_1", "--equip-save", slot.slot, "--width", "1024",
+             "--height", "768"}));
+        std::string output;
+        const int code = run_glgame_capture(
+            screenshot_arguments(game_dir, config, png,
+                                 {"--level", "l13_1", "--equip-save", slot.slot,
+                                  "--click-npc", "3", "--dialog-answer", "0", "--width",
+                                  "1024", "--height", "768"}),
+            output);
+        CAPTURE(baseline_code);
+        CAPTURE(code);
+        CAPTURE(output);
+        REQUIRE(fs::exists(baseline_png));
+        REQUIRE(fs::exists(png));
+        CHECK(baseline_code == 0);
+        CHECK(code == 0);
+        CHECK(count_occurrences(output, dialog_marker) == 1);
+        CHECK(count_occurrences(output, "dialog: closed '") == 1);
+        CHECK(count_occurrences(output, "trade: opened npc='L13_1.P517_Boat_Trader'") == 1);
+        CHECK(output.find(expected_trade) != std::string::npos);
+
+        int width = 0;
+        int height = 0;
+        const std::vector<unsigned char> pixels = read_png(png, width, height);
+        int baseline_width = 0;
+        int baseline_height = 0;
+        const std::vector<unsigned char> baseline =
+            read_png(baseline_png, baseline_width, baseline_height);
+        CHECK(width == 1024);
+        CHECK(height == 768);
+        CHECK(baseline_width == width);
+        CHECK(baseline_height == height);
+        CHECK(count_differences(pixels, baseline) > 100000);
+    }
+}
+
+TEST_CASE("glgame --level l1_1 --click-npc 13 opens the circus worker dialog" *
+          doctest::skip(!font_available())) {
+    const char* game_dir = std::getenv("GL_GAME_DIR");
+    REQUIRE(game_dir != nullptr);
+
+    TempDir temp;
+    const fs::path config = write_test_config(temp.path);
+    const fs::path png = temp.path / "l1_1_click_npc_13.png";
     std::string output;
     const int code = run_glgame_capture(
-        screenshot_arguments(game_dir, config, png,
-                             {"--level", "l13_1", "--equip-save", "0", "--click-npc", "3",
-                              "--dialog-answer", "0"}),
+        screenshot_arguments(game_dir, config, png, {"--level", "l1_1", "--click-npc", "13"}),
         output);
     CAPTURE(code);
     CAPTURE(output);
     REQUIRE(fs::exists(png));
     CHECK(code == 0);
-
-    const std::string dialog_marker =
-        "dialog: 'scripts/dialogs/l13_1/l13_1.p517_boat_trader.d517.age.cs'";
-    CHECK(count_occurrences(output, dialog_marker) == 1);
-    CHECK(count_occurrences(output, "dialog: closed '") == 1);
-    CHECK(count_occurrences(output, "trade: opened npc='L13_1.P517_Boat_Trader'") == 1);
-    CHECK(output.find("trade: opened npc='L13_1.P517_Boat_Trader' npc_items=16 "
-                      "npc_money=42142 hero_items=117 hero_money=43875") != std::string::npos);
-
-    int width = 0;
-    int height = 0;
-    const std::vector<unsigned char> pixels = read_png(png, width, height);
-    CHECK(width == 1280);
-    CHECK(height == 720);
-    CHECK_FALSE(pixels.empty());
+    CHECK(output.find("dialog: 'scripts/dialogs/l1_1/"
+                      "l1.p621_svet_3circusworkerv.d621.age.cs'") != std::string::npos);
+    CHECK(output.find("speaker='L1.P621_Svet_3CircusWorkerV'") != std::string::npos);
+    CHECK(output.find("trade: opened") == std::string::npos);
+    check_png(png, 1280, 720);
 }
 
 TEST_CASE("glgame --inventory opens the selected save inventory" *
