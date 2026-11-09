@@ -1,6 +1,14 @@
 # STATUS
 
 Обновлено: 2026-11-09
+## Phase 1b2b4b — trade transactions (in progress 2026-11-09)
+
+- **Задача:** buy/sell в trade overlay: цены, деньги/стоки, confirm.
+- **Spec:** `docs/specs/2026-11-09-p3b2b4b-trade-transactions-design.md`.
+- **Plan:** `docs/plans/2026-11-09-p3b2b4b-trade-transactions.md`.
+- **Gate:** research buy/sell/price semantics + real oracle; иначе BLOCKED.
+- **Вне scope:** quantity slider, trade natives `0x5000006/7`, save.
+
 ## Phase 1b2b4a — read-only trade overlay (done 2026-11-09)
 
 - **Итог (Tasks 1–5, done):** `RS_PassToTradePanel` (`0x700000D`)
