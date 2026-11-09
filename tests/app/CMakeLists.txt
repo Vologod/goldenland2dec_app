@@ -37,3 +37,11 @@ gl_enable_warnings(inventory_overlay_tests)
 
 add_test(NAME inventory_overlay_tests COMMAND inventory_overlay_tests)
 set_tests_properties(inventory_overlay_tests PROPERTIES SKIP_RETURN_CODE 77)
+
+add_executable(trade_overlay_tests test_trade_overlay.cpp)
+target_include_directories(trade_overlay_tests PRIVATE ${CMAKE_SOURCE_DIR}/third_party/doctest)
+target_link_libraries(trade_overlay_tests PRIVATE gl_app)
+gl_enable_warnings(trade_overlay_tests)
+
+add_test(NAME trade_overlay_tests COMMAND trade_overlay_tests)
+set_tests_properties(trade_overlay_tests PROPERTIES SKIP_RETURN_CODE 77)

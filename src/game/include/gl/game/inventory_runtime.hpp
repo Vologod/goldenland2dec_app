@@ -36,6 +36,9 @@ class InventoryRuntime {
     const gl::assets::HeroInventory &hero_inventory() const;
     const std::vector<gl::assets::InventoryItem> &person_items(std::string_view person) const;
     void set_person_items(std::string name, std::vector<gl::assets::InventoryItem> items);
+    const std::vector<gl::assets::InventoryItem> &trade_items(std::string_view person) const;
+    void set_person_trade_items(std::string name, std::vector<gl::assets::InventoryItem> items);
+    std::int32_t trade_money(std::string_view person) const;
     void clear_persons();
     gl::script::InventoryAccess access();
 
@@ -44,6 +47,7 @@ class InventoryRuntime {
 
     gl::assets::HeroInventory hero_inventory_;
     std::map<std::string, std::vector<gl::assets::InventoryItem>, std::less<>> persons_;
+    std::map<std::string, std::vector<gl::assets::InventoryItem>, std::less<>> trades_;
     gl::assets::ItemNameIndex names_;
     ItemTemplateLookup item_template_;
 };

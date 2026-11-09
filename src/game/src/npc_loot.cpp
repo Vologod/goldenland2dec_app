@@ -131,12 +131,19 @@ void generate_npc_inventories(InventoryRuntime &runtime, const std::vector<Perso
             continue;
         const NpcLoot loot =
             NpcLootGenerator::generate(*cached->second, loot_level, names, item_template, rng);
+        std::vector<gl::assets::InventoryItem> hot;
+        hot.reserve(loot.hot.size());
+        for (const LootItem &item : loot.hot) {
+            hot.push_back({item.item_id, static_cast<std::uint32_t>(item.count), item.flags,
+                           item.type, item.style});
+        }
         std::vector<gl::assets::InventoryItem> main;
         main.reserve(loot.main.size());
         for (const LootItem &item : loot.main) {
             main.push_back({item.item_id, static_cast<std::uint32_t>(item.count), item.flags,
                             item.type, item.style});
         }
+        runtime.set_person_trade_items(person.name, std::move(hot));
         runtime.set_person_items(person.name, std::move(main));
     }
 }

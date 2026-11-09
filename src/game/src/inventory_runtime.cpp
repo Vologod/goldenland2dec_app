@@ -204,7 +204,35 @@ void InventoryRuntime::set_person_items(std::string name,
     }
 }
 
-void InventoryRuntime::clear_persons() { persons_.clear(); }
+const std::vector<gl::assets::InventoryItem> &
+InventoryRuntime::trade_items(std::string_view person) const {
+    static const std::vector<gl::assets::InventoryItem> empty;
+    const auto it = trades_.find(person);
+    return it == trades_.end() ? empty : it->second;
+}
+
+void InventoryRuntime::set_person_trade_items(std::string name,
+                                              std::vector<gl::assets::InventoryItem> items) {
+    const auto [it, inserted] = trades_.try_emplace(std::move(name), std::move(items));
+    if (!inserted) {
+        gl::log(gl::LogLevel::warning,
+                "inventory runtime: duplicate trade name '" + it->first + "' ignored");
+    }
+}
+
+std::int32_t InventoryRuntime::trade_money(std::string_view person) const {
+    std::int64_t total = 0;
+    for (const gl::assets::InventoryItem &item : trade_items(person)) {
+        if (item.type == kMoneyType)
+            total += item.count;
+    }
+    return static_cast<std::int32_t>(total);
+}
+
+void InventoryRuntime::clear_persons() {
+    persons_.clear();
+    trades_.clear();
+}
 
 std::vector<gl::assets::InventoryItem> *InventoryRuntime::mutable_items(std::string_view person) {
     if (is_hero(person))

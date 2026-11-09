@@ -257,9 +257,7 @@ TEST_CASE("inventory_runtime missing template makes add a no-op") {
     CHECK_FALSE(runtime.add_item("Hero", "QST_1_0_159", 1));
     CHECK(runtime.count("Hero", "QST_1_0_159") == 2);
 
-    auto missing = [](std::uint32_t) -> std::optional<ItemTemplate> {
-        return std::nullopt;
-    };
+    auto missing = [](std::uint32_t) -> std::optional<ItemTemplate> { return std::nullopt; };
     auto runtime2 = InventoryRuntime::create(make_inventory(), make_names(), missing);
     CHECK_FALSE(runtime2.add_item("Hero", "QST_1_0_159", 1));
     CHECK(runtime2.count("Hero", "QST_1_0_159") == 2);
@@ -680,6 +678,68 @@ TEST_CASE("inventory_runtime transfer_all missing person is false and unchanged"
     CHECK_FALSE(runtime.transfer_all("L0.Missing", "Hero"));
     CHECK(runtime.count("Hero", "MON_1_0_1") == 500);
     CHECK(runtime.hero_inventory().items.size() == 3);
+}
+
+TEST_CASE("inventory_runtime retains npc trade items separately from main") {
+    auto runtime = InventoryRuntime::create(make_inventory(), make_names());
+
+    runtime.set_person_items("L0.P1", {InventoryItem{1101, 4, 0, 0, 0}});
+    runtime.set_person_trade_items("L0.P1", {InventoryItem{812, 42142, 0, 18, 0}});
+
+    CHECK(runtime.count("L0.P1", "QST_1_0_159") == 4);
+    CHECK(runtime.count("L0.P1", "MON_1_0_1") == 0);
+    CHECK(runtime.trade_money("L0.P1") == 42142);
+    REQUIRE(runtime.trade_items("L0.P1").size() == 1);
+    CHECK(runtime.trade_items("L0.P1")[0].item_id == 812);
+    CHECK(runtime.trade_items("L0.P1")[0].count == 42142);
+}
+
+TEST_CASE("inventory_runtime trade money sums type 18 trade records") {
+    auto runtime = InventoryRuntime::create(make_inventory(), make_names());
+
+    runtime.set_person_trade_items("L0.P1", {InventoryItem{812, 12266, 0, 18, 0},
+                                             InventoryItem{813, 100, 0, 18, 0},
+                                             InventoryItem{408, 10, 0, 20, 0}});
+
+    CHECK(runtime.trade_money("L0.P1") == 12366);
+    CHECK(runtime.trade_items("L0.P1").size() == 3);
+}
+
+TEST_CASE("inventory_runtime keeps the first trade container for duplicate names") {
+    auto runtime = InventoryRuntime::create(make_inventory(), make_names());
+
+    runtime.set_person_trade_items("L0.P1", {InventoryItem{408, 10, 0, 20, 0}});
+    runtime.set_person_trade_items("L0.P1", {InventoryItem{812, 250, 0, 18, 0}});
+
+    CHECK(runtime.trade_money("L0.P1") == 0);
+    REQUIRE(runtime.trade_items("L0.P1").size() == 1);
+    CHECK(runtime.trade_items("L0.P1")[0].item_id == 408);
+}
+
+TEST_CASE("inventory_runtime hero trade is empty until set") {
+    auto runtime = InventoryRuntime::create(make_inventory(), make_names());
+
+    CHECK(runtime.trade_items("Hero").empty());
+    CHECK(runtime.trade_money("Hero") == 0);
+    CHECK(runtime.trade_items("L0.Missing").empty());
+    CHECK(runtime.trade_money("L0.Missing") == 0);
+
+    runtime.set_person_trade_items("Hero", {InventoryItem{812, 50, 0, 18, 0}});
+    CHECK(runtime.trade_money("Hero") == 50);
+    CHECK(runtime.money() == 500);
+    CHECK(runtime.count("Hero", "MON_1_0_1") == 500);
+}
+
+TEST_CASE("inventory_runtime clear_persons clears trade containers") {
+    auto runtime = InventoryRuntime::create(make_inventory(), make_names());
+    runtime.set_person_items("L0.P1", {InventoryItem{1101, 4, 0, 0, 0}});
+    runtime.set_person_trade_items("L0.P1", {InventoryItem{812, 10, 0, 18, 0}});
+
+    runtime.clear_persons();
+
+    CHECK(runtime.trade_items("L0.P1").empty());
+    CHECK(runtime.trade_money("L0.P1") == 0);
+    CHECK(runtime.count("Hero", "MON_1_0_1") == 500);
 }
 
 TEST_CASE("inventory_runtime access exposes transfer callbacks") {
