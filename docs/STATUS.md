@@ -8,6 +8,43 @@
 - **Plan:** `docs/plans/2026-11-09-p3b2b4b-trade-transactions.md`.
 - **Gate:** research buy/sell/price semantics + real oracle; иначе BLOCKED.
 - **Вне scope:** quantity slider, trade natives `0x5000006/7`, save.
+- **Task 1 (research gate, done 2026-11-09):** вердикт **`implementable`
+  (scoped)**; research `docs/research/p3b2b4b-trade-transactions.md`.
+  - Транзакции серверные: drag → staging (`+0x1A4` sell / `+0x1A8` buy),
+    Exchange (obj 44) → `FUN_1206DBB0`; деньги проверяются клиентом
+    (Hero/NPC), затем одна команда `0x0E` (`FUN_120C7358`) →
+    `FUN_140294A0` case `0xE` → `FUN_1402F0A8(hero,1,delta)`; сервер
+    переносит `+0x4E8→hero main`, `+0x4E4→NPC trade (+0x4D4)`, затем
+    net-деньги `FUN_140484C8` (`MON_1_0_1`, Hero main `+0x10` ↔ NPC
+    `+0xC`); rollback `action 0xD` (`FUN_1402ABD8`). Ошибки: нет денег
+    Hero/NPC (клиент, команды нет), staging-строка >15 записей
+    (`0xa7`); stock/slot на confirm не проверяются.
+  - Цена `FUN_1206E8D0`: `base0=trunc((dur*0.0025+0.75)*ITM.price)`,
+    min `base0/3`, `f=2.5-0.1*SKILL_TRADE` (id 16, Hero; addon
+    perks `0x10/0x400`), buy `trunc(f*base)`, sell `trunc(base/f)`,
+    min 1, `*count`; всё trunc (`RC=0xC00`); per-unit UI = целочисл.
+    деление на count. Константы Client.dll `0x128FD0..0x129000`
+    (`0.85/-1/1/-0.1/2.5/0.0025/0.75`).
+  - Real oracle `L13_1.P517_Boat_Trader` (`l13_1`, NPC 3, dialog
+    `D_Say(8868)` ответ 0 `3498` → `RS_PassToTradePanel`):
+    `POT_1_00_27` (953) slot0 NPC 14/Hero 51/skill 1, buy 1200/sell
+    208; slot2 NPC 17/Hero 25/skill 5, buy 1000/sell 250. Money
+    before/after: slot0 43875/42142 → buy 27075/58942, sell
+    54483/31534; slot2 122008/48908 → buy 105008/65908, sell
+    128258/42658; item totals сохраняются (65/42). Подтверждено
+    real-тестами slot0 69/69, slot2 71/71 assertions.
+  - **Gate пройден** для buy + sell предметов без модификаторов.
+    **Остаётся `blocked`:** точный sell magic/модифицированных
+    предметов — modifier-блок (`+0x78 != 0`, `(flags&0x80)==0`)
+    требует engine/magic-def таблиц (`DAT_12110ed8`, host), не
+    расшифрованы; затрагивает 25/29 Hero main записей. До этого —
+    `unsupported` (не угадывать, D-029). Также unverified: клиентский
+    setter staging id `0x120C33D8`/packet order, `gv_addon` для
+    слотов, точный rollback-триггер, исходный `+8/+4`-quirk, нет
+    live-оракула.
+- **Следующее:** Task 2 scoped (`TradePrice` + `buy_trade`/`sell_trade`
+  для buy любого NPC-стека и sell `modn==0`), либо research magic-def
+  (`DAT_12110ed8`/`GoldenLand.exe`) для полного sell-паритета.
 
 ## Phase 1b2b4a — read-only trade overlay (done 2026-11-09)
 
