@@ -34,9 +34,10 @@
   `glgame_screenshot_tests --test-case="*trade*"` **8/8** (164
   assertions, 27 skipped); `trade_overlay_tests` **24/24** (651);
   `gl_game_tests --test-case="*trade*"` **56/56** (917, 229 skipped).
-- **Oracle / screenshots:** slot0 buy stack 16800 / sell 2912
-  (unit 1200/208), NPC/Hero money 42142/43875 → buy 58942/27075,
-  sell 31534/54483; mixed и sell-side insufficient. slot2 pure buy
+- **Oracle / screenshots:** slot0 buy action 16800 / sell action 10608
+  (51×208; unit 1200/208; 14-стек stage-buy quote buy 16800/sell 2912),
+  NPC/Hero money 42142/43875 → buy 58942/27075, sell 31534/54483;
+  mixed и sell-side insufficient. slot2 pure buy
   **105008/65908**, sell **128258/42658**, mixed (unit 1000/250);
   item totals сохраняются (65/42). Screenshot diffs на 1024×768
   (`trade_staging*`, `trade_buy/sell0/2`, `trade_mixed2`,
@@ -64,7 +65,7 @@
   Hero — main `entity+0x10` + `money()`; две money values (NPC y=126,
   Hero y=612, x=562). Read-only: selection/filter/scroll/exit; нет
   buy/sell/confirm и мутаций trade-контейнера; **цены не отображаются**
-  (price UI — 1b2b4b). Docs: D-057; parity 170 строк.
+  (price UI — 1b2b4b). Docs: D-057; parity 170 строк на 1b2b4a (174 после 1b2b4b).
 - **Проверка (`GL_GAME_DIR=I:\Games\Златогорье-2`):**
   `cmake --build build` exit 0; targeted `ctest` (`gl_script_tests|
   gl_script_real_tests|gl_game_tests|gl_assets_tests|gl_assets_real_tests|

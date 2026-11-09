@@ -181,9 +181,9 @@ ID: `P4a-*`, `P4b-*`, `P4b2-*` — прежние A/B/C из аудита (пе�
 | ID | Подсистема | Пункт | Реализация | Evidence | Статус | Пробел/задача | Источник |
 |---|---|---|---|---|---|---|---|
 | P3d-1 | dispatch | `RS_PassToTradePanel` (`0x700000D`) | `NativeServices::trade_panel`; `native_registry.cpp`; `glgame` callback | handler RVA `0x41558`, return `0.0`; `NativeRegistry` 16/65; unit tests + real `glgame --dialog-answer 0` (`tests/app/test_glgame_screenshot.cpp:962`); oracle log slot0/slot2 | verified | trade-мутации (`0x5000006`/`0x5000007`) не реализованы | research §5; D-057 |
-| P3d-2 | UI/layout | trade panel 1024×768, assets, rows, filters, scroll, exit | `TradeLayout`/`TradeOverlay` (`src/app`) | `engineres/trade` (53 BMP), `scripts/ui/trade.scr`; per-id NPC filter Y `{94,94,95,95,95,95,95}`; unit + 1024×768 real screenshot (diff > 2 MB, top region > 100000 px) | partial | деньги/selected-name цвет/масштаб/позиция — invented UI values; средний/нижний ряды не интерактивны; GDI-текст оригинала не сверен | research §2/§4; D-057 |
+| P3d-2 | UI/layout | trade panel 1024×768, assets, rows, filters, scroll, exit | `TradeLayout`/`TradeOverlay` (`src/app`) | `engineres/trade` (53 BMP), `scripts/ui/trade.scr`; per-id NPC filter Y `{94,94,95,95,95,95,95}`; unit + 1024×768 real screenshot (diff > 2 MB, top region > 100000 px) | partial | деньги/selected-name цвет/масштаб/позиция — invented UI values; интерактивность среднего/нижнего рядов закрыта P3e (1b2b4b); GDI-текст оригинала не сверен | research §2/§4; D-057; P3e |
 | P3d-3 | данные | NPC trade = pass-1 `entity+0xC`; Hero main `entity+0x10`; money | `InventoryRuntime::trade_items`/`trade_money`; `NpcLootGenerator` сохраняет `loot.hot` | real `l13_1` slot0 `16/42142/117/43875`, slot2 `17/48908/140/122008`; asserted все NPC items и первые 12 Hero main | partial | client `FUN_1206EC98` invocation не трассирован (server/native source only); нет live-memory oracle; specials NPC не генерируются (D-055) | research §4.1/§6; D-055/D-057 |
-| P3d-4 | поведение | selection/filter/scroll/exit; две money; read-only | `TradeOverlay` | unit hit-test/scroll/filter; real E2E dialog→overlay; regression `l1_1 --click-npc 13` | partial | нет buy/sell/confirm и цен (1b2b4b); NPC/hero-ряды фильтруются `gl::game::item_matches_filter` (inventory-группировка) — assumption, type→bit для trade не доказан; «all» не pressed при открытии; точная exit-команда `0x2B` не трассирована; списки — снимок на момент открытия | research §2.3/§4.4/§8; D-057 |
+| P3d-4 | поведение | selection/filter/scroll/exit; две money (buy/sell/Exchange — P3e) | `TradeOverlay` | unit hit-test/scroll/filter; real E2E dialog→overlay; regression `l1_1 --click-npc 13` | partial | buy/sell/confirm/цены перенесены в P3e (1b2b4b); NPC/hero-ряды фильтруются `gl::game::item_matches_filter` (inventory-группировка) — assumption, type→bit для trade не доказан; «all» не pressed при открытии; точная exit-команда `0x2B` не трассирована; списки — снимок на момент открытия | research §2.3/§4.4/§8; D-057; P3e |
 
 ## P3e — trade transactions (Phase 1b2b4b, 2026-11-09)
 
@@ -309,7 +309,7 @@ ID: `P4a-*`, `P4b-*`, `P4b2-*` — прежние A/B/C из аудита (пе�
 | P5a-4 | outfit | set A/B switch | set A | — | missing | не доказано | STATUS P5a |
 | P5a-5 | parser | deferrals | — | — | partial | 32 MiB/first `BT_HERO`/BOM | STATUS P5a |
 
-## P5b1 — read-only inventory UI (in progress)
+## P5b1 — read-only inventory UI (2026-11-05)
 
 | ID | Подсистема | Пункт | Реализация | Evidence | Статус | Пробел/задача | Источник |
 |---|---|---|---|---|---|---|---|
@@ -332,7 +332,7 @@ ID: `P4a-*`, `P4b-*`, `P4b2-*` — прежние A/B/C из аудита (пе�
 
 ## Итог
 
-Всего строк: **174**. По статусам: `verified` 51, `partial` 72,
+Всего строк: **174**. По статусам: `verified` 50 + `live` 1, `partial` 72,
 `unverified` 22, `missing` 17, `contradicted` 2, `superseded` 10.
 
 Native dispatch infrastructure (Phase 1a): `NativeRegistry` 65/65 +
