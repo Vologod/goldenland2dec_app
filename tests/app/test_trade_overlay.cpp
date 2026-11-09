@@ -495,6 +495,52 @@ TEST_CASE("trade overlay stages whole npc and hero stacks in separate rows") {
     CHECK(overlay.sell_total() == 0);
 }
 
+TEST_CASE("trade overlay stages both duplicate npc stacks and completes exchange") {
+    gl::assets::GameVfs vfs;
+    gl::assets::ItemCatalog catalog;
+    gl::app::TradeOverlay overlay;
+    gl::assets::HeroInventory inventory;
+    inventory.items.push_back({812, 43875, 0, 18, 0});
+    auto runtime =
+        gl::game::InventoryRuntime::create(inventory, make_trade_names(), overlay_template_for);
+    runtime.set_person_items("L13_1.P517_Boat_Trader", {});
+    runtime.set_person_trade_items(
+        "L13_1.P517_Boat_Trader",
+        {gl::assets::InventoryItem{812, 42142, 0, 18, 0},
+         gl::assets::InventoryItem{953, 14, 0x8000000Cu, 19, 0},
+         gl::assets::InventoryItem{953, 9, 0x8000000Cu, 19, 0}});
+    const std::vector<gl::assets::InventoryItem> npc =
+        runtime.trade_items("L13_1.P517_Boat_Trader");
+    const std::vector<gl::assets::InventoryItem> hero = runtime.hero_inventory().items;
+    REQUIRE(overlay.open(vfs, catalog, "L13_1.P517_Boat_Trader", npc,
+                         runtime.trade_money("L13_1.P517_Boat_Trader"), hero, runtime.money()));
+    overlay.set_price_provider([](const gl::assets::InventoryItem &item) {
+        return std::optional<gl::game::TradePrice>{make_quote(item, 1200, 208)};
+    });
+    overlay.set_exchange_handler([&runtime](const std::vector<gl::game::TradePrice> &buy,
+                                            const std::vector<gl::game::TradePrice> &sell) {
+        return exchange_runtime(runtime, buy, sell);
+    });
+
+    REQUIRE(overlay.handle_mouse(347, 26, true));
+    REQUIRE(overlay.buy_staged_items().size() == 1);
+    CHECK(overlay.buy_staged_items()[0].item.count == 14);
+    REQUIRE(overlay.handle_mouse(347, 26, true));
+    REQUIRE(overlay.buy_staged_items().size() == 2);
+    CHECK(overlay.buy_staged_items()[1].item.count == 9);
+    CHECK(overlay.buy_total() == 27600);
+
+    CHECK(overlay.handle_mouse(600, 340, true));
+    CHECK(overlay.last_error().empty());
+    CHECK(overlay.buy_staged_items().empty());
+    REQUIRE(overlay.npc_items().size() == 1);
+    REQUIRE(overlay.hero_items().size() == 2);
+    CHECK(overlay.hero_items()[1].item_id == 953);
+    CHECK(overlay.hero_items()[1].count == 23);
+    CHECK(overlay.npc_money() == 69742);
+    CHECK(overlay.hero_money() == 16275);
+}
+
 TEST_CASE("trade overlay exchange settles staging and updates lists and money") {
     gl::assets::GameVfs vfs;
     gl::assets::ItemCatalog catalog;

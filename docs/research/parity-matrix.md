@@ -190,8 +190,8 @@ ID: `P4a-*`, `P4b-*`, `P4b2-*` — прежние A/B/C из аудита (пе�
 | ID | Подсистема | Пункт | Реализация | Evidence | Статус | Пробел/задача | Источник |
 |---|---|---|---|---|---|---|---|
 | P3e-1 | цена | `TradePrice` buy/sell (ITM/durability/skill, min 1, reciprocal, count) | `trade_price.cpp` | research §4.3/§9.1; unit (boat-trader oracle, durability/trunc/min/guard) | partial | double под явной `assume_pc53`; live FPU-CW не снят; modifier guard → unsupported; `gv_addon`/perks не моделируются; NPC modifier-free proof только slot0/slot2 | research §4/§8; D-058 |
-| P3e-2 | buy/sell | whole-stack `buy_trade`/`sell_trade` | `InventoryRuntime` | research §3.2/§9; unit + real E2E | partial | нет persistent staging `+0x4E4/+0x4E8`; single-item path не реализован; first-matching duplicate; append-порядок; after-state analytic | research §2/§3; D-058 |
-| P3e-3 | Exchange | `exchange_trade` net money, atomic errors | `InventoryRuntime::exchange_trade`; `TradeOverlay` | research §2.4–§2.5/§3; unit + real E2E slot0/slot2 | partial | staging — overlay quotes, нет server staging/rollback `0xD`; `uint32` net cap; client staging invocation не трассирован | research §2/§3/§6; D-058 |
+| P3e-2 | buy/sell | whole-stack `buy_trade`/`sell_trade` | `InventoryRuntime` | research §3.2/§9; unit + real E2E | partial | нет persistent staging `+0x4E4/+0x4E8`; single-item path не реализован; duplicate stacks matched by item id+count; append-порядок; after-state analytic | research §2/§3; D-058 |
+| P3e-3 | Exchange | `exchange_trade` net money, atomic errors | `InventoryRuntime::exchange_trade`; `TradeOverlay` | research §2.4–§2.5/§3; unit + real E2E slot0/slot2 | partial | staging — overlay quotes, нет server staging/rollback `0xD`; signed int32 net cap; client staging invocation не трассирован | research §2/§3/§6; D-058 |
 | P3e-4 | UI/E2E | staging rows, net totals, hooks, screenshots | `TradeOverlay`; `glgame` | research §2.3/§4.6; `--trade-buy/--trade-sell/--trade-exchange`; screenshot diffs; E2E slot0/slot2 | partial | after-state analytic (PC=53); нет specials NPC-лута; save не пишется | research §6/§8; D-058 |
 
 ## P4a — PAD/person/SEF/отрисовка NPC
@@ -332,7 +332,7 @@ ID: `P4a-*`, `P4b-*`, `P4b2-*` — прежние A/B/C из аудита (пе�
 
 ## Итог
 
-Всего строк: **174**. По статусам: `verified` 50 + `live` 1, `partial` 72,
+Всего строк: **174**. По статусам: `verified` 51, `partial` 72,
 `unverified` 22, `missing` 17, `contradicted` 2, `superseded` 10.
 
 Native dispatch infrastructure (Phase 1a): `NativeRegistry` 65/65 +

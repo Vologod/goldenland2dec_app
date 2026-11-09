@@ -30,10 +30,13 @@
   gl_script_real_tests|gl_game_tests|gl_assets_tests|
   gl_assets_real_tests|glgame_screenshot_tests|glview_screenshot_tests|
   level_click_tests|trade_overlay_tests"` **9/9 passed**, 3171.29 s,
-  exit 0; full `ctest` **19/19 passed**, 2723.07 s, exit 0.
+  exit 0; full `ctest` **19/19 passed**, 2723.07 s, exit 0 (targeted и
+  full мерялись в отдельных прогонах при разной нагрузке — времена не
+  сравнимы напрямую).
   `glgame_screenshot_tests --test-case="*trade*"` **8/8** (164
-  assertions, 27 skipped); `trade_overlay_tests` **24/24** (651);
-  `gl_game_tests --test-case="*trade*"` **56/56** (917, 229 skipped).
+  assertions, 27 skipped); `trade_overlay_tests` **25/25** (669);
+  `gl_game_tests --test-case="*trade*"` **59/59** (935, 230 skipped);
+  full `gl_game_tests` **289/289** (559623).
 - **Oracle / screenshots:** slot0 buy action 16800 / sell action 10608
   (51×208; unit 1200/208; 14-стек stage-buy quote buy 16800/sell 2912),
   NPC/Hero money 42142/43875 → buy 58942/27075, sell 31534/54483;
@@ -45,7 +48,8 @@
   not observed**; before-state real/validated.
 - **Ограничения:** no persistent server staging `+0x4E4/+0x4E8` и
   rollback action `0xD` (staging = overlay quotes); save не пишется;
-  при дубликатах item id — first-matching record; net cap `uint32`;
+  дубликаты item id матчатся по item id+count (не first-id); net/суммы
+  ограничены signed int32;
   unstage append в конец source; клиентский invocation staging id не
   трассирован; `gv_addon`/perks не моделируются; specials NPC-лута не
   генерируются (D-055); modifier-free NPC stock доказан только

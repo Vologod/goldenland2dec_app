@@ -150,7 +150,7 @@ known case, в Task 2 пока не реализуется (research-only note).
 
 ### 2.4 Confirm (Exchange) — `FUN_1206DBB0`
 
-Кнопка obj **44** (`trade.scr` `lbig2`, центр 579,320) → GUI-команда
+Кнопка obj **44** (`trade.scr` `lbig2`, top-left rect 579,320,110×43) → GUI-команда
 `uVar8 == 0x27`, `*param_1 == 0x2C` (:81268-81273) →
 `FUN_1206dbb0` (RVA `0x6DBB0`, :72319-72357):
 

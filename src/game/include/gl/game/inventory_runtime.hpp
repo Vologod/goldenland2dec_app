@@ -52,7 +52,10 @@ class InventoryRuntime {
     // Stages are settled in one step: each quote identifies a whole source
     // record (`item_id`, `count`). Buy quotes move NPC trade -> Hero main,
     // sell quotes move Hero main -> NPC trade, then the net money difference
-    // is settled. Any error leaves every container untouched.
+    // is settled. Any error leaves every container untouched. Quotes are
+    // trusted caller data: identity and count are validated, but the price
+    // is not recomputed here (pricing and execution are coupled only through
+    // the caller's provider, D-058).
     TradeStatus exchange_trade(std::string_view npc, std::string_view hero,
                                const std::vector<TradePrice> &buy_items,
                                const std::vector<TradePrice> &sell_items);

@@ -188,13 +188,14 @@ bool InventoryRuntime::transfer_item(std::string_view from, std::string_view to,
             [&](const gl::assets::InventoryItem &item) { return item.item_id == *item_id; });
         if (it == source->end())
             return remaining != static_cast<std::uint32_t>(count);
+        const gl::assets::InventoryItem moved = *it;
         const std::uint32_t available = it->count;
         if (remaining < available) {
+            append_items_preserving(*dest, *item_id, moved, item_template->max_stack, remaining);
             it->count = available - remaining;
-            append_items(*dest, *item_id, *item_template, remaining);
             return true;
         }
-        append_items(*dest, *item_id, *item_template, available);
+        append_items_preserving(*dest, *item_id, moved, item_template->max_stack, available);
         remaining -= available;
         source->erase(it);
     }
@@ -221,7 +222,7 @@ bool InventoryRuntime::transfer_all(std::string_view from, std::string_view to) 
     while (index < source->size()) {
         const gl::assets::InventoryItem item = (*source)[index];
         const auto item_template = item_template_(item.item_id);
-        append_items(*dest, item.item_id, *item_template, item.count);
+        append_items_preserving(*dest, item.item_id, item, item_template->max_stack, item.count);
         source->erase(source->begin() + static_cast<std::ptrdiff_t>(index));
     }
     return true;
@@ -233,22 +234,28 @@ TradeStatus InventoryRuntime::execute_trade(std::vector<gl::assets::InventoryIte
                                             std::vector<gl::assets::InventoryItem> &money_dest,
                                             std::uint32_t item_id, const TradePrice &price,
                                             std::int64_t total) {
-    // Original server sends the net money amount as uint32; a larger total
-    // is not representable and is rejected (D-058 note).
-    if (total <= 0 || total > std::numeric_limits<std::uint32_t>::max())
+    // The original command carries a signed 32-bit money delta; a larger
+    // amount is not representable and is rejected (D-058 note).
+    if (total <= 0 || total > std::numeric_limits<std::int32_t>::max())
         return TradeStatus::unsupported_price;
-    if (price.item_id != item_id)
+    if (price.item_id != item_id || price.count == 0)
         return TradeStatus::unsupported_price;
 
-    const auto source = std::find_if(item_source.begin(), item_source.end(),
-                                     [item_id](const gl::assets::InventoryItem &item) {
-                                         return item.item_id == item_id && item.count != 0;
-                                     });
-    if (source == item_source.end())
-        return TradeStatus::insufficient_stock;
-    const std::uint32_t count = source->count;
-    if (price.count != count)
+    const auto source = std::find_if(
+        item_source.begin(), item_source.end(),
+        [item_id, &price](const gl::assets::InventoryItem &item) {
+            return item.item_id == item_id && item.count == price.count;
+        });
+    if (source == item_source.end()) {
+        const bool has_item = std::any_of(
+            item_source.begin(), item_source.end(), [item_id](const gl::assets::InventoryItem &item) {
+                return item.item_id == item_id && item.count != 0;
+            });
+        return has_item ? TradeStatus::unsupported_price : TradeStatus::insufficient_stock;
+    }
+    if (!tradeable_record(*source))
         return TradeStatus::unsupported_price;
+    const std::uint32_t count = source->count;
 
     // Money is identified by MON_1_0_1 name (as FUN_140484C8 does), while
     // money()/trade_money() sum any type-18 record. The asymmetry is
@@ -332,19 +339,24 @@ TradeStatus InventoryRuntime::exchange_trade(std::string_view npc, std::string_v
     std::int64_t buy_total = 0;
     for (const TradePrice &quote : buy_items) {
         if (quote.buy <= 0 ||
-            static_cast<std::uint64_t>(quote.buy) > std::numeric_limits<std::uint32_t>::max())
+            static_cast<std::uint64_t>(quote.buy) > std::numeric_limits<std::int32_t>::max())
             return TradeStatus::unsupported_price;
         buy_total += quote.buy;
-        if (buy_total > std::numeric_limits<std::uint32_t>::max())
+        if (buy_total > std::numeric_limits<std::int32_t>::max())
             return TradeStatus::unsupported_price;
 
         const auto record = std::find_if(
             npc_items.begin(), npc_items.end(), [&quote](const gl::assets::InventoryItem &item) {
-                return item.item_id == quote.item_id && item.count != 0;
+                return item.item_id == quote.item_id && item.count == quote.count;
             });
-        if (record == npc_items.end())
-            return TradeStatus::insufficient_stock;
-        if (record->count != quote.count || !tradeable_record(*record))
+        if (record == npc_items.end()) {
+            const bool has_item = std::any_of(
+                npc_items.begin(), npc_items.end(), [&quote](const gl::assets::InventoryItem &item) {
+                    return item.item_id == quote.item_id && item.count != 0;
+                });
+            return has_item ? TradeStatus::unsupported_price : TradeStatus::insufficient_stock;
+        }
+        if (!tradeable_record(*record))
             return TradeStatus::unsupported_price;
         if (!item_template_)
             return TradeStatus::missing_template;
@@ -360,19 +372,24 @@ TradeStatus InventoryRuntime::exchange_trade(std::string_view npc, std::string_v
     std::int64_t sell_total = 0;
     for (const TradePrice &quote : sell_items) {
         if (quote.sell <= 0 ||
-            static_cast<std::uint64_t>(quote.sell) > std::numeric_limits<std::uint32_t>::max())
+            static_cast<std::uint64_t>(quote.sell) > std::numeric_limits<std::int32_t>::max())
             return TradeStatus::unsupported_price;
         sell_total += quote.sell;
-        if (sell_total > std::numeric_limits<std::uint32_t>::max())
+        if (sell_total > std::numeric_limits<std::int32_t>::max())
             return TradeStatus::unsupported_price;
 
         const auto record = std::find_if(
             hero_items.begin(), hero_items.end(), [&quote](const gl::assets::InventoryItem &item) {
-                return item.item_id == quote.item_id && item.count != 0;
+                return item.item_id == quote.item_id && item.count == quote.count;
             });
-        if (record == hero_items.end())
-            return TradeStatus::insufficient_stock;
-        if (record->count != quote.count || !tradeable_record(*record))
+        if (record == hero_items.end()) {
+            const bool has_item = std::any_of(
+                hero_items.begin(), hero_items.end(), [&quote](const gl::assets::InventoryItem &item) {
+                    return item.item_id == quote.item_id && item.count != 0;
+                });
+            return has_item ? TradeStatus::unsupported_price : TradeStatus::insufficient_stock;
+        }
+        if (!tradeable_record(*record))
             return TradeStatus::unsupported_price;
         if (!item_template_)
             return TradeStatus::missing_template;

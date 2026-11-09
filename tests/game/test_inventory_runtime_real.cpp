@@ -121,7 +121,7 @@ void check_transfer_item_slot(gl::assets::GameVfs &vfs, const gl::assets::ItemCa
         REQUIRE(runtime.person_items(p678).size() == 1);
         const auto &item = runtime.person_items(p678)[0];
         CHECK(item.type == 19);
-        CHECK(item.flags == 0x8000000Cu);
+        CHECK(item.flags == 0x8000020Cu);
         CHECK(item.style == 1);
     }
     {

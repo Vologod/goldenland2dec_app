@@ -624,9 +624,9 @@ TEST_CASE("inventory_runtime transfer_item merges into an existing dest stack") 
     CHECK(runtime.person_items("L0.P1")[0].style == 9);
 }
 
-TEST_CASE("inventory_runtime transfer_item new dest record uses the item template") {
+TEST_CASE("inventory_runtime transfer_item new dest record preserves source metadata") {
     gl::assets::HeroInventory inventory;
-    inventory.items.push_back({812, 500, 0x8000020Cu, 99, 77});
+    inventory.items.push_back({812, 500, 0x8000020Cu, 99, 77, 42, 1});
     auto runtime = InventoryRuntime::create(inventory, make_names(), template_for);
     runtime.set_person_items("L0.P1", {});
 
@@ -635,9 +635,48 @@ TEST_CASE("inventory_runtime transfer_item new dest record uses the item templat
     const InventoryItem &item = runtime.person_items("L0.P1")[0];
     CHECK(item.item_id == 812);
     CHECK(item.count == 10);
-    CHECK(item.type == 18);
-    CHECK(item.flags == 0xC0000000u);
-    CHECK(item.style == 1);
+    CHECK(item.type == 99);
+    CHECK(item.flags == 0x8000020Cu);
+    CHECK(item.style == 77);
+    CHECK(item.durability == 42);
+    CHECK(item.mod_count == 1);
+}
+
+TEST_CASE("inventory_runtime transfers preserve durability and modifiers") {
+    gl::assets::HeroInventory inventory;
+    inventory.items.push_back({812, 500, 0, 18, 0});
+    inventory.items.push_back({953, 10, 0x8000000Cu, 19, 0, 42, 1});
+    auto runtime = InventoryRuntime::create(inventory, make_trade_names(), trade_template_for);
+    runtime.set_person_items("L0.Partial", {});
+    runtime.set_person_items("L0.All", {});
+
+    REQUIRE(runtime.transfer_item("Hero", "L0.Partial", "POT_1_00_27", 4));
+    REQUIRE(runtime.person_items("L0.Partial").size() == 1);
+    CHECK(runtime.person_items("L0.Partial")[0].count == 4);
+    CHECK(runtime.person_items("L0.Partial")[0].durability == 42);
+    CHECK(runtime.person_items("L0.Partial")[0].mod_count == 1);
+    REQUIRE(runtime.person_items("Hero").size() == 2);
+    CHECK(runtime.person_items("Hero")[1].count == 6);
+    CHECK(runtime.person_items("Hero")[1].durability == 42);
+    CHECK(runtime.person_items("Hero")[1].mod_count == 1);
+
+    REQUIRE(runtime.transfer_all("Hero", "L0.All"));
+    REQUIRE(runtime.person_items("L0.All").size() == 2);
+    CHECK(runtime.person_items("L0.All")[1].item_id == 953);
+    CHECK(runtime.person_items("L0.All")[1].count == 6);
+    CHECK(runtime.person_items("L0.All")[1].durability == 42);
+    CHECK(runtime.person_items("L0.All")[1].mod_count == 1);
+
+    TradePriceInput input{};
+    input.item_id = 953;
+    input.item_price = 500;
+    input.durability = 42;
+    input.flags = 0x8000000Cu;
+    input.mod_count = 1;
+    input.skill_trade = 1;
+    input.count = 6;
+    input.assume_pc53 = true;
+    CHECK_FALSE(compute_trade_price(input).has_value());
 }
 
 TEST_CASE("inventory_runtime transfer_item walks duplicate records in slot order") {
@@ -1148,6 +1187,66 @@ TEST_CASE("inventory_runtime sell_trade moves the first matching source record o
     CHECK(trade_item_count(runtime, 953) == 20);
     REQUIRE(runtime.person_items("Hero").size() == 2);
     CHECK(runtime.person_items("Hero")[1].count == 31);
+}
+
+TEST_CASE("inventory_runtime buy_trade and sell_trade reject modified and quest stock") {
+    auto buy_runtime = make_modifier_trade_runtime(43875, 51, 42142, 14, 1, 0);
+    CHECK(buy_runtime.buy_trade(kTradeNpc, "Hero", "POT_1_00_27", whole_stack_price(1, 14)) ==
+          TradeStatus::unsupported_price);
+
+    auto sell_runtime = make_modifier_trade_runtime(43875, 51, 42142, 14, 0, 1);
+    CHECK(sell_runtime.sell_trade(kTradeNpc, "Hero", "POT_1_00_27", whole_stack_price(1, 51)) ==
+          TradeStatus::unsupported_price);
+
+    gl::assets::HeroInventory inventory;
+    inventory.items.push_back({812, 43875, 0, 18, 0});
+    auto quest_runtime =
+        InventoryRuntime::create(inventory, make_trade_names(), trade_template_for);
+    quest_runtime.set_person_items(std::string(kTradeNpc), {});
+    quest_runtime.set_person_trade_items(
+        std::string(kTradeNpc),
+        {InventoryItem{812, 42142, 0, 18, 0}, InventoryItem{953, 1, 0x8000000Cu, 25, 0}});
+    CHECK(quest_runtime.buy_trade(kTradeNpc, "Hero", "POT_1_00_27", TradePrice{953, 100, 0, 1}) ==
+          TradeStatus::unsupported_price);
+}
+
+TEST_CASE("inventory_runtime buy_trade matches a duplicate stack by item id and count") {
+    gl::assets::HeroInventory inventory;
+    inventory.items.push_back({812, 43875, 0, 18, 0});
+    auto runtime = InventoryRuntime::create(inventory, make_trade_names(), trade_template_for);
+    runtime.set_person_items(std::string(kTradeNpc), {});
+    runtime.set_person_trade_items(
+        std::string(kTradeNpc),
+        {InventoryItem{812, 42142, 0, 18, 0}, InventoryItem{953, 14, 0x8000000Cu, 19, 0},
+         InventoryItem{953, 9, 0x8000000Cu, 19, 0}});
+
+    CHECK(runtime.buy_trade(kTradeNpc, "Hero", "POT_1_00_27", whole_stack_price(1, 9)) ==
+          TradeStatus::ok);
+
+    CHECK(runtime.count("Hero", "POT_1_00_27") == 9);
+    CHECK(trade_item_count(runtime, 953) == 14);
+    CHECK(runtime.money() == 33075);
+    CHECK(runtime.trade_money(kTradeNpc) == 52942);
+}
+
+TEST_CASE("inventory_runtime exchange_trade matches duplicate stacks by item id and count") {
+    gl::assets::HeroInventory inventory;
+    inventory.items.push_back({812, 43875, 0, 18, 0});
+    auto runtime = InventoryRuntime::create(inventory, make_trade_names(), trade_template_for);
+    runtime.set_person_items(std::string(kTradeNpc), {});
+    runtime.set_person_trade_items(
+        std::string(kTradeNpc),
+        {InventoryItem{812, 42142, 0, 18, 0}, InventoryItem{953, 14, 0x8000000Cu, 19, 0},
+         InventoryItem{953, 9, 0x8000000Cu, 19, 0}});
+
+    CHECK(runtime.exchange_trade(kTradeNpc, "Hero",
+                                 {whole_stack_price(1, 14), whole_stack_price(1, 9)}, {}) ==
+          TradeStatus::ok);
+
+    CHECK(runtime.count("Hero", "POT_1_00_27") == 23);
+    CHECK(trade_item_count(runtime, 953) == 0);
+    CHECK(runtime.money() == 16275);
+    CHECK(runtime.trade_money(kTradeNpc) == 69742);
 }
 
 TEST_CASE("inventory_runtime buy_trade copies the moved record metadata to a new destination") {
