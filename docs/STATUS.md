@@ -55,6 +55,12 @@
   reference + real `.cs`); trade-контейнер `+0xC`/`0x5000006`/`7`/
   `RS_PassToTradePanel` вне scope; specials/restock NPC blocked; save
   payload не читается/не пишется.
+- **Final review (2026-11-09):** Ready to merge = Yes; Critical/Important
+  нет. Отложенные minors: `transfer_all` second template lookup без
+  re-check; `append_items` return ignored; нет unit-теста
+  `transfer_item max_stack==0`; count truncation vs ROUND; duplicate
+  15/65 assertion; read_save open check; globals type check; fixture
+  loot level 1; full/targeted time variance.
 - **Дальше:** trade/`RS_PassToTradePanel` (`0x5000006`/`0x5000007`),
   research specials R4–R10 (`FUN_14047284`/`DAT_14088df4`), затем save
   payload (`P2-15`), затем 35 Гц.
