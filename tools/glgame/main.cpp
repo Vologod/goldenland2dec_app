@@ -104,6 +104,7 @@ struct Options {
     std::optional<int> inventory_select;
     std::string trade_npc;
     bool has_trade_npc = false;
+    std::optional<int> dialog_answer;
     std::optional<int> camera_x;
     std::optional<int> camera_y;
     bool walkable_overlay = false;
@@ -141,6 +142,7 @@ void print_usage() {
         "  --inventory          Open the inventory overlay for the selected save\n"
         "  --inventory-select <n> Select bottom-strip slot <n> when the inventory opens\n"
         "  --trade-npc <name>   Open the trade overlay for person <name> after loading\n"
+        "  --dialog-answer <n>  Headless: choose dialog answer <n> when it opens\n"
         "  --camera-x <px>      World X of the left viewport edge (screenshot mode)\n"
         "  --camera-y <px>      World Y of the top viewport edge (screenshot mode)\n"
         "  --walkable-overlay   Draw blocked tiles in red on the level\n"
@@ -387,6 +389,15 @@ ParseStatus parse_args(int argc, char** argv, Options& options) {
             }
             options.trade_npc = std::string(value);
             options.has_trade_npc = true;
+        } else if (arg == "--dialog-answer") {
+            if (!next_value(arg, value)) return ParseStatus::error;
+            int answer = 0;
+            if (!parse_int(value, answer) || answer < 0) {
+                std::fprintf(stderr, "glgame: invalid --dialog-answer: %.*s\n",
+                             static_cast<int>(value.size()), value.data());
+                return ParseStatus::error;
+            }
+            options.dialog_answer = answer;
         } else if (arg == "--list-saves") {
             options.list_saves = true;
         } else if (arg == "--screenshot") {
@@ -572,6 +583,8 @@ class Game {
             if (options_.has_trade_npc) show_trade_panel(options_.trade_npc);
         }
 
+        apply_cli_dialog_answer();
+
         if (options_.equip_save && !options_.equip_save_pending)
             apply_loaded_equip_save();
 
@@ -618,6 +631,7 @@ class Game {
         std::vector<std::uint8_t> pixels(static_cast<std::size_t>(pixel_count) * 4);
         if (options_.has_click_npc || options_.has_click_world) {
             run_headless_click();
+            apply_cli_dialog_answer();
             render(0, 0);
         } else {
             render(0, options_.sim_ms);
@@ -855,6 +869,9 @@ class Game {
     void show_trade_panel(std::string_view npc) {
         const std::vector<gl::assets::InventoryItem>& npc_items =
             inventory_runtime_.trade_items(npc);
+        if (npc_items.empty())
+            gl::log(gl::LogLevel::warning,
+                    "trade: person '" + std::string(npc) + "' has no trade items");
         const std::int32_t npc_money = inventory_runtime_.trade_money(npc);
         const std::vector<gl::assets::InventoryItem>& hero_items =
             inventory_runtime_.hero_inventory().items;
@@ -959,8 +976,11 @@ class Game {
     }
 
     void close_dialog() {
+        if (dialog_)
+            gl::log(gl::LogLevel::info, "dialog: closed '" + dialog_->path + "'");
         dialog_.reset();
         dialog_overlay_.clear();
+        pending_trade_npc_.reset();
         pending_talk_.reset();
         pending_talk_tile_.reset();
     }
@@ -1061,15 +1081,30 @@ class Game {
         const std::size_t selected = dialog_overlay_.selected();
         if (answers.empty() || selected >= answers.size()) return;
         const gl::Result<void> chosen = dialog_->session->choose(selected);
+        if (!chosen) {
+            gl::log(gl::LogLevel::error, "dialog: " + chosen.error().message);
+            pending_trade_npc_.reset();
+            return;
+        }
         if (pending_trade_npc_) {
             maybe_open_pending_trade_panel();
             return;
         }
-        if (!chosen) {
-            gl::log(gl::LogLevel::error, "dialog: " + chosen.error().message);
+        refresh_dialog_overlay();
+    }
+
+    void apply_cli_dialog_answer() {
+        if (!options_.dialog_answer || !dialog_waiting()) return;
+        const std::size_t index = static_cast<std::size_t>(*options_.dialog_answer);
+        const std::span<const gl::script::DialogLine> answers = dialog_->session->answers();
+        if (index >= answers.size()) {
+            gl::log(gl::LogLevel::warning, "dialog: --dialog-answer " + std::to_string(index) +
+                                               " is out of range (" +
+                                               std::to_string(answers.size()) + " answers)");
             return;
         }
-        refresh_dialog_overlay();
+        dialog_overlay_.set_selected(index);
+        dialog_activate();
     }
 
     void dialog_hover(int x, int y) {

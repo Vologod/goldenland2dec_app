@@ -259,6 +259,17 @@ bool has_line(const std::vector<std::string>& lines, const std::string& expected
     return false;
 }
 
+std::size_t count_occurrences(const std::string& text, std::string_view needle) {
+    if (needle.empty())
+        return 0;
+    std::size_t count = 0;
+    for (std::size_t pos = 0; (pos = text.find(needle, pos)) != std::string::npos;
+         pos += needle.size()) {
+        ++count;
+    }
+    return count;
+}
+
 std::string setting_value(const std::vector<std::string>& lines, std::string_view key) {
     for (const std::string& line : lines) {
         const std::string trimmed = trim_left(line);
@@ -914,20 +925,66 @@ TEST_CASE("glgame --trade-npc opens the boat trader overlay with real stock" *
 
     TempDir temp;
     const fs::path config = write_test_config(temp.path);
+    const fs::path baseline_png = temp.path / "trade_level.png";
     const fs::path png = temp.path / "trade_boat.png";
+    const int baseline_code = run_glgame(screenshot_arguments(
+        game_dir, config, baseline_png, {"--level", "l13_1", "--equip-save", "0"}));
     std::string output;
     const int code =
         run_glgame_capture(screenshot_arguments(game_dir, config, png,
                                                 {"--level", "l13_1", "--equip-save", "0",
                                                  "--trade-npc", "L13_1.P517_Boat_Trader"}),
                            output);
+    CAPTURE(baseline_code);
+    CAPTURE(code);
+    CAPTURE(output);
+    REQUIRE(fs::exists(baseline_png));
+    REQUIRE(fs::exists(png));
+    CHECK(baseline_code == 0);
+    CHECK(code == 0);
+    CHECK(output.find("trade: opened npc='L13_1.P517_Boat_Trader' npc_items=16 "
+                      "npc_money=42142 hero_items=117 hero_money=43875") != std::string::npos);
+
+    int width = 0;
+    int height = 0;
+    const std::vector<unsigned char> pixels = read_png(png, width, height);
+    int baseline_width = 0;
+    int baseline_height = 0;
+    const std::vector<unsigned char> baseline =
+        read_png(baseline_png, baseline_width, baseline_height);
+    CHECK(width == 1280);
+    CHECK(height == 720);
+    CHECK(baseline_width == width);
+    CHECK(baseline_height == height);
+    CHECK(count_differences(pixels, baseline) > 100000);
+}
+
+TEST_CASE("glgame boat trader dialog answer opens the trade overlay" *
+          doctest::skip(!font_available())) {
+    const char* game_dir = std::getenv("GL_GAME_DIR");
+    REQUIRE(game_dir != nullptr);
+
+    TempDir temp;
+    const fs::path config = write_test_config(temp.path);
+    const fs::path png = temp.path / "trade_dialog.png";
+    std::string output;
+    const int code = run_glgame_capture(
+        screenshot_arguments(game_dir, config, png,
+                             {"--level", "l13_1", "--equip-save", "0", "--click-npc", "3",
+                              "--dialog-answer", "0"}),
+        output);
     CAPTURE(code);
     CAPTURE(output);
     REQUIRE(fs::exists(png));
     CHECK(code == 0);
+
+    const std::string dialog_marker =
+        "dialog: 'scripts/dialogs/l13_1/l13_1.p517_boat_trader.d517.age.cs'";
+    CHECK(count_occurrences(output, dialog_marker) == 1);
+    CHECK(count_occurrences(output, "dialog: closed '") == 1);
+    CHECK(count_occurrences(output, "trade: opened npc='L13_1.P517_Boat_Trader'") == 1);
     CHECK(output.find("trade: opened npc='L13_1.P517_Boat_Trader' npc_items=16 "
-                      "npc_money=42142") != std::string::npos);
-    CHECK(output.find("hero_money=43875") != std::string::npos);
+                      "npc_money=42142 hero_items=117 hero_money=43875") != std::string::npos);
 
     int width = 0;
     int height = 0;

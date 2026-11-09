@@ -53,6 +53,32 @@
     client invocation `FUN_1206EC98`/источник `local_player+0x6F8/+0x6FC`,
     modifier-блок цены, точная exit-привязка; read-only overlay ими не
     блокируется.
+- **Task 2 (overlay core, done 2026-11-09):** pass-1 `loot.hot` retained as
+  NPC trade container (`trade_items`/`trade_money`); `TradeLayout` +
+  read-only `TradeOverlay` (letterbox 1024×768, NPC/Hero rows, two money,
+  filters, scroll, exit); unit + real screenshot tests. Commits `4273a0a`,
+  `eac9a3c`.
+- **Task 3 (native/service wiring, done 2026-11-09):**
+  `NativeServices::trade_panel`; `0x700000D` supported, arity 0, callback
+  invoked, always returns `double{0.0}`, empty callback logs. Registry
+  **16/65 supported**. `glgame` sets the callback per dialog, defers
+  close/open until the VM call returns (avoids use-after-free), then
+  `close_dialog()` + `TradeOverlay` from dialog speaker
+  `trade_items`/`trade_money` and Hero main/`money()`; input blocking,
+  Esc/exit, `render`. No active dialog/speaker → warning + no-op. Hooks:
+  `--trade-npc <name>` (with empty-list warning) and `--dialog-answer <n>`.
+  `close_dialog()` clears stale `pending_trade_npc_`; `dialog_activate`
+  aborts on failed `choose()` before opening. Commits `577edd6`
+  (implementation) + fix `fix(tools): reset pending trade and cover dialog path`.
+  Tests (`GL_GAME_DIR`): `gl_script_tests` **123/123** (961 assertions),
+  `gl_game_tests` **234/234** (558702), `trade_overlay_tests` **11/11**
+  (257), `level_click_tests` pass; ctest targeted 4/4 (131.11 s);
+  `glgame_screenshot_tests` new two cases **2/2** (29 assertions):
+  `--trade-npc` real boat-trader overlay with pixel diff vs level baseline,
+  and real dialog answer 0 → **`RS_PassToTradePanel`** → dialog closed once
+  → `trade: opened npc='L13_1.P517_Boat_Trader' npc_items=16
+  npc_money=42142 hero_items=117 hero_money=43875`. Smoke
+  `l1_1 --click-npc 13` exit 0; unknown `--trade-npc` warns.
 - **Вне scope:** покупка/продажа, trade-мутации, confirm.
 
 ## Phase 1b2b3 — inventory transfers (done 2026-11-08)
