@@ -1,6 +1,7 @@
 #pragma once
 
 #include <gl/assets/hero_equipment.hpp>
+#include <gl/game/inventory_runtime.hpp>
 #include <gl/render/font.hpp>
 #include <gl/render/texture.hpp>
 
@@ -9,6 +10,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <map>
 #include <optional>
 #include <set>
@@ -45,10 +47,14 @@ enum class TradeRegion {
     npc_filter,
     npc_scroll_left,
     npc_scroll_right,
+    staging_slot,
+    staging_scroll_left,
+    staging_scroll_right,
     hero_slot,
     hero_filter,
     hero_scroll_left,
     hero_scroll_right,
+    exchange,
     exit,
     drop,
 };
@@ -59,6 +65,29 @@ enum class TradeSelection {
     hero,
 };
 
+enum class TradeOrigin {
+    npc,
+    hero,
+};
+
+struct StagedTradeItem {
+    gl::assets::InventoryItem item;
+    gl::game::TradePrice price;
+    TradeOrigin origin = TradeOrigin::npc;
+};
+
+struct TradeSnapshot {
+    std::vector<gl::assets::InventoryItem> npc_items;
+    std::vector<gl::assets::InventoryItem> hero_items;
+    std::int32_t npc_money = 0;
+    std::int32_t hero_money = 0;
+};
+
+struct TradeExchangeResult {
+    gl::game::TradeStatus status = gl::game::TradeStatus::ok;
+    TradeSnapshot snapshot;
+};
+
 struct TradeLayout {
     static constexpr float kCanvasWidth = 1024.0f;
     static constexpr float kCanvasHeight = 768.0f;
@@ -66,6 +95,7 @@ struct TradeLayout {
 
     static constexpr int kNpcY = 26;
     static constexpr std::array<int, 10> kNpcX{347, 407, 467, 528, 589, 650, 711, 773, 834, 895};
+    static constexpr int kStagingY = 208;
     static constexpr int kHeroY = 703;
     static constexpr std::array<int, 12> kHeroX{140, 201, 261, 321, 382, 443,
                                                 504, 565, 627, 688, 749, 811};
@@ -74,6 +104,8 @@ struct TradeLayout {
     static constexpr int kNpcMoneyY = 126;
     static constexpr float kHeroMoneyX = 562.0f;
     static constexpr int kHeroMoneyY = 612;
+    static constexpr float kTotalsX = 340.0f;
+    static constexpr int kTotalsY = 386;
 
     static constexpr std::array<TradeFilterSpec, 7> kNpcFilters{{
         TradeFilterSpec{{350.0f, 94.0f, 52.0f, 20.0f}, 0x01u, 1},
@@ -97,13 +129,17 @@ struct TradeLayout {
 
     static constexpr TradeRect kNpcScrollLeft{312.0f, 28.0f, 27.0f, 55.0f};
     static constexpr TradeRect kNpcScrollRight{954.0f, 26.0f, 27.0f, 55.0f};
+    static constexpr TradeRect kStagingScrollLeft{313.0f, 208.0f, 27.0f, 55.0f};
+    static constexpr TradeRect kStagingScrollRight{955.0f, 207.0f, 27.0f, 55.0f};
     static constexpr TradeRect kHeroScrollLeft{110.0f, 702.0f, 27.0f, 55.0f};
     static constexpr TradeRect kHeroScrollRight{870.0f, 703.0f, 26.0f, 54.0f};
+    static constexpr TradeRect kExchange{579.0f, 320.0f, 110.0f, 43.0f};
     static constexpr TradeRect kExit{920.0f, 694.0f, 75.0f, 68.0f};
     static constexpr TradeRect kDrop{19.0f, 690.0f, 81.0f, 75.0f};
 
     TradeRegion hit_test(float x, float y) const;
     std::optional<std::size_t> npc_slot_at(float x, float y) const;
+    std::optional<std::size_t> staging_slot_at(float x, float y) const;
     std::optional<std::size_t> hero_slot_at(float x, float y) const;
     std::optional<std::size_t> npc_filter_at(float x, float y) const;
     std::optional<std::size_t> hero_filter_at(float x, float y) const;
@@ -130,6 +166,14 @@ class TradeOverlay {
     bool handle_wheel(int delta);
     bool handle_wheel(int delta, int x, int y);
 
+    using TradePriceProvider =
+        std::function<std::optional<gl::game::TradePrice>(const gl::assets::InventoryItem &item)>;
+    using TradeExchangeHandler =
+        std::function<TradeExchangeResult(const std::vector<gl::game::TradePrice> &buy_items,
+                                          const std::vector<gl::game::TradePrice> &sell_items)>;
+    void set_price_provider(TradePriceProvider provider);
+    void set_exchange_handler(TradeExchangeHandler handler);
+
     TradeRegion hit_test(int x, int y) const;
     const TradeLayout &layout() const { return layout_; }
     const std::string &npc_name() const { return npc_name_; }
@@ -151,6 +195,13 @@ class TradeOverlay {
     std::string selected_name() const;
     const std::vector<std::size_t> &visible_npc_indices() const { return npc_visible_; }
     const std::vector<std::size_t> &visible_hero_indices() const { return hero_visible_; }
+    const std::vector<StagedTradeItem> &staged_items() const { return staged_; }
+    std::int64_t buy_total() const;
+    std::int64_t sell_total() const;
+    std::int64_t net_total() const { return sell_total() - buy_total(); }
+    std::size_t staging_scroll() const { return staging_scroll_; }
+    std::size_t staging_max_scroll() const;
+    const std::string &last_error() const { return last_error_; }
 
     static float native_icon_offset(float target, float texture_size);
     static void apply_magenta_key(gl::assets::Image &image);
@@ -175,7 +226,13 @@ class TradeOverlay {
                   int slots);
     void draw_filters(SDL_Renderer *renderer);
     void draw_money(SDL_Renderer *renderer);
+    void draw_totals(SDL_Renderer *renderer);
+    void draw_staging_info(SDL_Renderer *renderer);
     void draw_selected_name(SDL_Renderer *renderer);
+    bool stage_item(TradeOrigin origin, std::size_t source_index);
+    void unstage_item(std::size_t staged_index);
+    void exchange();
+    static const char *status_message(gl::game::TradeStatus status);
 
     const gl::assets::GameVfs *vfs_ = nullptr;
     const gl::assets::ItemCatalog *catalog_ = nullptr;
@@ -200,6 +257,16 @@ class TradeOverlay {
     TradeSelection selection_ = TradeSelection::none;
     std::optional<std::size_t> selected_npc_;
     std::optional<std::size_t> selected_hero_;
+
+    TradePriceProvider price_provider_;
+    TradeExchangeHandler exchange_handler_;
+    std::vector<StagedTradeItem> staged_;
+    std::size_t staging_scroll_ = 0;
+    std::string last_error_;
+    std::optional<gl::assets::InventoryItem> info_item_;
+    std::optional<gl::game::TradePrice> info_price_;
+    TradeOrigin info_origin_ = TradeOrigin::npc;
+    bool exchange_pressed_ = false;
 
     bool visible_ = false;
     float scale_ = 1.0f;

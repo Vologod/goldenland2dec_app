@@ -3,6 +3,7 @@
 #include <gl/assets/csx.hpp>
 #include <gl/assets/image.hpp>
 #include <gl/assets/item_catalog.hpp>
+#include <gl/assets/log.hpp>
 #include <gl/assets/vfs.hpp>
 #include <gl/game/inventory_view.hpp>
 #include <gl/render/text.hpp>
@@ -23,6 +24,7 @@ constexpr std::string_view kFallbackIcon = "engineres/interface/bag.csx";
 constexpr float kMoneyScale = 1.5f;
 constexpr gl::render::Color kMoneyColor{255, 232, 160, 255};
 constexpr gl::render::Color kNameColor{255, 232, 160, 255};
+constexpr std::size_t kMaxStaged = 16;
 
 bool lower_suffix(std::string_view path, std::string_view suffix) {
     if (path.size() < suffix.size())
@@ -87,6 +89,16 @@ std::optional<std::size_t> TradeLayout::npc_slot_at(float x, float y) const {
     return std::nullopt;
 }
 
+std::optional<std::size_t> TradeLayout::staging_slot_at(float x, float y) const {
+    for (std::size_t i = 0; i < kNpcX.size(); ++i) {
+        const TradeRect rect{static_cast<float>(kNpcX[i]), static_cast<float>(kStagingY),
+                             static_cast<float>(kIconSize), static_cast<float>(kIconSize)};
+        if (rect.contains(x, y))
+            return i;
+    }
+    return std::nullopt;
+}
+
 std::optional<std::size_t> TradeLayout::hero_slot_at(float x, float y) const {
     for (std::size_t i = 0; i < kHeroX.size(); ++i) {
         const TradeRect rect{static_cast<float>(kHeroX[i]), static_cast<float>(kHeroY),
@@ -118,10 +130,16 @@ TradeRegion TradeLayout::hit_test(float x, float y) const {
         return TradeRegion::exit;
     if (kDrop.contains(x, y))
         return TradeRegion::drop;
+    if (kExchange.contains(x, y))
+        return TradeRegion::exchange;
     if (kNpcScrollLeft.contains(x, y))
         return TradeRegion::npc_scroll_left;
     if (kNpcScrollRight.contains(x, y))
         return TradeRegion::npc_scroll_right;
+    if (kStagingScrollLeft.contains(x, y))
+        return TradeRegion::staging_scroll_left;
+    if (kStagingScrollRight.contains(x, y))
+        return TradeRegion::staging_scroll_right;
     if (kHeroScrollLeft.contains(x, y))
         return TradeRegion::hero_scroll_left;
     if (kHeroScrollRight.contains(x, y))
@@ -132,6 +150,8 @@ TradeRegion TradeLayout::hit_test(float x, float y) const {
         return TradeRegion::hero_filter;
     if (npc_slot_at(x, y).has_value())
         return TradeRegion::npc_slot;
+    if (staging_slot_at(x, y).has_value())
+        return TradeRegion::staging_slot;
     if (hero_slot_at(x, y).has_value())
         return TradeRegion::hero_slot;
     return TradeRegion::none;
@@ -156,6 +176,12 @@ bool TradeOverlay::open(const gl::assets::GameVfs &vfs, const gl::assets::ItemCa
     hero_filter_index_.reset();
     npc_scroll_ = 0;
     hero_scroll_ = 0;
+    staging_scroll_ = 0;
+    staged_.clear();
+    last_error_.clear();
+    info_item_.reset();
+    info_price_.reset();
+    exchange_pressed_ = false;
     clear_selection();
     visible_ = true;
     screen_w_ = 1024;
@@ -169,6 +195,36 @@ bool TradeOverlay::open(const gl::assets::GameVfs &vfs, const gl::assets::ItemCa
 
 void TradeOverlay::close() { visible_ = false; }
 
+void TradeOverlay::set_price_provider(TradePriceProvider provider) {
+    price_provider_ = std::move(provider);
+}
+
+void TradeOverlay::set_exchange_handler(TradeExchangeHandler handler) {
+    exchange_handler_ = std::move(handler);
+}
+
+std::int64_t TradeOverlay::buy_total() const {
+    std::int64_t total = 0;
+    for (const StagedTradeItem &staged : staged_) {
+        if (staged.origin == TradeOrigin::npc)
+            total += staged.price.buy;
+    }
+    return total;
+}
+
+std::int64_t TradeOverlay::sell_total() const {
+    std::int64_t total = 0;
+    for (const StagedTradeItem &staged : staged_) {
+        if (staged.origin == TradeOrigin::hero)
+            total += staged.price.sell;
+    }
+    return total;
+}
+
+std::size_t TradeOverlay::staging_max_scroll() const {
+    return TradeLayout::max_scroll(staged_.size(), TradeLayout::npc_row_size());
+}
+
 void TradeOverlay::clear_selection() {
     selection_ = TradeSelection::none;
     selected_npc_.reset();
@@ -180,8 +236,8 @@ void TradeOverlay::rebuild_npc_visible() {
     const std::size_t max_scroll = npc_max_scroll();
     if (npc_scroll_ > max_scroll)
         npc_scroll_ = max_scroll;
-    if (selected_npc_.has_value() && std::find(npc_visible_.begin(), npc_visible_.end(),
-                                               *selected_npc_) == npc_visible_.end()) {
+    if (selected_npc_.has_value() &&
+        std::find(npc_visible_.begin(), npc_visible_.end(), *selected_npc_) == npc_visible_.end()) {
         clear_selection();
     }
 }
@@ -195,6 +251,118 @@ void TradeOverlay::rebuild_hero_visible() {
                                                 *selected_hero_) == hero_visible_.end()) {
         clear_selection();
     }
+}
+
+bool TradeOverlay::stage_item(TradeOrigin origin, std::size_t source_index) {
+    if (staged_.size() >= kMaxStaged) {
+        last_error_ = "staging row is full";
+        gl::log(gl::LogLevel::warning, "trade: staging row is full (16 records)");
+        return false;
+    }
+    std::vector<gl::assets::InventoryItem> &items =
+        origin == TradeOrigin::npc ? npc_items_ : hero_items_;
+    if (source_index >= items.size())
+        return false;
+    const gl::assets::InventoryItem item = items[source_index];
+    if (item.type == 18 || item.type == 25) {
+        last_error_ = "money and quest items cannot be traded";
+        gl::log(gl::LogLevel::warning,
+                "trade: item type 0x" + std::to_string(item.type) + " cannot be staged");
+        return false;
+    }
+    if (!price_provider_) {
+        last_error_ = "price unavailable";
+        gl::log(gl::LogLevel::warning, "trade: no price provider configured");
+        return false;
+    }
+    const std::optional<gl::game::TradePrice> price = price_provider_(item);
+    if (!price || price->item_id != item.item_id || price->count != item.count) {
+        last_error_ = "price unavailable";
+        gl::log(gl::LogLevel::warning,
+                "trade: no price for item " + std::to_string(item.item_id) + " (modifier guard)");
+        return false;
+    }
+    items.erase(items.begin() + static_cast<std::ptrdiff_t>(source_index));
+    staged_.push_back(StagedTradeItem{item, *price, origin});
+    info_item_ = item;
+    info_price_ = *price;
+    info_origin_ = origin;
+    last_error_.clear();
+    clear_selection();
+    rebuild_npc_visible();
+    rebuild_hero_visible();
+    return true;
+}
+
+void TradeOverlay::unstage_item(std::size_t staged_index) {
+    if (staged_index >= staged_.size())
+        return;
+    const StagedTradeItem staged = staged_[staged_index];
+    staged_.erase(staged_.begin() + static_cast<std::ptrdiff_t>(staged_index));
+    std::vector<gl::assets::InventoryItem> &items =
+        staged.origin == TradeOrigin::npc ? npc_items_ : hero_items_;
+    items.push_back(staged.item);
+    info_item_.reset();
+    info_price_.reset();
+    last_error_.clear();
+    clear_selection();
+    rebuild_npc_visible();
+    rebuild_hero_visible();
+}
+
+const char *TradeOverlay::status_message(gl::game::TradeStatus status) {
+    switch (status) {
+    case gl::game::TradeStatus::ok:
+        return "";
+    case gl::game::TradeStatus::missing_person:
+        return "trade person is not available";
+    case gl::game::TradeStatus::missing_template:
+        return "item template is not available";
+    case gl::game::TradeStatus::insufficient_stock:
+        return "staged item is no longer available";
+    case gl::game::TradeStatus::insufficient_money:
+        return "not enough money for this exchange";
+    case gl::game::TradeStatus::unsupported_price:
+        return "price is unavailable for a staged item";
+    }
+    return "trade failed";
+}
+
+void TradeOverlay::exchange() {
+    if (staged_.empty())
+        return;
+    if (!exchange_handler_) {
+        last_error_ = "exchange is not available";
+        gl::log(gl::LogLevel::warning, "trade: no exchange handler configured");
+        return;
+    }
+    std::vector<gl::game::TradePrice> buy_items;
+    std::vector<gl::game::TradePrice> sell_items;
+    for (const StagedTradeItem &staged : staged_) {
+        if (staged.origin == TradeOrigin::npc)
+            buy_items.push_back(staged.price);
+        else
+            sell_items.push_back(staged.price);
+    }
+    TradeExchangeResult result = exchange_handler_(buy_items, sell_items);
+    if (result.status != gl::game::TradeStatus::ok) {
+        last_error_ = status_message(result.status);
+        gl::log(gl::LogLevel::warning,
+                "trade: exchange failed: " + std::string(status_message(result.status)));
+        return;
+    }
+    npc_items_ = std::move(result.snapshot.npc_items);
+    hero_items_ = std::move(result.snapshot.hero_items);
+    npc_money_ = result.snapshot.npc_money;
+    hero_money_ = result.snapshot.hero_money;
+    staged_.clear();
+    staging_scroll_ = 0;
+    info_item_.reset();
+    info_price_.reset();
+    last_error_.clear();
+    clear_selection();
+    rebuild_npc_visible();
+    rebuild_hero_visible();
 }
 
 void TradeOverlay::update_transform(int screen_w, int screen_h) {
@@ -431,6 +599,41 @@ void TradeOverlay::draw_money(SDL_Renderer *renderer) {
                           static_cast<float>(TradeLayout::kHeroMoneyY), kMoneyScale, kMoneyColor);
 }
 
+void TradeOverlay::draw_totals(SDL_Renderer *renderer) {
+    const std::string text = "buy " + std::to_string(buy_total()) + "   sell " +
+                             std::to_string(sell_total()) + "   net " + std::to_string(net_total());
+    if (font_ != nullptr) {
+        font_->draw_text(renderer, text, TradeLayout::kTotalsX,
+                         static_cast<float>(TradeLayout::kTotalsY), kMoneyColor);
+        return;
+    }
+    gl::render::draw_text(renderer, text, TradeLayout::kTotalsX,
+                          static_cast<float>(TradeLayout::kTotalsY), 1.5f, kMoneyColor);
+}
+
+void TradeOverlay::draw_staging_info(SDL_Renderer *renderer) {
+    if (!info_item_ || !info_price_)
+        return;
+    const gl::assets::ItemCatalogEntry *entry =
+        catalog_ != nullptr ? catalog_->find(info_item_->item_id) : nullptr;
+    const std::string name = entry != nullptr && !entry->name.empty()
+                                 ? entry->name
+                                 : std::to_string(info_item_->item_id);
+    const std::int64_t total =
+        info_origin_ == TradeOrigin::npc ? info_price_->buy : info_price_->sell;
+    const std::uint32_t count = info_price_->count;
+    const std::int64_t unit = count != 0 ? total / static_cast<std::int64_t>(count) : total;
+    const std::string label = std::string(info_origin_ == TradeOrigin::npc ? "buy " : "sell ") +
+                              std::to_string(unit) + " / " + std::to_string(total);
+    if (font_ != nullptr) {
+        font_->draw_text(renderer, name, 340.0f, 150.0f, kNameColor);
+        font_->draw_text(renderer, label, 340.0f, 172.0f, kNameColor);
+        return;
+    }
+    gl::render::draw_text(renderer, name, 340.0f, 150.0f, 1.5f, kNameColor);
+    gl::render::draw_text(renderer, label, 340.0f, 172.0f, 1.5f, kNameColor);
+}
+
 void TradeOverlay::draw_selected_name(SDL_Renderer *renderer) {
     if (font_ == nullptr || selection_ == TradeSelection::none)
         return;
@@ -484,9 +687,16 @@ void TradeOverlay::render(SDL_Renderer *renderer, int screen_w, int screen_h,
 
     npc_scroll_ = std::min(npc_scroll_, npc_max_scroll());
     hero_scroll_ = std::min(hero_scroll_, hero_max_scroll());
+    staging_scroll_ = std::min(staging_scroll_, staging_max_scroll());
 
     draw_row(renderer, npc_items_, &npc_visible_, TradeLayout::kNpcX.data(), TradeLayout::kNpcY,
              npc_scroll_, static_cast<int>(TradeLayout::npc_row_size()));
+    std::vector<gl::assets::InventoryItem> staging_items;
+    staging_items.reserve(staged_.size());
+    for (const StagedTradeItem &staged : staged_)
+        staging_items.push_back(staged.item);
+    draw_row(renderer, staging_items, nullptr, TradeLayout::kNpcX.data(), TradeLayout::kStagingY,
+             staging_scroll_, static_cast<int>(TradeLayout::npc_row_size()));
     draw_row(renderer, hero_items_, &hero_visible_, TradeLayout::kHeroX.data(), TradeLayout::kHeroY,
              hero_scroll_, static_cast<int>(TradeLayout::hero_row_size()));
 
@@ -498,6 +708,16 @@ void TradeOverlay::render(SDL_Renderer *renderer, int screen_w, int screen_h,
     if (gl::render::Texture *texture = load_texture("engineres/trade/right3.bmp");
         texture != nullptr)
         draw_rect(renderer, *texture, TradeLayout::kNpcScrollRight);
+    if (gl::render::Texture *texture = load_texture("engineres/trade/left2.bmp");
+        texture != nullptr)
+        draw_rect(renderer, *texture, TradeLayout::kStagingScrollLeft);
+    if (gl::render::Texture *texture = load_texture("engineres/trade/right2.bmp");
+        texture != nullptr)
+        draw_rect(renderer, *texture, TradeLayout::kStagingScrollRight);
+    if (gl::render::Texture *texture = load_texture(
+            exchange_pressed_ ? "engineres/trade/pbig2.bmp" : "engineres/trade/lbig2.bmp");
+        texture != nullptr)
+        draw_rect(renderer, *texture, TradeLayout::kExchange);
     if (gl::render::Texture *texture = load_texture("engineres/trade/inv_left.bmp");
         texture != nullptr)
         draw_rect(renderer, *texture, TradeLayout::kHeroScrollLeft);
@@ -511,6 +731,8 @@ void TradeOverlay::render(SDL_Renderer *renderer, int screen_w, int screen_h,
         draw_rect(renderer, *texture, TradeLayout::kDrop);
 
     draw_money(renderer);
+    draw_totals(renderer);
+    draw_staging_info(renderer);
     draw_selected_name(renderer);
 
     SDL_RenderSetScale(renderer, old_scale_x, old_scale_y);
@@ -523,10 +745,14 @@ bool TradeOverlay::handle_mouse(int x, int y, bool click) {
     if (!visible_)
         return false;
     const TradeRegion region = hit_test(x, y);
-    if (region == TradeRegion::none)
+    if (region == TradeRegion::none) {
+        exchange_pressed_ = false;
         return false;
+    }
+    exchange_pressed_ = !click && region == TradeRegion::exchange;
     if (!click)
         return true;
+    exchange_pressed_ = false;
 
     const float logical_x = (static_cast<float>(x) - offset_x_) / scale_;
     const float logical_y = (static_cast<float>(y) - offset_y_) / scale_;
@@ -535,12 +761,22 @@ bool TradeOverlay::handle_mouse(int x, int y, bool click) {
     case TradeRegion::exit:
         close();
         break;
+    case TradeRegion::exchange:
+        exchange();
+        break;
     case TradeRegion::npc_scroll_left:
         if (npc_scroll_ > 0)
             --npc_scroll_;
         break;
     case TradeRegion::npc_scroll_right:
         npc_scroll_ = std::min(npc_scroll_ + 1, npc_max_scroll());
+        break;
+    case TradeRegion::staging_scroll_left:
+        if (staging_scroll_ > 0)
+            --staging_scroll_;
+        break;
+    case TradeRegion::staging_scroll_right:
+        staging_scroll_ = std::min(staging_scroll_ + 1, staging_max_scroll());
         break;
     case TradeRegion::hero_scroll_left:
         if (hero_scroll_ > 0)
@@ -569,21 +805,38 @@ bool TradeOverlay::handle_mouse(int x, int y, bool click) {
         if (const auto slot = layout_.npc_slot_at(logical_x, logical_y); slot.has_value()) {
             const std::size_t index = npc_scroll_ + *slot;
             if (index < npc_visible_.size()) {
-                selection_ = TradeSelection::npc;
-                selected_npc_ = npc_visible_[index];
-                selected_hero_.reset();
+                if (price_provider_) {
+                    if (!stage_item(TradeOrigin::npc, npc_visible_[index]))
+                        clear_selection();
+                } else {
+                    selection_ = TradeSelection::npc;
+                    selected_npc_ = npc_visible_[index];
+                    selected_hero_.reset();
+                }
             } else {
                 clear_selection();
             }
+        }
+        break;
+    case TradeRegion::staging_slot:
+        if (const auto slot = layout_.staging_slot_at(logical_x, logical_y); slot.has_value()) {
+            const std::size_t index = staging_scroll_ + *slot;
+            if (index < staged_.size())
+                unstage_item(index);
         }
         break;
     case TradeRegion::hero_slot:
         if (const auto slot = layout_.hero_slot_at(logical_x, logical_y); slot.has_value()) {
             const std::size_t index = hero_scroll_ + *slot;
             if (index < hero_visible_.size()) {
-                selection_ = TradeSelection::hero;
-                selected_hero_ = hero_visible_[index];
-                selected_npc_.reset();
+                if (price_provider_) {
+                    if (!stage_item(TradeOrigin::hero, hero_visible_[index]))
+                        clear_selection();
+                } else {
+                    selection_ = TradeSelection::hero;
+                    selected_hero_ = hero_visible_[index];
+                    selected_npc_.reset();
+                }
             } else {
                 clear_selection();
             }
@@ -621,6 +874,14 @@ bool TradeOverlay::handle_wheel(int delta, int x, int y) {
     if (!visible_ || delta == 0)
         return false;
     const TradeRegion region = hit_test(x, y);
+    if (region == TradeRegion::staging_slot || region == TradeRegion::staging_scroll_left ||
+        region == TradeRegion::staging_scroll_right) {
+        if (delta > 0)
+            staging_scroll_ = std::min(staging_scroll_ + 3u, staging_max_scroll());
+        else
+            staging_scroll_ = staging_scroll_ > 3u ? staging_scroll_ - 3u : 0u;
+        return true;
+    }
     const bool over_hero = region == TradeRegion::hero_slot || region == TradeRegion::hero_filter ||
                            region == TradeRegion::hero_scroll_left ||
                            region == TradeRegion::hero_scroll_right;

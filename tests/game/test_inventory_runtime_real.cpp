@@ -229,9 +229,9 @@ struct ItemCountOracle {
 };
 
 void check_l13_1_trade_oracle(int slot, std::int32_t expected_loot_level,
-                              const std::vector<ItemCountOracle>& hero_first12,
+                              const std::vector<ItemCountOracle> &hero_first12,
                               std::int32_t npc_money,
-                              const std::vector<ItemCountOracle>& npc_items) {
+                              const std::vector<ItemCountOracle> &npc_items) {
     auto vfs = gl::assets::GameVfs::mount(std::getenv("GL_GAME_DIR"));
     REQUIRE(vfs.has_value());
     auto catalog = gl::assets::ItemCatalog::load(vfs.value());
@@ -245,8 +245,7 @@ void check_l13_1_trade_oracle(int slot, std::int32_t expected_loot_level,
     REQUIRE(body.has_value());
     auto stats = gl::assets::parse_hero_stats(body.value());
     REQUIRE(stats.has_value());
-    const std::int32_t loot_level =
-        gl::game::hero_level_from_experience(stats->experience) + 1;
+    const std::int32_t loot_level = gl::game::hero_level_from_experience(stats->experience) + 1;
     CHECK(loot_level == expected_loot_level);
 
     auto runtime = make_runtime(vfs.value(), slot, catalog.value());
@@ -254,21 +253,30 @@ void check_l13_1_trade_oracle(int slot, std::int32_t expected_loot_level,
     gl::game::generate_npc_inventories(runtime, level->persons, vfs.value(), names.value(),
                                        catalog_lookup(catalog.value()), loot_level, rng);
 
-    const std::vector<gl::assets::InventoryItem>& hero = runtime.hero_inventory().items;
+    const std::vector<gl::assets::InventoryItem> &hero = runtime.hero_inventory().items;
     REQUIRE(hero.size() >= hero_first12.size());
     for (std::size_t index = 0; index < hero_first12.size(); ++index) {
         CAPTURE(index);
         CHECK(hero[index].item_id == hero_first12[index].id);
         CHECK(hero[index].count == hero_first12[index].count);
+        CHECK(hero[index].durability == 100);
+    }
+    for (const gl::assets::InventoryItem &item : hero) {
+        if (item.item_id == 953) {
+            CHECK(item.durability == 100);
+            CHECK(item.mod_count == 0);
+        }
     }
 
     const std::string trader = "L13_1.P517_Boat_Trader";
-    const std::vector<gl::assets::InventoryItem>& npc = runtime.trade_items(trader);
+    const std::vector<gl::assets::InventoryItem> &npc = runtime.trade_items(trader);
     REQUIRE(npc.size() == npc_items.size());
     for (std::size_t index = 0; index < npc_items.size(); ++index) {
         CAPTURE(index);
         CHECK(npc[index].item_id == npc_items[index].id);
         CHECK(npc[index].count == npc_items[index].count);
+        CHECK(npc[index].durability == 100);
+        CHECK(npc[index].mod_count == 0);
     }
     CHECK(runtime.trade_money(trader) == npc_money);
 }
@@ -413,8 +421,8 @@ TEST_CASE("real data: l13_1 slot0 trade lists match the research oracle" *
 TEST_CASE("real data: l13_1 slot2 trade lists match the research oracle" *
           doctest::skip(!game_dir_available())) {
     const std::vector<ItemCountOracle> hero = {
-        {812, 122008}, {429, 1},  {411, 16}, {449, 5},  {441, 4},  {408, 5},
-        {444, 1},      {422, 2},  {410, 13}, {435, 5},  {423, 1},  {445, 13},
+        {812, 122008}, {429, 1}, {411, 16}, {449, 5}, {441, 4}, {408, 5},
+        {444, 1},      {422, 2}, {410, 13}, {435, 5}, {423, 1}, {445, 13},
     };
     const std::vector<ItemCountOracle> npc = {
         {812, 9813}, {812, 13632}, {812, 10266}, {812, 15197}, {408, 4},  {409, 8},

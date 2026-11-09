@@ -136,7 +136,27 @@ void check_items_equal(const std::vector<InventoryItem> &actual,
         CHECK(actual[index].flags == expected[index].flags);
         CHECK(actual[index].type == expected[index].type);
         CHECK(actual[index].style == expected[index].style);
+        CHECK(actual[index].durability == expected[index].durability);
+        CHECK(actual[index].mod_count == expected[index].mod_count);
     }
+}
+
+InventoryRuntime make_modifier_trade_runtime(std::uint32_t hero_money, std::uint32_t hero_potion,
+                                             std::uint32_t npc_money, std::uint32_t npc_potion,
+                                             std::uint32_t npc_mod_count = 0,
+                                             std::uint32_t hero_mod_count = 0) {
+    gl::assets::HeroInventory inventory;
+    inventory.items.push_back({812, hero_money, 0, 18, 0});
+    if (hero_potion != 0)
+        inventory.items.push_back({953, hero_potion, 0x8000000Cu, 19, 0, 77, hero_mod_count});
+    auto runtime = InventoryRuntime::create(inventory, make_trade_names(), trade_template_for);
+    runtime.set_person_items(std::string(kTradeNpc), {});
+    std::vector<InventoryItem> trade;
+    trade.push_back({812, npc_money, 0, 18, 0});
+    if (npc_potion != 0)
+        trade.push_back({953, npc_potion, 0x8000000Cu, 19, 0, 55, npc_mod_count});
+    runtime.set_person_trade_items(std::string(kTradeNpc), std::move(trade));
+    return runtime;
 }
 } // namespace
 
@@ -1231,4 +1251,191 @@ TEST_CASE("inventory_runtime trade rejects a quote for a different item id") {
 
     check_items_equal(runtime.person_items("Hero"), hero_before);
     check_items_equal(runtime.trade_items(kTradeNpc), trade_before);
+}
+
+TEST_CASE("inventory_runtime exchange_trade buy only matches the buy primitive") {
+    auto runtime = make_trade_runtime(43875, 51, 42142, 14);
+
+    CHECK(runtime.exchange_trade(kTradeNpc, "Hero", {whole_stack_price(1, 14)}, {}) ==
+          TradeStatus::ok);
+
+    CHECK(runtime.count("Hero", "POT_1_00_27") == 65);
+    CHECK(runtime.count("Hero", "MON_1_0_1") == 27075);
+    CHECK(runtime.money() == 27075);
+    CHECK(trade_item_count(runtime, 953) == 0);
+    CHECK(runtime.trade_money(kTradeNpc) == 58942);
+    CHECK(runtime.money() + runtime.trade_money(kTradeNpc) == 86017);
+}
+
+TEST_CASE("inventory_runtime exchange_trade sell only matches the sell primitive") {
+    auto runtime = make_trade_runtime(43875, 51, 42142, 14);
+
+    CHECK(runtime.exchange_trade(kTradeNpc, "Hero", {}, {whole_stack_price(1, 51)}) ==
+          TradeStatus::ok);
+
+    CHECK(runtime.count("Hero", "POT_1_00_27") == 0);
+    CHECK(runtime.count("Hero", "MON_1_0_1") == 54483);
+    CHECK(runtime.money() == 54483);
+    CHECK(trade_item_count(runtime, 953) == 65);
+    CHECK(runtime.trade_money(kTradeNpc) == 31534);
+    CHECK(runtime.money() + runtime.trade_money(kTradeNpc) == 86017);
+}
+
+TEST_CASE("inventory_runtime exchange_trade settles a mixed buy and sell") {
+    auto runtime = make_trade_runtime(43875, 51, 42142, 14);
+
+    CHECK(runtime.exchange_trade(kTradeNpc, "Hero", {whole_stack_price(1, 14)},
+                                 {whole_stack_price(1, 51)}) == TradeStatus::ok);
+
+    CHECK(runtime.count("Hero", "POT_1_00_27") == 14);
+    CHECK(trade_item_count(runtime, 953) == 51);
+    CHECK(runtime.count("Hero", "MON_1_0_1") == 37683);
+    CHECK(runtime.trade_money(kTradeNpc) == 48334);
+    CHECK(runtime.money() + runtime.trade_money(kTradeNpc) == 86017);
+    CHECK(runtime.count("Hero", "POT_1_00_27") + trade_item_count(runtime, 953) == 65);
+}
+
+TEST_CASE("inventory_runtime exchange_trade moves net money from npc to hero") {
+    auto runtime = make_trade_runtime(43875, 51, 42142, 14);
+    const TradePrice buy{953, 5000, 0, 14};
+    const TradePrice sell{953, 0, 9000, 51};
+
+    CHECK(runtime.exchange_trade(kTradeNpc, "Hero", {buy}, {sell}) == TradeStatus::ok);
+
+    CHECK(runtime.count("Hero", "POT_1_00_27") == 14);
+    CHECK(trade_item_count(runtime, 953) == 51);
+    CHECK(runtime.money() == 47875);
+    CHECK(runtime.trade_money(kTradeNpc) == 38142);
+}
+
+TEST_CASE("inventory_runtime exchange_trade equal totals move no money") {
+    auto runtime = make_trade_runtime(43875, 51, 42142, 14);
+    const TradePrice buy{953, 9000, 0, 14};
+    const TradePrice sell{953, 0, 9000, 51};
+
+    CHECK(runtime.exchange_trade(kTradeNpc, "Hero", {buy}, {sell}) == TradeStatus::ok);
+
+    CHECK(runtime.money() == 43875);
+    CHECK(runtime.trade_money(kTradeNpc) == 42142);
+    CHECK(runtime.count("Hero", "POT_1_00_27") == 14);
+    CHECK(trade_item_count(runtime, 953) == 51);
+}
+
+TEST_CASE("inventory_runtime exchange_trade empty staging is a no-op") {
+    auto runtime = make_trade_runtime(43875, 51, 42142, 14);
+    const auto hero_before = runtime.person_items("Hero");
+    const auto trade_before = runtime.trade_items(kTradeNpc);
+
+    CHECK(runtime.exchange_trade(kTradeNpc, "Hero", {}, {}) == TradeStatus::ok);
+
+    check_items_equal(runtime.person_items("Hero"), hero_before);
+    check_items_equal(runtime.trade_items(kTradeNpc), trade_before);
+}
+
+TEST_CASE("inventory_runtime exchange_trade without enough npc money leaves state unchanged") {
+    auto runtime = make_trade_runtime(43875, 51, 100, 14);
+    const auto hero_before = runtime.person_items("Hero");
+    const auto trade_before = runtime.trade_items(kTradeNpc);
+
+    const TradePrice sell{953, 0, 9000, 51};
+    CHECK(runtime.exchange_trade(kTradeNpc, "Hero", {}, {sell}) == TradeStatus::insufficient_money);
+
+    check_items_equal(runtime.person_items("Hero"), hero_before);
+    check_items_equal(runtime.trade_items(kTradeNpc), trade_before);
+}
+
+TEST_CASE("inventory_runtime exchange_trade without enough hero money leaves state unchanged") {
+    auto runtime = make_trade_runtime(1000, 51, 42142, 14);
+    const auto hero_before = runtime.person_items("Hero");
+    const auto trade_before = runtime.trade_items(kTradeNpc);
+
+    CHECK(runtime.exchange_trade(kTradeNpc, "Hero", {whole_stack_price(1, 14)}, {}) ==
+          TradeStatus::insufficient_money);
+
+    check_items_equal(runtime.person_items("Hero"), hero_before);
+    check_items_equal(runtime.trade_items(kTradeNpc), trade_before);
+}
+
+TEST_CASE("inventory_runtime exchange_trade rejects modified npc stock without mutation") {
+    auto runtime = make_modifier_trade_runtime(43875, 51, 42142, 14, 1, 0);
+    const auto hero_before = runtime.person_items("Hero");
+    const auto trade_before = runtime.trade_items(kTradeNpc);
+
+    CHECK(runtime.exchange_trade(kTradeNpc, "Hero", {whole_stack_price(1, 14)}, {}) ==
+          TradeStatus::unsupported_price);
+
+    check_items_equal(runtime.person_items("Hero"), hero_before);
+    check_items_equal(runtime.trade_items(kTradeNpc), trade_before);
+}
+
+TEST_CASE("inventory_runtime exchange_trade rejects modified hero stock without mutation") {
+    auto runtime = make_modifier_trade_runtime(43875, 51, 42142, 14, 0, 1);
+    const auto hero_before = runtime.person_items("Hero");
+    const auto trade_before = runtime.trade_items(kTradeNpc);
+
+    CHECK(runtime.exchange_trade(kTradeNpc, "Hero", {}, {whole_stack_price(1, 51)}) ==
+          TradeStatus::unsupported_price);
+
+    check_items_equal(runtime.person_items("Hero"), hero_before);
+    check_items_equal(runtime.trade_items(kTradeNpc), trade_before);
+}
+
+TEST_CASE("inventory_runtime exchange_trade rejects money and quest records") {
+    gl::assets::HeroInventory inventory;
+    inventory.items.push_back({812, 43875, 0, 18, 0});
+    auto runtime = InventoryRuntime::create(inventory, make_trade_names(), trade_template_for);
+    runtime.set_person_items(std::string(kTradeNpc), {});
+    runtime.set_person_trade_items(
+        std::string(kTradeNpc),
+        {InventoryItem{812, 42142, 0, 18, 0}, InventoryItem{953, 1, 0x8000000Cu, 25, 0}});
+
+    const auto before = runtime.trade_items(kTradeNpc);
+    CHECK(runtime.exchange_trade(kTradeNpc, "Hero", {TradePrice{953, 100, 0, 1}}, {}) ==
+          TradeStatus::unsupported_price);
+    check_items_equal(runtime.trade_items(kTradeNpc), before);
+}
+
+TEST_CASE("inventory_runtime exchange_trade rejects a quote for another stack") {
+    auto runtime = make_trade_runtime(43875, 51, 42142, 14);
+    const auto hero_before = runtime.person_items("Hero");
+    const auto trade_before = runtime.trade_items(kTradeNpc);
+
+    CHECK(runtime.exchange_trade(kTradeNpc, "Hero", {whole_stack_price(1, 13)}, {}) ==
+          TradeStatus::unsupported_price);
+    CHECK(runtime.exchange_trade(kTradeNpc, "Hero", {}, {whole_stack_price(1, 50)}) ==
+          TradeStatus::unsupported_price);
+
+    check_items_equal(runtime.person_items("Hero"), hero_before);
+    check_items_equal(runtime.trade_items(kTradeNpc), trade_before);
+}
+
+TEST_CASE("inventory_runtime exchange_trade copies durability and modifier metadata") {
+    auto runtime = make_modifier_trade_runtime(43875, 0, 42142, 14, 0, 0);
+
+    CHECK(runtime.exchange_trade(kTradeNpc, "Hero", {whole_stack_price(1, 14)}, {}) ==
+          TradeStatus::ok);
+
+    const auto &hero = runtime.person_items("Hero");
+    REQUIRE(hero.size() == 2);
+    CHECK(hero[1].item_id == 953);
+    CHECK(hero[1].durability == 55);
+    CHECK(hero[1].mod_count == 0);
+}
+
+TEST_CASE("inventory_runtime exchange_trade moves only the first matching record") {
+    gl::assets::HeroInventory inventory;
+    inventory.items.push_back({812, 43875, 0, 18, 0});
+    inventory.items.push_back({953, 51, 0x8000000Cu, 19, 0});
+    auto runtime = InventoryRuntime::create(inventory, make_trade_names(), trade_template_for);
+    runtime.set_person_items(std::string(kTradeNpc), {});
+    runtime.set_person_trade_items(std::string(kTradeNpc),
+                                   {InventoryItem{812, 42142, 0, 18, 0},
+                                    InventoryItem{953, 14, 0x8000000Cu, 19, 0},
+                                    InventoryItem{953, 9, 0x8000000Cu, 19, 0}});
+
+    CHECK(runtime.exchange_trade(kTradeNpc, "Hero", {whole_stack_price(1, 14)}, {}) ==
+          TradeStatus::ok);
+
+    CHECK(trade_item_count(runtime, 953) == 9);
+    CHECK(runtime.count("Hero", "POT_1_00_27") == 65);
 }

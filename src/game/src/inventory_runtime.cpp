@@ -61,10 +61,29 @@ bool append_items_preserving(std::vector<gl::assets::InventoryItem> &items, std:
     }
     while (remaining != 0) {
         const std::uint32_t added = std::min(remaining, max_stack);
-        items.push_back({item_id, added, source.flags, source.type, source.style});
+        items.push_back({item_id, added, source.flags, source.type, source.style, source.durability,
+                         source.mod_count});
         remaining -= added;
     }
     return true;
+}
+
+bool tradeable_record(const gl::assets::InventoryItem &item) {
+    if (item.count == 0)
+        return false;
+    if (item.type == 18 || item.type == 25)
+        return false;
+    return item.mod_count == 0 || (item.flags & 0x80u) != 0;
+}
+
+std::uint64_t money_units(const std::vector<gl::assets::InventoryItem> &items,
+                          std::uint32_t money_id) {
+    std::uint64_t total = 0;
+    for (const gl::assets::InventoryItem &item : items) {
+        if (item.item_id == money_id)
+            total += item.count;
+    }
+    return total;
 }
 
 bool remove_item_count(std::vector<gl::assets::InventoryItem> &items, std::uint32_t item_id,
@@ -292,6 +311,121 @@ TradeStatus InventoryRuntime::sell_trade(std::string_view npc, std::string_view 
         return TradeStatus::missing_template;
     return execute_trade(hero_inventory_.items, trade->second, trade->second, hero_inventory_.items,
                          *item_id, price, price.sell);
+}
+
+TradeStatus InventoryRuntime::exchange_trade(std::string_view npc, std::string_view hero,
+                                             const std::vector<TradePrice> &buy_items,
+                                             const std::vector<TradePrice> &sell_items) {
+    if (!is_hero(hero))
+        return TradeStatus::missing_person;
+    const auto trade = trades_.find(npc);
+    if (trade == trades_.end())
+        return TradeStatus::missing_person;
+    if (buy_items.empty() && sell_items.empty())
+        return TradeStatus::ok;
+
+    std::vector<gl::assets::InventoryItem> npc_items = trade->second;
+    std::vector<gl::assets::InventoryItem> hero_items = hero_inventory_.items;
+
+    std::vector<gl::assets::InventoryItem> moved_buy;
+    moved_buy.reserve(buy_items.size());
+    std::int64_t buy_total = 0;
+    for (const TradePrice &quote : buy_items) {
+        if (quote.buy <= 0 ||
+            static_cast<std::uint64_t>(quote.buy) > std::numeric_limits<std::uint32_t>::max())
+            return TradeStatus::unsupported_price;
+        buy_total += quote.buy;
+        if (buy_total > std::numeric_limits<std::uint32_t>::max())
+            return TradeStatus::unsupported_price;
+
+        const auto record = std::find_if(
+            npc_items.begin(), npc_items.end(), [&quote](const gl::assets::InventoryItem &item) {
+                return item.item_id == quote.item_id && item.count != 0;
+            });
+        if (record == npc_items.end())
+            return TradeStatus::insufficient_stock;
+        if (record->count != quote.count || !tradeable_record(*record))
+            return TradeStatus::unsupported_price;
+        if (!item_template_)
+            return TradeStatus::missing_template;
+        const auto item_template = item_template_(record->item_id);
+        if (!item_template || item_template->max_stack == 0)
+            return TradeStatus::missing_template;
+        moved_buy.push_back(*record);
+        npc_items.erase(record);
+    }
+
+    std::vector<gl::assets::InventoryItem> moved_sell;
+    moved_sell.reserve(sell_items.size());
+    std::int64_t sell_total = 0;
+    for (const TradePrice &quote : sell_items) {
+        if (quote.sell <= 0 ||
+            static_cast<std::uint64_t>(quote.sell) > std::numeric_limits<std::uint32_t>::max())
+            return TradeStatus::unsupported_price;
+        sell_total += quote.sell;
+        if (sell_total > std::numeric_limits<std::uint32_t>::max())
+            return TradeStatus::unsupported_price;
+
+        const auto record = std::find_if(
+            hero_items.begin(), hero_items.end(), [&quote](const gl::assets::InventoryItem &item) {
+                return item.item_id == quote.item_id && item.count != 0;
+            });
+        if (record == hero_items.end())
+            return TradeStatus::insufficient_stock;
+        if (record->count != quote.count || !tradeable_record(*record))
+            return TradeStatus::unsupported_price;
+        if (!item_template_)
+            return TradeStatus::missing_template;
+        const auto item_template = item_template_(record->item_id);
+        if (!item_template || item_template->max_stack == 0)
+            return TradeStatus::missing_template;
+        moved_sell.push_back(*record);
+        hero_items.erase(record);
+    }
+
+    const std::int64_t net = sell_total - buy_total;
+    const auto money_id = names_.find(kMoneyTech);
+    const std::optional<ItemTemplate> money_template =
+        (money_id && item_template_) ? item_template_(*money_id) : std::nullopt;
+    if (net != 0) {
+        if (!money_id || !money_template || money_template->max_stack == 0)
+            return TradeStatus::missing_template;
+        if (net > 0) {
+            if (money_units(npc_items, *money_id) < static_cast<std::uint64_t>(net))
+                return TradeStatus::insufficient_money;
+        } else if (money_units(hero_items, *money_id) < static_cast<std::uint64_t>(-net)) {
+            return TradeStatus::insufficient_money;
+        }
+    }
+
+    for (const gl::assets::InventoryItem &moved : moved_buy) {
+        const auto item_template = item_template_(moved.item_id);
+        append_items_preserving(hero_items, moved.item_id, moved, item_template->max_stack,
+                                moved.count);
+    }
+    for (const gl::assets::InventoryItem &moved : moved_sell) {
+        const auto item_template = item_template_(moved.item_id);
+        append_items_preserving(npc_items, moved.item_id, moved, item_template->max_stack,
+                                moved.count);
+    }
+
+    if (net > 0) {
+        if (!remove_item_count(npc_items, *money_id, static_cast<std::uint64_t>(net))) {
+            assert(false && "money availability validated before exchange");
+            return TradeStatus::insufficient_money;
+        }
+        append_items(hero_items, *money_id, *money_template, static_cast<std::uint32_t>(net));
+    } else if (net < 0) {
+        if (!remove_item_count(hero_items, *money_id, static_cast<std::uint64_t>(-net))) {
+            assert(false && "money availability validated before exchange");
+            return TradeStatus::insufficient_money;
+        }
+        append_items(npc_items, *money_id, *money_template, static_cast<std::uint32_t>(-net));
+    }
+
+    trade->second = std::move(npc_items);
+    hero_inventory_.items = std::move(hero_items);
+    return TradeStatus::ok;
 }
 
 std::int32_t InventoryRuntime::count(std::string_view person, std::string_view tech_name) const {

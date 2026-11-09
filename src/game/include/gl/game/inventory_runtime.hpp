@@ -48,6 +48,13 @@ class InventoryRuntime {
                           const TradePrice &price);
     TradeStatus sell_trade(std::string_view npc, std::string_view hero, std::string_view tech_name,
                            const TradePrice &price);
+    // Stages are settled in one step: each quote identifies a whole source
+    // record (`item_id`, `count`). Buy quotes move NPC trade -> Hero main,
+    // sell quotes move Hero main -> NPC trade, then the net money difference
+    // is settled. Any error leaves every container untouched.
+    TradeStatus exchange_trade(std::string_view npc, std::string_view hero,
+                               const std::vector<TradePrice> &buy_items,
+                               const std::vector<TradePrice> &sell_items);
     std::int32_t count(std::string_view person, std::string_view tech_name) const;
     std::int32_t money() const;
     const gl::assets::HeroInventory &hero_inventory() const;

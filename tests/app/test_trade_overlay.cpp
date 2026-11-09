@@ -4,6 +4,7 @@
 #include <gl/app/trade_overlay.hpp>
 #include <gl/assets/image.hpp>
 #include <gl/assets/item_catalog.hpp>
+#include <gl/assets/sdb.hpp>
 #include <gl/assets/vfs.hpp>
 
 #include <chrono>
@@ -44,6 +45,66 @@ std::vector<gl::assets::InventoryItem> make_items(std::size_t count, std::uint32
     for (std::size_t i = 0; i < count; ++i)
         items.push_back(make_item(first_id + static_cast<std::uint32_t>(i), type));
     return items;
+}
+
+gl::game::TradePrice make_quote(const gl::assets::InventoryItem &item, std::int64_t buy_unit = 100,
+                                std::int64_t sell_unit = 50) {
+    return gl::game::TradePrice{item.item_id, buy_unit * item.count, sell_unit * item.count,
+                                item.count};
+}
+
+gl::assets::ItemNameIndex make_trade_names() {
+    const std::vector<gl::assets::SdbEntry> entries = {
+        {812, "MON_1_0_1"},
+        {953, "POT_1_00_27"},
+    };
+    auto index = gl::assets::ItemNameIndex::from_entries(entries);
+    REQUIRE(index.has_value());
+    return index.value();
+}
+
+std::optional<gl::game::ItemTemplate> overlay_template_for(std::uint32_t item_id) {
+    switch (item_id) {
+    case 812:
+        return gl::game::ItemTemplate{18, 0xC0000000u, 1, 100000000u};
+    case 953:
+        return gl::game::ItemTemplate{19, 0x8000000Cu, 0, 10000u};
+    default:
+        return std::nullopt;
+    }
+}
+
+gl::game::InventoryRuntime make_overlay_runtime(std::uint32_t hero_money = 43875,
+                                                std::uint32_t hero_potion = 51,
+                                                std::uint32_t npc_money = 42142,
+                                                std::uint32_t npc_potion = 14) {
+    gl::assets::HeroInventory inventory;
+    inventory.items.push_back({812, hero_money, 0, 18, 0});
+    if (hero_potion != 0)
+        inventory.items.push_back({953, hero_potion, 0x8000000Cu, 19, 0});
+    auto runtime =
+        gl::game::InventoryRuntime::create(inventory, make_trade_names(), overlay_template_for);
+    runtime.set_person_items("L13_1.P517_Boat_Trader", {});
+    std::vector<gl::assets::InventoryItem> trade;
+    trade.push_back({812, npc_money, 0, 18, 0});
+    if (npc_potion != 0)
+        trade.push_back({953, npc_potion, 0x8000000Cu, 19, 0});
+    runtime.set_person_trade_items("L13_1.P517_Boat_Trader", std::move(trade));
+    return runtime;
+}
+
+gl::app::TradeExchangeResult exchange_runtime(gl::game::InventoryRuntime &runtime,
+                                              const std::vector<gl::game::TradePrice> &buy,
+                                              const std::vector<gl::game::TradePrice> &sell) {
+    gl::app::TradeExchangeResult result;
+    result.status = runtime.exchange_trade("L13_1.P517_Boat_Trader", "Hero", buy, sell);
+    if (result.status == gl::game::TradeStatus::ok) {
+        result.snapshot.npc_items = runtime.trade_items("L13_1.P517_Boat_Trader");
+        result.snapshot.hero_items = runtime.hero_inventory().items;
+        result.snapshot.npc_money = runtime.trade_money("L13_1.P517_Boat_Trader");
+        result.snapshot.hero_money = runtime.money();
+    }
+    return result;
 }
 
 std::optional<gl::assets::HeroInventory> load_real_inventory(int slot) {
@@ -188,6 +249,22 @@ TEST_CASE("trade layout reports money and row geometry") {
     CHECK(layout.hero_row_size() == 12);
     CHECK(gl::app::TradeLayout::max_scroll(25, 10) == 15);
     CHECK(gl::app::TradeLayout::max_scroll(7, 10) == 0);
+}
+
+TEST_CASE("trade layout hit-tests the staging row, exchange and staging scroll") {
+    gl::app::TradeLayout layout;
+
+    CHECK(gl::app::TradeLayout::kStagingY == 208);
+    CHECK(gl::app::TradeLayout::kTotalsY == 386);
+    CHECK(layout.staging_slot_at(347.0f, 208.0f) == std::optional<std::size_t>{0});
+    CHECK(layout.staging_slot_at(895.0f + 54.0f, 208.0f + 54.0f) == std::optional<std::size_t>{9});
+    CHECK_FALSE(layout.staging_slot_at(346.0f, 208.0f).has_value());
+
+    CHECK(layout.hit_test(350.0f, 210.0f) == gl::app::TradeRegion::staging_slot);
+    CHECK(layout.hit_test(600.0f, 340.0f) == gl::app::TradeRegion::exchange);
+    CHECK(layout.hit_test(325.0f, 230.0f) == gl::app::TradeRegion::staging_scroll_left);
+    CHECK(layout.hit_test(967.0f, 230.0f) == gl::app::TradeRegion::staging_scroll_right);
+    CHECK(layout.hit_test(500.0f, 300.0f) == gl::app::TradeRegion::none);
 }
 
 TEST_CASE("trade overlay opens visible with money and both lists") {
@@ -365,6 +442,139 @@ TEST_CASE("trade overlay selects npc and hero items read-only") {
     CHECK(overlay.selected_npc() == std::optional<std::size_t>{0});
 }
 
+TEST_CASE("trade overlay stages whole npc and hero stacks and returns them") {
+    gl::assets::GameVfs vfs;
+    gl::assets::ItemCatalog catalog;
+    gl::app::TradeOverlay overlay;
+    const auto npc = std::vector<gl::assets::InventoryItem>{make_item(953, 19, 14, 0x8000000Cu)};
+    const auto hero = std::vector<gl::assets::InventoryItem>{make_item(953, 19, 51, 0x8000000Cu)};
+    REQUIRE(overlay.open(vfs, catalog, "npc", npc, 42142, hero, 43875));
+    overlay.set_price_provider([](const gl::assets::InventoryItem &item) {
+        return std::optional<gl::game::TradePrice>{make_quote(item)};
+    });
+
+    CHECK(overlay.handle_mouse(360, 40, true));
+    CHECK(overlay.npc_items().empty());
+    REQUIRE(overlay.staged_items().size() == 1);
+    CHECK(overlay.staged_items()[0].origin == gl::app::TradeOrigin::npc);
+    CHECK(overlay.staged_items()[0].item.count == 14);
+    CHECK(overlay.buy_total() == 1400);
+    CHECK(overlay.sell_total() == 0);
+    CHECK(overlay.net_total() == -1400);
+
+    CHECK(overlay.handle_mouse(150, 710, true));
+    CHECK(overlay.hero_items().empty());
+    REQUIRE(overlay.staged_items().size() == 2);
+    CHECK(overlay.staged_items()[1].origin == gl::app::TradeOrigin::hero);
+    CHECK(overlay.staged_items()[1].item.count == 51);
+    CHECK(overlay.sell_total() == 2550);
+    CHECK(overlay.net_total() == 1150);
+
+    CHECK(overlay.handle_mouse(360, 210, true));
+    REQUIRE(overlay.staged_items().size() == 1);
+    REQUIRE(overlay.npc_items().size() == 1);
+    CHECK(overlay.npc_items()[0].item_id == 953);
+    CHECK(overlay.npc_items()[0].count == 14);
+    CHECK(overlay.buy_total() == 0);
+
+    CHECK(overlay.handle_mouse(360, 210, true));
+    CHECK(overlay.staged_items().empty());
+    REQUIRE(overlay.hero_items().size() == 1);
+    CHECK(overlay.hero_items()[0].count == 51);
+    CHECK(overlay.sell_total() == 0);
+}
+
+TEST_CASE("trade overlay exchange settles staging and updates lists and money") {
+    gl::assets::GameVfs vfs;
+    gl::assets::ItemCatalog catalog;
+    gl::app::TradeOverlay overlay;
+    auto runtime = make_overlay_runtime();
+    const std::vector<gl::assets::InventoryItem> npc =
+        runtime.trade_items("L13_1.P517_Boat_Trader");
+    const std::vector<gl::assets::InventoryItem> hero = runtime.hero_inventory().items;
+    REQUIRE(overlay.open(vfs, catalog, "L13_1.P517_Boat_Trader", npc,
+                         runtime.trade_money("L13_1.P517_Boat_Trader"), hero, runtime.money()));
+    overlay.set_price_provider([](const gl::assets::InventoryItem &item) {
+        return std::optional<gl::game::TradePrice>{make_quote(item, 1200, 208)};
+    });
+    overlay.set_exchange_handler([&runtime](const std::vector<gl::game::TradePrice> &buy,
+                                            const std::vector<gl::game::TradePrice> &sell) {
+        return exchange_runtime(runtime, buy, sell);
+    });
+
+    REQUIRE(overlay.handle_mouse(407, 26, true));
+    REQUIRE(overlay.handle_mouse(201, 703, true));
+    REQUIRE(overlay.staged_items().size() == 2);
+    CHECK(overlay.buy_total() == 16800);
+    CHECK(overlay.sell_total() == 10608);
+
+    CHECK(overlay.hit_test(600, 340) == gl::app::TradeRegion::exchange);
+    CHECK(overlay.handle_mouse(600, 340, true));
+    CHECK(overlay.last_error().empty());
+    CHECK(overlay.staged_items().empty());
+    CHECK(overlay.npc_items().size() == 2);
+    CHECK(overlay.hero_items().size() == 2);
+    CHECK(overlay.npc_money() == 48334);
+    CHECK(overlay.hero_money() == 37683);
+}
+
+TEST_CASE("trade overlay exchange error keeps staging and state") {
+    gl::assets::GameVfs vfs;
+    gl::assets::ItemCatalog catalog;
+    gl::app::TradeOverlay overlay;
+    auto runtime = make_overlay_runtime(1000);
+    const std::vector<gl::assets::InventoryItem> npc =
+        runtime.trade_items("L13_1.P517_Boat_Trader");
+    const std::vector<gl::assets::InventoryItem> hero = runtime.hero_inventory().items;
+    REQUIRE(overlay.open(vfs, catalog, "L13_1.P517_Boat_Trader", npc,
+                         runtime.trade_money("L13_1.P517_Boat_Trader"), hero, runtime.money()));
+    overlay.set_price_provider([](const gl::assets::InventoryItem &item) {
+        return std::optional<gl::game::TradePrice>{make_quote(item, 1200, 208)};
+    });
+    overlay.set_exchange_handler([&runtime](const std::vector<gl::game::TradePrice> &buy,
+                                            const std::vector<gl::game::TradePrice> &sell) {
+        return exchange_runtime(runtime, buy, sell);
+    });
+
+    REQUIRE(overlay.handle_mouse(407, 26, true));
+    CHECK(overlay.handle_mouse(600, 340, true));
+    CHECK_FALSE(overlay.last_error().empty());
+    CHECK(overlay.staged_items().size() == 1);
+    CHECK(overlay.npc_items().size() == 1);
+    CHECK(overlay.npc_money() == 42142);
+    CHECK(overlay.hero_money() == 1000);
+}
+
+TEST_CASE("trade overlay rejects an unpriced item without staging") {
+    gl::assets::GameVfs vfs;
+    gl::assets::ItemCatalog catalog;
+    gl::app::TradeOverlay overlay;
+    REQUIRE(overlay.open(
+        vfs, catalog, "npc",
+        std::vector<gl::assets::InventoryItem>{make_item(953, 19, 14, 0x8000000Cu)}, 0, {}, 0));
+    overlay.set_price_provider(
+        [](const gl::assets::InventoryItem &) -> std::optional<gl::game::TradePrice> {
+            return std::nullopt;
+        });
+
+    CHECK(overlay.handle_mouse(347, 26, true));
+    CHECK_FALSE(overlay.last_error().empty());
+    CHECK(overlay.staged_items().empty());
+    CHECK(overlay.npc_items().size() == 1);
+}
+
+TEST_CASE("trade overlay exchange hit-test works on letterboxed screens") {
+    gl::assets::GameVfs vfs;
+    gl::assets::ItemCatalog catalog;
+    gl::app::TradeOverlay overlay;
+    REQUIRE(overlay.open(vfs, catalog, "npc", {}, 0, {}, 0));
+    SoftwareRenderer canvas(900, 600);
+    REQUIRE(canvas.renderer != nullptr);
+
+    overlay.render(canvas.renderer, 900, 600);
+    CHECK(overlay.hit_test(545, 267) == gl::app::TradeRegion::exchange);
+}
+
 TEST_CASE("trade overlay exit and escape close it") {
     gl::assets::GameVfs vfs;
     gl::assets::ItemCatalog catalog;
@@ -519,6 +729,103 @@ TEST_CASE("real slot0 trade overlay renders background, icons and two money valu
         keep_screenshot ? std::filesystem::path(screenshot_env)
                         : std::filesystem::temp_directory_path() /
                               ("gl_trade_overlay_" + std::to_string(stamp) + ".png");
+    CHECK(gl::assets::write_png(output, image));
+    CHECK(std::filesystem::file_size(output) > 10000);
+    if (!keep_screenshot) {
+        std::error_code ignored;
+        std::filesystem::remove(output, ignored);
+    }
+}
+
+TEST_CASE("real slot0 trade overlay stages both stacks and renders exchange" *
+          doctest::skip(!game_dir_available())) {
+    const char *dir = std::getenv("GL_GAME_DIR");
+    REQUIRE(dir != nullptr);
+    auto vfs = gl::assets::GameVfs::mount(dir);
+    REQUIRE(vfs.has_value());
+    auto catalog = gl::assets::ItemCatalog::load(vfs.value());
+    REQUIRE(catalog.has_value());
+    auto inventory = load_real_inventory(0);
+    REQUIRE(inventory.has_value());
+
+    std::size_t hero_index = 0;
+    bool found = false;
+    for (std::size_t i = 0; i < inventory->items.size(); ++i) {
+        if (inventory->items[i].item_id == 953) {
+            hero_index = i;
+            found = true;
+            break;
+        }
+    }
+    REQUIRE(found);
+    REQUIRE(hero_index < gl::app::TradeLayout::kHeroX.size());
+
+    std::vector<gl::assets::InventoryItem> npc{make_item(953, 19, 14, 0x8000000Cu)};
+    std::vector<gl::assets::InventoryItem> hero(inventory->items.begin(), inventory->items.end());
+
+    SoftwareRenderer canvas(1024, 768);
+    REQUIRE(canvas.renderer != nullptr);
+    auto font = load_game_font(canvas.renderer, vfs.value());
+    REQUIRE(font.has_value());
+
+    gl::app::TradeOverlay overlay;
+    REQUIRE(overlay.open(vfs.value(), catalog.value(), "L13_1.P517_Boat_Trader", npc, 42142, hero,
+                         43875));
+    overlay.set_font(&font.value());
+    overlay.set_price_provider(
+        [&catalog](const gl::assets::InventoryItem &item) -> std::optional<gl::game::TradePrice> {
+            const gl::assets::ItemCatalogEntry *entry = catalog.value().find(item.item_id);
+            if (entry == nullptr)
+                return std::nullopt;
+            gl::game::TradePriceInput input{};
+            input.item_id = item.item_id;
+            input.item_price = entry->item.price;
+            input.durability = item.durability;
+            input.flags = item.flags;
+            input.mod_count = item.mod_count;
+            input.skill_trade = 1;
+            input.count = item.count;
+            input.assume_pc53 = true;
+            return gl::game::compute_trade_price(input);
+        });
+
+    REQUIRE(overlay.handle_mouse(347, 26, true));
+    REQUIRE(overlay.handle_mouse(gl::app::TradeLayout::kHeroX[hero_index], 703, true));
+    REQUIRE(overlay.staged_items().size() == 2);
+    CHECK(overlay.buy_total() == 16800);
+    CHECK(overlay.sell_total() == 10608);
+    CHECK(overlay.net_total() == -6192);
+
+    SDL_SetRenderDrawColor(canvas.renderer, 0, 0, 0, 255);
+    SDL_RenderClear(canvas.renderer);
+    overlay.render(canvas.renderer, 1024, 768, &font.value());
+
+    std::vector<std::uint8_t> pixels(1024 * 768 * 4);
+    REQUIRE(SDL_RenderReadPixels(canvas.renderer, nullptr, SDL_PIXELFORMAT_RGBA32, pixels.data(),
+                                 1024 * 4) == 0);
+
+    std::size_t non_black = 0;
+    for (std::size_t i = 0; i + 3 < pixels.size(); i += 4) {
+        if (pixels[i] > 16 || pixels[i + 1] > 16 || pixels[i + 2] > 16)
+            ++non_black;
+    }
+    CHECK(non_black > 100000);
+    CHECK(count_pure_magenta(pixels, 347, 208, 55, 55) == 0);
+    CHECK(count_pure_magenta(pixels, 579, 320, 110, 43) == 0);
+
+    gl::assets::Image image;
+    image.width = 1024;
+    image.height = 768;
+    image.rgba.resize(static_cast<std::size_t>(image.width) * image.height);
+    std::memcpy(image.rgba.data(), pixels.data(), pixels.size());
+
+    const auto stamp = std::chrono::steady_clock::now().time_since_epoch().count();
+    const char *screenshot_env = std::getenv("GL_TRADE_SCREENSHOT");
+    const bool keep_screenshot = screenshot_env != nullptr;
+    const std::filesystem::path output =
+        keep_screenshot ? std::filesystem::path(screenshot_env)
+                        : std::filesystem::temp_directory_path() /
+                              ("gl_trade_staging_" + std::to_string(stamp) + ".png");
     CHECK(gl::assets::write_png(output, image));
     CHECK(std::filesystem::file_size(output) > 10000);
     if (!keep_screenshot) {

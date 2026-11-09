@@ -28,13 +28,16 @@ void add_u32(Bytes &bytes, std::uint32_t value) {
 }
 
 Bytes make_record(std::uint32_t item_id, std::uint32_t type, std::uint32_t flags,
-                  std::uint32_t style, std::uint32_t subcount, std::uint32_t count = 1) {
+                  std::uint32_t style, std::uint32_t subcount, std::uint32_t count = 1,
+                  std::uint32_t durability = 100, std::uint32_t mod_count = 0) {
     Bytes record(kRecordFixed + subcount * 0x14, 0);
     put_u32(record, 0x08, type);
     put_u32(record, 0x0C, flags);
     put_u32(record, 0x20, style);
+    put_u32(record, 0x78, mod_count);
     put_u32(record, 0xA8, item_id);
     put_u32(record, 0xB0, count);
+    put_u32(record, 0xB4, durability);
     put_u32(record, 0xC0, subcount);
     return record;
 }
@@ -180,9 +183,9 @@ TEST_CASE("parse_hero_equipment rejects truncated subrecords") {
 }
 
 TEST_CASE("parse_hero_inventory reads all three BT_HERO containers") {
-    const Bytes body = make_body({make_record(1554, 22, 0x00001008, 4, 0, 2)},
-                                 {make_record(318, 12, 0x100000, 13, 1, 5)},
-                                 {make_record(72, 15, 0x040000, 11, 0, 7)});
+    const Bytes body = make_body({make_record(1554, 22, 0x00001008, 4, 0, 2, 88, 3)},
+                                 {make_record(318, 12, 0x100000, 13, 1, 5, 42, 1)},
+                                 {make_record(72, 15, 0x040000, 11, 0, 7, 100, 0)});
 
     auto inventory = parse_hero_inventory(body);
     REQUIRE(inventory.has_value());
@@ -195,18 +198,24 @@ TEST_CASE("parse_hero_inventory reads all three BT_HERO containers") {
     CHECK(inventory->hot[0].flags == 0x00001008);
     CHECK(inventory->hot[0].style == 4);
     CHECK(inventory->hot[0].count == 2);
+    CHECK(inventory->hot[0].durability == 88);
+    CHECK(inventory->hot[0].mod_count == 3);
 
     CHECK(inventory->items[0].item_id == 318);
     CHECK(inventory->items[0].type == 12);
     CHECK(inventory->items[0].flags == 0x100000);
     CHECK(inventory->items[0].style == 13);
     CHECK(inventory->items[0].count == 5);
+    CHECK(inventory->items[0].durability == 42);
+    CHECK(inventory->items[0].mod_count == 1);
 
     CHECK(inventory->equipped[0].item_id == 72);
     CHECK(inventory->equipped[0].type == 15);
     CHECK(inventory->equipped[0].flags == 0x040000);
     CHECK(inventory->equipped[0].style == 11);
     CHECK(inventory->equipped[0].count == 1);
+    CHECK(inventory->equipped[0].durability == 100);
+    CHECK(inventory->equipped[0].mod_count == 0);
 }
 
 TEST_CASE("parse_hero_inventory leaves an absent container empty") {

@@ -23,8 +23,10 @@ constexpr std::size_t kItemSubrecordSize = 0x14;
 constexpr std::size_t kItemTypeOffset = 0x08;
 constexpr std::size_t kItemFlagsOffset = 0x0C;
 constexpr std::size_t kItemStyleOffset = 0x20;
+constexpr std::size_t kItemModCountOffset = 0x78;
 constexpr std::size_t kItemIdOffset = 0xA8;
 constexpr std::size_t kItemCountOffset = 0xB0;
+constexpr std::size_t kItemDurabilityOffset = 0xB4;
 constexpr std::size_t kItemSubcountOffset = 0xC0;
 constexpr std::uint32_t kAbsentContainer = 0xFFFFFFFFu;
 constexpr std::array<std::uint8_t, 8> kHeroTag = {'B', 'T', '_', 'H', 'E', 'R', 'O', ' '};
@@ -122,7 +124,9 @@ Result<HeroInventory> parse_hero_inventory(std::span<const std::uint8_t> body) {
                 item.type = read_u32(remaining, kItemTypeOffset);
                 item.flags = read_u32(remaining, kItemFlagsOffset);
                 item.style = read_u32(remaining, kItemStyleOffset);
+                item.mod_count = read_u32(remaining, kItemModCountOffset);
                 item.count = container == 2 ? 1u : read_u32(remaining, kItemCountOffset);
+                item.durability = read_u32(remaining, kItemDurabilityOffset);
                 target->push_back(item);
 
                 if (!reader.skip(record_size))
