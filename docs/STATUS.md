@@ -41,7 +41,7 @@
     `scripts/ui/trade.scr`; 3 trade-ряда (obj 48/49/50, 10 слотов,
     x=347..895, y=26/208/478, icon 55×55); hero main 12×55 (y=703),
     hot 9×27 (y=624), puppet; фильтры `filter1..7` (y=672) и
-    `afilter1..7` (y=95); exit (920,694), scroll, сервисные
+    `afilter1..7` (per-id y `{94,94,95,95,95,95,95}`); exit (920,694), scroll, сервисные
     `lbig/pbig` (repair/exchange/identify/charge/curse); деньги
     y=126/386/612.
   - Client: открытие `FUN_1203CFD0` case `0xF` (:46778); ctor
@@ -75,7 +75,7 @@
     oracle reproducibility/seed/inputs + hero first 12 recorded;
     two money values; `trade.scr` 101/102/103 — code-drawn placeholders.
     Parity-matrix на момент fix round не менялся (Task 5 — 170 строк).
-  - **Gate:** снят; Tasks 2–4 разблокированы. Остаётся unverified:
+  - **Gate:** был снят; Tasks 2–4 done. Остаётся unverified:
     item-type→filter-bit для trade-списков (кнопки/mask доказаны),
     client invocation `FUN_1206EC98`/источник `local_player+0x6F8/+0x6FC`,
     modifier-блок цены, точная exit-привязка; read-only overlay ими не
