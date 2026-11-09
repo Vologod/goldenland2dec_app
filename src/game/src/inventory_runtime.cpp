@@ -5,12 +5,14 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <string_view>
 #include <utility>
 
 namespace gl::game {
 namespace {
 constexpr std::uint32_t kMoneyType = 18;
+constexpr std::string_view kMoneyTech = "MON_1_0_1";
 
 bool is_hero(std::string_view person) { return person == "Hero"; }
 
@@ -37,6 +39,28 @@ bool append_items(std::vector<gl::assets::InventoryItem> &items, std::uint32_t i
         remaining -= added;
     }
     return true;
+}
+
+bool remove_item_count(std::vector<gl::assets::InventoryItem> &items, std::uint32_t item_id,
+                       std::uint64_t amount) {
+    std::uint64_t remaining = amount;
+    if (remaining == 0)
+        return true;
+    for (auto it = items.begin(); it != items.end();) {
+        if (it->item_id != item_id) {
+            ++it;
+            continue;
+        }
+        if (remaining < it->count) {
+            it->count -= static_cast<std::uint32_t>(remaining);
+            return true;
+        }
+        remaining -= it->count;
+        it = items.erase(it);
+        if (remaining == 0)
+            return true;
+    }
+    return false;
 }
 } // namespace
 
@@ -156,6 +180,78 @@ bool InventoryRuntime::transfer_all(std::string_view from, std::string_view to) 
         source->erase(source->begin() + static_cast<std::ptrdiff_t>(index));
     }
     return true;
+}
+
+TradeStatus InventoryRuntime::execute_trade(std::vector<gl::assets::InventoryItem> &item_source,
+                                            std::vector<gl::assets::InventoryItem> &item_dest,
+                                            std::vector<gl::assets::InventoryItem> &money_source,
+                                            std::vector<gl::assets::InventoryItem> &money_dest,
+                                            std::uint32_t item_id, std::int64_t total,
+                                            std::uint32_t price_count) {
+    if (total <= 0 || total > std::numeric_limits<std::uint32_t>::max())
+        return TradeStatus::unsupported_price;
+
+    const auto source = std::find_if(item_source.begin(), item_source.end(),
+                                     [item_id](const gl::assets::InventoryItem &item) {
+                                         return item.item_id == item_id && item.count != 0;
+                                     });
+    if (source == item_source.end())
+        return TradeStatus::insufficient_stock;
+    const std::uint32_t count = source->count;
+    if (price_count != count)
+        return TradeStatus::unsupported_price;
+
+    const auto money_id = names_.find(kMoneyTech);
+    if (!money_id || !item_template_)
+        return TradeStatus::missing_template;
+    const auto item_template = item_template_(item_id);
+    if (!item_template || item_template->max_stack == 0)
+        return TradeStatus::missing_template;
+    const auto money_template = item_template_(*money_id);
+    if (!money_template || money_template->max_stack == 0)
+        return TradeStatus::missing_template;
+
+    std::uint64_t available = 0;
+    for (const gl::assets::InventoryItem &item : money_source) {
+        if (item.item_id == *money_id)
+            available += item.count;
+    }
+    if (available < static_cast<std::uint64_t>(total))
+        return TradeStatus::insufficient_money;
+
+    item_source.erase(source);
+    append_items(item_dest, item_id, *item_template, count);
+    remove_item_count(money_source, *money_id, static_cast<std::uint64_t>(total));
+    append_items(money_dest, *money_id, *money_template, static_cast<std::uint32_t>(total));
+    return TradeStatus::ok;
+}
+
+TradeStatus InventoryRuntime::buy_trade(std::string_view npc, std::string_view hero,
+                                        std::string_view tech_name, const TradePrice &price) {
+    if (!is_hero(hero))
+        return TradeStatus::missing_person;
+    const auto trade = trades_.find(npc);
+    if (trade == trades_.end())
+        return TradeStatus::missing_person;
+    const auto item_id = names_.find(tech_name);
+    if (!item_id)
+        return TradeStatus::missing_template;
+    return execute_trade(trade->second, hero_inventory_.items, hero_inventory_.items, trade->second,
+                         *item_id, price.buy, price.count);
+}
+
+TradeStatus InventoryRuntime::sell_trade(std::string_view npc, std::string_view hero,
+                                         std::string_view tech_name, const TradePrice &price) {
+    if (!is_hero(hero))
+        return TradeStatus::missing_person;
+    const auto trade = trades_.find(npc);
+    if (trade == trades_.end())
+        return TradeStatus::missing_person;
+    const auto item_id = names_.find(tech_name);
+    if (!item_id)
+        return TradeStatus::missing_template;
+    return execute_trade(hero_inventory_.items, trade->second, trade->second, hero_inventory_.items,
+                         *item_id, price.sell, price.count);
 }
 
 std::int32_t InventoryRuntime::count(std::string_view person, std::string_view tech_name) const {

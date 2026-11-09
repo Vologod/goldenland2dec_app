@@ -15,6 +15,7 @@ add_library(gl_game STATIC
     src/person.cpp
     src/person_movement.cpp
     src/person_runtime.cpp
+    src/trade_price.cpp
     src/walk_grid.cpp
 )
 target_include_directories(gl_game PUBLIC include)

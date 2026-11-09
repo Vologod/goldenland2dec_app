@@ -1,6 +1,7 @@
 #pragma once
 #include "gl/assets/hero_equipment.hpp"
 #include "gl/assets/item_name_index.hpp"
+#include "gl/game/trade_price.hpp"
 #include "gl/script/native_registry.hpp"
 
 #include <cstdint>
@@ -19,6 +20,15 @@ struct ItemTemplate {
     std::uint32_t max_stack = 0;
 };
 
+enum class TradeStatus {
+    ok,
+    missing_person,
+    missing_template,
+    insufficient_stock,
+    insufficient_money,
+    unsupported_price,
+};
+
 class InventoryRuntime {
   public:
     using ItemTemplateLookup = std::function<std::optional<ItemTemplate>(std::uint32_t)>;
@@ -31,6 +41,13 @@ class InventoryRuntime {
     bool transfer_item(std::string_view from, std::string_view to, std::string_view tech_name,
                        std::int32_t count);
     bool transfer_all(std::string_view from, std::string_view to);
+    // One call moves the whole selected source stack (count comes from the
+    // source record; there is no count parameter). `price` must be the
+    // whole-stack price for that record.
+    TradeStatus buy_trade(std::string_view npc, std::string_view hero, std::string_view tech_name,
+                          const TradePrice &price);
+    TradeStatus sell_trade(std::string_view npc, std::string_view hero, std::string_view tech_name,
+                           const TradePrice &price);
     std::int32_t count(std::string_view person, std::string_view tech_name) const;
     std::int32_t money() const;
     const gl::assets::HeroInventory &hero_inventory() const;
@@ -47,6 +64,11 @@ class InventoryRuntime {
 
   private:
     std::vector<gl::assets::InventoryItem> *mutable_items(std::string_view person);
+    TradeStatus execute_trade(std::vector<gl::assets::InventoryItem> &item_source,
+                              std::vector<gl::assets::InventoryItem> &item_dest,
+                              std::vector<gl::assets::InventoryItem> &money_source,
+                              std::vector<gl::assets::InventoryItem> &money_dest,
+                              std::uint32_t item_id, std::int64_t total, std::uint32_t price_count);
 
     gl::assets::HeroInventory hero_inventory_;
     std::map<std::string, std::vector<gl::assets::InventoryItem>, std::less<>> persons_;

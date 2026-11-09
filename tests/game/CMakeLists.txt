@@ -19,6 +19,7 @@ add_executable(gl_game_tests
     test_person_runtime_real.cpp
     test_real_person_loader.cpp
     test_stability.cpp
+    test_trade_price.cpp
     test_walk_grid.cpp
 )
 target_include_directories(gl_game_tests PRIVATE ${CMAKE_SOURCE_DIR}/third_party)
