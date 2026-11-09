@@ -937,10 +937,6 @@ class Game {
             [this](const std::vector<gl::game::TradePrice>& buy_items,
                    const std::vector<gl::game::TradePrice>& sell_items) {
                 gl::app::TradeExchangeResult result;
-                result.snapshot.npc_items = trade_overlay_.npc_items();
-                result.snapshot.hero_items = trade_overlay_.hero_items();
-                result.snapshot.npc_money = trade_overlay_.npc_money();
-                result.snapshot.hero_money = trade_overlay_.hero_money();
                 result.status = inventory_runtime_.exchange_trade(current_trade_npc_, "Hero",
                                                                   buy_items, sell_items);
                 if (result.status == gl::game::TradeStatus::ok) {
@@ -1006,7 +1002,8 @@ class Game {
             if (hook.kind == TradeHookKind::exchange) {
                 const std::int64_t buy_total = trade_overlay_.buy_total();
                 const std::int64_t sell_total = trade_overlay_.sell_total();
-                const bool ok = trade_overlay_.run_exchange();
+                const gl::game::TradeStatus status = trade_overlay_.run_exchange();
+                const bool ok = status == gl::game::TradeStatus::ok;
                 const std::string totals =
                     " net=" + std::to_string(sell_total - buy_total) +
                     " buy=" + std::to_string(buy_total) +

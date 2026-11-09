@@ -183,10 +183,11 @@ class TradeOverlay {
 
     // Headless/test seams: stage the first source record with `item_id`
     // (the same path as clicking the row) and run Exchange through the
-    // configured handler. They return false on failure; `last_error()`
-    // carries the reason. Both go through the normal staging/exchange code.
+    // configured handler. `stage_item_by_id` returns false on failure and
+    // `run_exchange` returns the actual trade status; `last_error()` carries
+    // the reason. Both go through the normal staging/exchange code.
     bool stage_item_by_id(TradeOrigin origin, std::uint32_t item_id);
-    bool run_exchange();
+    gl::game::TradeStatus run_exchange();
 
     TradeRegion hit_test(int x, int y) const;
     const TradeLayout &layout() const { return layout_; }
@@ -249,7 +250,7 @@ class TradeOverlay {
     void draw_selected_name(SDL_Renderer *renderer);
     bool stage_item(TradeOrigin origin, std::size_t source_index);
     void unstage_item(TradeOrigin origin, std::size_t staged_index);
-    void exchange();
+    gl::game::TradeStatus exchange();
     static const char *status_message(gl::game::TradeStatus status);
 
     const gl::assets::GameVfs *vfs_ = nullptr;

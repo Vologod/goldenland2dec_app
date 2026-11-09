@@ -1043,6 +1043,7 @@ TEST_CASE("glgame boat trader staged rows render at 1024x768" * doctest::skip(!f
     TempDir temp;
     const fs::path config = write_test_config(temp.path);
     const fs::path baseline_png = temp.path / "trade_staging_baseline.png";
+    const fs::path empty_png = temp.path / "trade_staging_empty.png";
     const fs::path png = temp.path / "trade_staging.png";
     const std::vector<std::string> common = {"--level", "l13_1", "--equip-save", "0",
                                              "--width", "1024", "--height", "768"};
@@ -1051,6 +1052,14 @@ TEST_CASE("glgame boat trader staged rows render at 1024x768" * doctest::skip(!f
     baseline_args.push_back("1");
     const int baseline_code =
         run_glgame(screenshot_arguments(game_dir, config, baseline_png, baseline_args));
+    std::vector<std::string> empty_args = common;
+    const std::vector<std::string> empty_hooks = {"--seed", "1", "--trade-npc",
+                                                  "L13_1.P517_Boat_Trader"};
+    empty_args.insert(empty_args.end(), empty_hooks.begin(), empty_hooks.end());
+    std::string empty_output;
+    const int empty_code =
+        run_glgame_capture(screenshot_arguments(game_dir, config, empty_png, empty_args),
+                           empty_output);
     std::string output;
     std::vector<std::string> staged_args = common;
     const std::vector<std::string> stage = {
@@ -1060,11 +1069,15 @@ TEST_CASE("glgame boat trader staged rows render at 1024x768" * doctest::skip(!f
     const int code =
         run_glgame_capture(screenshot_arguments(game_dir, config, png, staged_args), output);
     CAPTURE(baseline_code);
+    CAPTURE(empty_code);
     CAPTURE(code);
     CAPTURE(output);
     REQUIRE(fs::exists(baseline_png));
+    REQUIRE(fs::exists(empty_png));
     REQUIRE(fs::exists(png));
     CHECK(baseline_code == 0);
+    CHECK(empty_code == 0);
+    CHECK(empty_output.find("trade: opened npc='L13_1.P517_Boat_Trader'") != std::string::npos);
     CHECK(code == 0);
     CHECK(output.find("trade: opened npc='L13_1.P517_Boat_Trader' npc_items=16 "
                       "npc_money=42142 hero_items=117 hero_money=43875") != std::string::npos);
@@ -1086,8 +1099,15 @@ TEST_CASE("glgame boat trader staged rows render at 1024x768" * doctest::skip(!f
     CHECK(baseline_width == width);
     CHECK(baseline_height == height);
     CHECK(count_differences(pixels, baseline) > 2000000);
-    CHECK(count_region_differences(pixels, baseline, width, height, 347, 208, 603, 55) > 20000);
-    CHECK(count_region_differences(pixels, baseline, width, height, 347, 478, 603, 55) > 20000);
+
+    int empty_width = 0;
+    int empty_height = 0;
+    const std::vector<unsigned char> empty = read_png(empty_png, empty_width, empty_height);
+    CHECK(empty_width == width);
+    CHECK(empty_height == height);
+    CHECK(count_differences(pixels, empty) > 10000);
+    CHECK(count_region_differences(pixels, empty, width, height, 347, 208, 603, 55) > 1000);
+    CHECK(count_region_differences(pixels, empty, width, height, 347, 478, 603, 55) > 1000);
 }
 
 TEST_CASE("glgame boat trader buy matches the research oracle" * doctest::skip(!font_available())) {
@@ -1123,7 +1143,7 @@ TEST_CASE("glgame boat trader buy matches the research oracle" * doctest::skip(!
     CHECK(height == 768);
 }
 
-TEST_CASE("glgame boat trader sell and mixed trades match the research oracle" *
+TEST_CASE("glgame boat trader buy, sell and mixed trades match the research oracle" *
           doctest::skip(!font_available())) {
     const char* game_dir = std::getenv("GL_GAME_DIR");
     REQUIRE(game_dir != nullptr);
@@ -1146,6 +1166,24 @@ TEST_CASE("glgame boat trader sell and mixed trades match the research oracle" *
           "trade: hook exchange result=ok net=10608 buy=0 sell=10608 npc_money=31534 "
           "hero_money=54483",
           "trade: hook stock id=953 npc=65 hero=0"}},
+        {"buy2",
+         "2",
+         {"--trade-buy", "POT_1_00_27", "--trade-exchange"},
+         {"trade: opened npc='L13_1.P517_Boat_Trader' npc_items=17 npc_money=48908 "
+          "hero_items=140 hero_money=122008",
+          "trade: hook stage buy id=953 count=17 buy=17000 sell=4250 result=ok",
+          "trade: hook exchange result=ok net=-17000 buy=17000 sell=0 npc_money=65908 "
+          "hero_money=105008",
+          "trade: hook stock id=953 npc=0 hero=42"}},
+        {"sell2",
+         "2",
+         {"--trade-sell", "POT_1_00_27", "--trade-exchange"},
+         {"trade: opened npc='L13_1.P517_Boat_Trader' npc_items=17 npc_money=48908 "
+          "hero_items=140 hero_money=122008",
+          "trade: hook stage sell id=953 count=25 buy=25000 sell=6250 result=ok",
+          "trade: hook exchange result=ok net=6250 buy=0 sell=6250 npc_money=42658 "
+          "hero_money=128258",
+          "trade: hook stock id=953 npc=42 hero=0"}},
         {"mixed2",
          "2",
          {"--trade-buy", "POT_1_00_27", "--trade-sell", "POT_1_00_27", "--trade-exchange"},
@@ -1203,6 +1241,50 @@ TEST_CASE("glgame boat trader insufficient hero money is atomic" *
     CHECK(output.find("not enough money for this exchange") != std::string::npos);
     CHECK(output.find("trade: hook stock id=953 npc=14 hero=51") != std::string::npos);
     CHECK(output.find("trade: hook stock id=956 npc=16 hero=0") != std::string::npos);
+}
+
+TEST_CASE("glgame boat trader insufficient npc money is atomic" *
+          doctest::skip(!font_available())) {
+    const char* game_dir = std::getenv("GL_GAME_DIR");
+    REQUIRE(game_dir != nullptr);
+
+    TempDir temp;
+    const fs::path config = write_test_config(temp.path);
+    const fs::path png = temp.path / "trade_npcmoney.png";
+    const std::vector<int> first = {953, 1579, 1577, 446, 434, 1497, 1575, 407,
+                                    1592, 1553, 451, 436, 428, 431, 969, 442};
+    const std::vector<int> second = {448, 1591, 433, 952};
+    std::vector<std::string> arguments = {"--level", "l13_1", "--equip-save", "0",
+                                          "--width", "1024", "--height", "768",
+                                          "--seed", "1", "--trade-npc",
+                                          "L13_1.P517_Boat_Trader"};
+    const auto add_sells = [&arguments](const std::vector<int>& ids) {
+        for (const int id : ids) {
+            arguments.push_back("--trade-sell");
+            arguments.push_back(std::to_string(id));
+        }
+        arguments.push_back("--trade-exchange");
+    };
+    add_sells(first);
+    add_sells(second);
+    std::string output;
+    const int code =
+        run_glgame_capture(screenshot_arguments(game_dir, config, png, arguments), output);
+    CAPTURE(code);
+    CAPTURE(output);
+    REQUIRE(fs::exists(png));
+    CHECK(code == 0);
+    CHECK(output.find("trade: opened npc='L13_1.P517_Boat_Trader' npc_items=16 "
+                      "npc_money=42142 hero_items=117 hero_money=43875") != std::string::npos);
+    CHECK(output.find("trade: hook exchange result=ok net=38590 buy=0 sell=38590 "
+                      "npc_money=3552 hero_money=82465") != std::string::npos);
+    CHECK(output.find("trade: hook exchange result=failed net=4043 buy=0 sell=4043 "
+                      "npc_money=3552 hero_money=82465") != std::string::npos);
+    CHECK(output.find("not enough money for this exchange") != std::string::npos);
+    CHECK(output.find("trade: hook stock id=448 npc=0 hero=22") != std::string::npos);
+    CHECK(output.find("trade: hook stock id=1591 npc=0 hero=2") != std::string::npos);
+    CHECK(output.find("trade: hook stock id=433 npc=0 hero=8") != std::string::npos);
+    CHECK(output.find("trade: hook stock id=952 npc=31 hero=21") != std::string::npos);
 }
 
 TEST_CASE("glgame boat trader insufficient npc stock is atomic" *

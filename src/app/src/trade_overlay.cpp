@@ -239,14 +239,13 @@ bool TradeOverlay::stage_item_by_id(TradeOrigin origin, std::uint32_t item_id) {
     return false;
 }
 
-bool TradeOverlay::run_exchange() {
+gl::game::TradeStatus TradeOverlay::run_exchange() {
     if (buy_staged_.empty() && sell_staged_.empty()) {
         last_error_ = "nothing to exchange";
         gl::log(gl::LogLevel::warning, "trade: nothing to exchange");
-        return false;
+        return gl::game::TradeStatus::not_available;
     }
-    exchange();
-    return last_error_.empty();
+    return exchange();
 }
 
 std::int64_t TradeOverlay::buy_total() const {
@@ -379,13 +378,13 @@ const char *TradeOverlay::status_message(gl::game::TradeStatus status) {
     return "trade failed";
 }
 
-void TradeOverlay::exchange() {
+gl::game::TradeStatus TradeOverlay::exchange() {
     if (buy_staged_.empty() && sell_staged_.empty())
-        return;
+        return gl::game::TradeStatus::not_available;
     if (!exchange_handler_) {
         last_error_ = "exchange is not available";
         gl::log(gl::LogLevel::warning, "trade: no exchange handler configured");
-        return;
+        return gl::game::TradeStatus::not_available;
     }
     std::vector<gl::game::TradePrice> buy_items;
     std::vector<gl::game::TradePrice> sell_items;
@@ -400,7 +399,7 @@ void TradeOverlay::exchange() {
         last_error_ = status_message(result.status);
         gl::log(gl::LogLevel::warning,
                 "trade: exchange failed: " + std::string(status_message(result.status)));
-        return;
+        return result.status;
     }
     npc_items_ = std::move(result.snapshot.npc_items);
     hero_items_ = std::move(result.snapshot.hero_items);
@@ -416,6 +415,7 @@ void TradeOverlay::exchange() {
     clear_selection();
     rebuild_npc_visible();
     rebuild_hero_visible();
+    return gl::game::TradeStatus::ok;
 }
 
 void TradeOverlay::update_transform(int screen_w, int screen_h) {
