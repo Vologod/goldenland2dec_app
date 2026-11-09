@@ -152,8 +152,14 @@ TEST_CASE("trade layout hit-tests filters, scroll, exit and drop") {
     gl::app::TradeLayout layout;
 
     CHECK(layout.npc_filter_at(350.0f + 26.0f, 94.0f + 10.0f) == std::optional<std::size_t>{0});
-    CHECK(layout.npc_filter_at(893.0f + 26.0f, 94.0f + 10.0f) == std::optional<std::size_t>{6});
+    CHECK(layout.npc_filter_at(439.0f + 26.0f, 94.0f + 10.0f) == std::optional<std::size_t>{1});
+    CHECK(layout.npc_filter_at(531.0f + 26.0f, 95.0f + 10.0f) == std::optional<std::size_t>{2});
+    CHECK(layout.npc_filter_at(893.0f + 26.0f, 95.0f + 10.0f) == std::optional<std::size_t>{6});
+    CHECK(layout.npc_filter_at(350.0f + 26.0f, 94.5f) == std::optional<std::size_t>{0});
+    CHECK_FALSE(layout.npc_filter_at(531.0f + 26.0f, 94.5f).has_value());
+    CHECK(layout.npc_filter_at(531.0f + 26.0f, 95.0f) == std::optional<std::size_t>{2});
     CHECK(layout.hit_test(350.0f + 26.0f, 94.0f + 10.0f) == gl::app::TradeRegion::npc_filter);
+    CHECK(layout.hit_test(531.0f + 26.0f, 95.0f + 10.0f) == gl::app::TradeRegion::npc_filter);
 
     CHECK(layout.hero_filter_at(201.0f + 28.0f, 672.0f + 11.0f) == std::optional<std::size_t>{0});
     CHECK(layout.hero_filter_at(745.0f + 28.0f, 672.0f + 11.0f) == std::optional<std::size_t>{6});
@@ -394,13 +400,58 @@ TEST_CASE("real slot0 trade overlay renders background, icons and two money valu
     CHECK(region_difference(pixels, empty_pixels, 562, 126, 160, 30) > 0);
     CHECK(region_difference(pixels, empty_pixels, 562, 612, 160, 30) > 0);
 
+    struct ScopedDir {
+        std::filesystem::path path;
+        ~ScopedDir() {
+            std::error_code ignored;
+            std::filesystem::remove_all(path, ignored);
+        }
+    };
+    const auto stamp = std::chrono::steady_clock::now().time_since_epoch().count();
+    auto background_bytes = vfs->read("engineres/trade/trade.bmp");
+    REQUIRE(background_bytes.has_value());
+    ScopedDir background_dir{std::filesystem::temp_directory_path() /
+                             ("gl_trade_bg_" + std::to_string(stamp))};
+    const std::filesystem::path background_path =
+        background_dir.path / "engineres" / "trade" / "trade.bmp";
+    std::filesystem::create_directories(background_path.parent_path());
+    {
+        std::ofstream out(background_path, std::ios::binary);
+        REQUIRE(out.good());
+        out.write(reinterpret_cast<const char *>(background_bytes->data()),
+                  static_cast<std::streamsize>(background_bytes->size()));
+    }
+    auto background_vfs = gl::assets::GameVfs::mount(background_dir.path);
+    REQUIRE(background_vfs.has_value());
+
+    SoftwareRenderer background_canvas(1024, 768);
+    REQUIRE(background_canvas.renderer != nullptr);
+    gl::app::TradeOverlay background_overlay;
+    REQUIRE(background_overlay.open(background_vfs.value(), catalog.value(),
+                                    "L13_1.P517_Boat_Trader", npc, 42142, hero, 43875));
+    SDL_SetRenderDrawColor(background_canvas.renderer, 0, 0, 0, 255);
+    SDL_RenderClear(background_canvas.renderer);
+    background_overlay.render(background_canvas.renderer, 1024, 768, &font.value());
+    std::vector<std::uint8_t> background_pixels(1024 * 768 * 4);
+    REQUIRE(SDL_RenderReadPixels(background_canvas.renderer, nullptr, SDL_PIXELFORMAT_RGBA32,
+                                 background_pixels.data(), 1024 * 4) == 0);
+
+    CHECK(region_difference(pixels, background_pixels, 350, 94, 52, 20) > 0);
+    CHECK(region_difference(pixels, background_pixels, 531, 95, 52, 20) > 0);
+    CHECK(region_difference(pixels, background_pixels, 201, 672, 56, 23) > 0);
+    CHECK(region_difference(pixels, background_pixels, 312, 28, 27, 55) > 0);
+    CHECK(region_difference(pixels, background_pixels, 954, 26, 27, 55) > 0);
+    CHECK(region_difference(pixels, background_pixels, 110, 702, 27, 55) > 0);
+    CHECK(region_difference(pixels, background_pixels, 870, 703, 26, 54) > 0);
+    CHECK(region_difference(pixels, background_pixels, 920, 694, 75, 68) > 0);
+    CHECK(region_difference(pixels, background_pixels, 19, 690, 81, 75) > 0);
+
     gl::assets::Image image;
     image.width = 1024;
     image.height = 768;
     image.rgba.resize(static_cast<std::size_t>(image.width) * image.height);
     std::memcpy(image.rgba.data(), pixels.data(), pixels.size());
 
-    const auto stamp = std::chrono::steady_clock::now().time_since_epoch().count();
     const char *screenshot_env = std::getenv("GL_TRADE_SCREENSHOT");
     const bool keep_screenshot = screenshot_env != nullptr;
     const std::filesystem::path output =

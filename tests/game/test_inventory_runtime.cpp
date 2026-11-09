@@ -1,13 +1,22 @@
 #include "gl/game/inventory_runtime.hpp"
 
 #include "gl/assets/hero_equipment.hpp"
+#include "gl/assets/inv_table.hpp"
 #include "gl/assets/item_name_index.hpp"
 #include "gl/assets/sdb.hpp"
+#include "gl/assets/vfs.hpp"
+#include "gl/game/msvc_random.hpp"
+#include "gl/game/npc_loot.hpp"
+#include "gl/game/person.hpp"
 
 #include <doctest/doctest.h>
 
+#include <chrono>
 #include <cstdint>
+#include <filesystem>
+#include <fstream>
 #include <optional>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -754,4 +763,46 @@ TEST_CASE("inventory_runtime access exposes transfer callbacks") {
     CHECK(access.transfer_all("Hero", "L0.P1"));
     CHECK(runtime.hero_inventory().items.empty());
     CHECK(runtime.count("L0.P1", "MON_1_0_1") == 500);
+}
+
+TEST_CASE("generate_npc_inventories stores pass-1 hot as npc trade items") {
+    struct ScopedDir {
+        std::filesystem::path path;
+        ~ScopedDir() {
+            std::error_code ignored;
+            std::filesystem::remove_all(path, ignored);
+        }
+    };
+    const auto stamp = std::chrono::steady_clock::now().time_since_epoch().count();
+    ScopedDir dir{std::filesystem::temp_directory_path() /
+                  ("gl_trade_inv_" + std::to_string(stamp))};
+    const std::filesystem::path inv_path = dir.path / "scripts" / "inventory" / "trade_test.inv";
+    std::filesystem::create_directories(inv_path.parent_path());
+    {
+        std::ofstream out(inv_path, std::ios::binary);
+        REQUIRE(out.good());
+        out << "regenerate_chance 100\n"
+               "chance_decrease 1\n"
+               "quantity_decrease 1\n"
+               "item \"MON_1_0_1\" 0 100 100 7 7\n";
+    }
+
+    auto vfs = gl::assets::GameVfs::mount(dir.path);
+    REQUIRE(vfs.has_value());
+    auto runtime = InventoryRuntime::create({}, make_names(), template_for);
+
+    PersonInstance person;
+    person.name = "L0.Trade";
+    person.inventory = "trade_test";
+    MsvcRandom rng(1);
+    generate_npc_inventories(runtime, std::vector<PersonInstance>{person}, vfs.value(),
+                             make_names(), template_for, 50, rng);
+
+    REQUIRE_FALSE(runtime.trade_items("L0.Trade").empty());
+    CHECK(runtime.trade_money("L0.Trade") == 7);
+    REQUIRE(runtime.trade_items("L0.Trade").size() == 1);
+    CHECK(runtime.trade_items("L0.Trade")[0].item_id == 812);
+    CHECK(runtime.trade_items("L0.Trade")[0].count == 7);
+    CHECK(runtime.count("L0.Trade", "MON_1_0_1") == 7);
+    CHECK(runtime.money() == 0);
 }

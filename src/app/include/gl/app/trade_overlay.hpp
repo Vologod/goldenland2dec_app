@@ -59,12 +59,6 @@ enum class TradeSelection {
     hero,
 };
 
-struct TradeItemView {
-    const gl::assets::InventoryItem *item = nullptr;
-    const gl::assets::ItemCatalogEntry *entry = nullptr;
-    std::size_t source_index = 0;
-};
-
 struct TradeLayout {
     static constexpr float kCanvasWidth = 1024.0f;
     static constexpr float kCanvasHeight = 768.0f;
@@ -84,11 +78,11 @@ struct TradeLayout {
     static constexpr std::array<TradeFilterSpec, 7> kNpcFilters{{
         TradeFilterSpec{{350.0f, 94.0f, 52.0f, 20.0f}, 0x01u, 1},
         TradeFilterSpec{{439.0f, 94.0f, 52.0f, 20.0f}, 0x02u, 2},
-        TradeFilterSpec{{531.0f, 94.0f, 52.0f, 20.0f}, 0x04u, 3},
-        TradeFilterSpec{{621.0f, 94.0f, 52.0f, 20.0f}, 0x08u, 4},
-        TradeFilterSpec{{713.0f, 94.0f, 52.0f, 20.0f}, 0x10u, 5},
-        TradeFilterSpec{{806.0f, 94.0f, 52.0f, 20.0f}, 0x20u, 6},
-        TradeFilterSpec{{893.0f, 94.0f, 52.0f, 20.0f}, 0x00u, 7},
+        TradeFilterSpec{{531.0f, 95.0f, 52.0f, 20.0f}, 0x04u, 3},
+        TradeFilterSpec{{621.0f, 95.0f, 52.0f, 20.0f}, 0x08u, 4},
+        TradeFilterSpec{{713.0f, 95.0f, 52.0f, 20.0f}, 0x10u, 5},
+        TradeFilterSpec{{806.0f, 95.0f, 52.0f, 20.0f}, 0x20u, 6},
+        TradeFilterSpec{{893.0f, 95.0f, 52.0f, 20.0f}, 0x00u, 7},
     }};
 
     static constexpr std::array<TradeFilterSpec, 7> kHeroFilters{{

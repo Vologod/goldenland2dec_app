@@ -17,5 +17,6 @@ struct InventoryViewState {
 std::vector<std::size_t> visible_inventory(const gl::assets::HeroInventory &inventory,
                                            std::uint32_t mask);
 std::size_t clamp_page(std::size_t page, std::size_t count);
+bool item_matches_filter(std::uint32_t type, std::uint32_t mask);
 
 } // namespace gl::game

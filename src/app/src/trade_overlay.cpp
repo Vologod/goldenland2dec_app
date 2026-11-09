@@ -4,6 +4,7 @@
 #include <gl/assets/image.hpp>
 #include <gl/assets/item_catalog.hpp>
 #include <gl/assets/vfs.hpp>
+#include <gl/game/inventory_view.hpp>
 #include <gl/render/text.hpp>
 
 #include <algorithm>
@@ -37,27 +38,6 @@ bool lower_suffix(std::string_view path, std::string_view suffix) {
     return true;
 }
 
-bool matches_filter(std::uint32_t type, std::uint32_t mask) {
-    if (mask == 0)
-        return true;
-    if (type == 18)
-        return true;
-    if ((mask & 0x01u) != 0 && (type <= 7 || type == 28))
-        return true;
-    if ((mask & 0x02u) != 0 && type >= 11 && type <= 14)
-        return true;
-    if ((mask & 0x04u) != 0 && type >= 15 && type <= 17)
-        return true;
-    if ((mask & 0x08u) != 0 && (type == 21 || type == 22))
-        return true;
-    if ((mask & 0x10u) != 0 && ((type >= 8 && type <= 10) || type == 19 || type == 20 ||
-                                type == 23 || type == 24 || type == 26 || type == 27))
-        return true;
-    if ((mask & 0x20u) != 0 && type == 25)
-        return true;
-    return false;
-}
-
 void draw_stack_count(SDL_Renderer *renderer, std::uint32_t count, float x, float y, float w,
                       float h) {
     if (count <= 1)
@@ -82,7 +62,7 @@ void build_visible_hero(const std::vector<gl::assets::InventoryItem> &items, std
                         std::vector<std::size_t> &out) {
     out.clear();
     for (std::size_t i = 0; i < items.size(); ++i) {
-        if (matches_filter(items[i].type, mask))
+        if (gl::game::item_matches_filter(items[i].type, mask))
             out.push_back(i);
     }
 }

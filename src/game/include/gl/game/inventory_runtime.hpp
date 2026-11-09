@@ -37,6 +37,9 @@ class InventoryRuntime {
     const std::vector<gl::assets::InventoryItem> &person_items(std::string_view person) const;
     void set_person_items(std::string name, std::vector<gl::assets::InventoryItem> items);
     const std::vector<gl::assets::InventoryItem> &trade_items(std::string_view person) const;
+    // Trade containers are keyed independently of main containers. Hero is
+    // allowed here (unlike set_person_items) so an explicit trade list can be
+    // supplied without touching Hero main; it stays empty unless set.
     void set_person_trade_items(std::string name, std::vector<gl::assets::InventoryItem> items);
     std::int32_t trade_money(std::string_view person) const;
     void clear_persons();

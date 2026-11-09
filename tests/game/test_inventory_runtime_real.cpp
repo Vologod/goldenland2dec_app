@@ -316,6 +316,12 @@ TEST_CASE("real data: l1_1 npc inventories match the pass-2 reference" *
     CHECK(runtime.count("L0.P711_citizen8", "MON_1_0_1") == 323);
     CHECK(runtime.person_items("L0.P678_citizen4").empty());
     CHECK(runtime.access().item_count("L1_1.P387_Poison_Plotnik", "QST_1_0_5") == 1);
+    REQUIRE_FALSE(runtime.trade_items("L1_1.P387_Poison_Plotnik").empty());
+    CHECK(runtime.trade_money("L1_1.P387_Poison_Plotnik") == 0);
+    REQUIRE(runtime.trade_items("L1_1.P387_Poison_Plotnik").size() == 1);
+    CHECK(runtime.trade_items("L1_1.P387_Poison_Plotnik")[0].item_id == 975);
+    CHECK(runtime.trade_items("L1_1.P387_Poison_Plotnik")[0].type == 25);
+    CHECK(runtime.trade_items("L1_1.P387_Poison_Plotnik")[0].count == 1);
 
     REQUIRE(runtime.person_items("L0.P744_oficer1").size() == 2);
     CHECK(runtime.person_items("L0.P744_oficer1")[0].item_id == 263);

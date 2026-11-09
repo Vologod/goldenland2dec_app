@@ -7,7 +7,9 @@ namespace {
 
 constexpr std::size_t kPageSize = 12;
 
-bool matches_filter(std::uint32_t type, std::uint32_t mask) {
+} // namespace
+
+bool item_matches_filter(std::uint32_t type, std::uint32_t mask) {
     if (mask == 0)
         return true;
     if (type == 18)
@@ -28,13 +30,11 @@ bool matches_filter(std::uint32_t type, std::uint32_t mask) {
     return false;
 }
 
-} // namespace
-
 std::vector<std::size_t> visible_inventory(const gl::assets::HeroInventory &inventory,
                                            std::uint32_t mask) {
     std::vector<std::size_t> visible;
     for (std::size_t i = 0; i < inventory.items.size(); ++i) {
-        if (matches_filter(inventory.items[i].type, mask))
+        if (item_matches_filter(inventory.items[i].type, mask))
             visible.push_back(i);
     }
     return visible;
