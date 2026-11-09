@@ -17,17 +17,20 @@
     `afilter1..7` (y=95); exit (920,694), scroll, сервисные
     `lbig/pbig` (repair/exchange/identify/charge/curse); деньги
     y=126/386/612.
-  - Client: открытие `FUN_1203CFD0` case `0xF` (:46781); ctor
-    `FUN_120708E0` (:75284); списки `FUN_1206FBC0/6F5BC/6EFB8/70198`;
+  - Client: открытие `FUN_1203CFD0` case `0xF` (:46778); ctor
+    `FUN_120708E0` (:75286); списки `FUN_1206FBC0/6F5BC/6EFB8/70198`;
     render `FUN_12071014`, update `FUN_1207A2A8`; money
     `FUN_1206DA08` = count `MON_1_0_1`; price `FUN_1206E8D0`
     (ITM price × durability, SKILL_TRADE id 16, buy
     `2.5−0.1*skill`, sell reciprocal, trunc); per-unit в
-    `FUN_120723E8`/`120725C4`.
+    `FUN_120723E8`/`120725C4`; hot/equip price call нет.
   - **Источник NPC-списка — trade-контейнер `entity+0xC` (pass 1
-    NPC-лута), не main `+0x10`** (`FUN_1206EC98` + server
-    `FUN_14028404` hero `+0x4D4 = NPC+0xC` + `0x5000006/7`). Порт 1b2b2b
-    сейчас отбрасывает pass 1 (`hot`) — Task 2 должен его сохранять.
+    NPC-лута), не main `+0x10`.** Server/native-level proven
+    (`FUN_14028404` hero `+0x4D4 = NPC+0xC` + `0x5000006/7`);
+    клиентский setter `FUN_1206EC98` (callers=0) invocation
+    **не трассирован** — client binding `unverified`. Порт 1b2b2b
+    сейчас отбрасывает pass 1 (`hot`) — Task 2 должен его сохранять;
+    pass 1 — единственный источник NPC-списка.
   - `RS_PassToTradePanel`: handler RVA `0x41558` (`-1`, return 0.0);
     `FUN_14028404` (RVA `0x28404`) добавляет hero action type 3 с
     NPC-id и пишет hero `+0x4D4 = NPC+0xC`; `dialog+0x5528=1`
@@ -36,11 +39,20 @@
     inv013_barman, dialog 8868 answers `[3498,4214]` → bytecode 127
     `PassToTradePanel`). slot0 loot 41: NPC 16 записей / money 42142,
     hero money 43875; slot2 loot 37: 17 записей / money 48908, hero
-    money 122008; buy/sell per-unit таблицы — research §6.
+    money 122008; buy/sell per-unit таблицы — research §6;
+    `populated` slot0 3/8, slot2 6/8; hero first 12 — research §6.3.
+  - **Fix round 1 (2026-11-09):** source propagated в spec §3.2/3.3/4,
+    plan Task 2/3 (`loot.hot` retention + `trade_items`/`trade_money`,
+    `open(npc_items,npc_money,hero_items,hero_money)`); client-side
+    `FUN_1206EC98` invocation downgraded; hot mode 99 removed;
+    oracle reproducibility/seed/inputs + hero first 12 recorded;
+    two money values; `trade.scr` 101/102/103 — code-drawn placeholders.
+    Parity-matrix не менялся.
   - **Gate:** снят; Tasks 2–4 разблокированы. Остаётся unverified:
     item-type→filter-bit для trade-списков (кнопки/mask доказаны),
-    источник `local_player+0x6F8/+0x6FC`, modifier-блок цены,
-    точная exit-привязка; read-only overlay ими не блокируется.
+    client invocation `FUN_1206EC98`/источник `local_player+0x6F8/+0x6FC`,
+    modifier-блок цены, точная exit-привязка; read-only overlay ими не
+    блокируется.
 - **Вне scope:** покупка/продажа, trade-мутации, confirm.
 
 ## Phase 1b2b3 — inventory transfers (done 2026-11-08)

@@ -12,13 +12,17 @@ production-код не менялся.
 
 Ключевой факт, меняющий план Task 2: **список товаров NPC — это
 trade-контейнер `entity+0xC` (pass 1 NPC-лута), а не main `entity+0x10`.**
-Порт 1b2b2b сейчас **отбрасывает pass 1 (`hot`)**; для overlay его нужно
-сохранять (RNG уже продвигается корректно).
+Это доказано на server/native-уровне (`FUN_14028404`, `0x5000006/7`);
+клиентский вызов setter'а `FUN_1206EC98` (callers=0) **не трассирован**
+(§8.2). Порт 1b2b2b сейчас **отбрасывает pass 1 (`hot`)**; для overlay
+его нужно сохранять (RNG уже продвигается корректно). Pass 1 — единственный
+источник NPC-списка; main `+0x10` для него не используется.
 
 Остаётся недоказанным (не блокирует read-only, см. §8):
-item-type → filter-bit группировка для trade-списков; источник id в
-`local_player+0x6f8/+0x6fc` (staging-контейнеры выбора); modifier-блок
-цены для неопознанных предметов; точная привязка exit-кнопки к команде.
+item-type → filter-bit группировка для trade-списков; клиентский вызов
+`FUN_1206EC98`/источник id в `local_player+0x6f8/+0x6fc` (staging-
+контейнеры выбора); modifier-блок цены для неопознанных предметов;
+точная привязка exit-кнопки к команде.
 
 ## 1. Provenance / метод
 
@@ -92,7 +96,10 @@ puppet, primaries, hot slots), правая/центральная — собс�
 | 84/85 | BUTTON | 79,507 / 201,464, 10×20 | — | wear weapon slot 1/2 |
 | 90..98 | BUTTON | primaries/puppet hotspots | — | из `inv_gui.scr` |
 | 99 | GUI_DD_CONTAINER | 10,618,266×40 | — | hero hot slots |
-| 101..103 | BUTTON | 560,126 / 560,386 / 560,613 | — | quantity/label позиции |
+| 101..103 | BUTTON | 560,126 / 560,386 / 560,613 | — | невидимые placeholder'ы под код-рисуемые money/итоги; текст не в скрипте |
+
+Объекты 101/102/103 — placeholder-кнопки: деньги/итоги/подписи рисует
+код (`FUN_12071014`), в `trade.scr` их текста нет.
 
 Имена контейнеров в скрипте («48 hero sel», «49 trader sel», «50 trader»)
 **не соответствуют** фактическому коду: ниже доказано, что верхний ряд
@@ -100,8 +107,8 @@ puppet, primaries, hot slots), правая/центральная — собс�
 
 ### 2.3 Геометрия trade-рядов (код, не скрипт)
 
-Из `FUN_1207A2A8` (RVA `0x7A2A8`, client decompiled.c:79729) и
-`FUN_12071014` (RVA `0x71014`, :75571):
+Из `FUN_1207A2A8` (RVA `0x7A2A8`, client decompiled.c:79758) и
+`FUN_12071014` (RVA `0x71014`, :75577):
 
 | Ряд | y иконок | x слотов (10) | видимых | scroll field | источник контейнера |
 |---|---:|---|---:|---|---|
@@ -113,10 +120,10 @@ puppet, primaries, hot slots), правая/центральная — собс�
 
 Icon target rect: **55×55** (prop `0x25 = 0x37,0x37`); native-size bitmap,
 без масштаба (как P5b1). Scroll: стрелки ±1, колесо/команды ±3
-(`FUN_1207C41C`, client decompiled.c:80792; для hero main :80835-80860,
+(`FUN_1207C41C`, client decompiled.c:80796; для hero main :80835-80860,
 для верхнего trade-ряда :80872-80897). При смене фильтра scroll = 0.
 
-Деньги/подписи рисуются кодом, не объектами скрипта (см. §4.4):
+Деньги/подписи рисуются кодом, не объектами скрипта (см. §4.2):
 `y = 126` (верх, деньги NPC), `y = 386` (разница sell−buy), `y = 612`
 (hero money); x = window offset + `0x232` (562).
 
@@ -124,31 +131,36 @@ Icon target rect: **55×55** (prop `0x25 = 0x37,0x37`); native-size bitmap,
 
 | RVA | client decompiled.c | Роль |
 |---:|---|---|
-| `0x708E0` | 75284 | ctor/init: грузит `engineres\trade\trade`, `weapon_slot1`, `scripts\UI\trade.scr`; `+0x218 = 0x100` |
-| `0x7209C` | 76110 | ctor объекта (vtable `PTR_LAB_12129688`), обнуление полей |
-| `0x3CFD0` | 46388 | переключатель экранов; `param_1 == 0xF` — **открытие trade** (:46781-46831) |
-| `0x70770` | 75186 | очистка списков/bitset'ов |
-| `0x70C88` | 75422 | освобождение текстур/списков (destroy) |
-| `0x6FBC0` | 74158 | заполнение hero main `+0x10` → list `+0x184`; prop `0x2A=1`; `FUN_120723E8(...,1)` |
-| `0x6F5BC` | 73644 | заполнение hero equip `+0x66C` → list `+0x188`; prop `0x2A=2`; stack count prop `0x28` |
-| `0x6EFB8` | 73130 | заполнение hero hot `+0xC` → list `+0x19C`; prop `0x2A=99`; `FUN_120723E8(...,99)` |
-| `0x70198` | 74672 | заполнение **NPC trade `+0xC`** (screen `+0x198`) → list `+0x18C`; prop `0x2A=0`; `FUN_120723E8(...,0)` |
-| `0x7A2A8` | 79729 | пересчёт selection/bitset'ов и отрисовка 6 списков; координаты §2.3 |
-| `0x71014` | 75571 | render: фильтры/кнопки/итоги/деньги; `FUN_12074C04` |
-| `0x70DAC` | 75470 | input/update кадра; exit/weapon-set команды |
-| `0x6EC98` | 72997 | `screen+0x198 = person+0xC`, если `person+0x14 & 2`, иначе −1 |
-| `0x6DA08` | 72241 | `money(container) = count MON_1_0_1` |
-| `0x6E8D0` | 72880 | `price(uid, mode)` (см. §4) |
-| `0x723E8` | 76237 | item display: stack count + **per-unit price** = `price(uid,mode)/count` |
-| `0x725C4` | 76301 | tooltip/иконка: prop `0x57` + per-unit price |
-| `0x74938` | 77690 | визуальные pressed/lit состояния фильтров (`+0xC`, `+0x10`) |
-| `0x7C41C` | 80792 | GUI-команды: фильтры, скроллы, drop, exit |
-| `0x54A20` | 58107 | копирует `local_player+0x6F8/+0x6FC/+0x700` в другой менеджер (trade start) |
+| `0x708E0` | 75286 | ctor/init: грузит `engineres\trade\trade`, `weapon_slot1`, `scripts\UI\trade.scr`; `+0x218 = 0x100` |
+| `0x7209C` | 76112 | ctor объекта (vtable `PTR_LAB_12129688`), обнуление полей |
+| `0x3CFD0` | 46392 | переключатель экранов; `param_1 == 0xF` — **открытие trade** (:46778-46831) |
+| `0x70770` | 75188 | очистка списков/bitset'ов |
+| `0x70C88` | 75424 | освобождение текстур/списков (destroy) |
+| `0x6FBC0` | 74160 | заполнение hero main `+0x10` → list `+0x184`; prop `0x2A=1`; `FUN_120723E8(...,1)` |
+| `0x6F5BC` | 73646 | заполнение hero equip `+0x66C` → list `+0x188`; prop `0x2A=2`; stack count prop `0x28`; price call нет |
+| `0x6EFB8` | 73132 | заполнение hero hot `+0xC` → list `+0x19C`; prop `0x2A=99`; price call нет |
+| `0x70198` | 74674 | заполнение **NPC trade `+0xC`** (screen `+0x198`) → list `+0x18C`; prop `0x2A=0x30` (obj 48); `FUN_120723E8(...,0)` |
+| `0x7A2A8` | 79758 | пересчёт selection/bitset'ов и отрисовка 6 списков; координаты §2.3 |
+| `0x71014` | 75577 | render: фильтры/кнопки/итоги/деньги; `FUN_12074C04` |
+| `0x70DAC` | 75476 | input/update кадра; exit/weapon-set команды |
+| `0x6EC98` | 72999 | `screen+0x198 = person+0xC`, если `person+0x14 & 2`, иначе −1; **callers=0** |
+| `0x6DA08` | 72243 | `money(container) = count MON_1_0_1` |
+| `0x6E8D0` | 72885 | `price(uid, mode)` (см. §4.3) |
+| `0x723E8` | 76241 | item display: stack count + **per-unit price** = `price(uid,mode)/count`; skip type `0x12`/`0x19` |
+| `0x725C4` | 76305 | tooltip/иконка: prop `0x57` + per-unit price |
+| `0x74938` | 77692 | визуальные pressed/lit состояния фильтров (`+0xC`, `+0x10`) |
+| `0x7C41C` | 80796 | GUI-команды: фильтры, скроллы, drop, exit |
+| `0x54A20` | 58109 | копирует `local_player+0x6F8/+0x6FC/+0x700` в другой менеджер (trade start) |
 | `0xC33D8` | (вне списка функций Ghidra; asm `0x120C33D8`) | vtable slot 26 `DAT_12110F28`: set/register `+0x6F8/+0x6FC/+0x700` через `FUN_120A47C0`/`FUN_120A4B24`/`FUN_120A481C` |
+
+`prop 0x2A` — не price mode: `1`/`2`/`99`/`0x30` — идентификаторы
+контейнера/зоны (hero main / equip / hot / obj 48). Price mode у
+`FUN_120723E8`: только `0` (NPC trade, buy) и `1` (hero main, sell);
+equip/hot price call не делают.
 
 ### 3.1 Открытие (`FUN_1203CFD0`, case `param_1 == 0xF`)
 
-`client decompiled.c:46781-46831`:
+`client decompiled.c:46778-46831`:
 
 ```c
 iVar6 = selected person entity; // = FUN_120c54dc(...) -> массив персон
@@ -164,12 +176,15 @@ FUN_1207A2A8(); FUN_12074938(); FUN_1206DA30();
 
 `screen+0x198` в init не ставится; его единственный writer —
 `FUN_1206EC98` (selected person `+0xC`), т.е. trade-контейнер выбранной
-персоны (NPC).
+персоны (NPC). **`FUN_1206EC98` имеет callers=0** (Ghidra); клиентский
+вызов не трассирован. Server/native-уровень (`FUN_14028404`/`0x5000006/7`)
+доказывает, что NPC trade container = `entity+0xC`; клиентская привязка
+setter'а — `unverified` (§8.2).
 
 ### 3.2 Закрытие
 
-- `FUN_12070C88` (:75422) уничтожает текстуры/списки (destroy объекта).
-- `FUN_12070DAC` (:75470) при команде `0x2B` вызывает
+- `FUN_12070C88` (:75424) уничтожает текстуры/списки (destroy объекта).
+- `FUN_12070DAC` (:75476) при команде `0x2B` вызывает
   `(**(DAT_12110954+8))(0xD, -1)` и `(**(DAT_12110F48+0x6C))()` — возврат
   на экран `0xD`/закрытие; команда `0x36` — переключение набора оружия
   (не exit). Точная привязка exit-кнопки (obj 7) к `0x2B` не трассирована;
@@ -181,27 +196,34 @@ FUN_1207A2A8(); FUN_12074938(); FUN_1206DA30();
 
 | Список | screen field | источник | доказательство |
 |---|---|---|---|
-| верх (товары NPC) | `+0x198` | **selected person `entity+0xC`** (NPC trade container) | `FUN_1206EC98` (:72997); server `FUN_14028404` кладёт NPC `+0xC` в hero `+0x4D4`; `RS_PersonAddItemToTrade`/`Remove` используют `entity+0xC` |
+| верх (товары NPC) | `+0x198` | **selected person `entity+0xC`** (NPC trade container) | server/native: `FUN_14028404` (NPC `+0xC` → hero `+0x4D4`), `0x5000006/7` (`entity+0xC`); client: `FUN_1206EC98` (callers=0, вызов не трассирован) |
 | hero main | `+0x190` | `entity+0x10` | `FUN_1203CFD0` :46796; `FUN_1206FBC0` |
 | hero hot | `+0x1A0` | `entity+0xC` | :46798; `FUN_1206EFB8` |
 | hero equip | `+0x194` | `local_player+0x66C` | :46797; `FUN_1206F5BC` |
 | staging A (низ) | `+0x1A4` | `local_player+0x6F8` | :46799; `FUN_12070198` не участвует |
 | staging B (середина) | `+0x1A8` | `local_player+0x6FC` | :46800 |
 
+**Статус источника верхнего ряда:** server/native-level — proven
+(`entity+0xC`); client-level — `unverified`: `screen+0x198` единственный
+writer — `FUN_1206EC98` (callers=0), реальный клиентский вызов/setter
+не трассирован. Для read-only overlay источник задаётся server/native-
+контрактом и pass-1 генератором; клиентская привязка не требуется.
+
 `+0x1A4`/`+0x1A8` — клиентские контейнеры выбора; их id регистрируются
 vtable-сеттером `0x120C33D8` (slot 26) через менеджер `DAT_12110EDC`.
 Источник самих id (сетевой пакет/серверный trade-start) не найден —
 `unverified`; для read-only верхнего ряда и hero-инвентаря не требуется.
 
-**NPC trade container = pass 1 NPC-лута.** `1b2b2b` §15.2: pass 1
-`FUN_1404b1c0` пишет в `+0xC`, pass 2 — в `+0x10`. `RS_PersonAddItemToTrade`
-(`0x5000006`, `natives.c:1931`) и `RS_PersonRemoveItemToTrade`
-(`0x5000007`, :1961) работают с `*(int*)(entity+0xC)`. Порт сейчас
-отбрасывает `hot`; Task 2 должен сохранять pass 1.
+**NPC trade container = pass 1 NPC-лута; pass 1 — единственный источник
+NPC-списка.** `1b2b2b` §15.2: pass 1 `FUN_1404b1c0` пишет в `+0xC`,
+pass 2 — в `+0x10`. `RS_PersonAddItemToTrade` (`0x5000006`,
+`natives.c:1935`) и `RS_PersonRemoveItemToTrade` (`0x5000007`, :1965)
+работают с `*(int*)(entity+0xC)`. Порт сейчас отбрасывает `hot`;
+Task 2 должен сохранять pass 1.
 
 ### 4.2 Деньги
 
-`FUN_1206DA08(containerId)` (:72241) = `FUN_120A52C8(container,
+`FUN_1206DA08(containerId)` (:72243) = `FUN_120A52C8(container,
 "MON_1_0_1")` — **count TECH `MON_1_0_1`**. Render:
 `FUN_1206DA08(screen+0x198)` (деньги NPC, y=126),
 `FUN_1206DA08(screen+0x190)` (деньги hero, y=612);
@@ -209,9 +231,11 @@ vtable-сеттером `0x120C33D8` (slot 26) через менеджер `DAT_
 (asm `0x1207176A-0x1207177D`).
 
 Type 18 (`money`) не фильтруется фильтрами (`FUN_120626F4`, P5b1 §7);
-`FUN_120723E8` не показывает цену для type `0x12`.
+`FUN_120723E8` не показывает цену для type `0x12` (money) и `0x19`
+(quest_item); в hardcore type `0x19` пропускается только при
+`(flags & 2) == 0`.
 
-### 4.3 Цена (`FUN_1206E8D0`, RVA `0x6E8D0`, :72880)
+### 4.3 Цена (`FUN_1206E8D0`, RVA `0x6E8D0`, :72885)
 
 Сигнатура фактически `price(uid, mode)` (`__fastcall`, uid в `ecx`,
 mode на стеке). Псевдокод:
@@ -245,22 +269,23 @@ return unit * rec.count(+0xB0);
 - Per-unit price в UI: `FUN_120723E8`/`FUN_120725C4` делят `price(uid,mode)`
   на `count(+0xB0)` (integer div) → **per-unit**.
 - Режимы по спискам: верхний NPC `FUN_12070198` → `mode 0` (buy);
-  hero main `FUN_1206FBC0` → `1` (sell); hero hot `FUN_1206EFB8` → `99`
-  (sell); hero equip `FUN_1206F5BC` цену не вызывает.
+  hero main `FUN_1206FBC0` → `1` (sell); hero hot `FUN_1206EFB8` и
+  hero equip `FUN_1206F5BC` **price call не делают** (per-unit price
+  для них не вызывается; `prop 0x2A=99` — не mode).
 - Итоги render: `+0x24C = Σ price(uid,0)` по staging B (`+0x1A8`);
   `+0x250 = Σ price(uid,1)` по staging A (`+0x1A4`)
-  (client decompiled.c:75837-75866).
+  (client decompiled.c:75826-75874).
 
 ### 4.4 Фильтры
 
-`FUN_1207C41C` (:80792) команда `0x3F`:
+`FUN_1207C41C` (:80796) команда `0x3F`:
 
 - ids **9..15** → `screen+0xC = 1,2,4,8,0x10,0x20,0`; `screen+0x1BC=0`
   (hero main scroll) → фильтры hero main (obj 1).
 - ids **30..36** → `screen+0x10 = 1,2,4,8,0x10,0x20,0`; `screen+0x1C0=0`
   (верхний trade scroll) → фильтры верхнего NPC-ряда (`+0x198`).
 - Маска **эксклюзивная** (один бит, 0 = all), не toggle. Визуал
-  pressed/lit — `FUN_12074938` (:77690).
+  pressed/lit — `FUN_12074938` (:77692).
 - Item-type → bit группировка для trade-списков **не доказана**;
   для inventory она в `FUN_120626F4` (P5b1 §7): 1 → types 0..7,28;
   2 → 11..14; 4 → 15..17; 8 → 21,22; 0x10 → 8,9,10,19,20,23,24,26,27;
@@ -271,7 +296,7 @@ return unit * rec.count(+0xB0);
 
 - `screen+0x10` — trade filter mask; `+0xC` — hero filter mask.
 - `+0x22C` — активный набор оружия B; при `!=0` рисуется
-  `weapon_slot1` (`FUN_12079854` :79337); `+0x234` — выбранный item uid;
+  `weapon_slot1` (`FUN_12079854` :79341); `+0x234` — выбранный item uid;
   `+0x230` — флаг выбора; `+0x24C/+0x250` — итоги; `+0x254` — кэш итогов.
 - `+0x218` — следующий динамический GUI object id (старт `0x100`).
 - `+0x190/+0x194/+0x198/+0x1A0/+0x1A4/+0x1A8` — container ids (§4.1).
@@ -402,6 +427,46 @@ NPC money = **48908**.
 Hero item price fields (save), example id 953: `+0x10 price=500`,
 `+0xB4 durability=100`, `+0x78 modifiers=0`; money id 812 price=1.
 
+First 12 hero main records (save order, container 1; `price=+0x10`,
+`sell_unit = trunc(price/(2.5-0.1*SKILL_TRADE))`, durability 100):
+
+slot0 (skill 1):
+
+| # | id | count | price | sell_unit |
+|---:|---:|---:|---:|---:|
+| 0 | 812 | 43875 | 1 | 1 |
+| 1 | 444 | 6 | 80 | 33 |
+| 2 | 1013 | 1 | 5 | 2 |
+| 3 | 1579 | 2 | 4000 | 1666 |
+| 4 | 411 | 19 | 50 | 20 |
+| 5 | 416 | 10 | 85 | 35 |
+| 6 | 413 | 16 | 75 | 31 |
+| 7 | 433 | 8 | 300 | 125 |
+| 8 | 450 | 11 | 140 | 58 |
+| 9 | 952 | 21 | 100 | 41 |
+| 10 | 953 | 51 | 500 | 208 |
+| 11 | 451 | 24 | 150 | 62 |
+
+slot2 (skill 5):
+
+| # | id | count | price | sell_unit |
+|---:|---:|---:|---:|---:|
+| 0 | 812 | 122008 | 1 | 1 |
+| 1 | 429 | 1 | 150 | 75 |
+| 2 | 411 | 16 | 50 | 25 |
+| 3 | 449 | 5 | 130 | 65 |
+| 4 | 441 | 4 | 50 | 25 |
+| 5 | 408 | 5 | 95 | 47 |
+| 6 | 444 | 1 | 80 | 40 |
+| 7 | 422 | 2 | 30 | 15 |
+| 8 | 410 | 13 | 40 | 20 |
+| 9 | 435 | 5 | 175 | 87 |
+| 10 | 423 | 1 | 50 | 25 |
+| 11 | 445 | 13 | 90 | 45 |
+
+NPC list source: pass 1 (`hot`) only; main `+0x10` for trade не
+используется (§4.1).
+
 ### 6.4 Buy/sell per-unit (trunc)
 
 `ITM price` из `items/data/<id>.itm`; `durability=100`; `base=price`.
@@ -476,23 +541,48 @@ status: end
 [info] script native RS_PassToTradePanel (0x700000D): unimplemented - requires quest/event runtime
 ```
 
-`glgame --level l13_1 --click-npc 3 --equip-save 0 --seed 1 --no-font`:
+`glgame --level l13_1 --click-npc 3 --equip-save 0|2 --seed 1 --no-font`:
 
 ```
-level 'l13_1': 8 persons
-npc inventory: level 'l13_1', loot level 41, populated 3/8
+slot0: level 'l13_1': 8 persons
+       npc inventory: level 'l13_1', loot level 41, populated 3/8
+slot2: level 'l13_1': 8 persons
+       npc inventory: level 'l13_1', loot level 37, populated 6/8
 dialog: 'scripts/dialogs/l13_1/l13_1.p517_boat_trader.d517.age.cs'
         speaker='L13_1.P517_Boat_Trader' answers=2
 ```
 
-### 7.4 Валидация Python-референса
+`populated N/8` — число **person-записей** с непустым first-wins
+контейнером: slot0 3/8 (P239/P707/P519); slot2 6/8 (P451/P239/P707/
+P519; три записи `P451` делят first-wins контейнер).
 
-Пуск на `l1_1`, loot_level 1, seed 1 воспроизводит принятый 1b2b2b
-oracle: `L0.P7_Kolbasens_Rodstvennik1` main = две записи
+### 7.4 Валидация и воспроизводимость Python-референса
+
+**Алгоритм** (точная копия `NpcLootGenerator::generate`, без specials):
+per person в SEF-порядке: R1 `coin(regenerate_chance)`; pass 1 для
+каждого in-window item: `coin(0.01*n3)`, при успехе `range(n4,n5)`;
+pass 2: если `n3 != 0` — `coin((0.01*n3)/chance_decrease)`, затем
+`range(scaled(n4),scaled(n5))`, `scaled(v)=ceil(v/quantity_decrease)`
+(trunc +1 если не целое). RNG: MSVC LCG `state=state*0x343FD+0x269EC3`,
+`next=(state>>16)&0x7FFF`; `coin`: `float(next)*(1/32767) < float(p)`;
+`range`: `lo+trunc(((hi-lo)+0.99999)*next*(1/32767))`. Specials
+(R4/R5) не моделируются — как в порте.
+
+**Входы:** `levels/single/l13_1/l13_1.sef`, person order/invs:
+`P518 inv012_civil`, `P451 inv014_money`, `P239 inv004_maceman`,
+`P517 inv013_barman`, `P707 inv020_caster_trader`, `P451 inv012_civil`,
+`P519 inv012_civil`, `P451 inv012_civil`; `seed=1`; loot 41 (slot0) /
+37 (slot2); `tech_names.sdb` + `items/data/<id>.itm` (price/max_stack).
+Pass 1 (`hot`) — **единственный источник NPC-списка**; main `+0x10` в
+trade не используется.
+
+**Ожидаемые значения:** §6.2 (NPC hot/money), §6.3 (hero/первые 12),
+§6.4 (buy/sell). **Валидация:** `l1_1` loot 1 seed 1 воспроизводит
+принятый 1b2b2b oracle: `L0.P7_Kolbasens_Rodstvennik1` main = две записи
 `MON_1_0_1` по 87 (сумма **174**), `L1_1.P387_Poison_Plotnik` main =
-`QST_1_0_5=1`. Для `l13_1` Python даёт `populated 3/8` (P239/P707/P519),
-совпадающее с логом `glgame` §7.3, значит RNG-поток, включая pass 1
-P517, совпадает с портом.
+`QST_1_0_5=1`; `l13_1` Python даёт slot0 `populated 3/8`, slot2 `6/8`,
+совпадающие с `glgame` §7.3 — RNG-поток, включая pass 1 P517, совпадает
+с портом.
 
 ## 8. Unverified / missing evidence
 
@@ -501,34 +591,41 @@ P517, совпадает с портом.
    `FUN_120626F4` — только кандидат). Read-only overlay может показывать
    все товары; фильтры — rendering/selection по доказанным маскам, без
    паритетного скрытия типов до доказательства.
-2. **Источник id `local_player+0x6F8/+0x6FC`** (staging A/B). Сеттер
+2. **Client-side источник верхнего ряда (`FUN_1206EC98`).** Server/
+   native-level `entity+0xC` proven (`FUN_14028404`, `0x5000006/7`);
+   `FUN_1206EC98` (единственный writer `screen+0x198`) имеет `callers=0`,
+   клиентский вызов/setter не трассирован. Для read-only источник задаётся
+   server/native-контрактом; client binding остаётся `unverified`.
+3. **Источник id `local_player+0x6F8/+0x6FC`** (staging A/B). Сеттер
    `0x120C33D8` найден; caller/сетевой пакет — нет. Для read-only
    верхнего ряда/hero main не нужен.
-3. **Modifier-блок цены** (`rec+0x78`/`+0x7C`) для неопознанных предметов:
+4. **Modifier-блок цены** (`rec+0x78`/`+0x7C`) для неопознанных предметов:
    добавляет стоимость модификаторов; точные поля не декодированы.
    Свежий NPC-лут имеет `+0x78=0`; hero-предметы — проверить.
-4. **Exit-кнопка → команда:** `0x2B` ведёт к закрытию (screen 0xD);
+5. **Exit-кнопка → команда:** `0x2B` ведёт к закрытию (screen 0xD);
    точная привязка obj 7 не трассирована.
-5. **Live-оракул** (память запущенной игры) не снимался; oracle —
+6. **Live-оракул** (память запущенной игры) не снимался; oracle —
    save + SEF/INV/ITM + независимый Python-референс + реальные `.cs`.
-6. **Production seed** недетерминирован (`timeGetTime`); oracle-значения
+7. **Production seed** недетерминирован (`timeGetTime`); oracle-значения
    выше — для `--seed 1` (как принято в 1b2b2b). В реальной игре список
    NPC будет другим (тот же алгоритм, другой seed).
-7. `weapon_slot1`/`+0x22C` (набор B) и paper-doll overlays — не часть
+8. `weapon_slot1`/`+0x22C` (набор B) и paper-doll overlays — не часть
    read-only списка; не проверялись.
 
 ## 9. Следствия для Task 2
 
 1. `NpcLootGenerator`/`generate_npc_inventories` — сохранять pass 1
    (`loot.hot`) как NPC trade container (`entity+0xC`); RNG уже корректен.
-2. `InventoryRuntime`: accessor NPC trade items + money; hero main/hot.
+2. `InventoryRuntime`: `trade_items(name)` (pass 1) + `trade_money(name)`;
+   hero main/hot; два money значения (`npc_money`, `hero_money`).
 3. `ItemCatalog`/save: добавить `price(+0x10)` и `durability(+0xB4)`
    (и, при необходимости, modifiers) в runtime-запись для точной цены;
    иначе показывать ITM-price с durability 100 (documented deviation).
 4. `TradeLayout`: §2.3 константы (ряды, x-массивы, y, 55×55, filters,
    money y, exit/scroll).
 5. `NativeServices::trade_panel` + handler 0x700000D → 0.0; `glgame`
-   закрывает диалог и открывает `TradeOverlay` (NPC speaker).
+   закрывает диалог и открывает `TradeOverlay(npc_items, npc_money,
+   hero_items, hero_money)`.
 6. Read-only: верх = NPC trade container (buy price), низ = hero main
-   (sell price), hot/equip — опционально; деньги NPC/hero; без
-   buy/sell/transfer/trade-мутаций.
+   (sell price), hot/equip — опционально (price call у них нет); деньги
+   NPC/hero; без buy/sell/transfer/trade-мутаций.
