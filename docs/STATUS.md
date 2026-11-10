@@ -10,23 +10,39 @@
 - **Реализация:** Tasks 1–3 done (`specials.scr` parser,
   `SpecialEngine` R4–R10, `NpcLootGenerator` integration); production
   `glgame` пока без specials (Task 5).
-- **Гейты (OPEN, 2026-11-10):**
-  - **FPU-CW:** механизм добавлен в
-    `tests/game/test_special_gates.cpp`. На build-машине x87 CW =
-    `0x037F` (PC=64/RC=nearest), не reference `0x027F`
-    (PC=53/RC=nearest) → live-гейт не подтверждён, FPU-тест skip;
-    порт считает в double/SSE2, но reference-предположение остаётся
-    `unverified` до live-захвата CW перед `FUN_14047284`/`FUN_1206E8D0`.
-  - **NPC-mod oracle:** формат `person|item_id|count|mod_id|value|
-    mod_flags|item_flags` и сравнение multiset готовы; capture
-    procedure/helper — `tools/live/`; `GL_SPECIALS_LIVE` не задан →
-    skip с причиной. Live capture не снят, full parity не заявлен.
-- **Проверка:** `gl_game_tests --test-case="*special*gate*"` — 3 passed,
-  0 failed, 1 skipped (FPU), 302 skipped всего; `--success`
-  зафиксировал CW `0x37f`.
+- **Гейты (OPEN, 2026-11-10; harden fix):**
+  - **FPU-CW live:** `GL_SPECIALS_FPU_CW` принимает live-захват CW из
+    оригинала (значение `0x027F` или файл с `generation=`/`price=`);
+    гейт требует точный `0x027F` (PC=53/RC=nearest) для генерации и
+    цены; без env — skip. Это **не** CW тестового процесса.
+  - **FPU-CW диагностика:** на build-машине x87 CW = `0x037F`
+    (PC=64/RC=nearest) — только diagnostic, не reference.
+    `0x027F` остаётся документированным extraction-assumption до live
+    breakpoint-захвата перед `FUN_14047284`/`FUN_1206E8D0`.
+  - **Static imports:** `llvm-objdump -p` для `Server.dll`, `Client.dll`,
+    `GoldenLand.exe` — `_controlfp`/`_control87` не импортируются.
+  - **Port rounding contract:** тест гоняет `SpecialEngine::apply` и
+    `TradePrice` под x87 PC/RC и MXCSR режимами. `SpecialEngine`
+    инвариантен; `TradePrice` инвариантен при MXCSR=nearest (reference),
+    но чувствителен к non-nearest MXCSR (2/3 режима) → порт обязан
+    сохранять default MXCSR rounding (nearest).
+  - **NPC-mod oracle v2:** обязательный `rng_state` (MSVC CRT `_rand`
+    holdrand перед первым NPC R1; seed недостаточен), item-строки
+    (включая zero-mod items, flags/`0x200`, mod_count) и mod-строки,
+    сравнение item+mod multiset. Partial capture допускается: port
+    генерирует всех, сравниваются только captured persons — это
+    reduced-scope evidence, не full-level parity.
+  - `GL_SPECIALS_LIVE`/`GL_SPECIALS_FPU_CW` не заданы → оба live-гейта
+    skip с причиной; live NPC-mod capture не снят, full parity не заявлен.
+- **Проверка:** `gl_game_tests --test-case="*special*gate*"` — 5 passed,
+  0 failed; 2 live-гейта skipped (FPU+oracle, входят в 302 skipped
+  всего); full `gl_game_tests` — 305 passed, 2 skipped.
+- **Task 5 blocker:** `tools/glgame/main.cpp:858-860` всё ещё собирает
+  `ItemTemplate` без `mod_count = effects.size()`; при включении DB
+  specials это сделает `effects>0` items кандидатами. Исправить в Task 5.
 - **Статус:** `partial`; full parity запрещён до live NPC-mod 0/N и
-  FPU-CW `0x027F`.
-- **Коммит Task 4:** `test(game): add specials live gates`.
+  live FPU-CW `0x027F`.
+- **Коммиты Task 4:** `3b62fc8` + `test(game): harden specials live gates`.
 
 ## Phase 1b2b2c — NPC loot specials research (done 2026-11-10)
 
