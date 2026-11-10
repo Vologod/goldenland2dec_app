@@ -15,25 +15,34 @@
   `DAT_14088df4` = host `+0x84` = `DAT_00469d54`; vtable
   `+4/+8/+0x14/+0x1c/+0x28` и запись def `0x98` (3 value + 6 time slots)
   восстановлены. `FUN_14047284`/`roll_special_count` (R4/R5) и полный
-  RNG-порядок R6–R10 восстановлены; `ROUND` = trunc (RC=`0xC00`).
-  Conditions: `assigned==1 && flags&4 && item+0x78==0`; R4/R5 лимиты
-  3 (`flags&0x40==0`) / 9 (`flags&0x40!=0`); даже `nspec==0` потребляет R4.
-- **Реальные данные:** 1848 ITM → 522 special-capable (`type` в pool,
-  `flags&4`, `effects==0`, `max_stack==1`), 20 с `flags&0x80==0`
-  (D-058 guard active), 0 special-capable stackable. `l1_1` seed1
-  level1 (analytic Python reference, без specials совпал с принятым
-  oracle 174/218/323): 17 кандидатов, 7 срабатываний, 9 модов,
-  1057→1272 draw (+215); первое расхождение — `Crying_Guardian`
-  (`ELB_1_04_1`, `nspec=0`, 1 draw); принятые no-specials значения
-  `174/218/323` под true parity **superseded**.
+  RNG-порядок R6–R10 восстановлены; `ROUND` = trunc только на финальном
+  `fistp` (RC=`0xC00`), `fval`/`fval*level` — под входящим CW
+  (default `0x027F`: PC=53/RC=nearest). Conditions:
+  `assigned==1 && flags&4 && item+0x78==0`; R4/R5 лимиты
+  3 (`flags&0x40==0`) / 9 (`flags&0x40!=0`); даже `nspec==0` потребляет R4;
+  coin/range без `_rand` при `p<=0`/`p>1`/`hi<=lo`.
+- **Реальные данные:** 1848 ITM → 522 modifier-capable (`type` в pool,
+  `flags&4`, `effects==0`; все `max_stack==1`), 20 с `flags&0x80==0`
+  (D-058 guard active), modifier-capable stackable 0; RNG candidates
+  (`flags&4`, `effects==0`) — 533 = 522 + 11 type19/20 stackable с
+  пустым pool (draw R4/R5, модов нет). `l1_1` seed1 level1 (analytic
+  Python reference, без specials совпал с принятым oracle 174/218/323):
+  17 кандидатов, 7 срабатываний, 9 модов, 1057→1272 draw (+215;
+  special-path 208 = R4/R5 27 + R6 171 + R9/R10 10); первое
+  RNG-расхождение — `Crying_Guardian` pass1 (`ELB_1_04_1`, `nspec=0`,
+  1 draw), первое изменение выдачи — его pass2; `P387/P678/Kolbasens`
+  hot/main идентичны (Kolbasens pass2 `2×87` в обоих). Принятые
+  no-specials значения `174/218/323` под true parity **superseded**.
 - **D-058:** modifier `classMul/typeMul` — это price-поля той же
   `special_desc`-записи (`+0x74/+0x84/+0x94`, `+0x14…+0x64`); client
-  `DAT_12110ed8` и server `DAT_14088df4` — один объект (host `+0x84`).
-  Основной missing-gap D-058 §8.2 закрыт структурно; остаётся live
-  FPU-CW (PC=53) и реализация.
+  `DAT_12110ed8` и server `DAT_14088df4` — один объект (host `+0x84`);
+  price читает только `id/value/flags` (не `+0x0c/+0x10`; generated —
+  0/0). Основной missing-gap `p3b2b4b` §8 п.2 закрыт структурно;
+  остаётся live FPU-CW (PC=53/RC=nearest) и реализация.
 - **Не доказано live:** захват NPC-модов из запущенной игры; live
-  FPU-CW; `random_sign` (def+0x04) не используется генерацией/ценой;
-  семантика item flag `0x40`; time-slots 4–6 генерацией не читаются.
+  FPU-CW **перед `FUN_14047284` (генерация) и `FUN_1206E8D0` (цена)**;
+  `random_sign` (def+0x04) не используется генерацией/ценой; семантика
+  item flag `0x40`; time-slots 4–6 генерацией не читаются.
 - **Acceptance next phase:** unit (DB/pool/R4–R10), deterministic
   `l1_1` seed1 level1 events §5.2 + final aggregates, live/differential
   gate (RNG-state + NPC `+0x10`/mod records, 0/N), live FPU-CW;

@@ -21,12 +21,13 @@ Research-only; production-код не менялся.
   пропускать**: даже неудачный R4 (`nspec==0`) потребляет draw и сдвигает
   последующий лут. На `l1_1`, seed 1, loot level 1: 17 кандидатов,
   7 срабатываний, 9 модификаторов; 1057 → 1272 draw (+215), первое
-  расхождение — `L1_1.P389_Crying_Guardian`.
+  RNG-расхождение — `L1_1.P389_Crying_Guardian` pass 1, первое
+  изменение выдачи — его pass 2.
 - Модификаторные множители цены (`class/type`) — это те же поля
   `special_desc`-записи (`+0x74/+0x84/+0x94`, `+0x14…+0x64`), а
   client-manager `DAT_12110ed8` — тот же объект, что server
   `DAT_14088df4` (host `+0x84`). Это закрывает основной missing-gap
-  **D-058 §8.2** структурно; остаётся live FPU-CW проверка.
+  **`p3b2b4b` §8 п.2** структурно; остаётся live FPU-CW проверка.
 - **Не доказано live:** фактический захват NPC-модов из запущенной игры и
   live FPU control word. Это acceptance-гейты следующей фазы, а не
   блокеры реализации: DB и алгоритм доказаны статически, а независимый
@@ -114,12 +115,11 @@ enum-таблицы в `GoldenLand.exe`**. `init.scr` содержит толь�
 | Таблица | Функция (VA / RVA) | Содержимое |
 |---|---|---|
 | `IDSPEC_* → id` | `FUN_0041fd20` (`0x41fd20` / `0x1fd20`) | 78 имён, id `0..0x4d`. Первые 58 (`0..0x39`) используются в itemclass-пулах; `.inv`-identity — `[0..57]`. |
-| `SPECF_* → tag` | `FUN_0042016c` (`0x42016c` / `0x2016c`) | `TIME_PERMANENT=1, DAY=2, NIGHT=4, INTERVAL=8, IMMEDIATE=0x10, DELAYED=0x20; VALUE_CHANGE_ABSOLUTE=0x40, RELATIVE=0x80, REPLACE=0x100; ANTI_MONSTER=0x200`. |
+| `SPECF_* → tag` | `FUN_0042016c` (`0x42016c` / `0x2016c`) | `TIME_PERMANENT=1, DAY=2, NIGHT=4, INTERVAL=8, IMMEDIATE=0x10, DELAYED=0x20; VALUE_CHANGE_ABSOLUTE=0x40, RELATIVE=0x80, REPLACE=0x100; SPECF_ANTI_MONSTER_SPECIFIED=0x200`. |
 | `T_* → item type` | `FUN_00420208` (`0x420208` / `0x20208`) | `T_SWORD=0, T_AXE=1, … T_STONE=28` (полный список — в функции). |
 
-`ANTI_MONSTER` в retail `specials.scr` не встречается; парсер
-`FUN_004216ac` принял бы его за ошибку (выход из парсинга), т.к. в
-special_desc допустимы только value-tags и time-tags.
+`SPECF_ANTI_MONSTER_SPECIFIED` (0x200) есть в hardcoded map, но в
+retail `specials.scr` не встречается; на генерацию и цену не влияет.
 
 ### 2.4 `specials.scr`: грамматика и запись
 
@@ -209,11 +209,12 @@ FUN_14047284(template, item, nspec):
     count = k
 
     # 2. R6: случайное подмножество размера nspec.
-    if nspec < count:
-        for r in 0 .. count-nspec-1:
-            idx = range(0, count-1)           # 48405
+    pool_size = count
+    if nspec < pool_size:
+        for r in 0 .. pool_size-nspec-1:
+            idx = range(0, count-1)           # 48405; count = текущий pool
             remove pool[idx] (shift left); count -= 1
-    # count == min(nspec, pool_size); R6 сделан count-nspec раз
+    # count == min(nspec, pool_size); R6 сделан pool_size-nspec раз
 
     # 3. Замена mod-массива item.
     free(item+0x7c)
@@ -282,17 +283,23 @@ FUN_14047284(template, item, nspec):
 - **R7**: draw только если в value-group >1 слота с access `+`.
   В retail это только `IDSPEC_MAX_HEALTH` (22) и `IDSPEC_MAX_ENERGY`
   (23), у которых `ABSOLUTE +` и `RELATIVE +`.
-- **R8**: в retail time-group всегда 1 слот с access `+`
-  (`TIME_PERMANENT`); draw нет. Time-слоты 4–6 не читаются.
+- **R8**: для reachable ids (входят в itemclass-пулы) time-group = 1
+  слот с access `+` (`TIME_PERMANENT`) → draw нет. `n2=0` только у
+  `IDSPEC_HEALTH_CURRENT` (48)/`IDSPEC_ENERGY_CURRENT` (49) (все time
+  access `-`), но они не входят в пулы → для генерации недостижимы.
+  Time-слоты 4–6 не читаются.
 - **R9**: для отрицательного `fval` `half >= v` (floor), поэтому
   `range(half,v)` возвращает `half` без draw; для положительного —
   draw, только если `v > half` (например, `v<=1` → нет draw).
 - **R10**: как в псевдокоде; `flags & 0x80` — это `RELATIVE` tag,
   не item-флаг.
 - `ROUND` = trunc: asm `0x140475b4-0x140475d4` (`fnstcw`, `or 0xC00`,
-  `fldcw`, `fistp`, restore). PC не меняется; Windows default CW =
-  `0x027F` (PC=53/double), как в `p3b2b4b` §4.5. `fval` хранится в
-  double (`fstp qword`), произведение — double.
+  `fldcw`, `fistp`, restore). `fval` (group products) и `fval*(level+1)`
+  считаются `fld/fmul` под **входящим** CW; `or 0xC00` действует только
+  на финальный `fistp` (trunc). Windows default CW = `0x027F`
+  (PC=53/double, RC=nearest), как в `p3b2b4b` §4.5. Поэтому значения
+  specials условны для default `0x027F`; `fval` хранится в double
+  (`fstp qword`), произведение — double.
 - Mod-запись: `+0x00 id`, `+0x04 value`, `+0x08 flags`, `+0x0c = 0`,
   `+0x10 = 0` (asm `0x140476a0-0x140476bf`). `item+0xc |= 0x200`
   ставится **безусловно**, даже если `count == 0` (пустой pool).
@@ -356,27 +363,46 @@ return n
 
 ### 5.1 Порядок для `FUN_1404b1c0` (SEF NPC)
 
-На каждого NPC (в порядке `persons:` SEF) и каждый проход:
+Порядок обхода (точно как `FUN_1404b1c0`/`generate_npc_inventories`):
+для каждого SEF person в порядке `persons:` — **R1; pass 1 (все записи);
+pass 2 (все записи); затем следующий person**. Hot (`+0xc`) и main
+(`+0x10`) эмитируются per person; **не** «все pass1, потом все pass2».
+Это существенно: при неверной вложенности special в pass 1 одного NPC
+сдвигает pass 2 предыдущего NPC.
 
-| # | Вызов | Аргумент | Когда |
-|---|---|---|---|
-| R1 | `coin` | `regenerate_chance` | всегда, до проходов |
-| R2 | `coin` | `0.01*n3` (pass 1) | для записи в окне |
-| R3 | `range` | `n4,n5` (pass 1) | если R2 != 0 и `n3 != 0` |
-| R4 | `coin` | `0.45` или `0.09` | на каждый чанк с `assigned==1`, `flags&4`, `mods==0` |
-| R5 | `coin` | `0.30/0.15` или `0.08…0.01` | пока R4/R5 успешны |
-| R6 | `range` | `(0, pool_size-1)` × (`pool_size-nspec`) | внутри `FUN_14047284`, до значений |
-| R7 | `range` | `(0, n1-1)` | на каждый special, если `n1>1` |
-| R8 | `range` | `(0, n2-1)` | на каждый special, если `n2>1` (в retail нет) |
-| R9 | `range` | `(half, v)` | на каждый special, если `v>half` (positive) |
-| R10 | `range` | `(0,1)` или `(0,3)` | на каждый special при условии flags/знака |
-| R2' | `coin` | `(0.01*n3)/chance_decrease` | pass 2, только `n3 != 0` |
-| R3' | `range` | scaled `n4,n5` | pass 2 |
-| R4–R10 | — | — | pass 2, те же условия |
+`FUN_14006288` (coin) не вызывает `_rand` при `p <= 0` (return 0) и
+`p > 1` (return 1); `FUN_140061e4` (range) не вызывает `_rand` при
+`hi <= lo` (return lo). Поэтому «вызов» и «draw» — разные вещи; ниже
+указан фактический draw. Все числа draw в §5.2 — реальные вызовы
+`_rand`/`next`; ранние return не считаются.
+
+| # | Вызов | Аргумент | Когда | Фактический `_rand` draw |
+|---|---|---|---|---|
+| R1 | `coin` | `regenerate_chance` | per person, до проходов | `p==0` → нет; `0<p<=1` → да; `p>1` → нет (header 0..1) |
+| R2 | `coin` | `0.01*n3` (pass 1) | запись в окне | `n3==0` → `p=0`, draw нет + skip; `0<n3<=100` → да |
+| R3 | `range` | `n4,n5` (pass 1) | R2 != 0 и `n3 != 0` | `n4>=n5` → нет (return `n4`); иначе да |
+| R4 | `coin` | `0.45` или `0.09` | кандидат (`assigned==1`, `flags&4`, `mods==0`) | всегда да |
+| R5 | `coin` | `0.30/0.15` или `0.08…0.01` | пока R4/R5 успешны | всегда да |
+| R6 | `range` | `(0, pool_size-1)` × (`pool_size-nspec`) | внутри `FUN_14047284`, до значений | всегда да (`hi>lo`) |
+| R7 | `range` | `(0, n1-1)` | на special, если `n1>1` | да; `n1<=1` → нет |
+| R8 | `range` | `(0, n2-1)` | на special, если `n2>1` | да; `n2<=1` → нет |
+| R9 | `range` | `(half, v)` | на special | да только при `v>half` (positive `v>=2`); negative/`v<=1` → нет |
+| R10 | `range` | `(0,1)` или `(0,3)` | на special при условии flags/знака | всегда да |
+| R2' | `coin` | `(0.01*n3)/chance_decrease` | pass 2, только `n3 != 0` | `p<=0` → нет; `p>1` → нет (return 1); `0<p<=1` → да |
+| R3' | `range` | scaled `n4,n5` | pass 2 | `lo>=hi` → нет; иначе да |
+| R4–R10 | — | — | pass 2, те же условия | как выше |
 
 Порядок на один special: **R6 (все удаления) → [R7, R8, R9, R10] для
 каждого выбранного id**. R6 идёт до значений, потому что сначала
 формируется подмножество pool.
+
+- **R6 = `pool_size − nspec`**, не `count − nspec`: `count` — это уже
+  текущий размер pool в цикле удаления.
+- Time-group: `n2=1` для всех id, реально входящих в itemclass-пулы
+  (`TIME_PERMANENT` — единственный с access `+`). `n2=0` только у
+  `IDSPEC_HEALTH_CURRENT` (48)/`IDSPEC_ENERGY_CURRENT` (49) (все time
+  access `-`), но эти id не входят ни в один pool → для генерации
+  недостижимы. Поэтому «R8=0 в retail» — только про reachable ids.
 
 ### 5.2 `l1_1`, seed 1, loot level 1 — фактический прогон референса
 
@@ -399,13 +425,31 @@ oracle `p3b2b2` §15.6:
 | созданных модов (pass1+pass2) | **9** |
 | RNG draw без specials | **1057** |
 | RNG draw со specials | **1272** (+215) |
-| первое расхождение | `L1_1.P389_Crying_Guardian` |
+| первое RNG-расхождение | `L1_1.P389_Crying_Guardian` pass 1 (`ELB_1_04_1`) |
+| первое изменение выдачи | `L1_1.P389_Crying_Guardian` pass 2 (`MON 218→287`) |
+| persons до divergence | `P387`, `P678`, `Kolbasens` — hot/main идентичны, включая stack structure |
+| final RNG state | `0xE66E2199` (per-person nesting §5.1) |
 
-Первое расхождение — не специальный предмет, а **неудачный R4**:
+Первое RNG-расхождение — **неудачный R4**:
 `L1_1.P389_Crying_Guardian` pass 1, `ELB_1_04_1` (type 14,
 flags `0xC0000004`) — `coin(0.45)` вернул 0, `nspec=0`, но один draw
-потреблён (state `75413397 → 3257732100`). Этого достаточно, чтобы
-сдвинуть весь последующий pass 2.
+потреблён (state `75413397 → 3257732100`). `ELB_1_04_1` — последняя
+запись pass 1, поэтому **hot pass 1 P389 ещё идентичен**; сдвиг
+проявляется в pass 2 этого же NPC (`218 → 287`). Persons #1–#3
+(`P387`, `P678`, `Kolbasens`) полностью идентичны.
+
+Регрессия вложенности (no-specials vs specials; `(item,count)`):
+
+| person | pass 1 | pass 2 |
+|---|---|---|
+| `L1_1.P387_Poison_Plotnik` | `QST_1_0_5=1` | `QST_1_0_5=1` |
+| `L0.P678_citizen4` | `MON 79+81+128`, `FOD_1_7_1=1`, `FOD_1_14_1=1` | empty |
+| `L0.P7_Kolbasens_Rodstvennik1` | `MON 62+72+129`, `RGT_1_0_8=1`, `RGT_1_0_13=1` | `MON 87+87` |
+
+`Kolbasens` — **2×87 в обоих прогонах**; ранее ошибочно указывалась
+смена stack structure (эффект неверной вложенности «все pass1, потом
+все pass2»). При правильной вложенности `P387/P678/Kolbasens` не
+меняются. `P693` также пуст в обоих.
 
 События special-path (analytic reference; pass1 hot + pass2 main):
 
@@ -421,11 +465,32 @@ flags `0xC0000004`) — `coin(0.45)` вернул 0, `nspec=0`, но один dr
 
 `+215` draw'ов: **208** — сам special-path, остальные 7 — уже
 изменившиеся последующие chance/quantity-ветки. Внутри 208:
-**27** — R4/R5 (17 кандидатов × R4 + 10 успешных R5), **171** — R6
-(`pool_size - nspec` на каждое срабатывание: type15 `33-1`, `33-2`;
-type16 `33-2`; type17 `33-1`; type0 `30-1`; type13 `18-2`), **10** —
-R9/R10; R7/R8 для этих id не срабатывали (`MAX_HEALTH/MAX_ENERGY` не
-выбраны; time-group = `PERMANENT`).
+**27** — R4/R5 (17 R4 + 10 coin-вызовов R5; сумма `nspec` = 10, причём
+последний coin в каждой последовательности может быть неуспешным),
+**171** — R6 (`pool_size − nspec` на каждое срабатывание: type15
+`33-1`, `33-2`; type16 `33-2`; type17 `33-1`; type0 `30-1`;
+type13 `18-2`), **10** — R9/R10; R7/R8 для этих id не срабатывали
+(`MAX_HEALTH/MAX_ENERGY` не выбраны; time-group = `PERMANENT`).
+
+Per-mod trace (9 модов, 10 R9/R10 draw'ов; `v0 = trunc(fval*level)`,
+`half` — после clamp/negative fix):
+
+| person | pass | item | mod | fval | v0 | half | v | R9 | R10 |
+|---|---:|---|---:|---:|---:|---:|---:|---:|---:|
+| `P404` | 1 | `BRL_1_01_5` | 25 | -0.5 | -1 | -1 | -1 | 0 | 1 |
+| `P785` | 1 | `BRL_1_04_4` | 16 | 1.0 | 2 | 1 | 2 | 1 | 0 |
+| `P785` | 1 | `BRL_1_04_4` | 43 | 0.5 | 1 | 1 | 2 | 0 | 1 |
+| `P785` | 1 | `AML_1_03_1` | **44** | 1.0 | 2 | 1 | 2 | **1** | **1** |
+| `P785` | 1 | `AML_1_03_1` | 46 | 0.5 | 1 | 1 | 1 | 0 | 1 |
+| `P785` | 2 | `RNG_1_01_2` | 18 | 0.5 | 1 | 1 | 2 | 0 | 1 |
+| `P744` | 1 | `SWR_1_03_3` | 32 | 0.01 | 0 | 1 | 3 | 0 | 1 |
+| `P744` | 1 | `SHL_1_04_1` | 11 | 0.025 | 0 | 1 | 2 | 0 | 1 |
+| `P744` | 1 | `SHL_1_04_1` | 24 | 0.5 | 1 | 1 | 2 | 0 | 1 |
+
+Итого R9=2, R10=8. Два draw'а у **id 44** (`LIGHTNESS_MAGIC_IMMUN`,
+flags `0x41`): R9 `range(1,2)` вернул 1, затем R10 (`v==1`, нет `0x80`)
+добавил `range(0,1)=1` → итог 2. Остальные 8 модов — по одному draw'у
+(либо R9, либо R10).
 
 Влияние на main (pass 2) по персонам (no-specials → specials, только
 изменившиеся агрегаты):
@@ -445,8 +510,8 @@ R9/R10; R7/R8 для этих id не срабатывали (`MAX_HEALTH/MAX_EN
 | `L0.P733_artist1` | `MON=268` | `FOD_1_13_1=1` |
 | `L1.P620_Svet_3CircusWorker2` | `FOD_1_11_1=1`, `MON=82` | `FOD_1_2_1=1`, `MON=318` |
 
-`Kolbasens` total остался `174`, но структура изменилась (`1×174` →
-`2×87`). `P387`, `P678`, `P693` не изменились.
+`P387`, `P678`, `Kolbasens`, `P693` не изменились; у `Kolbasens`
+hot/main и stack structure идентичны (pass 2 — `2×87` в обоих прогонах).
 
 **Следствие:** принятый oracle `p3b2b2` §15.6 — это **no-specials**
 референс. При true parity он недействителен; его значения нужно либо
@@ -465,17 +530,26 @@ implementation-фазе.
 | `flags & 0x80` | 565 |
 | `effects > 0` (prototype mods) | 583 |
 | `max_stack > 1` | 231 |
-| **special-capable** (`type` в pool, `flags&4`, `effects==0`, `max_stack==1`) | **522** |
+| **modifier-capable** (`type` в pool, `flags&4`, `effects==0`) | **522** (все `max_stack==1`) |
 | из них `flags&0x80 == 0` (price-guard active) | **20** |
-| special-capable со `max_stack > 1` | **0** |
+| **RNG candidates** (`flags&4`, `effects==0`; возможен `assigned==1`) | **533** |
+| RNG candidates в pool (= modifier-capable) | 522 |
+| RNG candidates с пустым pool (type19/20) | **11** (9 type19 + 2 type20), все `max_stack>1` |
+| modifier-capable со `max_stack > 1` | **0** |
 
-Special-capable по типам: type0 56, 1 37, 2 26, 3 11, 4 11, 5 7, 6 31,
+Modifier-capable по типам: type0 56, 1 37, 2 26, 3 11, 4 11, 5 7, 6 31,
 7 56, 11 26, 12 26, 13 26, 14 26, 15 76, 16 76, 17 31.
 
-`max_stack > 1` встречается у type0/1/2 (14/15/15), но ни один из них не
-является special-capable (`effects != 0` или `flags&4 == 0`). Поэтому
-merge-путь `FUN_1404e3a4` для random-specials не задействован —
-`unverified` merge не блокирует specials.
+`max_stack > 1` (231) по типам: 0:14, 1:15, 2:15, 8:1, 9:3, 10:3,
+18:1, 19:44, 20:15, 22:78, 23:15, 24:15, 27:9, 28:3. Из них
+modifier-capable — **0**.
+
+Отдельно **11 stackable RNG candidates** (type19: ids 951–957, 969, 970;
+type20: ids 407, 415): `flags&4`, `effects==0`, `max_stack=10000`, но
+type19/20 **не входят в itemclass-пулы**. При `assigned==1` они
+вызывают R4/R5 (draw), `FUN_14047284` возвращает 0 (pool пуст), модов
+нет, но `flags |= 0x200`. Merge для них не меняет набор модов (их нет);
+общий merge-путь `FUN_1404e3a4` остаётся `unverified`.
 
 ### 6.2 Цена/торговля и D-058
 
@@ -483,15 +557,15 @@ merge-путь `FUN_1404e3a4` для random-specials не задействова
 - Price-блок клиента выполняется при
   `(flags & 0x80) == 0 && mod_count != 0` (`p3b2b4b` §4.3-§4.4).
   D-058 guard (`mod_count != 0 && (flags & 0x80) == 0` → `unsupported`)
-  срабатывает для **20** special-capable ITM (см. §6.1), если special
-  выпал. У остальных 502 special-capable `flags&0x80 != 0`, поэтому
+  срабатывает для **20** modifier-capable ITM (см. §6.1), если special
+  выпал. У остальных 502 modifier-capable `flags&0x80 != 0`, поэтому
   случайные моды на цену не влияют.
 - Пример реального specials-предмета: `SWR_1_03_3` (id 536, type 0,
   flags `0x104`, price 35). В `l1_1` specials-run он получил
   `mod id=32` (`IDSPEC_TRANSFER_ENERGY`), `value=3`,
   `flags=0x81` (`RELATIVE|PERMANENT`). После special:
   `flags=0x304`, `mod_count=1`, price-guard active.
-- **D-058 §8.2 (modifier multipliers) теперь раскрыт структурно.**
+- **p3b2b4b §8 п.2 (modifier multipliers) теперь раскрыт структурно.**
   Ценовые `classMul/typeMul` — это поля той же `special_desc`-записи:
   - value-group (class, `flags & 0x1c0`): `+0x68/+0x78/+0x88` (tag),
     `+0x74/+0x84/+0x94` (price); `0x40=ABS, 0x80=REL, 0x100=REPL`;
@@ -500,6 +574,9 @@ merge-путь `FUN_1404e3a4` для random-specials не задействова
     8=INTERVAL, 0x10=IMMEDIATE, 0x20=DELAYED`.
   - Client `DAT_12110ed8` и server `DAT_14088df4` — один объект
     (host `+0x84` = `DAT_00469d54`), поэтому таблицы совпадают.
+  - Save-записи, пришедшие из ITM `effects`, могут иметь `+0x10 = -1`
+    (`p3b2b4b` §4.4); generated specials пишут `+0x0c = +0x10 = 0`.
+    Price-код читает только `id/value/flags`, не `+0x0c/+0x10`.
 - Для примера `SWR_1_03_3` при PC=53: `base0 = trunc((100*0.0025+0.75)*35)
   = 35`; `classMul = def(id 32)+0x84 = 300` (RELATIVE); `typeMul =
   def+0x14 = 2` (PERMANENT); один mod даёт `35 + 3*300*2 = 1835`.
@@ -522,12 +599,17 @@ merge-путь `FUN_1404e3a4` для random-specials не задействова
 1. **Live-оракул specials не снят.** Нет захвата NPC-модов из
    запущенной игры при известном RNG-state. Это acceptance-гейт, не
    блокер алгоритма.
-2. **Live FPU-CW** для modifier-цены не снят. Цена specials/mods
-   реализуема только под PC=53/double; при другом CW — `blocked`
-   (наследуется из `p3b2b4b` §4.5).
-3. **`random_sign` (`def+0x04`)** парсится, но `FUN_14047284` и
-   price-код его не читают. Семантика (применение к стату/эффекту)
-   вне scope — `unverified`.
+2. **Live FPU-CW не снят** ни для генерации, ни для цены. В
+   `FUN_14047284` `fval` и `fval*level` считаются `fld/fmul` под
+   входящим CW (default `0x027F`: PC=53, RC=nearest); `fnstcw/or 0xC00`
+   действует только на финальный `fistp` (trunc). Поэтому значения
+   specials условны для default `0x027F`; при другом PC/RC возможны
+   отличия до trunc. Цена — то же (`p3b2b4b` §4.5). Нужен live CW перед
+   `FUN_14047284` и `FUN_1206E8D0`.
+3. **`random_sign` (`def+0x04`)** парсится; комментарий
+   `specials.scr:10-11` говорит о 50% смене знака `<baseval>`; однако
+   `FUN_14047284` и price-код поле не читают. Где применяется —
+   `unverified`.
 4. **Item flag `0x40`** (режим 0..9 specials) поведение точное,
    смысловое имя — `unverified`.
 5. **Time-slots 4–6** (`+0x3c…+0x64`) в генерации не читаются
@@ -538,8 +620,10 @@ merge-путь `FUN_1404e3a4` для random-specials не задействова
 7. **Pass-1 hot** в порте отбрасывается; specials в pass 1 обязательны
    для RNG, даже если hot не хранится. Это уже зафиксировано в
    `p3b2b2` §15.3; для specials — тем более.
-8. **Merge** `FUN_1404e3a4` не задействован (0 special-capable
-   stackable ITM), но остаётся `unverified` в общем случае.
+8. **Merge** `FUN_1404e3a4`: modifier-capable stackable ITM = 0;
+   11 type19/20 stackable RNG candidates имеют пустой pool и не
+   получают модов. Merge не влияет на mod-набор, но остаётся
+   `unverified` в общем случае.
 
 ### 7.3 Oracle / acceptance для следующей фазы
 
@@ -550,24 +634,42 @@ merge-путь `FUN_1404e3a4` для random-specials не задействова
    - `FUN_14047284` pool: identity `[0..57]` ∩ type-pool, ascending;
      `nspec >= pool` → все pool; `nspec == 0` → пусто.
    - R4/R5: точные значения/лимиты 3 и 9 для `flags&0x40` 0/1.
-   - R6: `pool-nspec` draw'ов; R7 только MAX_HEALTH/MAX_ENERGY;
-     R8=0 в retail; R9/R10 условия §3.
+   - R6: `pool_size-nspec` draw'ов; R7 только MAX_HEALTH/MAX_ENERGY;
+     R8=0 для reachable ids (`n2=1`); R9/R10 условия §3.
 2. **Deterministic integration `l1_1`, seed 1, loot level 1.**
-   - events §5.2 (7 срабатываний, 9 модов; `RNG_1_01_2` main);
+   - exact nesting §5.1: per person `R1 → pass1 → pass2`; regression
+     `P387/P678/Kolbasens` hot/main identical including stack structure
+     (`Kolbasens` pass2 `2×87` in both runs);
+   - events §5.2 (7 срабатываний, 9 модов; `RNG_1_01_2` main) +
+     per-mod R9/R10 trace (10 draw'ов, id 44 — два);
    - final pass2 aggregates §5.2; 1272 draw, final state
      `0xE66E2199` (референс; C++ state может отличаться только при
      другом порядке — он не должен);
-   - first divergence `Crying_Guardian`/`ELB_1_04_1` (§5.2).
+   - first RNG divergence `Crying_Guardian` pass1/`ELB_1_04_1`; first
+     emitted change `Crying_Guardian` pass2 (`MON 218→287`).
 3. **Live/differential gate (обязателен до заявки на full parity).**
    - Запустить оригинал, зафиксировать seed/RNG-state (attach/debug,
      без DRM-обхода), снять NPC-контейнеры `+0x10` и mod-записи
      (`+0x78/+0x7c`, stride `0x14`) для `l1_1`/иного уровня.
    - Сравнить 0/N: item id/count, mod id/value/flags, `flags&0x200`.
-   - Для цены — снять FPU CW до входа в `FUN_1206E8D0`; ожидается
-     PC=53. Если CW иной — price `blocked`.
+   - Снять FPU CW **до** `FUN_14047284` (генерация) и **до**
+     `FUN_1206E8D0` (цена); ожидается default `0x027F`
+     (PC=53/RC=nearest). Если CW иной — generation values и/или price
+     `blocked`.
 4. **Regression:** при включении specials принятые no-specials
    значения `174/218/323` помечены `superseded`; тесты обновляются на
    new oracle (или явно разделяются `no_specials`/`specials` режимы).
+5. **Reference reproduction.** Полный Python-референс архивом:
+   `.superpowers/sdd/2026-11-10-p3b2b2c-npc-loot-specials-research/loot_ref.py`
+   (SHA-256 `63F797738F967F79D7245DF2FB08B964E24E73698F7D026669BACE0D3CD6C0BC`);
+   ключевые формулы/порядок — §3–§5. Подготовка (вне репозитория):
+   `glpak extract <game> --archive items.pak --out <base>/items`;
+   `--prefix scripts/inventory --out <base>/scripts`;
+   `--file levels/single/l1_1/l1_1.sef --out <base>/levels`;
+   `--file sdb/items/tech_names.sdb --out <base>`;
+   `--prefix scripts/item_class_specials --out <base>/scripts`.
+   Запуск: `set GL_SPEC_BASE=<base> && py loot_ref.py --specials`
+   (без `--specials` — no-specials oracle).
 
 ## 8. Проверка (фактический вывод)
 
@@ -607,17 +709,22 @@ tech_names.sdb BACFC79409DFEA4FAD1AB85D21235C2E4D7F37C4525B69C87F7838634F391796
 #   mod store 0x140476a0-0x140476bf (stride 0x14); flags|=0x200 0x140476e0.
 
 # ITM stats (1848): flags4=922 flags40=99 flags80=565 effects>0=583
-#   max_stack>1=231 special-capable=522 guard-active=20 stackable-special=0
+#   max_stack>1=231; modifier-capable=522 (all ms=1); RNG candidates=533
+#   (522 in pool + 11 empty-pool type19/20, all ms>1); guard-active=20
+#   modifier-capable stackable=0
 # pool sizes: 0:30 1:29 2:28 3:32 4:32 5:32 6:43 7:28
 #   11:22 12:21 13:18 14:21 15:33 16:33 17:33
 
-# l1_1 seed=1 level=1 Python reference:
-#   no-specials: P387 QST=1; Kolbasens MON=174; Crying MON=218;
+# l1_1 seed=1 level=1 Python reference (per-person R1,pass1,pass2 nesting):
+#   no-specials: P387 QST=1; Kolbasens MON=174 (pass2 2x87); Crying MON=218;
 #     P711 MON=323; P678 empty; P744 first ELB_1_03_1/HLM_1_04_2 MON=0
+#   nesting regression: P387/P678/Kolbasens hot+main identical incl stacks
 #   specials: candidates=17 triggered=7 mods=9 draws 1057->1272
 #     special-path draws=208 (R4/R5=27, R6=171, R9/R10=10, R7/R8=0);
-#     remaining 7 = downstream divergence
-#     first divergence Crying_Guardian (ELB_1_04_1 nspec=0, 1 draw)
+#     remaining 7 = downstream divergence; final state 0xE66E2199
+#     per-mod R9/R10: sid44 in AML_1_03_1 consumes R9+R10; others one draw
+#     first RNG divergence Crying_Guardian pass1 ELB_1_04_1 (nspec=0, 1 draw);
+#     first emitted change Crying_Guardian pass2 MON 218->287
 #     events: BRL_1_01_5(25,-1,0x81); BRL_1_04_4(16,2,0x41)(43,2,0x41);
 #             AML_1_03_1(44,2,0x41)(46,1,0x41); RNG_1_01_2(18,2,0x41);
 #             POT_1_00_30(empty pool); SWR_1_03_3(32,3,0x81);
