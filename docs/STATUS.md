@@ -1,6 +1,17 @@
 # STATUS
 
 Обновлено: 2026-11-10
+## Phase 1b2b2d — NPC loot specials implementation (planned 2026-11-10)
+
+- **Задача:** `specials.scr` parser, `SpecialEngine` (R4–R10),
+  интеграция в `NpcLootGenerator`, `InventoryItem.mods`.
+- **Spec:** `docs/specs/2026-11-10-p3b2b2d-specials-implementation-design.md`.
+- **Plan:** `docs/plans/2026-11-10-p3b2b2d-specials-implementation.md`.
+- **Гейты:** full parity только после live FPU-CW (generation+price) и
+  live NPC-mod 0/N; без них — `partial`.
+- **Статус:** spec/plan готовы; implementation не начата (ждёт
+  одобрения).
+
 ## Phase 1b2b2c — NPC loot specials research (done 2026-11-10)
 
 - **Задача:** доказать/опровергнуть воспроизводимость specials NPC-лута
