@@ -20,6 +20,7 @@ add_executable(gl_game_tests
     test_person_runtime_real.cpp
     test_real_person_loader.cpp
     test_special_engine.cpp
+    test_special_gates.cpp
     test_stability.cpp
     test_trade_price.cpp
     test_walk_grid.cpp

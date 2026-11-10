@@ -1,16 +1,32 @@
 # STATUS
 
 Обновлено: 2026-11-10
-## Phase 1b2b2d — NPC loot specials implementation (planned 2026-11-10)
+## Phase 1b2b2d — NPC loot specials implementation (in progress 2026-11-10)
 
 - **Задача:** `specials.scr` parser, `SpecialEngine` (R4–R10),
   интеграция в `NpcLootGenerator`, `InventoryItem.mods`.
 - **Spec:** `docs/specs/2026-11-10-p3b2b2d-specials-implementation-design.md`.
 - **Plan:** `docs/plans/2026-11-10-p3b2b2d-specials-implementation.md`.
-- **Гейты:** full parity только после live FPU-CW (generation+price) и
-  live NPC-mod 0/N; без них — `partial`.
-- **Статус:** spec/plan готовы; implementation не начата (ждёт
-  одобрения).
+- **Реализация:** Tasks 1–3 done (`specials.scr` parser,
+  `SpecialEngine` R4–R10, `NpcLootGenerator` integration); production
+  `glgame` пока без specials (Task 5).
+- **Гейты (OPEN, 2026-11-10):**
+  - **FPU-CW:** механизм добавлен в
+    `tests/game/test_special_gates.cpp`. На build-машине x87 CW =
+    `0x037F` (PC=64/RC=nearest), не reference `0x027F`
+    (PC=53/RC=nearest) → live-гейт не подтверждён, FPU-тест skip;
+    порт считает в double/SSE2, но reference-предположение остаётся
+    `unverified` до live-захвата CW перед `FUN_14047284`/`FUN_1206E8D0`.
+  - **NPC-mod oracle:** формат `person|item_id|count|mod_id|value|
+    mod_flags|item_flags` и сравнение multiset готовы; capture
+    procedure/helper — `tools/live/`; `GL_SPECIALS_LIVE` не задан →
+    skip с причиной. Live capture не снят, full parity не заявлен.
+- **Проверка:** `gl_game_tests --test-case="*special*gate*"` — 3 passed,
+  0 failed, 1 skipped (FPU), 302 skipped всего; `--success`
+  зафиксировал CW `0x37f`.
+- **Статус:** `partial`; full parity запрещён до live NPC-mod 0/N и
+  FPU-CW `0x027F`.
+- **Коммит Task 4:** `test(game): add specials live gates`.
 
 ## Phase 1b2b2c — NPC loot specials research (done 2026-11-10)
 
