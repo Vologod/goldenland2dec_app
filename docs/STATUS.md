@@ -26,13 +26,15 @@
   (D-058 guard active), modifier-capable stackable 0; RNG candidates
   (`flags&4`, `effects==0`) — 533 = 522 + 11 type19/20 stackable с
   пустым pool (draw R4/R5, модов нет). `l1_1` seed1 level1 (analytic
-  Python reference, без specials совпал с принятым oracle 174/218/323):
-  17 кандидатов, 7 срабатываний, 9 модов, 1057→1272 draw (+215;
-  special-path 208 = R4/R5 27 + R6 171 + R9/R10 10); первое
-  RNG-расхождение — `Crying_Guardian` pass1 (`ELB_1_04_1`, `nspec=0`,
-  1 draw), первое изменение выдачи — его pass2; `P387/P678/Kolbasens`
-  hot/main идентичны (Kolbasens pass2 `2×87` в обоих). Принятые
-  no-specials значения `174/218/323` под true parity **superseded**.
+  Python reference; level contract `v=int(fval*loot_level)`,
+  self-check `fval=1,loot=1 -> 1`; без specials совпал с принятым
+  oracle 174/218/323): 18 кандидатов, 9 срабатываний, 12 модов,
+  1057→1329 draw (+272; special-path 275 = R4/R5 30 + R6 233 +
+  R9/R10 12; downstream -3); первое RNG-расхождение —
+  `Crying_Guardian` pass1 (`ELB_1_04_1`, `nspec=0`, 1 draw), первое
+  изменение выдачи — его pass2; `P387/P678/Kolbasens` hot/main
+  идентичны (Kolbasens pass2 `2×87` в обоих). Принятые no-specials
+  значения `174/218/323` под true parity **superseded**.
 - **D-058:** modifier `classMul/typeMul` — это price-поля той же
   `special_desc`-записи (`+0x74/+0x84/+0x94`, `+0x14…+0x64`); client
   `DAT_12110ed8` и server `DAT_14088df4` — один объект (host `+0x84`);
@@ -48,13 +50,14 @@
   `l1_1` seed1 level1 events §5.2 + final aggregates, live/differential
   gate (RNG-state + NPC `+0x10`/mod records, 0/N), live FPU-CW;
   обновить/пометить `superseded` no-specials oracle.
-- **Коммиты:** `0e4402e..0af9ab7` (spec/plan, research, RNG-order/caveat
-  fixes; verdict/handoff — `0af9ab7`; fix wording — `docs: fix specials
-  blocked wording`) — **docs-only**, production-код не менялся; не запушено.
+- **Коммиты:** `0e4402e..841bed7` (spec/plan, research, RNG-order/caveat
+  fixes; verdict/handoff — `0af9ab7`; fix wording — `841bed7`) —
+  **docs-only**, production-код не менялся; не запушено.
 - **Следующее:** implementation spec/plan для specials (parser
   `specials.scr`, `FUN_14047284`, R4–R10 в обоих проходах, modifier
-  price под PC=53) — **после live-захвата FPU-CW и NPC-mod oracle
-  (RNG-state + mod records, 0/N)**, затем `P2-15`/35 Гц.
+  price под PC=53) **можно начинать сейчас**; live NPC-mod oracle и
+  live FPU-CW — обязательные acceptance-гейты **до заявки на full
+  parity**, не блокеры старта. Затем `P2-15`/35 Гц.
 
 ## Phase 1b2b4b — trade transactions (done 2026-11-09)
 

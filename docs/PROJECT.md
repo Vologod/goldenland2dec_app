@@ -90,8 +90,10 @@ atomic errors), staging/Exchange UI, `glgame` hooks, D-058, full
 и save — вне scope. Phase 1b2b2c (specials research) done 2026-11-10:
 **implementable scoped** (DB `specials.scr`, manager
 `DAT_14088df4 = *(host+0x84) = DAT_00469d54`, R4–R10, price multipliers
-structurally resolved; live oracle/CW open). Дальше — implementation
-specials, save payload (`P2-15`), затем 35 Гц.
+structurally resolved; analytic `l1_1` 18/9/12, 1057→1329 draw, final
+`0x48CAA370`). Implementation can start now; live NPC-mod oracle and
+live FPU-CW are mandatory acceptance gates before full parity. Дальше —
+implementation specials, save payload (`P2-15`), затем 35 Гц.
 
 ## Архитектура (кратко)
 

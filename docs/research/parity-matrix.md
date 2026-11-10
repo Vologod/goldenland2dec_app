@@ -167,7 +167,7 @@ ID: `P4a-*`, `P4b-*`, `P4b2-*` — прежние A/B/C из аудита (пе�
 | P3b-1 | `.inv` | парсер таблиц | `inv_table.cpp` | 238/238 реальных файлов, 11 543 item, 362 four-number skip в 10 файлах, 0 failures; грамматика §3 | verified | synthetic-строгость (незакрытая кавычка, длина токена, перепроверка header) — minor | STATUS 1b2b2b; D-055; research §3–§5 |
 | P3b-2 | генератор | core initial spawn `FUN_1404b1c0` | `npc_loot.cpp` | research §15.2 (RVA/asm), независимый Python-референс, unit 11/11, real `l1_1` oracle (`174/218/323` — no-specials, `superseded` under true parity, D-059) | partial | нет live-оракула; merge `+1` (`FUN_1404e3a4`) `unverified`; zero-divisor/`max_stack==0` — guards; уровень — EXP-эквивалент `+0x26c4` без Scout/Identify; specials не генерируются (D-055) | research §15.2–§15.6; D-055/D-059 |
 | P3b-3 | контейнеры/запросы | NPC main `+0x10` + генерация при загрузке | `inventory_runtime.cpp`, `level_screen.cpp`, `main.cpp` | main = pass 2 читается `RS_TestPersonHasItem`/`RS_GetItemCountI`; SEF-порядок; тот же RNG в `LevelSimulation`; real `174/218/323` (no-specials, `superseded` under true parity, D-059); Hero не изменён | partial | hot `+0xc` отброшен (RNG pass 1 выполняется); дубликаты first-wins; NPC add/remove no-op; save на уже загруженном уровне не перегенерирует; нет live-оракула | research §15.3/§15.6; D-055/D-059 |
-| P3b-4 | specials | R4–R10 модификаторы | не реализовано | research `p3b2b2c-npc-loot-specials.md`: DB `scripts/item_class_specials/specials.scr` + hardcoded `IDSPEC/SPECF/T_*` в `GoldenLand.exe`, manager `DAT_14088df4 = *(host+0x84) = DAT_00469d54` (shared с Client); `FUN_14047284`/R4–R10/полный RNG-порядок восстановлены; analytic `l1_1` seed1 level1 (17 кандидатов, 7 срабатываний, 9 модов, 1057→1272 draw) | partial (research only; implementation pending) | live NPC-mod oracle и live FPU-CW (генерация+цена) не сняты; `random_sign` парсится, но не читается генерацией/ценой (unverified только место применения); item flag `0x40`, time-slots 4–6 `unverified`; no-specials oracle `174/218/323` под true parity `superseded`; реализация — отдельная фаза | research `p3b2b2c-npc-loot-specials.md` §0/§3–§7; D-059 |
+| P3b-4 | specials | R4–R10 модификаторы | не реализовано | research `p3b2b2c-npc-loot-specials.md`: DB `scripts/item_class_specials/specials.scr` + hardcoded `IDSPEC/SPECF/T_*` в `GoldenLand.exe`, manager `DAT_14088df4 = *(host+0x84) = DAT_00469d54` (shared с Client); `FUN_14047284`/R4–R10/полный RNG-порядок восстановлены; analytic `l1_1` seed1 level1 (18 кандидатов, 9 срабатываний, 12 модов, 1057→1329 draw; level `v=int(fval*loot_level)`) | missing (research recovered; implementation pending) | live NPC-mod oracle и live FPU-CW (генерация+цена) не сняты; `random_sign` парсится, но не читается генерацией/ценой (unverified только место применения); item flag `0x40`, time-slots 4–6 `unverified`; no-specials oracle `174/218/323` под true parity `superseded`; реализация — отдельная фаза | research `p3b2b2c-npc-loot-specials.md` §0/§3–§7; D-059 |
 | P3b-5 | restock | regenerate во времени | не реализовано | `FUN_14048fac`; initial spawn только | missing | blocked: restock/regenerate после первого поколения вне scope | research §10.2; D-055 |
 
 ## P3c — inventory transfers (Phase 1b2b3, 2026-11-08)
@@ -334,8 +334,8 @@ ID: `P4a-*`, `P4b-*`, `P4b2-*` — прежние A/B/C из аудита (пе�
 
 ## Итог
 
-Всего строк: **174**. По статусам: `verified` 51, `partial` 73,
-`unverified` 22, `missing` 16, `contradicted` 2, `superseded` 10.
+Всего строк: **174**. По статусам: `verified` 51, `partial` 72,
+`unverified` 22, `missing` 17, `contradicted` 2, `superseded` 10.
 
 Native dispatch infrastructure (Phase 1a): `NativeRegistry` 65/65 +
 `GameScriptHost`. Phase 1b1 добавляет три person-натива, Phase 1b2a — три

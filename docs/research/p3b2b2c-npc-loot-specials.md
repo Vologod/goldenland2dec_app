@@ -19,8 +19,8 @@ Research-only; production-код не менялся.
   `FUN_140489ec` и `FUN_1404b1c0`.
 - Полный RNG-порядок special-path восстановлен. Specials **нельзя
   пропускать**: даже неудачный R4 (`nspec==0`) потребляет draw и сдвигает
-  последующий лут. На `l1_1`, seed 1, loot level 1: 17 кандидатов,
-  7 срабатываний, 9 модификаторов; 1057 → 1272 draw (+215), первое
+  последующий лут. На `l1_1`, seed 1, loot level 1: 18 кандидатов,
+  9 срабатываний, 12 модификаторов; 1057 → 1329 draw (+272), первое
   RNG-расхождение — `L1_1.P389_Crying_Guardian` pass 1, первое
   изменение выдачи — его pass 2.
 - Модификаторные множители цены (`class/type`) — это те же поля
@@ -294,12 +294,13 @@ FUN_14047284(template, item, nspec):
 - **R10**: как в псевдокоде; `flags & 0x80` — это `RELATIVE` tag,
   не item-флаг.
 - `ROUND` = trunc: asm `0x140475b4-0x140475d4` (`fnstcw`, `or 0xC00`,
-  `fldcw`, `fistp`, restore). `fval` (group products) и `fval*(level+1)`
-  считаются `fld/fmul` под **входящим** CW; `or 0xC00` действует только
-  на финальный `fistp` (trunc). Windows default CW = `0x027F`
-  (PC=53/double, RC=nearest), как в `p3b2b4b` §4.5. Поэтому значения
-  specials условны для default `0x027F`; `fval` хранится в double
-  (`fstp qword`), произведение — double.
+  `fldcw`, `fistp`, restore). `fval` (group products) и
+  `fval*loot_level` (`loot_level = +0x26c4+1`) считаются `fld/fmul` под
+  **входящим** CW; `or 0xC00` действует только на финальный `fistp`
+  (trunc). Windows default CW = `0x027F` (PC=53/double, RC=nearest), как
+  в `p3b2b4b` §4.5. Поэтому значения specials условны для default
+  `0x027F`; `fval` хранится в double (`fstp qword`), произведение —
+  double.
 - Mod-запись: `+0x00 id`, `+0x04 value`, `+0x08 flags`, `+0x0c = 0`,
   `+0x10 = 0` (asm `0x140476a0-0x140476bf`). `item+0xc |= 0x200`
   ставится **безусловно**, даже если `count == 0` (пустой pool).
@@ -383,7 +384,7 @@ pass 2 (все записи); затем следующий person**. Hot (`+0xc
 | R3 | `range` | `n4,n5` (pass 1) | R2 != 0 и `n3 != 0` | `n4>=n5` → нет (return `n4`); иначе да |
 | R4 | `coin` | `0.45` или `0.09` | кандидат (`assigned==1`, `flags&4`, `mods==0`) | всегда да |
 | R5 | `coin` | `0.30/0.15` или `0.08…0.01` | пока R4/R5 успешны | всегда да |
-| R6 | `range` | `(0, pool_size-1)` × (`pool_size-nspec`) | внутри `FUN_14047284`, до значений | всегда да (`hi>lo`) |
+| R6 | `range` | `(0, current_count-1)` × (`pool_size-nspec`) | внутри `FUN_14047284`, до значений | всегда да (`hi>lo`; `current_count` уменьшается) |
 | R7 | `range` | `(0, n1-1)` | на special, если `n1>1` | да; `n1<=1` → нет |
 | R8 | `range` | `(0, n2-1)` | на special, если `n2>1` | да; `n2<=1` → нет |
 | R9 | `range` | `(half, v)` | на special | да только при `v>half` (positive `v>=2`); negative/`v<=1` → нет |
@@ -396,8 +397,10 @@ pass 2 (все записи); затем следующий person**. Hot (`+0xc
 каждого выбранного id**. R6 идёт до значений, потому что сначала
 формируется подмножество pool.
 
-- **R6 = `pool_size − nspec`**, не `count − nspec`: `count` — это уже
-  текущий размер pool в цикле удаления.
+- **R6**: число удалений = `pool_size − nspec`; **каждое** удаление
+  использует `range(0, current_count-1)`, где `current_count`
+  уменьшается от `pool_size` до `nspec+1` — это **не** постоянный
+  `pool_size-1`.
 - Time-group: `n2=1` для всех id, реально входящих в itemclass-пулы
   (`TIME_PERMANENT` — единственный с access `+`). `n2=0` только у
   `IDSPEC_HEALTH_CURRENT` (48)/`IDSPEC_ENERGY_CURRENT` (49) (все time
@@ -420,15 +423,15 @@ oracle `p3b2b2` §15.6:
 
 | показатель | значение |
 |---|---:|
-| кандидатов (`assigned==1`, `flags&4`, `mods==0`) | **17** |
-| срабатываний (`nspec != 0`) | **7** |
-| созданных модов (pass1+pass2) | **9** |
+| кандидатов (`assigned==1`, `flags&4`, `mods==0`) | **18** |
+| срабатываний (`nspec != 0`) | **9** |
+| созданных модов (pass1+pass2) | **12** |
 | RNG draw без specials | **1057** |
-| RNG draw со specials | **1272** (+215) |
+| RNG draw со specials | **1329** (+272) |
 | первое RNG-расхождение | `L1_1.P389_Crying_Guardian` pass 1 (`ELB_1_04_1`) |
 | первое изменение выдачи | `L1_1.P389_Crying_Guardian` pass 2 (`MON 218→287`) |
 | persons до divergence | `P387`, `P678`, `Kolbasens` — hot/main идентичны, включая stack structure |
-| final RNG state | `0xE66E2199` (per-person nesting §5.1) |
+| final RNG state | `0x48CAA370` (per-person nesting §5.1) |
 
 Первое RNG-расхождение — **неудачный R4**:
 `L1_1.P389_Crying_Guardian` pass 1, `ELB_1_04_1` (type 14,
@@ -457,40 +460,44 @@ flags `0xC0000004`) — `coin(0.45)` вернул 0, `nspec=0`, но один dr
 |---|---:|---|---:|---:|---|
 | `L1_2.P404_Sister_Of_Mercy2` | 1 | `BRL_1_01_5` | 15 | 1 | `(25, -1, 0x81)` |
 | `L0.P785_witch3` | 1 | `BRL_1_04_4` | 15 | 2 | `(16, 2, 0x41)`, `(43, 2, 0x41)` |
-| `L0.P785_witch3` | 1 | `AML_1_03_1` | 16 | 2 | `(44, 2, 0x41)`, `(46, 1, 0x41)` |
-| `L0.P785_witch3` | 2 | `RNG_1_01_2` | 17 | 1 | `(18, 2, 0x41)` |
-| `L0.P693_citizen6` | 1 | `POT_1_00_30` | 19 | 1 | — (пустой pool; `flags |= 0x200`) |
-| `L0.P744_oficer1` | 1 | `SWR_1_03_3` | 0 | 1 | `(32, 3, 0x81)` |
-| `L0.P744_oficer1` | 1 | `SHL_1_04_1` | 13 | 2 | `(11, 2, 0x41)`, `(24, 2, 0x41)` |
+| `L0.P785_witch3` | 1 | `AML_1_03_1` | 16 | 2 | `(44, 1, 0x41)`, `(46, 2, 0x41)` |
+| `L0.P785_witch3` | 2 | `RNG_1_03_1` | 17 | 1 | `(18, 2, 0x41)` |
+| `L0.P744_oficer1` | 1 | `HLM_1_03_1` | 11 | 1 | `(20, 2, 0x41)` |
+| `L0.P744_oficer1` | 2 | `SWR_1_04_2` | 0 | 1 | `(10, 2, 0x41)` |
+| `L0.P744_oficer1` | 1 | `HLM_1_01_2` | 11 | 2 | `(12, 2, 0x41)`, `(25, -4, 0x81)` |
+| `L0.P744_oficer1` | 1 | `SHL_1_01_2` | 13 | 1 | `(7, 2, 0x41)` |
+| `L0.P744_oficer1` | 2 | `ARM_1_04_2` | 12 | 1 | `(12, 1, 0x41)` |
 
-`+215` draw'ов: **208** — сам special-path, остальные 7 — уже
-изменившиеся последующие chance/quantity-ветки. Внутри 208:
-**27** — R4/R5 (17 R4 + 10 coin-вызовов R5; сумма `nspec` = 10, причём
-последний coin в каждой последовательности может быть неуспешным),
-**171** — R6 (`pool_size − nspec` на каждое срабатывание: type15
-`33-1`, `33-2`; type16 `33-2`; type17 `33-1`; type0 `30-1`;
-type13 `18-2`), **10** — R9/R10; R7/R8 для этих id не срабатывали
+`+272` draw'ов (net): **275** — сам special-path, downstream — минус 3.
+Внутри 275: **30** — R4/R5 (18 R4 + 12 coin-вызовов R5; сумма `nspec`
+= 12, последний coin в последовательности может быть неуспешным),
+**233** — R6 (`pool_size − nspec`; каждое удаление — `range(0,
+current_count-1)`; type15 `33-1`, `33-2`; type16 `33-2`; type17 `33-1`;
+type11 `22-1`, `22-2`; type0 `30-1`; type13 `18-1`; type12 `21-1`),
+**12** — R9/R10; R7/R8 для этих id не срабатывали
 (`MAX_HEALTH/MAX_ENERGY` не выбраны; time-group = `PERMANENT`).
 
-Per-mod trace (9 модов, 10 R9/R10 draw'ов; `v0 = trunc(fval*level)`,
+Per-mod trace (12 модов, 12 R9/R10 draw'ов; `v0 = trunc(fval*level)`,
 `half` — после clamp/negative fix):
 
 | person | pass | item | mod | fval | v0 | half | v | R9 | R10 |
 |---|---:|---|---:|---:|---:|---:|---:|---:|---:|
-| `P404` | 1 | `BRL_1_01_5` | 25 | -0.5 | -1 | -1 | -1 | 0 | 1 |
-| `P785` | 1 | `BRL_1_04_4` | 16 | 1.0 | 2 | 1 | 2 | 1 | 0 |
-| `P785` | 1 | `BRL_1_04_4` | 43 | 0.5 | 1 | 1 | 2 | 0 | 1 |
-| `P785` | 1 | `AML_1_03_1` | **44** | 1.0 | 2 | 1 | 2 | **1** | **1** |
-| `P785` | 1 | `AML_1_03_1` | 46 | 0.5 | 1 | 1 | 1 | 0 | 1 |
-| `P785` | 2 | `RNG_1_01_2` | 18 | 0.5 | 1 | 1 | 2 | 0 | 1 |
-| `P744` | 1 | `SWR_1_03_3` | 32 | 0.01 | 0 | 1 | 3 | 0 | 1 |
-| `P744` | 1 | `SHL_1_04_1` | 11 | 0.025 | 0 | 1 | 2 | 0 | 1 |
-| `P744` | 1 | `SHL_1_04_1` | 24 | 0.5 | 1 | 1 | 2 | 0 | 1 |
+| `P404` | 1 | `BRL_1_01_5` | 25 | -0.5 | 0 | -1 | -1 | 0 | 1 |
+| `P785` | 1 | `BRL_1_04_4` | 16 | 1.0 | 1 | 1 | 2 | 0 | 1 |
+| `P785` | 1 | `BRL_1_04_4` | 43 | 0.5 | 0 | 1 | 2 | 0 | 1 |
+| `P785` | 1 | `AML_1_03_1` | 44 | 1.0 | 1 | 1 | 1 | 0 | 1 |
+| `P785` | 1 | `AML_1_03_1` | 46 | 0.5 | 0 | 1 | 2 | 0 | 1 |
+| `P785` | 2 | `RNG_1_03_1` | 18 | 0.5 | 0 | 1 | 2 | 0 | 1 |
+| `P744` | 1 | `HLM_1_03_1` | 20 | 0.25 | 0 | 1 | 2 | 0 | 1 |
+| `P744` | 2 | `SWR_1_04_2` | 10 | 0.025 | 0 | 1 | 2 | 0 | 1 |
+| `P744` | 1 | `HLM_1_01_2` | 12 | 0.025 | 0 | 1 | 2 | 0 | 1 |
+| `P744` | 1 | `HLM_1_01_2` | 25 | -0.5 | 0 | -1 | -4 | 0 | 1 |
+| `P744` | 1 | `SHL_1_01_2` | 7 | 0.025 | 0 | 1 | 2 | 0 | 1 |
+| `P744` | 2 | `ARM_1_04_2` | 12 | 0.025 | 0 | 1 | 1 | 0 | 1 |
 
-Итого R9=2, R10=8. Два draw'а у **id 44** (`LIGHTNESS_MAGIC_IMMUN`,
-flags `0x41`): R9 `range(1,2)` вернул 1, затем R10 (`v==1`, нет `0x80`)
-добавил `range(0,1)=1` → итог 2. Остальные 8 модов — по одному draw'у
-(либо R9, либо R10).
+Итого R9=0, R10=12: в этом прогоне R9 не потребовался (все `v0<=1`
+для positive и `v0=0` для negative); каждый мод — ровно один R10 draw.
+Старого случая «10 draw'ов на 9 модов» в corrected run нет.
 
 Влияние на main (pass 2) по персонам (no-specials → specials, только
 изменившиеся агрегаты):
@@ -499,16 +506,16 @@ flags `0x41`): R9 `range(1,2)` вернул 1, затем R10 (`v==1`, нет `0
 |---|---|---|
 | `L1_1.P389_Crying_Guardian` | `MON=218` | `MON=287` |
 | `L1_2.P404_Sister_Of_Mercy2` | `AML_1_04_2=1` | `BRL_1_01_2=1` |
-| `L0.P785_witch3` | `BRL_1_01_2=1` | `MON=108`, `RNG_1_01_2=1`, `SCR_4_0_3=1` |
-| `L1_2.P403_Sister_Of_Mercy1` | `MON=119` | `MON=159` |
-| `L0.P711_citizen8` | `MON=323` | `MON=93` |
-| `L0.P692_citizen5` | `FOD_1_9_1=2`, `MON=54` | `MON=60` |
-| `L0.P744_oficer1` (1) | `ELB_1_03_1=1`, `HLM_1_04_2=1`, `MON=0` | `ARM_1_04_1=1`, `ELB_1_04_1=1`, `MON=317` |
-| `L0.P744_oficer1` (2) | `MON=90` | `MON=177` |
-| `L0.P640_children2` | `MON=85` | `MON=183`, `RGT_1_0_12=1`, `STN_1_0_2=3` |
-| `L1.P621_Svet_3CircusWorkerV` | `FOD_1_13_1=3`, `MON=104` | `MON=179` |
-| `L0.P733_artist1` | `MON=268` | `FOD_1_13_1=1` |
-| `L1.P620_Svet_3CircusWorker2` | `FOD_1_11_1=1`, `MON=82` | `FOD_1_2_1=1`, `MON=318` |
+| `L0.P785_witch3` | `BRL_1_01_2=1` | `RNG_1_03_1=1`, `SCR_5_0_1=1` |
+| `L1_2.P403_Sister_Of_Mercy1` | `MON=119` | `MON=251` |
+| `L0.P711_citizen8` | `MON=323` | `MON=0` |
+| `L0.P692_citizen5` | `FOD_1_9_1=2`, `MON=54` | `MON=72` |
+| `L0.P744_oficer1` (1) | `ELB_1_03_1=1`, `HLM_1_04_2=1`, `MON=0` | `HLM_1_04_1=1`, `SWR_1_04_2=1`, `MON=161` |
+| `L0.P744_oficer1` (2) | `MON=90` | `ARM_1_04_2=1`, `FOD_1_9_1=3`, `SWR_1_03_2=1`, `MON=73` |
+| `L0.P640_children2` | `MON=85` | `MON=83` |
+| `L1.P621_Svet_3CircusWorkerV` | `FOD_1_13_1=3`, `MON=104` | `FOD_1_10_1=1`, `MON=281` |
+| `L0.P733_artist1` | `MON=268` | `MON=78` |
+| `L1.P620_Svet_3CircusWorker2` | `FOD_1_11_1=1`, `MON=82` | `FOD_1_11_1=3`, `MON=0` |
 
 `P387`, `P678`, `Kolbasens`, `P693` не изменились; у `Kolbasens`
 hot/main и stack structure идентичны (pass 2 — `2×87` в обоих прогонах).
@@ -560,10 +567,10 @@ type19/20 **не входят в itemclass-пулы**. При `assigned==1` он
   срабатывает для **20** modifier-capable ITM (см. §6.1), если special
   выпал. У остальных 502 modifier-capable `flags&0x80 != 0`, поэтому
   случайные моды на цену не влияют.
-- Пример реального specials-предмета: `SWR_1_03_3` (id 536, type 0,
-  flags `0x104`, price 35). В `l1_1` specials-run он получил
-  `mod id=32` (`IDSPEC_TRANSFER_ENERGY`), `value=3`,
-  `flags=0x81` (`RELATIVE|PERMANENT`). После special:
+- Пример corrected-run: `HLM_1_03_1` (id 256, type 11,
+  flags `0x104`, price 40). В `l1_1` specials-run он получил
+  `mod id=20` (`IDSPEC_CRUSHING_RES`), `value=2`,
+  `flags=0x41` (`ABSOLUTE|PERMANENT`). После special:
   `flags=0x304`, `mod_count=1`, price-guard active.
 - **p3b2b4b §8 п.2 (modifier multipliers) теперь раскрыт структурно.**
   Ценовые `classMul/typeMul` — это поля той же `special_desc`-записи:
@@ -577,11 +584,16 @@ type19/20 **не входят в itemclass-пулы**. При `assigned==1` он
   - Save-записи, пришедшие из ITM `effects`, могут иметь `+0x10 = -1`
     (`p3b2b4b` §4.4); generated specials пишут `+0x0c = +0x10 = 0`.
     Price-код читает только `id/value/flags`, не `+0x0c/+0x10`.
-- Для примера `SWR_1_03_3` при PC=53: `base0 = trunc((100*0.0025+0.75)*35)
-  = 35`; `classMul = def(id 32)+0x84 = 300` (RELATIVE); `typeMul =
-  def+0x14 = 2` (PERMANENT); один mod даёт `35 + 3*300*2 = 1835`.
-  Точное целое зависит от live FPU-CW (PC=53 — обязательное условие,
-  как в `p3b2b4b` §4.5); без live CW цена остаётся `blocked`.
+- Для `HLM_1_03_1` при PC=53: `base0 = trunc((100*0.0025+0.75)*40)
+  = 40`; `classMul = def(id 20)+0x74 = 40` (ABSOLUTE);
+  `typeMul = def+0x14 = 1` (PERMANENT); **item value после модификаторов**
+  (`base`/local_430) = `40 + 2*40*1 = 120`. Это **не** финальная
+  trade-цена: далее применяются `f = 2.5 − 0.1*SKILL_TRADE` (buy) или
+  reciprocal (sell), `trunc` и `× count` (`p3b2b4b` §4.3). Точное целое
+  зависит от live FPU-CW (PC=53 — обязательное условие, как в
+  `p3b2b4b` §4.5); без live CW цена остаётся `blocked`. Прежний пример
+  `35 + 3*300*2 = 1835` был item value после модификаторов из другого
+  прогона, не финальной trade-ценой, и здесь заменён.
 - Итог для D-058: структура modifier-цены больше не missing; остаётся
   live FPU-CW и реализация. До реализации 20 guard-active предметов
   должны оставаться `unsupported` (иначе — угадывание, D-029).
@@ -627,6 +639,10 @@ type19/20 **не входят в itemclass-пулы**. При `assigned==1` он
 
 ### 7.3 Oracle / acceptance для следующей фазы
 
+**Реализацию можно начинать сейчас.** Live NPC-mod oracle и live FPU-CW
+— обязательные acceptance-гейты **до заявки на full parity**, а не
+блокеры старта implementation spec/plan.
+
 1. **Unit: DB/parse.**
    - `specials.scr`: 58 `special_desc`, 9 слотов, 15 `itemclass`,
      pool sizes §2.4; `IDSPEC/T_*/SPECF` maps совпадают с
@@ -634,16 +650,17 @@ type19/20 **не входят в itemclass-пулы**. При `assigned==1` он
    - `FUN_14047284` pool: identity `[0..57]` ∩ type-pool, ascending;
      `nspec >= pool` → все pool; `nspec == 0` → пусто.
    - R4/R5: точные значения/лимиты 3 и 9 для `flags&0x40` 0/1.
-   - R6: `pool_size-nspec` draw'ов; R7 только MAX_HEALTH/MAX_ENERGY;
-     R8=0 для reachable ids (`n2=1`); R9/R10 условия §3.
+   - R6: `pool_size-nspec` удалений, каждое `range(0,current_count-1)`;
+     R7 только MAX_HEALTH/MAX_ENERGY; R8=0 для reachable ids (`n2=1`);
+     R9/R10 условия §3.
 2. **Deterministic integration `l1_1`, seed 1, loot level 1.**
    - exact nesting §5.1: per person `R1 → pass1 → pass2`; regression
      `P387/P678/Kolbasens` hot/main identical including stack structure
      (`Kolbasens` pass2 `2×87` in both runs);
-   - events §5.2 (7 срабатываний, 9 модов; `RNG_1_01_2` main) +
-     per-mod R9/R10 trace (10 draw'ов, id 44 — два);
-   - final pass2 aggregates §5.2; 1272 draw, final state
-     `0xE66E2199` (референс; C++ state может отличаться только при
+   - events §5.2 (9 срабатываний, 12 модов; `RNG_1_03_1` main) +
+     per-mod R9/R10 trace (12 draw'ов, все R10);
+   - final pass2 aggregates §5.2; 1329 draw, final state
+     `0x48CAA370` (референс; C++ state может отличаться только при
      другом порядке — он не должен);
    - first RNG divergence `Crying_Guardian` pass1/`ELB_1_04_1`; first
      emitted change `Crying_Guardian` pass2 (`MON 218→287`).
@@ -661,7 +678,7 @@ type19/20 **не входят в itemclass-пулы**. При `assigned==1` он
    new oracle (или явно разделяются `no_specials`/`specials` режимы).
 5. **Reference reproduction.** Полный Python-референс архивом:
    `.superpowers/sdd/2026-11-10-p3b2b2c-npc-loot-specials-research/loot_ref.py`
-   (SHA-256 `63F797738F967F79D7245DF2FB08B964E24E73698F7D026669BACE0D3CD6C0BC`);
+   (SHA-256 `BD123627FE120BB77FDD937C20FE4F53B9D6581813A36F074EE77B4B31A27F8F`);
    ключевые формулы/порядок — §3–§5. Подготовка (вне репозитория):
    `glpak extract <game> --archive items.pak --out <base>/items`;
    `--prefix scripts/inventory --out <base>/scripts`;
@@ -669,7 +686,8 @@ type19/20 **не входят в itemclass-пулы**. При `assigned==1` он
    `--file sdb/items/tech_names.sdb --out <base>`;
    `--prefix scripts/item_class_specials --out <base>/scripts`.
    Запуск: `set GL_SPEC_BASE=<base> && py loot_ref.py --specials`
-   (без `--specials` — no-specials oracle).
+   (без `--specials` — no-specials oracle). Скрипт содержит self-check
+   `modifier_value(1.0,1)==1` для level contract.
 
 ## 8. Проверка (фактический вывод)
 
@@ -715,20 +733,22 @@ tech_names.sdb BACFC79409DFEA4FAD1AB85D21235C2E4D7F37C4525B69C87F7838634F391796
 # pool sizes: 0:30 1:29 2:28 3:32 4:32 5:32 6:43 7:28
 #   11:22 12:21 13:18 14:21 15:33 16:33 17:33
 
+# level contract: v0 = int(fval * loot_level); self-check fval=1.0,loot=1 -> 1
 # l1_1 seed=1 level=1 Python reference (per-person R1,pass1,pass2 nesting):
 #   no-specials: P387 QST=1; Kolbasens MON=174 (pass2 2x87); Crying MON=218;
 #     P711 MON=323; P678 empty; P744 first ELB_1_03_1/HLM_1_04_2 MON=0
 #   nesting regression: P387/P678/Kolbasens hot+main identical incl stacks
-#   specials: candidates=17 triggered=7 mods=9 draws 1057->1272
-#     special-path draws=208 (R4/R5=27, R6=171, R9/R10=10, R7/R8=0);
-#     remaining 7 = downstream divergence; final state 0xE66E2199
-#     per-mod R9/R10: sid44 in AML_1_03_1 consumes R9+R10; others one draw
+#   specials: candidates=18 triggered=9 mods=12 draws 1057->1329
+#     special-path draws=275 (R4/R5=30, R6=233, R9/R10=12, R7/R8=0);
+#     downstream -3; final state 0x48CAA370
+#     per-mod R9/R10: R9=0, R10=12 (each mod one R10; no two-draw mod)
 #     first RNG divergence Crying_Guardian pass1 ELB_1_04_1 (nspec=0, 1 draw);
 #     first emitted change Crying_Guardian pass2 MON 218->287
 #     events: BRL_1_01_5(25,-1,0x81); BRL_1_04_4(16,2,0x41)(43,2,0x41);
-#             AML_1_03_1(44,2,0x41)(46,1,0x41); RNG_1_01_2(18,2,0x41);
-#             POT_1_00_30(empty pool); SWR_1_03_3(32,3,0x81);
-#             SHL_1_04_1(11,2,0x41)(24,2,0x41)
+#             AML_1_03_1(44,1,0x41)(46,2,0x41); RNG_1_03_1(18,2,0x41);
+#             HLM_1_03_1(20,2,0x41); SWR_1_04_2(10,2,0x41);
+#             HLM_1_01_2(12,2,0x41)(25,-4,0x81); SHL_1_01_2(7,2,0x41);
+#             ARM_1_04_2(12,1,0x41)
 ```
 
 Документ: UTF-8 без BOM, `nul=0` (проверено после записи).
