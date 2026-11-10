@@ -43,7 +43,7 @@
 - **Fix wave (inherited mods):** `LootItem`/`InventoryItem.mod_count =
   ItemTemplate.mod_count + mods.size()`; `append_items` инициализирует
   `mod_count` из template; transfer копирует `source.mods`; live-гейт
-  исключает `effects>0` rows (Open Question выше). Добавлены tests:
+  исключает `effects>0` rows (Open Question ниже). Добавлены tests:
   inherited template (price guard), `chunk!=1`, missing `SpecialDef`,
   FPU-CW file fallback, synthetic inherited capture, transfer mods.
 - **Статус:** **`partial`**; full parity запрещён до live NPC-mod 0/N и
@@ -60,6 +60,11 @@
   wiring, `mod_count`, `--no-specials`, E2E/guard tests) +
   `docs: record specials implementation` (D-060/parity/STATUS/PROJECT/plan)
   + `fix(game): preserve inherited mods and scope live gate`.
+- **Final review (2026-11-10):** With fixes (inherited mod_count,
+  append/transfer mods, live-gate scoping) → `3bef8c8`; scoped re-review
+  clean. Ready to merge = Yes как `partial`; full parity — только после
+  live FPU-CW/NPC-mod. Отложенные minors: vacuous 0/0 gate assertion,
+  merge не копирует mods в существующий стек, helper unexercised.
 - **Дальше:** live FPU-CW + live NPC-mod capture (закрытие гейтов) либо
   `P2-15` (save payload), затем 35 Гц (`P2-9`).
 
