@@ -15,6 +15,7 @@ add_library(gl_game STATIC
     src/person.cpp
     src/person_movement.cpp
     src/person_runtime.cpp
+    src/special_engine.cpp
     src/trade_price.cpp
     src/walk_grid.cpp
 )
@@ -27,7 +28,7 @@ gl_enable_warnings(gl_game)
 # evaluated with extra intermediate precision on GCC/Clang targets (Android
 # arm64) or MSVC.
 if (MSVC)
-    set_source_files_properties(src/trade_price.cpp PROPERTIES COMPILE_OPTIONS "/fp:precise")
+    set_source_files_properties(src/trade_price.cpp src/special_engine.cpp PROPERTIES COMPILE_OPTIONS "/fp:precise")
 else()
-    set_source_files_properties(src/trade_price.cpp PROPERTIES COMPILE_OPTIONS "-ffp-contract=off")
+    set_source_files_properties(src/trade_price.cpp src/special_engine.cpp PROPERTIES COMPILE_OPTIONS "-ffp-contract=off")
 endif()
