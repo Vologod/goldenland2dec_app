@@ -18,6 +18,7 @@ struct ItemTemplate {
     std::uint32_t flags = 0;
     std::uint32_t style = 0;
     std::uint32_t max_stack = 0;
+    std::uint32_t mod_count = 0;
 };
 
 enum class TradeStatus {

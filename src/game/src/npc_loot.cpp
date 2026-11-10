@@ -1,6 +1,7 @@
 #include "gl/game/npc_loot.hpp"
 
 #include "gl/assets/log.hpp"
+#include "gl/game/special_engine.hpp"
 
 #include <algorithm>
 #include <map>
@@ -27,14 +28,27 @@ std::int32_t scaled_bound(std::int32_t value, float scale) {
 }
 
 void append_chunks(std::vector<LootItem> &out, std::uint32_t item_id, std::int32_t quantity,
-                   const ItemTemplate &item_template, std::uint32_t flags) {
+                   const ItemTemplate &item_template, std::uint32_t flags,
+                   const gl::assets::SpecialDatabase *specials, std::int32_t loot_level,
+                   MsvcRandom &rng) {
     if (item_template.max_stack == 0)
         return;
     std::int32_t remaining = quantity;
     while (remaining > 0) {
         const std::int32_t chunk =
             std::min(remaining, static_cast<std::int32_t>(item_template.max_stack));
-        out.push_back(LootItem{item_id, chunk, item_template.type, flags, item_template.style});
+        LootItem loot{item_id, chunk, item_template.type, flags, item_template.style};
+        if (specials != nullptr && chunk == 1 && (flags & 0x4u) != 0 &&
+            item_template.mod_count == 0) {
+            const int nspec = random_special_count(flags, rng);
+            if (nspec > 0) {
+                loot.mods = SpecialEngine::apply(
+                    *specials, static_cast<gl::assets::ItemType>(item_template.type), nspec,
+                    loot_level, rng);
+                loot.flags |= 0x200u;
+            }
+        }
+        out.push_back(std::move(loot));
         remaining -= chunk;
     }
 }
@@ -56,7 +70,8 @@ resolve(const gl::assets::InvItem &item, const gl::assets::ItemNameIndex &names,
 
 NpcLoot NpcLootGenerator::generate(const gl::assets::InvTable &table, std::int32_t loot_level,
                                    const gl::assets::ItemNameIndex &names,
-                                   ItemTemplateLookup item_template, MsvcRandom &rng) {
+                                   ItemTemplateLookup item_template, MsvcRandom &rng,
+                                   const gl::assets::SpecialDatabase *specials) {
     NpcLoot loot;
     rng.coin(table.regenerate_chance);
 
@@ -75,7 +90,7 @@ NpcLoot NpcLootGenerator::generate(const gl::assets::InvTable &table, std::int32
         if (!resolved)
             continue;
         append_chunks(loot.hot, resolved->first, quantity, resolved->second,
-                      resolved->second.flags & ~0x80u);
+                      resolved->second.flags & ~0x80u, specials, loot_level, rng);
     }
 
     if (table.chance_decrease == 0.0 || table.quantity_decrease == 0.0)
@@ -101,7 +116,7 @@ NpcLoot NpcLootGenerator::generate(const gl::assets::InvTable &table, std::int32
         if (!resolved)
             continue;
         append_chunks(loot.main, resolved->first, quantity, resolved->second,
-                      resolved->second.flags);
+                      resolved->second.flags, specials, loot_level, rng);
     }
 
     return loot;
@@ -110,7 +125,8 @@ NpcLoot NpcLootGenerator::generate(const gl::assets::InvTable &table, std::int32
 void generate_npc_inventories(InventoryRuntime &runtime, const std::vector<PersonInstance> &persons,
                               gl::assets::GameVfs &vfs, const gl::assets::ItemNameIndex &names,
                               InventoryRuntime::ItemTemplateLookup item_template,
-                              std::int32_t loot_level, MsvcRandom &rng) {
+                              std::int32_t loot_level, MsvcRandom &rng,
+                              const gl::assets::SpecialDatabase *specials) {
     runtime.clear_persons();
     std::map<std::string, std::optional<gl::assets::InvTable>, std::less<>> cache;
     for (const PersonInstance &person : persons) {
@@ -129,19 +145,33 @@ void generate_npc_inventories(InventoryRuntime &runtime, const std::vector<Perso
         }
         if (!cached->second)
             continue;
-        const NpcLoot loot =
-            NpcLootGenerator::generate(*cached->second, loot_level, names, item_template, rng);
+        const NpcLoot loot = NpcLootGenerator::generate(*cached->second, loot_level, names,
+                                                        item_template, rng, specials);
         std::vector<gl::assets::InventoryItem> hot;
         hot.reserve(loot.hot.size());
         for (const LootItem &item : loot.hot) {
-            hot.push_back({item.item_id, static_cast<std::uint32_t>(item.count), item.flags,
-                           item.type, item.style});
+            gl::assets::InventoryItem converted{item.item_id,
+                                                static_cast<std::uint32_t>(item.count),
+                                                item.flags,
+                                                item.type,
+                                                item.style,
+                                                100,
+                                                static_cast<std::uint32_t>(item.mods.size())};
+            converted.mods = item.mods;
+            hot.push_back(std::move(converted));
         }
         std::vector<gl::assets::InventoryItem> main;
         main.reserve(loot.main.size());
         for (const LootItem &item : loot.main) {
-            main.push_back({item.item_id, static_cast<std::uint32_t>(item.count), item.flags,
-                            item.type, item.style});
+            gl::assets::InventoryItem converted{item.item_id,
+                                                static_cast<std::uint32_t>(item.count),
+                                                item.flags,
+                                                item.type,
+                                                item.style,
+                                                100,
+                                                static_cast<std::uint32_t>(item.mods.size())};
+            converted.mods = item.mods;
+            main.push_back(std::move(converted));
         }
         runtime.set_person_trade_items(person.name, std::move(hot));
         runtime.set_person_items(person.name, std::move(main));

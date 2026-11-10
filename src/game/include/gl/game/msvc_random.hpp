@@ -9,6 +9,7 @@ class MsvcRandom {
     double fraction() noexcept;
     std::int32_t range(std::int32_t low, std::int32_t high) noexcept;
     bool coin(double probability) noexcept;
+    std::uint32_t state() const noexcept { return state_; }
     static std::uint32_t production_seed() noexcept;
 
   private:
