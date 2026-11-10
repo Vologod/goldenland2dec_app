@@ -1,6 +1,15 @@
 # STATUS
 
-Обновлено: 2026-11-09
+Обновлено: 2026-11-10
+## Phase 1b2b2c — NPC loot specials research (in progress 2026-11-10)
+
+- **Задача:** доказать/опровергнуть воспроизводимость specials NPC-лута
+  (`FUN_14047284`/`DAT_14088df4`, R4–R10). Research-only; production-код
+  не меняется.
+- **Spec:** `docs/specs/2026-11-10-p3b2b2c-npc-loot-specials-research-design.md`.
+- **Plan:** `docs/plans/2026-11-10-p3b2b2c-npc-loot-specials-research.md`.
+- **Gate:** DB source/algorithm/RNG/oracle; иначе verdict `blocked`.
+
 ## Phase 1b2b4b — trade transactions (done 2026-11-09)
 
 - **Итог (Tasks 1–5, done):** trade overlay интерактивный: `TradePrice`
