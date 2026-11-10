@@ -1,14 +1,46 @@
 # STATUS
 
 Обновлено: 2026-11-10
-## Phase 1b2b2c — NPC loot specials research (in progress 2026-11-10)
+## Phase 1b2b2c — NPC loot specials research (done 2026-11-10)
 
 - **Задача:** доказать/опровергнуть воспроизводимость specials NPC-лута
   (`FUN_14047284`/`DAT_14088df4`, R4–R10). Research-only; production-код
-  не меняется.
+  не менялся.
 - **Spec:** `docs/specs/2026-11-10-p3b2b2c-npc-loot-specials-research-design.md`.
 - **Plan:** `docs/plans/2026-11-10-p3b2b2c-npc-loot-specials-research.md`.
-- **Gate:** DB source/algorithm/RNG/oracle; иначе verdict `blocked`.
+- **Research:** `docs/research/p3b2b2c-npc-loot-specials.md`.
+- **Вердикт:** **`implementable` (scoped).** Gate снят: DB source —
+  `scripts/item_class_specials/specials.scr` + hardcoded `IDSPEC/SPECF/T_*`
+  в `GoldenLand.exe` (не `.itm`/`itemdescparts.sdb`/`magic.pak`);
+  `DAT_14088df4` = host `+0x84` = `DAT_00469d54`; vtable
+  `+4/+8/+0x14/+0x1c/+0x28` и запись def `0x98` (3 value + 6 time slots)
+  восстановлены. `FUN_14047284`/`roll_special_count` (R4/R5) и полный
+  RNG-порядок R6–R10 восстановлены; `ROUND` = trunc (RC=`0xC00`).
+  Conditions: `assigned==1 && flags&4 && item+0x78==0`; R4/R5 лимиты
+  3 (`flags&0x40==0`) / 9 (`flags&0x40!=0`); даже `nspec==0` потребляет R4.
+- **Реальные данные:** 1848 ITM → 522 special-capable (`type` в pool,
+  `flags&4`, `effects==0`, `max_stack==1`), 20 с `flags&0x80==0`
+  (D-058 guard active), 0 special-capable stackable. `l1_1` seed1
+  level1 (analytic Python reference, без specials совпал с принятым
+  oracle 174/218/323): 17 кандидатов, 7 срабатываний, 9 модов,
+  1057→1272 draw (+215); первое расхождение — `Crying_Guardian`
+  (`ELB_1_04_1`, `nspec=0`, 1 draw); принятые no-specials значения
+  `174/218/323` под true parity **superseded**.
+- **D-058:** modifier `classMul/typeMul` — это price-поля той же
+  `special_desc`-записи (`+0x74/+0x84/+0x94`, `+0x14…+0x64`); client
+  `DAT_12110ed8` и server `DAT_14088df4` — один объект (host `+0x84`).
+  Основной missing-gap D-058 §8.2 закрыт структурно; остаётся live
+  FPU-CW (PC=53) и реализация.
+- **Не доказано live:** захват NPC-модов из запущенной игры; live
+  FPU-CW; `random_sign` (def+0x04) не используется генерацией/ценой;
+  семантика item flag `0x40`; time-slots 4–6 генерацией не читаются.
+- **Acceptance next phase:** unit (DB/pool/R4–R10), deterministic
+  `l1_1` seed1 level1 events §5.2 + final aggregates, live/differential
+  gate (RNG-state + NPC `+0x10`/mod records, 0/N), live FPU-CW;
+  обновить/пометить `superseded` no-specials oracle.
+- **Следующее:** implementation spec/plan для specials (parser
+  `specials.scr`, `FUN_14047284`, R4–R10 в обоих проходах, modifier
+  price под PC=53), затем `P2-15`/35 Гц.
 
 ## Phase 1b2b4b — trade transactions (done 2026-11-09)
 
