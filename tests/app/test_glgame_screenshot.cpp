@@ -217,11 +217,13 @@ fs::path write_test_config(const fs::path& dir, bool with_resolution = false,
 
 std::vector<std::string> screenshot_arguments(const fs::path& game_dir, const fs::path& config,
                                               const fs::path& png,
-                                              const std::vector<std::string>& extra = {}) {
+                                              const std::vector<std::string>& extra = {},
+                                              bool no_specials = true) {
     std::vector<std::string> arguments = {
         "--game-dir", game_dir.string(), "--config",   config.string(),
         "--screenshot", png.string(),    "--width",    "1280",
         "--height",   "720",             "--seed",     "1"};
+    if (no_specials) arguments.push_back("--no-specials");
     arguments.insert(arguments.end(), extra.begin(), extra.end());
     return arguments;
 }
@@ -322,6 +324,42 @@ std::size_t count_differences(const std::vector<unsigned char>& first,
         if (first[index] != second[index]) ++different;
     }
     return different;
+}
+
+std::int64_t dumped_item_count(const std::string& output, std::string_view person,
+                               std::string_view container, std::uint32_t item_id) {
+    const std::string marker = "npc dump: person='" + std::string(person) + "' container='" +
+                               std::string(container) + "' items=[";
+    const std::size_t begin = output.find(marker);
+    if (begin == std::string::npos) return -1;
+    std::size_t pos = begin + marker.size();
+    const std::size_t end = output.find(']', pos);
+    if (end == std::string::npos) return -1;
+    std::int64_t total = 0;
+    while (pos < end) {
+        std::size_t comma = output.find(',', pos);
+        if (comma == std::string::npos || comma > end) comma = end;
+        std::uint32_t id = 0;
+        std::uint32_t count = 0;
+        int field = 0;
+        for (std::size_t index = pos; index < comma; ++index) {
+            const char c = output[index];
+            if (c == ':') {
+                ++field;
+                continue;
+            }
+            if (c < '0' || c > '9') return -1;
+            const std::uint32_t digit = static_cast<std::uint32_t>(c - '0');
+            if (field == 0) {
+                id = id * 10 + digit;
+            } else if (field == 1) {
+                count = count * 10 + digit;
+            }
+        }
+        if (id == item_id) total += count;
+        pos = comma + 1;
+    }
+    return total;
 }
 
 std::size_t count_region_differences(const std::vector<unsigned char>& first,
@@ -2076,4 +2114,80 @@ TEST_CASE("glgame persists gv_pause and r_windowed") {
     const std::vector<std::string> lines = split_lines(read_file(config));
     CHECK(setting_value(lines, "gv_pause") == "1");
     CHECK(setting_value(lines, "r_windowed") == "0");
+}
+
+TEST_CASE("glgame specials mode changes NPC loot and keeps modified trade unsupported") {
+    const char* game_dir = std::getenv("GL_GAME_DIR");
+    REQUIRE(game_dir != nullptr);
+
+    TempDir temp;
+    const fs::path config = write_test_config(temp.path);
+    const fs::path no_specials_png = temp.path / "specials_off.png";
+    const fs::path specials_png = temp.path / "specials_on.png";
+    constexpr std::string_view kKolbasens = "L0.P7_Kolbasens_Rodstvennik1";
+    constexpr std::string_view kCrying = "L1_1.P389_Crying_Guardian";
+    constexpr std::string_view kCitizen8 = "L0.P711_citizen8";
+    constexpr std::string_view kSister = "L1_2.P404_Sister_Of_Mercy2";
+    constexpr std::uint32_t kMoney = 812;
+    const std::vector<std::string> common = {
+        "--level", "l1_1", "--seed", "1",
+        "--dump-npc", std::string(kKolbasens),
+        "--dump-npc", std::string(kCrying),
+        "--dump-npc", std::string(kCitizen8),
+        "--dump-npc", std::string(kSister),
+        "--trade-npc", std::string(kSister),
+        "--trade-buy", "BRL_1_01_5"};
+
+    std::string no_specials_output;
+    const int no_specials_code = run_glgame_capture(
+        screenshot_arguments(game_dir, config, no_specials_png, common, true),
+        no_specials_output);
+    std::string specials_output;
+    const int specials_code = run_glgame_capture(
+        screenshot_arguments(game_dir, config, specials_png, common, false), specials_output);
+    CAPTURE(no_specials_code);
+    CAPTURE(specials_code);
+    CAPTURE(no_specials_output);
+    CAPTURE(specials_output);
+    REQUIRE(fs::exists(no_specials_png));
+    REQUIRE(fs::exists(specials_png));
+    CHECK(no_specials_code == 0);
+    CHECK(specials_code == 0);
+
+    CHECK(no_specials_output.find("specials: disabled (--no-specials)") != std::string::npos);
+    CHECK(specials_output.find("specials: loaded 58 defs, 15 item classes") != std::string::npos);
+
+    CHECK(dumped_item_count(no_specials_output, kKolbasens, "main", kMoney) == 174);
+    CHECK(dumped_item_count(specials_output, kKolbasens, "main", kMoney) == 174);
+    CHECK(dumped_item_count(no_specials_output, kCrying, "main", kMoney) == 218);
+    CHECK(dumped_item_count(specials_output, kCrying, "main", kMoney) == 287);
+    CHECK(dumped_item_count(no_specials_output, kCitizen8, "main", kMoney) == 323);
+    CHECK(dumped_item_count(specials_output, kCitizen8, "main", kMoney) == 0);
+
+    CHECK(no_specials_output.find("npc mod:") == std::string::npos);
+    CHECK(specials_output.find("npc mod: person='" + std::string(kSister) +
+                               "' container='trade' item=8 mod=25 value=-1 flags=129") !=
+          std::string::npos);
+
+    CHECK(no_specials_output.find(
+              "trade: hook stage buy id=8 count=0 result=failed "
+              "error='item is not in the trade list'") != std::string::npos);
+    CHECK(specials_output.find("trade: no price for item 8 (modifier guard)") !=
+          std::string::npos);
+    CHECK(specials_output.find(
+              "trade: hook stage buy id=8 count=1 result=failed error='price unavailable'") !=
+          std::string::npos);
+
+    int width = 0;
+    int height = 0;
+    const std::vector<unsigned char> pixels = read_png(specials_png, width, height);
+    int no_specials_width = 0;
+    int no_specials_height = 0;
+    const std::vector<unsigned char> no_specials =
+        read_png(no_specials_png, no_specials_width, no_specials_height);
+    CHECK(width == 1280);
+    CHECK(height == 720);
+    CHECK(no_specials_width == width);
+    CHECK(no_specials_height == height);
+    CHECK(count_differences(pixels, no_specials) > 5000);
 }

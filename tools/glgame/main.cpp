@@ -13,6 +13,7 @@
 #include <gl/assets/item_name_index.hpp>
 #include <gl/assets/log.hpp>
 #include <gl/assets/sdb.hpp>
+#include <gl/assets/specials.hpp>
 #include <gl/assets/vfs.hpp>
 #include <gl/core/command.hpp>
 #include <gl/core/config.hpp>
@@ -104,6 +105,7 @@ struct Options {
     bool font_set = false;
     bool no_font = false;
     bool no_persons = false;
+    bool no_specials = false;
     bool hero_outfit_none = false;
     std::optional<int> equip_save;
     bool equip_save_pending = false;
@@ -125,6 +127,7 @@ struct Options {
     int click_world_x = 0;
     int click_world_y = 0;
     bool has_click_world = false;
+    std::vector<std::string> dump_npcs;
     std::vector<std::string> exec;
 };
 
@@ -145,6 +148,8 @@ void print_usage() {
         "  --font <ttf>         TrueType font for dialog text (default: system font)\n"
         "  --no-font            Force ASCII bitmap text (dev/debug, overrides --font)\n"
         "  --no-persons         Skip NPC sprites on the level\n"
+        "  --no-specials        Disable NPC loot specials (deterministic no-specials mode)\n"
+        "  --dump-npc <name>    Headless test: log generated main/trade items for <name>\n"
         "  --equip-save <slot>  Apply hero equipment from save slot <slot>\n"
         "  --equip-save-pending Apply --equip-save on the next level load only\n"
         "  --inventory          Open the inventory overlay for the selected save\n"
@@ -310,6 +315,15 @@ ParseStatus parse_args(int argc, char** argv, Options& options) {
             options.no_font = true;
         } else if (arg == "--no-persons") {
             options.no_persons = true;
+        } else if (arg == "--no-specials") {
+            options.no_specials = true;
+        } else if (arg == "--dump-npc") {
+            if (!next_value(arg, value)) return ParseStatus::error;
+            if (value.empty()) {
+                std::fputs("glgame: --dump-npc must not be empty\n", stderr);
+                return ParseStatus::error;
+            }
+            options.dump_npcs.emplace_back(value);
         } else if (arg == "--hero-outfit") {
             if (!next_value(arg, value)) return ParseStatus::error;
             if (value != "none") {
@@ -592,6 +606,7 @@ class Game {
         load_inventory_font();
         load_item_catalog();
         load_item_name_index();
+        load_specials();
         rebuild_inventory_runtime();
 
         if (!state_.transition(gl::core::AppState::menu)) return 3;
@@ -613,6 +628,7 @@ class Game {
         } else if (options_.has_level && !options_.menu) {
             if (!load_level(level_name_)) return 3;
             if (!state_.transition(gl::core::AppState::level)) return 3;
+            dump_npc_inventories();
             apply_cli_click();
             if (options_.has_trade_npc) show_trade_panel(options_.trade_npc);
         }
@@ -819,6 +835,72 @@ class Game {
         gl::log(gl::LogLevel::info, "inventory: item name index loaded");
     }
 
+    void load_specials() {
+        specials_.reset();
+        if (options_.no_specials) {
+            gl::log(gl::LogLevel::info,
+                    "specials: disabled (--no-specials)");
+            return;
+        }
+        gl::Result<gl::assets::SpecialDatabase> specials =
+            gl::assets::load_specials_scr(vfs_);
+        if (!specials) {
+            gl::log(gl::LogLevel::warning,
+                    "specials: " + specials.error().message +
+                        "; using no-specials");
+            return;
+        }
+        specials_ = std::move(specials.value());
+        gl::log(gl::LogLevel::info,
+                "specials: loaded " + std::to_string(specials_->defs.size()) +
+                    " defs, " + std::to_string(specials_->item_classes.size()) +
+                    " item classes");
+    }
+
+    const gl::assets::SpecialDatabase* specials_db() const {
+        return specials_ ? &*specials_ : nullptr;
+    }
+
+    std::string dump_items(const std::vector<gl::assets::InventoryItem>& items) const {
+        std::string text = "[";
+        bool first = true;
+        for (const gl::assets::InventoryItem& item : items) {
+            if (!first) text += ',';
+            first = false;
+            text += std::to_string(item.item_id) + ":" +
+                    std::to_string(item.count) + ":" +
+                    std::to_string(item.flags) + ":" +
+                    std::to_string(item.mod_count);
+        }
+        text += "]";
+        return text;
+    }
+
+    void dump_container(std::string_view person, std::string_view container,
+                        const std::vector<gl::assets::InventoryItem>& items) const {
+        gl::log(gl::LogLevel::info,
+                "npc dump: person='" + std::string(person) + "' container='" +
+                    std::string(container) + "' items=" + dump_items(items));
+        for (const gl::assets::InventoryItem& item : items) {
+            for (const gl::assets::SpecialMod& mod : item.mods) {
+                gl::log(gl::LogLevel::info,
+                        "npc mod: person='" + std::string(person) + "' container='" +
+                            std::string(container) + "' item=" +
+                            std::to_string(item.item_id) + " mod=" +
+                            std::to_string(mod.id) + " value=" +
+                            std::to_string(mod.value) + " flags=" +
+                            std::to_string(mod.flags));
+            }
+        }
+    }
+
+    void dump_npc_inventories() const {
+        for (const std::string& person : options_.dump_npcs) {
+            dump_container(person, "main", inventory_runtime_.person_items(person));
+            dump_container(person, "trade", inventory_runtime_.trade_items(person));
+        }
+    }
+
     void rebuild_inventory_runtime() {
         const gl::assets::HeroInventory inventory =
             pending_inventory_ ? *pending_inventory_ : gl::assets::HeroInventory{};
@@ -828,7 +910,8 @@ class Game {
             if (entry == nullptr) return std::nullopt;
             return gl::game::ItemTemplate{
                 static_cast<std::uint32_t>(entry->item.type), entry->item.flags,
-                entry->item.unknown_b[1], entry->item.max_stack};
+                entry->item.unknown_b[1], entry->item.max_stack,
+                static_cast<std::uint32_t>(entry->item.effects.size())};
         };
         if (item_names_) {
             inventory_runtime_ =
@@ -857,10 +940,13 @@ class Game {
             if (entry == nullptr) return std::nullopt;
             return gl::game::ItemTemplate{static_cast<std::uint32_t>(entry->item.type),
                                           entry->item.flags, entry->item.unknown_b[1],
-                                          entry->item.max_stack};
+                                          entry->item.max_stack,
+                                          static_cast<std::uint32_t>(
+                                              entry->item.effects.size())};
         };
         gl::game::generate_npc_inventories(inventory_runtime_, level.persons, vfs_, names,
-                                           item_template, loot_level(), rng);
+                                           item_template, loot_level(), rng,
+                                           specials_db());
         std::size_t populated = 0;
         for (const gl::game::PersonInstance& person : level.persons) {
             if (!inventory_runtime_.person_items(person.name).empty())
@@ -2686,6 +2772,7 @@ class Game {
     std::optional<gl::assets::ItemNameIndex> item_names_;
     bool hero_stats_absent_logged_ = false;
     gl::assets::ItemCatalog item_catalog_;
+    std::optional<gl::assets::SpecialDatabase> specials_;
     std::string level_name_;
     std::string input_;
     bool console_visible_ = false;

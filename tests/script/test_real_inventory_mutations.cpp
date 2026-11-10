@@ -67,7 +67,8 @@ void check_slot(int slot, std::int32_t start_money, std::int32_t expected_money)
         if (entry == nullptr) return std::nullopt;
         return gl::game::ItemTemplate{static_cast<std::uint32_t>(entry->item.type),
                                       entry->item.flags, entry->item.unknown_b[1],
-                                      entry->item.max_stack};
+                                      entry->item.max_stack,
+                                      static_cast<std::uint32_t>(entry->item.effects.size())};
     };
     gl::game::InventoryRuntime runtime =
         gl::game::InventoryRuntime::create(inventory.value(), names.value(), item_template);

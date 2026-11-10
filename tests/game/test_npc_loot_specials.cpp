@@ -260,6 +260,19 @@ TEST_CASE("npc_loot specials: inventories keep generated mods and mod count" *
     CHECK(brl->mods[0].value == -1);
     CHECK(brl->mods[0].flags == 0x81u);
     CHECK((brl->flags & 0x200u) != 0);
+
+    gl::game::TradePriceInput price_input{};
+    price_input.item_id = brl->item_id;
+    price_input.item_price = 220;
+    price_input.durability = 100;
+    price_input.flags = brl->flags;
+    price_input.mod_count = brl->mod_count;
+    price_input.skill_trade = 1;
+    price_input.count = 1;
+    price_input.assume_pc53 = true;
+    CHECK_FALSE(gl::game::compute_trade_price(price_input).has_value());
+    price_input.mod_count = 0;
+    CHECK(gl::game::compute_trade_price(price_input).has_value());
 }
 
 TEST_CASE("npc_loot specials: l1_1 seed 1 loot level 1 deterministic oracle" *
