@@ -222,6 +222,25 @@ bool parse_float_token(const Token &token, float &out) {
 bool is_symbol(const Token &token, std::string_view symbol) {
     return !token.quoted && token.text == symbol;
 }
+
+std::string token_text(const std::string &text) {
+    return cp1251_to_utf8(std::span<const std::uint8_t>(
+        reinterpret_cast<const std::uint8_t *>(text.data()), text.size()));
+}
+
+template <std::size_t N>
+void add_special_slot(std::array<SpecialSlot, N> &slots, const SpecialSlot &slot) {
+    for (const SpecialSlot &existing : slots) {
+        if (existing.tag == slot.tag)
+            return;
+    }
+    for (SpecialSlot &target : slots) {
+        if (target.tag == 0) {
+            target = slot;
+            return;
+        }
+    }
+}
 } // namespace
 
 std::optional<SpecialId> special_id_from_name(std::string_view name) {
@@ -278,7 +297,8 @@ Result<SpecialDatabase> parse_specials_scr(std::span<const std::uint8_t> data) {
                 return format_error("specials: expected special id after 'special_desc'");
             auto id = special_id_from_name(tokens[i].text);
             if (!id)
-                return format_error("specials: unknown special id '" + tokens[i].text + "'");
+                return format_error("specials: unknown special id '" + token_text(tokens[i].text) +
+                                    "'");
             ++i;
 
             bool random_sign = false;
@@ -294,25 +314,23 @@ Result<SpecialDatabase> parse_specials_scr(std::span<const std::uint8_t> data) {
             SpecialDef def;
             def.id = *id;
             def.random_sign = random_sign;
-            for (std::size_t slot = 0; slot < special_slot_count; ++slot) {
-                if (i >= tokens.size() || is_symbol(tokens[i], "}"))
-                    return format_error("specials: expected 9 slot entries");
+            while (i < tokens.size()) {
+                if (is_symbol(tokens[i], "}")) {
+                    ++i;
+                    break;
+                }
                 if (tokens[i].quoted)
                     return format_error("specials: expected slot flag");
-                auto tag = special_flag_from_name(tokens[i].text);
+                const std::string tag_text = tokens[i].text;
+                auto tag = special_flag_from_name(tag_text);
                 if (!tag)
-                    return format_error("specials: unknown slot flag '" + tokens[i].text + "'");
+                    return format_error("specials: unknown slot flag '" + token_text(tag_text) +
+                                        "'");
                 ++i;
 
                 if (i >= tokens.size() || tokens[i].quoted)
                     return format_error("specials: expected slot access");
-                std::uint8_t access = 0;
-                if (tokens[i].text == "+")
-                    access = 1;
-                else if (tokens[i].text == "-")
-                    access = 0;
-                else
-                    return format_error("specials: invalid slot access '" + tokens[i].text + "'");
+                const std::uint8_t access = tokens[i].text == "+" ? 1 : 0;
                 ++i;
 
                 float value = 0.0f;
@@ -325,12 +343,16 @@ Result<SpecialDatabase> parse_specials_scr(std::span<const std::uint8_t> data) {
                     return format_error("specials: invalid slot price");
                 ++i;
 
-                def.slots[slot] = SpecialSlot{*tag, access, value, price};
+                const SpecialSlot slot{*tag, access, value, price};
+                if (is_special_value_tag(*tag)) {
+                    add_special_slot(def.value_slots, slot);
+                } else if (is_special_time_tag(*tag)) {
+                    add_special_slot(def.time_slots, slot);
+                } else {
+                    return format_error("specials: unsupported slot flag '" + token_text(tag_text) +
+                                        "'");
+                }
             }
-
-            if (i >= tokens.size() || !is_symbol(tokens[i], "}"))
-                return format_error("specials: expected '}' after 9 slot entries");
-            ++i;
             db.defs.push_back(def);
         } else if (!token.quoted && ci_equal(token.text, "itemclass")) {
             current_class.reset();
@@ -339,7 +361,8 @@ Result<SpecialDatabase> parse_specials_scr(std::span<const std::uint8_t> data) {
                 return format_error("specials: expected item class name");
             auto type = special_item_type_from_name(tokens[i].text);
             if (!type)
-                return format_error("specials: unknown item class '" + tokens[i].text + "'");
+                return format_error("specials: unknown item class '" + token_text(tokens[i].text) +
+                                    "'");
             current_class = *type;
             db.item_classes[*type];
             ++i;
@@ -351,13 +374,14 @@ Result<SpecialDatabase> parse_specials_scr(std::span<const std::uint8_t> data) {
                 return format_error("specials: expected special id after 'special'");
             auto id = special_id_from_name(tokens[i].text);
             if (!id)
-                return format_error("specials: unknown special id '" + tokens[i].text + "'");
+                return format_error("specials: unknown special id '" + token_text(tokens[i].text) +
+                                    "'");
             std::vector<SpecialId> &pool = db.item_classes[*current_class];
             if (std::find(pool.begin(), pool.end(), *id) == pool.end())
                 pool.push_back(*id);
             ++i;
         } else {
-            return format_error("specials: unexpected token '" + token.text + "'");
+            return format_error("specials: unexpected token '" + token_text(token.text) + "'");
         }
     }
     return db;

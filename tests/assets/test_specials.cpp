@@ -56,18 +56,19 @@ TEST_CASE("specials: parses defs, slots, random_sign and item classes") {
     const SpecialDef &poison = db->defs[0];
     CHECK(poison.id == 0);
     CHECK_FALSE(poison.random_sign);
-    REQUIRE(poison.slots.size() == special_slot_count);
-    CHECK(poison.slots[0].tag == 0x40);
-    CHECK(poison.slots[0].access == 1);
-    CHECK(poison.slots[0].value == doctest::Approx(1.0f));
-    CHECK(poison.slots[0].price == doctest::Approx(50.0f));
-    CHECK(poison.slots[1].tag == 0x80);
-    CHECK(poison.slots[1].access == 0);
-    CHECK(poison.slots[3].tag == 1);
-    CHECK(poison.slots[3].access == 1);
-    CHECK(poison.slots[3].value == doctest::Approx(0.3f));
-    CHECK(poison.slots[3].price == doctest::Approx(1.0f));
-    CHECK(poison.slots[8].tag == 0x20);
+    REQUIRE(poison.value_slots.size() == special_value_slot_count);
+    REQUIRE(poison.time_slots.size() == special_time_slot_count);
+    CHECK(poison.value_slots[0].tag == 0x40);
+    CHECK(poison.value_slots[0].access == 1);
+    CHECK(poison.value_slots[0].value == doctest::Approx(1.0f));
+    CHECK(poison.value_slots[0].price == doctest::Approx(50.0f));
+    CHECK(poison.value_slots[1].tag == 0x80);
+    CHECK(poison.value_slots[1].access == 0);
+    CHECK(poison.time_slots[0].tag == 1);
+    CHECK(poison.time_slots[0].access == 1);
+    CHECK(poison.time_slots[0].value == doctest::Approx(0.3f));
+    CHECK(poison.time_slots[0].price == doctest::Approx(1.0f));
+    CHECK(poison.time_slots[5].tag == 0x20);
 
     const SpecialDef &cold = db->defs[1];
     CHECK(cold.id == 4);
@@ -109,6 +110,95 @@ TEST_CASE("specials: keywords and names are case-insensitive") {
     CHECK(db->defs[0].random_sign);
     REQUIRE(db->item_classes.contains(ItemType::sword));
     CHECK(db->item_classes.at(ItemType::sword)[0] == 0);
+}
+
+TEST_CASE("specials: partial records at EOF or '}' are accepted") {
+    auto eof = parse("special_desc IDSPEC_POISON_DMG\n{\n"
+                     "SPECF_VALUE_CHANGE_ABSOLUTE + 1 50\n"
+                     "SPECF_TIME_PERMANENT + 0.3 1\n");
+    REQUIRE(eof.has_value());
+    REQUIRE(eof->defs.size() == 1);
+    CHECK(eof->defs[0].value_slots[0].tag == 0x40);
+    CHECK(eof->defs[0].value_slots[0].value == doctest::Approx(1.0f));
+    CHECK(eof->defs[0].value_slots[1].tag == 0);
+    CHECK(eof->defs[0].time_slots[0].tag == 1);
+    CHECK(eof->defs[0].time_slots[1].tag == 0);
+
+    auto closed = parse("special_desc IDSPEC_COLD_RES\n{\n"
+                        "SPECF_VALUE_CHANGE_ABSOLUTE + 2 60\n"
+                        "SPECF_TIME_PERMANENT + 0.5 2\n"
+                        "}\n");
+    REQUIRE(closed.has_value());
+    REQUIRE(closed->defs.size() == 1);
+    CHECK(closed->defs[0].value_slots[0].value == doctest::Approx(2.0f));
+    CHECK(closed->defs[0].time_slots[0].value == doctest::Approx(0.5f));
+    CHECK(closed->defs[0].value_slots[1].tag == 0);
+    CHECK(closed->defs[0].time_slots[1].tag == 0);
+}
+
+TEST_CASE("specials: duplicate tags and full categories are ignored") {
+    auto db = parse("special_desc IDSPEC_POISON_DMG\n{\n"
+                    "SPECF_TIME_PERMANENT + 0.3 1\n"
+                    "SPECF_VALUE_CHANGE_ABSOLUTE + 1 50\n"
+                    "SPECF_VALUE_CHANGE_ABSOLUTE + 9 99\n"
+                    "SPECF_VALUE_CHANGE_RELATIVE + 2 2\n"
+                    "SPECF_VALUE_REPLACE + 3 3\n"
+                    "SPECF_VALUE_REPLACE + 4 4\n"
+                    "SPECF_TIME_DAY - 0.3 0.5\n"
+                    "SPECF_TIME_NIGHT - 0.3 0.5\n"
+                    "SPECF_TIME_INTERVAL - 1 1\n"
+                    "SPECF_TIME_IMMEDIATE - 1 1\n"
+                    "SPECF_TIME_DELAYED - 1 1\n"
+                    "SPECF_TIME_PERMANENT + 9 99\n"
+                    "}\n");
+    REQUIRE(db.has_value());
+    REQUIRE(db->defs.size() == 1);
+    const SpecialDef &def = db->defs[0];
+    const std::array<std::uint32_t, 3> value_tags = {0x40, 0x80, 0x100};
+    const std::array<float, 3> value_values = {1.0f, 2.0f, 3.0f};
+    for (std::size_t i = 0; i < value_tags.size(); ++i) {
+        CHECK(def.value_slots[i].tag == value_tags[i]);
+        CHECK(def.value_slots[i].value == doctest::Approx(value_values[i]));
+    }
+    const std::array<std::uint32_t, 6> time_tags = {1, 2, 4, 8, 0x10, 0x20};
+    for (std::size_t i = 0; i < time_tags.size(); ++i)
+        CHECK(def.time_slots[i].tag == time_tags[i]);
+    CHECK(def.time_slots[0].value == doctest::Approx(0.3f));
+}
+
+TEST_CASE("specials: access is one only for '+'") {
+    auto db = parse("special_desc IDSPEC_POISON_DMG\n{\n"
+                    "SPECF_VALUE_CHANGE_ABSOLUTE * 1 50\n"
+                    "SPECF_VALUE_CHANGE_RELATIVE x 1 1\n"
+                    "SPECF_VALUE_REPLACE - 1 1\n"
+                    "SPECF_TIME_PERMANENT - 0.3 1\n"
+                    "SPECF_TIME_DAY + 0.3 0.5\n"
+                    "}\n");
+    REQUIRE(db.has_value());
+    REQUIRE(db->defs.size() == 1);
+    CHECK(db->defs[0].value_slots[0].access == 0);
+    CHECK(db->defs[0].value_slots[1].access == 0);
+    CHECK(db->defs[0].value_slots[2].access == 0);
+    CHECK(db->defs[0].time_slots[0].access == 0);
+    CHECK(db->defs[0].time_slots[1].access == 1);
+}
+
+TEST_CASE("specials: SPECF_ANTI_MONSTER_SPECIFIED is rejected in slot context") {
+    auto db = parse("special_desc IDSPEC_POISON_DMG\n{\n"
+                    "SPECF_ANTI_MONSTER_SPECIFIED + 1 50\n"
+                    "}\n");
+    REQUIRE_FALSE(db.has_value());
+    CHECK(db.error().code == gl::ErrorCode::format);
+}
+
+TEST_CASE("specials: error text converts cp1251 tokens to UTF-8") {
+    std::string text = "special_desc ";
+    text += "\xCF\xD0"; // cp1251 "ПР"
+    text += "\n{\n}\n";
+    auto db = parse(text);
+    REQUIRE_FALSE(db.has_value());
+    CHECK(db.error().code == gl::ErrorCode::format);
+    CHECK(db.error().message.find("\xD0\x9F\xD0\xA0") != std::string::npos);
 }
 
 TEST_CASE("specials: supports comments and empty input") {
@@ -309,18 +399,12 @@ TEST_CASE("specials: malformed grammar is a format error") {
 
     require_format_error("special IDSPEC_POISON_DMG\n");
     require_format_error("special_desc IDSPEC_POISON_DMG } \n");
-    require_format_error("special_desc IDSPEC_POISON_DMG\n{\nSPECF_VALUE_CHANGE_ABSOLUTE + 1 50\n");
-    require_format_error("special_desc IDSPEC_POISON_DMG\n{\nSPECF_VALUE_CHANGE_ABSOLUTE * 1 50\n" +
-                         std::string(kNineSlots).substr(kNineSlots.find('\n') + 1) + "}\n");
+    require_format_error("special_desc IDSPEC_POISON_DMG\n{\nSPECF_VALUE_CHANGE_ABSOLUTE\n");
+    require_format_error("special_desc IDSPEC_POISON_DMG\n{\nSPECF_VALUE_CHANGE_ABSOLUTE + 1\n");
     require_format_error(
         "special_desc IDSPEC_POISON_DMG\n{\nSPECF_VALUE_CHANGE_ABSOLUTE + nope 50\n" +
         std::string(kNineSlots).substr(kNineSlots.find('\n') + 1) + "}\n");
     require_format_error("special_desc IDSPEC_POISON_DMG random_sing\n{\n" +
                          std::string(kNineSlots) + "}\n");
-    require_format_error("special_desc IDSPEC_POISON_DMG\n{\n" +
-                         std::string(kNineSlots).substr(0, kNineSlots.find("SPECF_TIME_DELAYED")) +
-                         "}\n");
-    require_format_error("special_desc IDSPEC_POISON_DMG\n{\n" + std::string(kNineSlots) +
-                         "SPECF_TIME_DELAYED - 1 1\n}\n");
     require_format_error("bogus_token\n");
 }

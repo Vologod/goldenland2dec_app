@@ -14,7 +14,10 @@
 namespace gl::assets {
 class GameVfs;
 
-inline constexpr std::size_t special_slot_count = 9;
+inline constexpr std::size_t special_value_slot_count = 3;
+inline constexpr std::size_t special_time_slot_count = 6;
+inline constexpr std::size_t special_slot_count =
+    special_value_slot_count + special_time_slot_count;
 
 using SpecialId = std::uint32_t;
 using SpecialFlags = std::uint32_t;
@@ -26,10 +29,19 @@ struct SpecialSlot {
     float price = 0.0f;
 };
 
+constexpr bool is_special_value_tag(SpecialFlags tag) {
+    return tag == 0x40 || tag == 0x80 || tag == 0x100;
+}
+
+constexpr bool is_special_time_tag(SpecialFlags tag) {
+    return tag == 1 || tag == 2 || tag == 4 || tag == 8 || tag == 0x10 || tag == 0x20;
+}
+
 struct SpecialDef {
     SpecialId id = 0;
     bool random_sign = false;
-    std::array<SpecialSlot, special_slot_count> slots{};
+    std::array<SpecialSlot, special_value_slot_count> value_slots{};
+    std::array<SpecialSlot, special_time_slot_count> time_slots{};
 };
 
 struct SpecialDatabase {

@@ -110,19 +110,29 @@ TEST_CASE("specials real: representative defs" * doctest::skip(!game_dir_availab
     const SpecialDef *poison = db->find(0);
     REQUIRE(poison != nullptr);
     CHECK_FALSE(poison->random_sign);
-    const std::array<std::uint32_t, special_slot_count> poison_tags = {0x40, 0x80, 0x100, 1,   2,
-                                                                       4,    8,    0x10,  0x20};
-    const std::array<std::uint8_t, special_slot_count> poison_access = {1, 0, 0, 1, 0, 0, 0, 0, 0};
-    const std::array<float, special_slot_count> poison_values = {1.0f, 1.0f, 1.0f, 0.3f, 0.3f,
-                                                                 0.3f, 1.0f, 1.0f, 1.0f};
-    const std::array<float, special_slot_count> poison_prices = {50.0f, 1.0f, 1.0f, 1.0f, 0.5f,
-                                                                 0.5f,  1.0f, 1.0f, 1.0f};
-    for (std::size_t i = 0; i < special_slot_count; ++i) {
+    const std::array<std::uint32_t, special_value_slot_count> value_tags = {0x40, 0x80, 0x100};
+    const std::array<std::uint8_t, special_value_slot_count> value_access = {1, 0, 0};
+    const std::array<float, special_value_slot_count> value_values = {1.0f, 1.0f, 1.0f};
+    const std::array<float, special_value_slot_count> value_prices = {50.0f, 1.0f, 1.0f};
+    for (std::size_t i = 0; i < special_value_slot_count; ++i) {
         CAPTURE(i);
-        CHECK(poison->slots[i].tag == poison_tags[i]);
-        CHECK(poison->slots[i].access == poison_access[i]);
-        CHECK(poison->slots[i].value == doctest::Approx(poison_values[i]));
-        CHECK(poison->slots[i].price == doctest::Approx(poison_prices[i]));
+        CHECK(poison->value_slots[i].tag == value_tags[i]);
+        CHECK(poison->value_slots[i].access == value_access[i]);
+        CHECK(poison->value_slots[i].value == doctest::Approx(value_values[i]));
+        CHECK(poison->value_slots[i].price == doctest::Approx(value_prices[i]));
+    }
+    const std::array<std::uint32_t, special_time_slot_count> time_tags = {1, 2, 4, 8, 0x10, 0x20};
+    const std::array<std::uint8_t, special_time_slot_count> time_access = {1, 0, 0, 0, 0, 0};
+    const std::array<float, special_time_slot_count> time_values = {0.3f, 0.3f, 0.3f,
+                                                                    1.0f, 1.0f, 1.0f};
+    const std::array<float, special_time_slot_count> time_prices = {1.0f, 0.5f, 0.5f,
+                                                                    1.0f, 1.0f, 1.0f};
+    for (std::size_t i = 0; i < special_time_slot_count; ++i) {
+        CAPTURE(i);
+        CHECK(poison->time_slots[i].tag == time_tags[i]);
+        CHECK(poison->time_slots[i].access == time_access[i]);
+        CHECK(poison->time_slots[i].value == doctest::Approx(time_values[i]));
+        CHECK(poison->time_slots[i].price == doctest::Approx(time_prices[i]));
     }
 
     const SpecialDef *poison_res = db->find(3);
@@ -131,15 +141,16 @@ TEST_CASE("specials real: representative defs" * doctest::skip(!game_dir_availab
 
     const SpecialDef *max_health = db->find(22);
     REQUIRE(max_health != nullptr);
-    CHECK(max_health->slots[0].access == 1);
-    CHECK(max_health->slots[0].value == doctest::Approx(-1.0f));
-    CHECK(max_health->slots[1].access == 1);
-    CHECK(max_health->slots[1].value == doctest::Approx(-0.6f));
-    CHECK(max_health->slots[1].price == doctest::Approx(5.0f));
+    CHECK(max_health->value_slots[0].access == 1);
+    CHECK(max_health->value_slots[0].value == doctest::Approx(-1.0f));
+    CHECK(max_health->value_slots[1].access == 1);
+    CHECK(max_health->value_slots[1].value == doctest::Approx(-0.6f));
+    CHECK(max_health->value_slots[1].price == doctest::Approx(5.0f));
 
     const SpecialDef *health_current = db->find(48);
     REQUIRE(health_current != nullptr);
     CHECK(health_current->random_sign);
-    CHECK(health_current->slots[0].access == 0);
-    CHECK(health_current->slots[3].access == 0);
+    CHECK(health_current->value_slots[0].access == 0);
+    CHECK(health_current->time_slots[0].access == 0);
+    CHECK(health_current->time_slots[5].access == 0);
 }
