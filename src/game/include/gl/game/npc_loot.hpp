@@ -28,6 +28,7 @@ struct LootItem {
     std::uint32_t type = 0;
     std::uint32_t flags = 0;
     std::uint32_t style = 0;
+    std::uint32_t mod_count = 0;
     std::vector<gl::assets::SpecialMod> mods;
 };
 

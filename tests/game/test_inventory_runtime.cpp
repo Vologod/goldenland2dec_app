@@ -401,6 +401,34 @@ TEST_CASE("inventory_runtime add splits new records by max_stack") {
     CHECK(items[2].count == 1);
 }
 
+TEST_CASE("inventory_runtime add initializes inherited mod count from the template") {
+    auto lookup = [](std::uint32_t item_id) -> std::optional<ItemTemplate> {
+        if (item_id == 1101)
+            return ItemTemplate{26, 0x04u, 0, 1, 2};
+        return std::nullopt;
+    };
+    auto runtime = InventoryRuntime::create({}, make_names(), lookup);
+
+    REQUIRE(runtime.add_item("Hero", "QST_1_0_159", 1));
+    const auto &items = runtime.hero_inventory().items;
+    REQUIRE(items.size() == 1);
+    CHECK(items[0].mod_count == 2);
+    CHECK(items[0].mods.empty());
+
+    TradePriceInput input{};
+    input.item_id = 1101;
+    input.item_price = 50;
+    input.durability = 100;
+    input.flags = items[0].flags;
+    input.mod_count = items[0].mod_count;
+    input.skill_trade = 1;
+    input.count = 1;
+    input.assume_pc53 = true;
+    CHECK_FALSE(compute_trade_price(input).has_value());
+    input.mod_count = 0;
+    CHECK(compute_trade_price(input).has_value());
+}
+
 TEST_CASE("inventory_runtime add fills an existing stack before splitting") {
     gl::assets::HeroInventory inventory;
     inventory.items.push_back({1101, 2, 0, 0, 0});
@@ -645,7 +673,9 @@ TEST_CASE("inventory_runtime transfer_item new dest record preserves source meta
 TEST_CASE("inventory_runtime transfers preserve durability and modifiers") {
     gl::assets::HeroInventory inventory;
     inventory.items.push_back({812, 500, 0, 18, 0});
-    inventory.items.push_back({953, 10, 0x8000000Cu, 19, 0, 42, 1});
+    gl::assets::InventoryItem modified{953, 10, 0x8000000Cu, 19, 0, 42, 2};
+    modified.mods = {{10, 2, 0x41u}, {20, 1, 0x41u}};
+    inventory.items.push_back(modified);
     auto runtime = InventoryRuntime::create(inventory, make_trade_names(), trade_template_for);
     runtime.set_person_items("L0.Partial", {});
     runtime.set_person_items("L0.All", {});
@@ -654,25 +684,32 @@ TEST_CASE("inventory_runtime transfers preserve durability and modifiers") {
     REQUIRE(runtime.person_items("L0.Partial").size() == 1);
     CHECK(runtime.person_items("L0.Partial")[0].count == 4);
     CHECK(runtime.person_items("L0.Partial")[0].durability == 42);
-    CHECK(runtime.person_items("L0.Partial")[0].mod_count == 1);
+    CHECK(runtime.person_items("L0.Partial")[0].mod_count == 2);
+    REQUIRE(runtime.person_items("L0.Partial")[0].mods.size() == 2);
+    CHECK(runtime.person_items("L0.Partial")[0].mods[0].id == 10);
+    CHECK(runtime.person_items("L0.Partial")[0].mods[1].id == 20);
     REQUIRE(runtime.person_items("Hero").size() == 2);
     CHECK(runtime.person_items("Hero")[1].count == 6);
     CHECK(runtime.person_items("Hero")[1].durability == 42);
-    CHECK(runtime.person_items("Hero")[1].mod_count == 1);
+    CHECK(runtime.person_items("Hero")[1].mod_count == 2);
+    REQUIRE(runtime.person_items("Hero")[1].mods.size() == 2);
 
     REQUIRE(runtime.transfer_all("Hero", "L0.All"));
     REQUIRE(runtime.person_items("L0.All").size() == 2);
     CHECK(runtime.person_items("L0.All")[1].item_id == 953);
     CHECK(runtime.person_items("L0.All")[1].count == 6);
     CHECK(runtime.person_items("L0.All")[1].durability == 42);
-    CHECK(runtime.person_items("L0.All")[1].mod_count == 1);
+    CHECK(runtime.person_items("L0.All")[1].mod_count == 2);
+    REQUIRE(runtime.person_items("L0.All")[1].mods.size() == 2);
+    CHECK(runtime.person_items("L0.All")[1].mods[0].id == 10);
+    CHECK(runtime.person_items("L0.All")[1].mods[1].id == 20);
 
     TradePriceInput input{};
     input.item_id = 953;
     input.item_price = 500;
     input.durability = 42;
     input.flags = 0x8000000Cu;
-    input.mod_count = 1;
+    input.mod_count = 2;
     input.skill_trade = 1;
     input.count = 6;
     input.assume_pc53 = true;

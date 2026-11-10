@@ -27,12 +27,9 @@
 #include <string_view>
 #include <vector>
 
-#if defined(__i386__) || defined(__x86_64__) || defined(_M_IX86) || defined(_M_X64)
+#if (defined(__i386__) || defined(__x86_64__)) && !defined(_MSC_VER)
 #define GL_TEST_X86_ROUNDING 1
 #include <xmmintrin.h>
-#if defined(_MSC_VER)
-#include <float.h>
-#endif
 #endif
 
 namespace {
@@ -48,21 +45,13 @@ using gl::assets::SpecialSlot;
 #if defined(GL_TEST_X86_ROUNDING)
 
 std::uint16_t read_x87_control_word() {
-#if defined(_MSC_VER)
-    return static_cast<std::uint16_t>(_controlfp(0, 0) & 0xffffu);
-#else
     std::uint16_t word = 0;
     __asm__ __volatile__("fnstcw %0" : "=m"(word));
     return word;
-#endif
 }
 
 void write_x87_control_word(std::uint16_t word) {
-#if defined(_MSC_VER)
-    _controlfp(word, _MCW_PC | _MCW_RC);
-#else
     __asm__ __volatile__("fldcw %0" : : "m"(word));
-#endif
 }
 
 class ScopedRoundingMode {
@@ -339,6 +328,22 @@ std::string env_value(const char *name) {
     return value == nullptr ? std::string{} : std::string(value);
 }
 
+bool set_env_value(const char *name, const std::string &value) {
+#ifdef _WIN32
+    return _putenv_s(name, value.c_str()) == 0;
+#else
+    return setenv(name, value.c_str(), 1) == 0;
+#endif
+}
+
+void clear_env_value(const char *name) {
+#ifdef _WIN32
+    _putenv_s(name, "");
+#else
+    unsetenv(name);
+#endif
+}
+
 bool game_dir_available() { return std::getenv("GL_GAME_DIR") != nullptr; }
 
 std::string live_capture_path() { return env_value("GL_SPECIALS_LIVE"); }
@@ -510,9 +515,29 @@ struct PortRun {
     std::multiset<CapturedMod> mods;
     std::size_t generated_persons = 0;
     std::size_t captured_persons = 0;
+    std::size_t inherited_capture_items = 0;
+    std::size_t inherited_capture_mods = 0;
+    std::size_t inherited_port_items = 0;
 };
 
-bool build_port_records(const LiveCapture &capture, bool filter_to_captured, PortRun &port,
+bool item_has_inherited_mods(const gl::assets::ItemCatalog &catalog, std::uint32_t item_id) {
+    const gl::assets::ItemCatalogEntry *entry = catalog.find(item_id);
+    return entry != nullptr && !entry->item.effects.empty();
+}
+
+void filter_inherited_capture(LiveCapture &capture, const gl::assets::ItemCatalog &catalog,
+                              PortRun &port) {
+    port.inherited_capture_items =
+        std::erase_if(capture.items, [&catalog](const CapturedItem &item) {
+            return item_has_inherited_mods(catalog, item.item_id);
+        });
+    port.inherited_capture_mods =
+        std::erase_if(capture.mods, [&catalog](const CapturedMod &mod) {
+            return item_has_inherited_mods(catalog, mod.item_id);
+        });
+}
+
+bool build_port_records(LiveCapture &capture, bool filter_to_captured, PortRun &port,
                         std::string &error) {
     const char *game_dir = std::getenv("GL_GAME_DIR");
     if (game_dir == nullptr) {
@@ -529,6 +554,7 @@ bool build_port_records(const LiveCapture &capture, bool filter_to_captured, Por
         error = "cannot load item catalog: " + catalog.error().message;
         return false;
     }
+    filter_inherited_capture(capture, catalog.value(), port);
     auto names = gl::assets::ItemNameIndex::load(vfs.value());
     if (!names) {
         error = "cannot load item names: " + names.error().message;
@@ -574,8 +600,13 @@ bool build_port_records(const LiveCapture &capture, bool filter_to_captured, Por
         if (filter_to_captured && !captured_persons.contains(person.name))
             continue;
         for (const gl::game::LootItem &item : loot.main) {
+            const auto item_template = lookup(item.item_id);
+            if (item_template.has_value() && item_template->mod_count > 0) {
+                ++port.inherited_port_items;
+                continue;
+            }
             port.items.insert(CapturedItem{person.name, item.item_id, item.count, item.flags,
-                                           static_cast<std::uint32_t>(item.mods.size())});
+                                           item.mod_count});
             for (const gl::assets::SpecialMod &mod : item.mods) {
                 port.mods.insert(CapturedMod{person.name, item.item_id, item.count, item.flags,
                                              static_cast<std::int32_t>(mod.id), mod.value,
@@ -659,7 +690,7 @@ TEST_CASE("special gates: live original FPU control word" * doctest::skip(!live_
     CHECK((captured.price & 0x0C00u) == 0x0000u);
 }
 
-TEST_CASE("special gates: port rounding-mode invariance" *
+TEST_CASE("special gates: rounding invariance (diagnostic; default MXCSR nearest)" *
           doctest::skip(!x86_rounding_available())) {
 #if defined(GL_TEST_X86_ROUNDING)
     const SpecialDatabase db = make_invariance_db();
@@ -681,7 +712,7 @@ TEST_CASE("special gates: port rounding-mode invariance" *
     };
     const Mode x87_modes[] = {
         {"x87 PC53/nearest", 0x027Fu, 0x0000u}, {"x87 PC64/nearest", 0x037Fu, 0x0000u},
-        {"x87 PC53/up", 0x067Fu, 0x0000u},      {"x87 PC53/down", 0x0A7Fu, 0x0000u},
+        {"x87 PC53/down", 0x067Fu, 0x0000u},    {"x87 PC53/up", 0x0A7Fu, 0x0000u},
         {"x87 PC53/trunc", 0x0E7Fu, 0x0000u},
     };
     for (const Mode &mode : x87_modes) {
@@ -749,6 +780,13 @@ TEST_CASE("special gates: live NPC-mod oracle" * doctest::skip(!live_capture_ava
 
     PortRun port;
     REQUIRE_MESSAGE(build_port_records(capture, true, port, error), error);
+    if (port.inherited_capture_items != 0 || port.inherited_capture_mods != 0 ||
+        port.inherited_port_items != 0) {
+        MESSAGE("oracle scope: skipped inherited ITM-effect records (capture items="
+                << port.inherited_capture_items << ", capture mods=" << port.inherited_capture_mods
+                << ", port items=" << port.inherited_port_items
+                << "); prototype effect semantics are not modelled");
+    }
     if (port.captured_persons < port.generated_persons) {
         MESSAGE("partial capture: compared "
                 << port.captured_persons << "/" << port.generated_persons
@@ -858,6 +896,95 @@ TEST_CASE("special gates: oracle plumbing self-check" * doctest::skip(!game_dir_
         std::multiset<CapturedMod>(extra_mods.begin(), extra_mods.end()), filtered.mods);
     CHECK(extra_mod.mismatched_mods == 1u);
     MESSAGE("synthetic plumbing self-check only; not live capture evidence");
+}
+
+TEST_CASE("special gates: inherited ITM-effect rows are excluded from comparison" *
+          doctest::skip(!game_dir_available())) {
+    const char *dir = std::getenv("GL_GAME_DIR");
+    REQUIRE(dir != nullptr);
+    auto vfs = gl::assets::GameVfs::mount(dir);
+    REQUIRE(vfs.has_value());
+    auto catalog = gl::assets::ItemCatalog::load(vfs.value());
+    REQUIRE(catalog.has_value());
+
+    const gl::assets::ItemCatalogEntry *effects_entry = catalog.value().find(411);
+    REQUIRE(effects_entry != nullptr);
+    REQUIRE(!effects_entry->item.effects.empty());
+
+    const CapturedItem inherited{"L0.Prototype", 411, 1, 0x0Cu, 1};
+    const CapturedMod inherited_mod{"L0.Prototype", 411, 1, 0x0Cu, 7, 1, 0x80u};
+    const CapturedItem generated{"L1_2.P404_Sister_Of_Mercy2", 8, 1, 0x204u, 1};
+    const CapturedMod generated_mod{"L1_2.P404_Sister_Of_Mercy2", 8, 1, 0x204u, 25, -1, 0x81u};
+
+    LiveCapture capture;
+    capture.level = "l1_1";
+    capture.rng_state = 1;
+    capture.loot_level = 1;
+    capture.items = {inherited, generated};
+    capture.mods = {inherited_mod, generated_mod};
+
+    PortRun port;
+    filter_inherited_capture(capture, catalog.value(), port);
+    CHECK(port.inherited_capture_items == 1u);
+    CHECK(port.inherited_capture_mods == 1u);
+    REQUIRE(capture.items.size() == 1u);
+    CHECK(capture.items[0] == generated);
+    REQUIRE(capture.mods.size() == 1u);
+    CHECK(capture.mods[0] == generated_mod);
+
+    const OracleComparison comparison = compare_records(
+        std::multiset<CapturedItem>(capture.items.begin(), capture.items.end()),
+        std::multiset<CapturedItem>{generated},
+        std::multiset<CapturedMod>(capture.mods.begin(), capture.mods.end()),
+        std::multiset<CapturedMod>{generated_mod});
+    CHECK(comparison.mismatched() == 0u);
+    CHECK(comparison.captured_items == 1u);
+    CHECK(comparison.captured_mods == 1u);
+}
+
+TEST_CASE("special gates: FPU-CW file fallback") {
+    const std::string old = env_value("GL_SPECIALS_FPU_CW");
+    const std::filesystem::path path =
+        std::filesystem::temp_directory_path() / "gl_special_fpu_cw_test.txt";
+    std::error_code remove_error;
+    std::filesystem::remove(path, remove_error);
+    {
+        std::ofstream file(path, std::ios::binary);
+        REQUIRE(file.good());
+        file << "# synthetic unit fixture\n"
+                "source=unit-file\n"
+                "generation=0x027F\n"
+                "price=0x037F\n";
+    }
+
+    REQUIRE(set_env_value("GL_SPECIALS_FPU_CW", path.string()));
+    const LiveFpuControlWord from_file = load_live_fpu_control_word();
+    CHECK(from_file.ok);
+    CHECK(from_file.generation == 0x027Fu);
+    CHECK(from_file.price == 0x037Fu);
+    CHECK(from_file.source == "unit-file");
+
+    REQUIRE(set_env_value("GL_SPECIALS_FPU_CW", "0x027F"));
+    const LiveFpuControlWord single = load_live_fpu_control_word();
+    CHECK(single.ok);
+    CHECK(single.generation == 0x027Fu);
+    CHECK(single.price == 0x027Fu);
+
+    {
+        std::ofstream file(path, std::ios::binary | std::ios::trunc);
+        REQUIRE(file.good());
+        file << "generation=0x027F\n";
+    }
+    REQUIRE(set_env_value("GL_SPECIALS_FPU_CW", path.string()));
+    const LiveFpuControlWord missing_price = load_live_fpu_control_word();
+    CHECK_FALSE(missing_price.ok);
+    CHECK(missing_price.error.find("price") != std::string::npos);
+
+    std::filesystem::remove(path, remove_error);
+    if (old.empty())
+        clear_env_value("GL_SPECIALS_FPU_CW");
+    else
+        set_env_value("GL_SPECIALS_FPU_CW", old);
 }
 
 TEST_CASE("special gates: capture format parser") {

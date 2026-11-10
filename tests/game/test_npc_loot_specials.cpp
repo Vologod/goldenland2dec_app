@@ -118,7 +118,7 @@ bool same_mods(const std::vector<SpecialMod> &left, const std::vector<SpecialMod
 bool same_item(const LootItem &left, const LootItem &right) {
     return left.item_id == right.item_id && left.count == right.count && left.type == right.type &&
            left.flags == right.flags && left.style == right.style &&
-           same_mods(left.mods, right.mods);
+           left.mod_count == right.mod_count && same_mods(left.mods, right.mods);
 }
 
 bool same_items(const std::vector<LootItem> &left, const std::vector<LootItem> &right) {
@@ -225,6 +225,101 @@ TEST_CASE("npc_loot specials: qualifying empty-pool item consumes R4 and marks 0
     CHECK(null_rng.next() == 41u);
 }
 
+TEST_CASE("npc_loot specials: inherited ITM effects stay count-only and skip random specials") {
+    gl::assets::InvTable table;
+    table.regenerate_chance = 0.0;
+    table.chance_decrease = 1.0;
+    table.quantity_decrease = 1.0;
+    gl::assets::InvItem item;
+    item.tech_name = "POT";
+    item.min_level = 0;
+    item.max_level = 100;
+    item.chance_percent = 0.0;
+    item.qty_min = 1;
+    item.qty_max = 1;
+    table.items = {item};
+
+    const std::vector<gl::assets::SdbEntry> entries = {{200, "POT"}};
+    auto names = gl::assets::ItemNameIndex::from_entries(entries);
+    REQUIRE(names.has_value());
+
+    const auto lookup = [](std::uint32_t item_id) -> std::optional<ItemTemplate> {
+        if (item_id != 200)
+            return std::nullopt;
+        return ItemTemplate{20, 0x04u, 0, 1, 2};
+    };
+
+    SpecialDatabase db;
+    db.item_classes[static_cast<gl::assets::ItemType>(20)] = {0};
+    MsvcRandom rng(1);
+    const NpcLoot loot = NpcLootGenerator::generate(table, 1, names.value(), lookup, rng, &db);
+    REQUIRE(loot.main.size() == 1);
+    CHECK(loot.main[0].mod_count == 2u);
+    CHECK(loot.main[0].mods.empty());
+    CHECK(loot.main[0].flags == 0x04u);
+
+    MsvcRandom null_rng(1);
+    const NpcLoot null_loot =
+        NpcLootGenerator::generate(table, 1, names.value(), lookup, null_rng, nullptr);
+    REQUIRE(null_loot.main.size() == 1);
+    CHECK(same_items(loot.main, null_loot.main));
+    CHECK(rng.state() == null_rng.state());
+
+    gl::game::TradePriceInput price_input{};
+    price_input.item_id = 200;
+    price_input.item_price = 50;
+    price_input.durability = 100;
+    price_input.flags = loot.main[0].flags;
+    price_input.mod_count = loot.main[0].mod_count;
+    price_input.skill_trade = 1;
+    price_input.count = 1;
+    price_input.assume_pc53 = true;
+    CHECK_FALSE(gl::game::compute_trade_price(price_input).has_value());
+    price_input.mod_count = 0;
+    CHECK(gl::game::compute_trade_price(price_input).has_value());
+}
+
+TEST_CASE("npc_loot specials: chunk other than one does not roll random specials") {
+    gl::assets::InvTable table;
+    table.regenerate_chance = 0.0;
+    table.chance_decrease = 1.0;
+    table.quantity_decrease = 1.0;
+    gl::assets::InvItem item;
+    item.tech_name = "POT";
+    item.min_level = 0;
+    item.max_level = 100;
+    item.chance_percent = 0.0;
+    item.qty_min = 5;
+    item.qty_max = 5;
+    table.items = {item};
+
+    const std::vector<gl::assets::SdbEntry> entries = {{200, "POT"}};
+    auto names = gl::assets::ItemNameIndex::from_entries(entries);
+    REQUIRE(names.has_value());
+
+    const auto lookup = [](std::uint32_t item_id) -> std::optional<ItemTemplate> {
+        if (item_id != 200)
+            return std::nullopt;
+        return ItemTemplate{20, 0x04u, 0, 10, 0};
+    };
+
+    SpecialDatabase db;
+    db.item_classes[static_cast<gl::assets::ItemType>(20)] = {0};
+    MsvcRandom rng(1);
+    const NpcLoot loot = NpcLootGenerator::generate(table, 1, names.value(), lookup, rng, &db);
+    REQUIRE(loot.main.size() == 1);
+    CHECK(loot.main[0].count == 5);
+    CHECK(loot.main[0].mods.empty());
+    CHECK(loot.main[0].mod_count == 0u);
+    CHECK(loot.main[0].flags == 0x04u);
+
+    MsvcRandom null_rng(1);
+    const NpcLoot null_loot =
+        NpcLootGenerator::generate(table, 1, names.value(), lookup, null_rng, nullptr);
+    CHECK(same_items(loot.main, null_loot.main));
+    CHECK(rng.state() == null_rng.state());
+}
+
 TEST_CASE("npc_loot specials: inventories keep generated mods and mod count" *
           doctest::skip(!game_dir_available())) {
     const char *dir = std::getenv("GL_GAME_DIR");
@@ -250,9 +345,13 @@ TEST_CASE("npc_loot specials: inventories keep generated mods and mod count" *
     CHECK(runtime.count("L1_1.P389_Crying_Guardian", "MON_1_0_1") == 287);
     const std::vector<gl::assets::InventoryItem> &trade =
         runtime.trade_items("L1_2.P404_Sister_Of_Mercy2");
+    const std::uint32_t brl_id = item_id_for(names.value(), "BRL_1_01_5");
+    REQUIRE(brl_id != 0);
     const auto brl =
         std::find_if(trade.begin(), trade.end(),
-                     [](const gl::assets::InventoryItem &item) { return item.item_id == 8; });
+                     [brl_id](const gl::assets::InventoryItem &item) {
+                         return item.item_id == brl_id;
+                     });
     REQUIRE(brl != trade.end());
     CHECK(brl->mod_count == 1);
     REQUIRE(brl->mods.size() == 1);

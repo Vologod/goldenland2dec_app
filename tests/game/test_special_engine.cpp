@@ -293,3 +293,15 @@ TEST_CASE("special engine combines value and time tags and caller marks 0x200") 
     CHECK(item.flags == 0x304u);
     CHECK(item.mod_count == 1u);
 }
+
+TEST_CASE("special engine skips a pool id without a SpecialDef") {
+    const SpecialDatabase db =
+        make_db({make_def(5, {value_slot(0x40, 1, 1.0f), empty_slot(), empty_slot()},
+                          {value_slot(1, 1, 1.0f)})},
+                {5, 6});
+
+    MsvcRandom rng(1);
+    const auto mods = SpecialEngine::apply(db, ItemType::sword, 2, 1, rng);
+    REQUIRE(mods.size() == 1);
+    check_mod(mods[0], 5u, 1, 0x41u);
+}

@@ -35,8 +35,8 @@ bool append_items(std::vector<gl::assets::InventoryItem> &items, std::uint32_t i
     }
     while (remaining != 0) {
         const std::uint32_t added = std::min(remaining, item_template.max_stack);
-        items.push_back(
-            {item_id, added, item_template.flags, item_template.type, item_template.style});
+        items.push_back({item_id, added, item_template.flags, item_template.type,
+                         item_template.style, 100, item_template.mod_count});
         remaining -= added;
     }
     return true;
@@ -61,8 +61,10 @@ bool append_items_preserving(std::vector<gl::assets::InventoryItem> &items, std:
     }
     while (remaining != 0) {
         const std::uint32_t added = std::min(remaining, max_stack);
-        items.push_back({item_id, added, source.flags, source.type, source.style, source.durability,
-                         source.mod_count});
+        gl::assets::InventoryItem record{item_id, added, source.flags, source.type, source.style,
+                                         source.durability, source.mod_count};
+        record.mods = source.mods;
+        items.push_back(std::move(record));
         remaining -= added;
     }
     return true;

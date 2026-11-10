@@ -34,24 +34,32 @@
   `0x027F` остаётся extraction-assumption; build-машина `0x037F` — только
   diagnostic. Port обязан сохранять default MXCSR rounding (nearest):
   `TradePrice` чувствителен к non-nearest (2/3 режима).
-- **Проверка (`GL_GAME_DIR=I:\Games\Златогорье-2`):**
-  `cmake --build build` exit 0. Targeted `ctest -R "gl_script_tests|
-  gl_script_real_tests|gl_game_tests|gl_assets_tests|gl_assets_real_tests|
-  glgame_screenshot_tests|glview_screenshot_tests|level_click_tests|
-  trade_overlay_tests"` — **9/9 passed**, `Total Test time (real) =
-  1787.22 sec`, exit 0. Full `ctest` — **19/19 passed**, `Total Test time
-  (real) = 2326.30 sec`, exit 0. `gl_game_tests` full **305/305** (2
-  skipped, 560191 assertions); `glgame_screenshot_tests` **36/36** (926);
-  specials E2E **1/1** (28); `*special*` **16/16** (568, 291 skipped).
+- **Проверка fix wave (`GL_GAME_DIR=I:\Games\Златогорье-2`):**
+  `cmake --build build` exit 0. Focus reruns: `gl_game_tests` full
+  **311/311** (2 skipped, 560289 assertions); `*special*gate*` **7/7**
+  (134); `*special*` **21/21** (619, 292 skipped); specials E2E **1/1**
+  (29); `glgame_screenshot_tests` full **36/36** (927). Full `ctest` —
+  **19/19 passed**, `Total Test time (real) = 2280.38 sec`, exit 0.
+- **Fix wave (inherited mods):** `LootItem`/`InventoryItem.mod_count =
+  ItemTemplate.mod_count + mods.size()`; `append_items` инициализирует
+  `mod_count` из template; transfer копирует `source.mods`; live-гейт
+  исключает `effects>0` rows (Open Question выше). Добавлены tests:
+  inherited template (price guard), `chunk!=1`, missing `SpecialDef`,
+  FPU-CW file fallback, synthetic inherited capture, transfer mods.
 - **Статус:** **`partial`**; full parity запрещён до live NPC-mod 0/N и
   live FPU-CW `0x027F`. Остаётся unverified: `random_sign` (место
   применения), item flag `0x40`, time-slots 4–6; save/сериализация mods —
-  вне scope.
+  вне scope. **Open Question:** ITM prototype effects (`effects>0`)
+  сохраняются count-only (`mod_count = template.mod_count + generated`,
+  `mods` пуст) — value/flags/duration семантика не доказана; live-гейт
+  исключает такие item/mod rows и сообщает skipped counts
+  (`tools/live/README.md`).
 - **Коммиты Task 4:** `3b62fc8` + `ca4fdca` (`test(game): harden specials
   live gates`).
 - **Коммиты Task 5:** `feat(tools): enable NPC specials` (production
   wiring, `mod_count`, `--no-specials`, E2E/guard tests) +
-  `docs: record specials implementation` (D-060/parity/STATUS/PROJECT/plan).
+  `docs: record specials implementation` (D-060/parity/STATUS/PROJECT/plan)
+  + `fix(game): preserve inherited mods and scope live gate`.
 - **Дальше:** live FPU-CW + live NPC-mod capture (закрытие гейтов) либо
   `P2-15` (save payload), затем 35 Гц (`P2-9`).
 

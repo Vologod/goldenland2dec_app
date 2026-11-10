@@ -1,6 +1,7 @@
 #define SDL_MAIN_HANDLED
 #define DOCTEST_CONFIG_IMPLEMENT
 #include <doctest.h>
+#include <gl/assets/item_name_index.hpp>
 #include <gl/assets/sef.hpp>
 #include <gl/assets/vfs.hpp>
 #include <gl/game/level.hpp>
@@ -314,6 +315,14 @@ std::vector<unsigned char> read_png(const fs::path& png, int& width, int& height
     return std::vector<unsigned char>(pixels.get(),
                                       pixels.get() + static_cast<std::size_t>(width) *
                                                          static_cast<std::size_t>(height) * 4);
+}
+
+std::optional<std::uint32_t> resolve_tech_item(const fs::path& game_dir, std::string_view tech) {
+    auto vfs = gl::assets::GameVfs::mount(game_dir);
+    if (!vfs) return std::nullopt;
+    auto names = gl::assets::ItemNameIndex::load(vfs.value());
+    if (!names) return std::nullopt;
+    return names.value().find(tech);
 }
 
 std::size_t count_differences(const std::vector<unsigned char>& first,
@@ -2129,6 +2138,9 @@ TEST_CASE("glgame specials mode changes NPC loot and keeps modified trade unsupp
     constexpr std::string_view kCitizen8 = "L0.P711_citizen8";
     constexpr std::string_view kSister = "L1_2.P404_Sister_Of_Mercy2";
     constexpr std::uint32_t kMoney = 812;
+    const std::optional<std::uint32_t> brl_item = resolve_tech_item(game_dir, "BRL_1_01_5");
+    REQUIRE(brl_item.has_value());
+    const std::string brl_id = std::to_string(*brl_item);
     const std::vector<std::string> common = {
         "--level", "l1_1", "--seed", "1",
         "--dump-npc", std::string(kKolbasens),
@@ -2166,17 +2178,17 @@ TEST_CASE("glgame specials mode changes NPC loot and keeps modified trade unsupp
 
     CHECK(no_specials_output.find("npc mod:") == std::string::npos);
     CHECK(specials_output.find("npc mod: person='" + std::string(kSister) +
-                               "' container='trade' item=8 mod=25 value=-1 flags=129") !=
-          std::string::npos);
+                               "' container='trade' item=" + brl_id +
+                               " mod=25 value=-1 flags=129") != std::string::npos);
 
     CHECK(no_specials_output.find(
-              "trade: hook stage buy id=8 count=0 result=failed "
+              "trade: hook stage buy id=" + brl_id + " count=0 result=failed "
               "error='item is not in the trade list'") != std::string::npos);
-    CHECK(specials_output.find("trade: no price for item 8 (modifier guard)") !=
-          std::string::npos);
+    CHECK(specials_output.find("trade: no price for item " + brl_id +
+                               " (modifier guard)") != std::string::npos);
     CHECK(specials_output.find(
-              "trade: hook stage buy id=8 count=1 result=failed error='price unavailable'") !=
-          std::string::npos);
+              "trade: hook stage buy id=" + brl_id +
+              " count=1 result=failed error='price unavailable'") != std::string::npos);
 
     int width = 0;
     int height = 0;

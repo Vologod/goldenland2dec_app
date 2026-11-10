@@ -35,7 +35,9 @@ mod/value/flags в предмет, интеграция в `NpcLootGenerator`.
 ### 3.1 `gl::assets`
 
 - `parse_specials_scr(span) -> Result<SpecialDatabase>`:
-  - `SpecialDef { id, random_sign, slots[9] { tag, access, value, price } }`;
+  - `SpecialDef { id, random_sign, value_slots[3] { tag, access, value, price },
+    time_slots[6] { tag, access, value, price } }` (в файле — 9 слотов:
+    3 value + 6 time);
   - `item_classes: map<ItemType, vector<SpecialId>>` (T_* → type);
   - hardcoded enum maps (IDSPEC/SPECF/T) из `GoldenLand.exe` (research
     §2.3); неизвестное имя → format error.

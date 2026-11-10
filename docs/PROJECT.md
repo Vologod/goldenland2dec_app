@@ -93,7 +93,7 @@ atomic errors), staging/Exchange UI, `glgame` hooks, D-058, full
 structurally resolved; analytic `l1_1` 18/9/12, 1057→1329 draw, final
 `0x48CAA370`). **Phase 1b2b2d (specials implementation) done 2026-11-10:**
 parser `specials.scr`, `SpecialEngine` R4–R10, production `glgame` wiring
-(DB + `mod_count` from ITM effects; `--no-specials` mode), specials oracle
+(DB + `mod_count` from ITM effects; `--no-specials` mode), analytic regression oracle
 `l1_1` 174/287/0, full `ctest` 19/19, D-060. Live NPC-mod oracle and live
 FPU-CW are mandatory acceptance gates before full parity and remain OPEN →
 `partial`. Дальше — live-гейты specials либо save payload (`P2-15`),

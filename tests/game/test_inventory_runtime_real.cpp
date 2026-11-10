@@ -277,7 +277,10 @@ void check_l13_1_trade_oracle(int slot, std::int32_t expected_loot_level,
         CHECK(npc[index].item_id == npc_items[index].id);
         CHECK(npc[index].count == npc_items[index].count);
         CHECK(npc[index].durability == 100);
-        CHECK(npc[index].mod_count == 0);
+        const gl::assets::ItemCatalogEntry *entry = catalog.value().find(npc_items[index].id);
+        REQUIRE(entry != nullptr);
+        CHECK(npc[index].mod_count ==
+              static_cast<std::uint32_t>(entry->item.effects.size()));
     }
     CHECK(runtime.trade_money(trader) == npc_money);
 }

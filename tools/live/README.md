@@ -83,6 +83,17 @@ the port still generates every NPC (to preserve the RNG stream) but only records
 captured persons are compared. That is reduced-scope evidence, not full-level parity;
 full parity requires every relevant NPC main container.
 
+## Open question: inherited ITM prototype effects
+
+The original stores per-item prototype effects from ITM `effects` in the same
+`+0x78/+0x7c` mod array as generated random specials (research §2.5). The port models
+only generated specials and keeps inherited effects as a count-only `mod_count`; their
+value/flags/duration semantics are not proven. Therefore the gate **excludes** captured
+and port records whose item template has `effects > 0` (it reports how many rows were
+skipped) and compares only generated-special items. This is an explicit known
+limitation, not a pass; it must be revisited if prototype-effect semantics are
+extracted.
+
 ## Capture format
 
 ```

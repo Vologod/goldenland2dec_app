@@ -38,6 +38,7 @@ void append_chunks(std::vector<LootItem> &out, std::uint32_t item_id, std::int32
         const std::int32_t chunk =
             std::min(remaining, static_cast<std::int32_t>(item_template.max_stack));
         LootItem loot{item_id, chunk, item_template.type, flags, item_template.style};
+        loot.mod_count = item_template.mod_count;
         if (specials != nullptr && chunk == 1 && (flags & 0x4u) != 0 &&
             item_template.mod_count == 0) {
             const int nspec = random_special_count(flags, rng);
@@ -46,6 +47,7 @@ void append_chunks(std::vector<LootItem> &out, std::uint32_t item_id, std::int32
                     *specials, static_cast<gl::assets::ItemType>(item_template.type), nspec,
                     loot_level, rng);
                 loot.flags |= 0x200u;
+                loot.mod_count += static_cast<std::uint32_t>(loot.mods.size());
             }
         }
         out.push_back(std::move(loot));
@@ -156,7 +158,7 @@ void generate_npc_inventories(InventoryRuntime &runtime, const std::vector<Perso
                                                 item.type,
                                                 item.style,
                                                 100,
-                                                static_cast<std::uint32_t>(item.mods.size())};
+                                                item.mod_count};
             converted.mods = item.mods;
             hot.push_back(std::move(converted));
         }
@@ -169,7 +171,7 @@ void generate_npc_inventories(InventoryRuntime &runtime, const std::vector<Perso
                                                 item.type,
                                                 item.style,
                                                 100,
-                                                static_cast<std::uint32_t>(item.mods.size())};
+                                                item.mod_count};
             converted.mods = item.mods;
             main.push_back(std::move(converted));
         }
