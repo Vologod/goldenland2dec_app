@@ -22,3 +22,6 @@ GameData/
 !third_party/**/*.dll
 !third_party/**/*.exe
 !tools/**/*.exe
+
+# Live capture helper build output
+/tools/live/gl_live_capture.exe
