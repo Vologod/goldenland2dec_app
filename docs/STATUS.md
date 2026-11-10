@@ -50,7 +50,7 @@
   `l1_1` seed1 level1 events §5.2 + final aggregates, live/differential
   gate (RNG-state + NPC `+0x10`/mod records, 0/N), live FPU-CW;
   обновить/пометить `superseded` no-specials oracle.
-- **Коммиты:** `0e4402e..841bed7` (spec/plan, research, RNG-order/caveat
+- **Коммиты:** `0e4402e..a920b22` (spec/plan, research, RNG-order/caveat
   fixes; verdict/handoff — `0af9ab7`; fix wording — `841bed7`) —
   **docs-only**, production-код не менялся; не запушено.
 - **Следующее:** implementation spec/plan для specials (parser

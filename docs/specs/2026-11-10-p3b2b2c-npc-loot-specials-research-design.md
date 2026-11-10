@@ -63,5 +63,6 @@ production-код не меняется.
 ## 7. Риски
 
 - Modifier DB может быть зашита в код/бинарь без файлового формата.
-- Live-oracle может быть недостижим; тогда specials остаются blocked,
-   а NPC-лут — `partial` (D-055).
+- Live-oracle может быть недостижим; реализацию specials можно начинать,
+  но полный паритет блокируется до live NPC-mod oracle и live FPU-CW
+  (generation+price); NPC-лут остаётся `partial` (D-055/D-059).
