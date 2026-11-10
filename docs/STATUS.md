@@ -47,9 +47,12 @@
   `l1_1` seed1 level1 events §5.2 + final aggregates, live/differential
   gate (RNG-state + NPC `+0x10`/mod records, 0/N), live FPU-CW;
   обновить/пометить `superseded` no-specials oracle.
+- **Коммиты:** `0e4402e..d18dc4b` (spec/plan, research, RNG-order/caveat
+  fixes) — **docs-only**, production-код не менялся; не запушено.
 - **Следующее:** implementation spec/plan для specials (parser
   `specials.scr`, `FUN_14047284`, R4–R10 в обоих проходах, modifier
-  price под PC=53), затем `P2-15`/35 Гц.
+  price под PC=53) — **после live-захвата FPU-CW и NPC-mod oracle
+  (RNG-state + mod records, 0/N)**, затем `P2-15`/35 Гц.
 
 ## Phase 1b2b4b — trade transactions (done 2026-11-09)
 

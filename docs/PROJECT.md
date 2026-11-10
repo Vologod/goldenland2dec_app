@@ -59,8 +59,8 @@
 **A8 parity (cell masks) — implemented:** engine-модель `ApplyCellMask`; `Level::MaskCellGrid` из LVL (`flags=relief|sound<<16`, `mask=LvlTile.mask`), `select_cell_mask` (сканы вправо/вниз), `LevelScreen` выбирает mask id в строке персонажа и рисует клетки кадра с этим id; baseline удалён. `ctest` 17/17; manual gate PASSED 2026-11-04. Детали — `docs/specs/2026-11-03-a8-mask-parity-design.md`, research `a8-mask-parity.md`.
 
 **Parity matrix & decomp reference (Phase 0) — done 2026-11-05:**
-`docs/research/parity-matrix.md` — 174 строки покрытия (на 2026-11-09:
-`verified` 51, `partial` 72, `unverified` 22, `missing` 17,
+`docs/research/parity-matrix.md` — 174 строки покрытия (на 2026-11-10:
+`verified` 51, `partial` 73, `unverified` 22, `missing` 16,
 `contradicted` 2, `superseded` 10); `docs/research/decomp-index.md` + локальный корпус
 `Server.dll` (1108 функций, SHA-256
 `418E256063748F2E90DB35AE7C6ABE6EAC401FB86908CB5F27EBF565A21CC837`) в
@@ -75,10 +75,7 @@ inventory mutations) закрыта 2026-11-06 (supported 13/65, 49 unsupported 
 (2026-11-08, D-054). Phase 1b2b2b (core NPC `.inv` loot) закрыта
 2026-11-08: `parse_inv`, `NpcLootGenerator` (`FUN_1404b1c0`), NPC main
 containers при загрузке уровня, real `l1_1` oracle, D-055; restock
-blocked. Phase 1b2b2c (specials research) done 2026-11-10:
-**implementable scoped** — DB `scripts/item_class_specials/specials.scr`
-+ shared manager (host `+0x84`), R4–R10/RNG recovered, price multipliers
-structurally resolved; live oracle/CW open. Phase 1b2b3 (inventory transfers) закрыта
+blocked. Phase 1b2b3 (inventory transfers) закрыта
 2026-11-08: `transfer_item`/`transfer_all` (Hero/NPC main), трансферные
 нативы `0x5000001`/`0x5000003` (supported 15/65, 47 unsupported + 3
 vm_internal), real `l1_1.p387_poison_plotnik` dialog, D-056. Phase 1b2b4a
