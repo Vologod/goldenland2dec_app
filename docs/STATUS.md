@@ -12,7 +12,7 @@
 - **Вердикт:** **`implementable` (scoped).** Gate снят: DB source —
   `scripts/item_class_specials/specials.scr` + hardcoded `IDSPEC/SPECF/T_*`
   в `GoldenLand.exe` (не `.itm`/`itemdescparts.sdb`/`magic.pak`);
-  `DAT_14088df4` = host `+0x84` = `DAT_00469d54`; vtable
+  `DAT_14088df4 = *(host+0x84) = DAT_00469d54`; vtable
   `+4/+8/+0x14/+0x1c/+0x28` и запись def `0x98` (3 value + 6 time slots)
   восстановлены. `FUN_14047284`/`roll_special_count` (R4/R5) и полный
   RNG-порядок R6–R10 восстановлены; `ROUND` = trunc только на финальном
@@ -41,14 +41,16 @@
   остаётся live FPU-CW (PC=53/RC=nearest) и реализация.
 - **Не доказано live:** захват NPC-модов из запущенной игры; live
   FPU-CW **перед `FUN_14047284` (генерация) и `FUN_1206E8D0` (цена)**;
-  `random_sign` (def+0x04) не используется генерацией/ценой; семантика
-  item flag `0x40`; time-slots 4–6 генерацией не читаются.
+  `random_sign` (def+0x04) парсится, но не читается генерацией/ценой
+  (unverified только место применения); семантика item flag `0x40`;
+  time-slots 4–6 генерацией не читаются.
 - **Acceptance next phase:** unit (DB/pool/R4–R10), deterministic
   `l1_1` seed1 level1 events §5.2 + final aggregates, live/differential
   gate (RNG-state + NPC `+0x10`/mod records, 0/N), live FPU-CW;
   обновить/пометить `superseded` no-specials oracle.
-- **Коммиты:** `0e4402e..d18dc4b` (spec/plan, research, RNG-order/caveat
-  fixes) — **docs-only**, production-код не менялся; не запушено.
+- **Коммиты:** `0e4402e..0af9ab7` (spec/plan, research, RNG-order/caveat
+  fixes; verdict/handoff — `0af9ab7`; fix wording — `docs: fix specials
+  blocked wording`) — **docs-only**, production-код не менялся; не запушено.
 - **Следующее:** implementation spec/plan для specials (parser
   `specials.scr`, `FUN_14047284`, R4–R10 в обоих проходах, modifier
   price под PC=53) — **после live-захвата FPU-CW и NPC-mod oracle
