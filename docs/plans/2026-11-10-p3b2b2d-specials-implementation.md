@@ -74,10 +74,12 @@
 - Create: `tests/game/test_special_gates.cpp` (or `tools/` capture hook)
 - Modify: `docs/STATUS.md` (gate results)
 
-- [x] **Step 1: FPU-CW** — capture before `FUN_14047284` and
-  `FUN_1206E8D0`; expect `0x027F`; record test/hook.
-- [x] **Step 2: NPC-mod oracle** — user-assisted live capture of
-  `+0x10` mods for a level; 0/N compare with port.
+- [ ] **Step 1: FPU-CW** — capture before `FUN_14047284` and
+  `FUN_1206E8D0`; expect `0x027F`; record test/hook. *Hook/test added;
+  live capture OPEN (`GL_SPECIALS_FPU_CW` not captured).*
+- [ ] **Step 2: NPC-mod oracle** — user-assisted live capture of
+  `+0x10` mods for a level; 0/N compare with port. *Hook/test added;
+  live capture OPEN (`GL_SPECIALS_LIVE` not captured).*
 - [x] **Step 3: Verdict** — pass → full parity; fail/unavailable →
   `partial` + Open Questions, no threshold weakening.
 - [x] **Step 4: Commit** `test(game): add specials live gates`.

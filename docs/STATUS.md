@@ -19,7 +19,7 @@
   blocker закрыт); `--no-specials` → null DB для детерминированных
   no-specials тестов/скриншотов. `--dump-npc <name>` — headless dump
   main/trade items и mods.
-- **Oracle `l1_1` seed 1 level 1:** no-specials `174/218/323`;
+- **Analytic regression oracle `l1_1` seed 1 level 1:** no-specials `174/218/323`;
   specials `174/287/0` (`P7` без изменений, `P389` `218→287`, `P711`
   `323→0` из-за downstream RNG); 18 кандидатов/9 срабатываний/12 модов,
   1057→1329 draw, final `0x48CAA370`; первый divergence — `P389` pass1

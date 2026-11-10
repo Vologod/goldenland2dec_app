@@ -149,7 +149,7 @@ void print_usage() {
         "  --no-font            Force ASCII bitmap text (dev/debug, overrides --font)\n"
         "  --no-persons         Skip NPC sprites on the level\n"
         "  --no-specials        Disable NPC loot specials (deterministic no-specials mode)\n"
-        "  --dump-npc <name>    Headless test: log generated main/trade items for <name>\n"
+        "  --dump-npc <name>    Headless direct-level test: log generated main/trade items for <name>\n"
         "  --equip-save <slot>  Apply hero equipment from save slot <slot>\n"
         "  --equip-save-pending Apply --equip-save on the next level load only\n"
         "  --inventory          Open the inventory overlay for the selected save\n"
