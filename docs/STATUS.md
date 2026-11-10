@@ -1,48 +1,59 @@
 # STATUS
 
 Обновлено: 2026-11-10
-## Phase 1b2b2d — NPC loot specials implementation (in progress 2026-11-10)
+## Phase 1b2b2d — NPC loot specials implementation (done 2026-11-10)
 
 - **Задача:** `specials.scr` parser, `SpecialEngine` (R4–R10),
-  интеграция в `NpcLootGenerator`, `InventoryItem.mods`.
+  интеграция в `NpcLootGenerator`, `InventoryItem.mods`, production-wiring
+  и trade/price guard.
 - **Spec:** `docs/specs/2026-11-10-p3b2b2d-specials-implementation-design.md`.
 - **Plan:** `docs/plans/2026-11-10-p3b2b2d-specials-implementation.md`.
-- **Реализация:** Tasks 1–3 done (`specials.scr` parser,
-  `SpecialEngine` R4–R10, `NpcLootGenerator` integration); production
-  `glgame` пока без specials (Task 5).
-- **Гейты (OPEN, 2026-11-10; harden fix):**
-  - **FPU-CW live:** `GL_SPECIALS_FPU_CW` принимает live-захват CW из
-    оригинала (значение `0x027F` или файл с `generation=`/`price=`);
-    гейт требует точный `0x027F` (PC=53/RC=nearest) для генерации и
-    цены; без env — skip. Это **не** CW тестового процесса.
-  - **FPU-CW диагностика:** на build-машине x87 CW = `0x037F`
-    (PC=64/RC=nearest) — только diagnostic, не reference.
-    `0x027F` остаётся документированным extraction-assumption до live
-    breakpoint-захвата перед `FUN_14047284`/`FUN_1206E8D0`.
-  - **Static imports:** `llvm-objdump -p` для `Server.dll`, `Client.dll`,
-    `GoldenLand.exe` — `_controlfp`/`_control87` не импортируются.
-  - **Port rounding contract:** тест гоняет `SpecialEngine::apply` и
-    `TradePrice` под x87 PC/RC и MXCSR режимами. `SpecialEngine`
-    инвариантен; `TradePrice` инвариантен при MXCSR=nearest (reference),
-    но чувствителен к non-nearest MXCSR (2/3 режима) → порт обязан
-    сохранять default MXCSR rounding (nearest).
-  - **NPC-mod oracle v2:** обязательный `rng_state` (MSVC CRT `_rand`
-    holdrand перед первым NPC R1; seed недостаточен), item-строки
-    (включая zero-mod items, flags/`0x200`, mod_count) и mod-строки,
-    сравнение item+mod multiset. Partial capture допускается: port
-    генерирует всех, сравниваются только captured persons — это
-    reduced-scope evidence, не full-level parity.
-  - `GL_SPECIALS_LIVE`/`GL_SPECIALS_FPU_CW` не заданы → оба live-гейта
-    skip с причиной; live NPC-mod capture не снят, full parity не заявлен.
-- **Проверка:** `gl_game_tests --test-case="*special*gate*"` — 5 passed,
-  0 failed; 2 live-гейта skipped (FPU+oracle, входят в 302 skipped
-  всего); full `gl_game_tests` — 305 passed, 2 skipped.
-- **Task 5 blocker:** `tools/glgame/main.cpp:858-860` всё ещё собирает
-  `ItemTemplate` без `mod_count = effects.size()`; при включении DB
-  specials это сделает `effects>0` items кандидатами. Исправить в Task 5.
-- **Статус:** `partial`; full parity запрещён до live NPC-mod 0/N и
-  live FPU-CW `0x027F`.
-- **Коммиты Task 4:** `3b62fc8` + `test(game): harden specials live gates`.
+- **Реализация (Tasks 1–5):** parser `specials.scr` (58 defs/15 pools,
+  value 3 + time 6 slots, cp1251); `SpecialEngine::apply` R6–R10 и
+  `random_special_count` R4/R5 на общем `MsvcRandom`; `NpcLootGenerator`/
+  `generate_npc_inventories` принимают `SpecialDatabase*`; `InventoryItem.mods`
+  + `mod_count == mods.size()`. **Production:** `glgame` загружает
+  `scripts/item_class_specials/specials.scr` (ошибка → warning +
+  no-specials), передаёт DB в генерацию, `ItemTemplate::mod_count` берётся
+  из `ITM effects.size()` во всех production/test lookup'ах (Task 5
+  blocker закрыт); `--no-specials` → null DB для детерминированных
+  no-specials тестов/скриншотов. `--dump-npc <name>` — headless dump
+  main/trade items и mods.
+- **Oracle `l1_1` seed 1 level 1:** no-specials `174/218/323`;
+  specials `174/287/0` (`P7` без изменений, `P389` `218→287`, `P711`
+  `323→0` из-за downstream RNG); 18 кандидатов/9 срабатываний/12 модов,
+  1057→1329 draw, final `0x48CAA370`; первый divergence — `P389` pass1
+  (`ELB_1_04_1`, `nspec=0`). Production E2E: specials item
+  `L1_2.P404_Sister_Of_Mercy2` `BRL_1_01_5` id 8, flags `0x20C`,
+  `mod=25/-1/0x81`, `mod_count=1`; price/buy → `unsupported`
+  (D-058 guard не менялся), no-specials — item отсутствует.
+- **Гейты (OPEN, 2026-11-10):** `GL_SPECIALS_FPU_CW` (live CW до
+  `FUN_14047284`/`FUN_1206E8D0`, ожидается `0x027F` PC=53/RC=nearest) и
+  `GL_SPECIALS_LIVE` (NPC-mod oracle v2, `rng_state` + item/mod
+  multiset) не заданы → skip с причиной; live-захваты не сняты.
+  `0x027F` остаётся extraction-assumption; build-машина `0x037F` — только
+  diagnostic. Port обязан сохранять default MXCSR rounding (nearest):
+  `TradePrice` чувствителен к non-nearest (2/3 режима).
+- **Проверка (`GL_GAME_DIR=I:\Games\Златогорье-2`):**
+  `cmake --build build` exit 0. Targeted `ctest -R "gl_script_tests|
+  gl_script_real_tests|gl_game_tests|gl_assets_tests|gl_assets_real_tests|
+  glgame_screenshot_tests|glview_screenshot_tests|level_click_tests|
+  trade_overlay_tests"` — **9/9 passed**, `Total Test time (real) =
+  1787.22 sec`, exit 0. Full `ctest` — **19/19 passed**, `Total Test time
+  (real) = 2326.30 sec`, exit 0. `gl_game_tests` full **305/305** (2
+  skipped, 560191 assertions); `glgame_screenshot_tests` **36/36** (926);
+  specials E2E **1/1** (28); `*special*` **16/16** (568, 291 skipped).
+- **Статус:** **`partial`**; full parity запрещён до live NPC-mod 0/N и
+  live FPU-CW `0x027F`. Остаётся unverified: `random_sign` (место
+  применения), item flag `0x40`, time-slots 4–6; save/сериализация mods —
+  вне scope.
+- **Коммиты Task 4:** `3b62fc8` + `ca4fdca` (`test(game): harden specials
+  live gates`).
+- **Коммиты Task 5:** `feat(tools): enable NPC specials` (production
+  wiring, `mod_count`, `--no-specials`, E2E/guard tests) +
+  `docs: record specials implementation` (D-060/parity/STATUS/PROJECT/plan).
+- **Дальше:** live FPU-CW + live NPC-mod capture (закрытие гейтов) либо
+  `P2-15` (save payload), затем 35 Гц (`P2-9`).
 
 ## Phase 1b2b2c — NPC loot specials research (done 2026-11-10)
 

@@ -1,6 +1,6 @@
 # Phase 1b2b2d — NPC loot specials implementation (plan)
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Реализовать specials NPC-лута (`specials.scr`, `FUN_14047284`, R4–R10) с обязательными live-гейтами до full parity.
 
@@ -26,10 +26,10 @@
 - Create: `tests/assets/test_specials.cpp`
 - Modify: `tests/assets/CMakeLists.txt`
 
-- [ ] **Step 1: Failing tests** — 58 `special_desc`, 9 slots, 15
+- [x] **Step 1: Failing tests** — 58 `special_desc`, 9 slots, 15
   itemclasses, pool sizes §2.4, enum maps, malformed.
-- [ ] **Step 2: Implement** cp1251 parser + hardcoded enum maps.
-- [ ] **Step 3: Run `gl_assets_tests` + real; commit**
+- [x] **Step 2: Implement** cp1251 parser + hardcoded enum maps.
+- [x] **Step 3: Run `gl_assets_tests` + real; commit**
   `feat(assets): parse specials.scr`.
 
 ---
@@ -43,11 +43,11 @@
 - Modify: `src/game/CMakeLists.txt`
 - Create: `tests/game/test_special_engine.cpp`
 
-- [ ] **Step 1: Failing vectors** — pool ascending/nspec; R4/R5 limits;
+- [x] **Step 1: Failing vectors** — pool ascending/nspec; R4/R5 limits;
   R6 bounds; R7 MAX_HEALTH/ENERGY; R8 n2=1; R9/R10; flags/0x200;
   fixed-seed values.
-- [ ] **Step 2: Implement** `random_special_count` + `apply`.
-- [ ] **Step 3: Run `gl_game_tests`; commit**
+- [x] **Step 2: Implement** `random_special_count` + `apply`.
+- [x] **Step 3: Run `gl_game_tests`; commit**
   `feat(game): implement specials engine`.
 
 ---
@@ -59,12 +59,12 @@
 - Modify: `tests/game/test_npc_loot.cpp`
 - Modify: `tests/game/test_inventory_runtime_real.cpp` (oracle modes)
 
-- [ ] **Step 1: Integrate** — chunk==1, flags&4, mod_count==0;
+- [x] **Step 1: Integrate** — chunk==1, flags&4, mod_count==0;
   R4/R5 before R6–R10; mods/flags/0x200; per-person nesting.
-- [ ] **Step 2: Deterministic oracle** — 18/9/12, 1329 draws,
+- [x] **Step 2: Deterministic oracle** — 18/9/12, 1329 draws,
   `0x48CAA370`; first divergence; `Kolbasens` regression.
-- [ ] **Step 3: no-specials mode** — keep 174/218/323.
-- [ ] **Step 4: Run; commit** `feat(game): generate NPC specials`.
+- [x] **Step 3: no-specials mode** — keep 174/218/323.
+- [x] **Step 4: Run; commit** `feat(game): generate NPC specials`.
 
 ---
 
@@ -74,13 +74,13 @@
 - Create: `tests/game/test_special_gates.cpp` (or `tools/` capture hook)
 - Modify: `docs/STATUS.md` (gate results)
 
-- [ ] **Step 1: FPU-CW** — capture before `FUN_14047284` and
+- [x] **Step 1: FPU-CW** — capture before `FUN_14047284` and
   `FUN_1206E8D0`; expect `0x027F`; record test/hook.
-- [ ] **Step 2: NPC-mod oracle** — user-assisted live capture of
+- [x] **Step 2: NPC-mod oracle** — user-assisted live capture of
   `+0x10` mods for a level; 0/N compare with port.
-- [ ] **Step 3: Verdict** — pass → full parity; fail/unavailable →
+- [x] **Step 3: Verdict** — pass → full parity; fail/unavailable →
   `partial` + Open Questions, no threshold weakening.
-- [ ] **Step 4: Commit** `test(game): add specials live gates`.
+- [x] **Step 4: Commit** `test(game): add specials live gates`.
 
 ---
 
@@ -92,11 +92,11 @@
 - Modify: `docs/STATUS.md`, `docs/PROJECT.md`,
   `docs/research/parity-matrix.md`
 
-- [ ] **Step 1: Mod guard** — items with generated mods remain
+- [x] **Step 1: Mod guard** — items with generated mods remain
   `unsupported` for price/trade; add test.
-- [ ] **Step 2: D-060** — implementation, DB/algorithm, live gates,
+- [x] **Step 2: D-060** — implementation, DB/algorithm, live gates,
   remaining unverified (random_sign/time-slots/flag0x40).
-- [ ] **Step 3: parity/STATUS/PROJECT** — specials implemented/partial;
+- [x] **Step 3: parity/STATUS/PROJECT** — specials implemented/partial;
   recompute counts.
-- [ ] **Step 4: Full ctest** with `GL_GAME_DIR`; encoding.
-- [ ] **Step 5: Commit** `docs: record specials implementation`.
+- [x] **Step 4: Full ctest** with `GL_GAME_DIR`; encoding.
+- [x] **Step 5: Commit** `docs: record specials implementation`.

@@ -18,8 +18,11 @@ Phase 1b2b4b (trade transactions, D-058) добавила `TradePrice`,
 whole-stack `buy_trade`/`sell_trade`/`exchange_trade`, staging/Exchange UI
 и `glgame` hooks; Phase 1b2b2c (specials research, D-059) — `implementable`
 scoped: DB/алгоритм/RNG восстановлены, live CW/NPC-mod oracle открыты;
-trade-нативы `0x5000006`/`0x5000007`, реализация specials/restock и save
-остаются вне scope.
+Phase 1b2b2d (specials implementation, D-060) реализовала парсер
+`specials.scr`, `SpecialEngine` (R4–R10), интеграцию в production
+`glgame` (`mod_count` из ITM effects, `--no-specials` режим); trade-нативы
+`0x5000006`/`0x5000007`, restock и save остаются вне scope; live-гейты
+specials OPEN → паритет `partial`.
 
 Матрица — единый источник истины о покрытии паритета. Строка без evidence не
 считается подтверждённой. Источники: `parity-audit-p0-p1.md`,
@@ -148,7 +151,7 @@ ID: `P4a-*`, `P4b-*`, `P4b2-*` — прежние A/B/C из аудита (пе�
 | P3-6 | VM | assign coercion | `script_vm.cpp:254-287` | research §4: `0x32` `0x3a036`, string dest `0x3a09f-0x3a0b7`; numeric match, D-025 | partial | string-приёмник `unverified` (string-переменных в данных нет) | Phase 1a Task 2/5 |
 | P3-7 | VM | limits/errors | `script_vm.hpp:38-40` | research §4: деление/модуль на 0 → `1e10` без ошибки (`0x3a2d8`/`0x3a28f`); sticky errors D-025 | partial | eval budget 100k/limits — решение порта, не извлечено | Phase 1a Task 2/5 |
 | P3-8 | VM | dialog data/answer index | `script_vm.cpp:163-201` | research §5: `D_Say` `0x3fc10`, `D_Answer` `0x3fc9c`, `D_CloseDialog` `0x3fc60`; real `2684/2686/2696` | partial | 0-based answer index — порт D-024, `Server.dll` не пинит | Phase 1a Task 2 |
-| P3-9 | нативы | dispatch/host | `native_registry.cpp`, `game_script_host.cpp`, `person_runtime.cpp`, `hero_stats.cpp`, `inventory_runtime.cpp`, `item_name_index.cpp`, `npc_loot.cpp`, `inv_table.cpp` | `NativeRegistry` 65/65; supported 16/65 (`Exit`/`Signal`/`Console`/`Cmd`/`D_PlaySound`, `RS_GetPersonParameterI`/`RS_SetPersonParameterI`/`RS_GetPersonSkillI`, `RS_TestPersonHasItem` (`0x5000000`)/`RS_GetItemCountI` (`0x5000002`)/`RS_GetMoney` (`0x5000008`), `RS_PersonAddItem` (`0x5000004`)/`RS_PersonRemoveItem` (`0x5000005`), `RS_PersonTransferItemI` (`0x5000001`)/`RS_PersonTransferAllItemsI` (`0x5000003`), `RS_PassToTradePanel` (`0x700000D`)), vm_internal 3, unsupported 46; три person-ID backed `PersonRuntime` + `parse_hero_stats`; три inventory-ID backed `InventoryRuntime` + `ItemNameIndex` (Hero: `BT_HERO` container `0x10`, деньги = type 18); два mutation-ID мутируют mutable `InventoryRuntime` (add/remove: stacking/`max_stack` из ITM, type/flags/style из ITM, деньги — обычная запись `MON_1_0_1`); два transfer-ID мутируют main-контейнеры Hero/NPC (`transfer_item`/`transfer_all`, merge по item id, ITM-поля новых dest-записей); `GameScriptHost` one-shot log; NPC main-контейнеры из `.inv` (pass 2) генерируются при загрузке уровня в SEF-порядке на общем `MsvcRandom` | partial | 46 unsupported ID требуют подсистем (lifecycle/party/остаток inventory/quests/time/world); 3 vm_internal — внутренние ID VM; inventory — Hero + NPC main: `RS_TestPersonHasItem`/`RS_GetItemCountI` читают NPC-main (`.inv`, pass 2) из `InventoryRuntime`; mutation-нативы остаются Hero-only (NPC/`0x10`/box → no-op); specials/restock NPC не генерируются (D-055); entity type `0x10` (`EF_TRIGGER`, не `EF_INVCONTAINER` = type `8`) fallback-контейнеры не моделируются и возвращают 0; transfer-нативы реализованы (D-056); `RS_PassToTradePanel` (`0x700000D`) открывает read-only `TradeOverlay` (D-057), trade-мутации `0x5000006`/`0x5000007` остаются unsupported; `Signal`/`D_PlaySound` — service-level stubs, не поведенческий паритет | Phase 1a Task 3/4/6; Phase 1b1 Task 2–5; Phase 1b2a Task 2–5; Phase 1b2b1 Task 2–5; Phase 1b2b2b Task 2–5; Phase 1b2b3 Task 2–5; Phase 1b2b4a Task 2–5; D-051/D-052/D-055/D-056/D-057 |
+| P3-9 | нативы | dispatch/host | `native_registry.cpp`, `game_script_host.cpp`, `person_runtime.cpp`, `hero_stats.cpp`, `inventory_runtime.cpp`, `item_name_index.cpp`, `npc_loot.cpp`, `inv_table.cpp` | `NativeRegistry` 65/65; supported 16/65 (`Exit`/`Signal`/`Console`/`Cmd`/`D_PlaySound`, `RS_GetPersonParameterI`/`RS_SetPersonParameterI`/`RS_GetPersonSkillI`, `RS_TestPersonHasItem` (`0x5000000`)/`RS_GetItemCountI` (`0x5000002`)/`RS_GetMoney` (`0x5000008`), `RS_PersonAddItem` (`0x5000004`)/`RS_PersonRemoveItem` (`0x5000005`), `RS_PersonTransferItemI` (`0x5000001`)/`RS_PersonTransferAllItemsI` (`0x5000003`), `RS_PassToTradePanel` (`0x700000D`)), vm_internal 3, unsupported 46; три person-ID backed `PersonRuntime` + `parse_hero_stats`; три inventory-ID backed `InventoryRuntime` + `ItemNameIndex` (Hero: `BT_HERO` container `0x10`, деньги = type 18); два mutation-ID мутируют mutable `InventoryRuntime` (add/remove: stacking/`max_stack` из ITM, type/flags/style из ITM, деньги — обычная запись `MON_1_0_1`); два transfer-ID мутируют main-контейнеры Hero/NPC (`transfer_item`/`transfer_all`, merge по item id, ITM-поля новых dest-записей); `GameScriptHost` one-shot log; NPC main-контейнеры из `.inv` (pass 2) генерируются при загрузке уровня в SEF-порядке на общем `MsvcRandom` | partial | 46 unsupported ID требуют подсистем (lifecycle/party/остаток inventory/quests/time/world); 3 vm_internal — внутренние ID VM; inventory — Hero + NPC main: `RS_TestPersonHasItem`/`RS_GetItemCountI` читают NPC-main (`.inv`, pass 2) из `InventoryRuntime`; mutation-нативы остаются Hero-only (NPC/`0x10`/box → no-op); specials NPC-лута реализованы (D-060), restock — нет (D-055); entity type `0x10` (`EF_TRIGGER`, не `EF_INVCONTAINER` = type `8`) fallback-контейнеры не моделируются и возвращают 0; transfer-нативы реализованы (D-056); `RS_PassToTradePanel` (`0x700000D`) открывает read-only `TradeOverlay` (D-057), trade-мутации `0x5000006`/`0x5000007` остаются unsupported; `Signal`/`D_PlaySound` — service-level stubs, не поведенческий паритет | Phase 1a Task 3/4/6; Phase 1b1 Task 2–5; Phase 1b2a Task 2–5; Phase 1b2b1 Task 2–5; Phase 1b2b2b Task 2–5; Phase 1b2b3 Task 2–5; Phase 1b2b4a Task 2–5; D-051/D-052/D-055/D-056/D-057 |
 | P3-10 | globals | типы/парсинг `.scr` | `globals.cpp:100-182` | real `zlato_vars.scr` | partial | неизвестные типы/кавычки | audit p2-p3 |
 | P3-11 | диалоги | DialogSession | `dialog_session.cpp:12-73` | real demon | partial | покрыт один диалог | audit p2-p3 |
 | P3-12 | диалоги | экран/клавиши/панель | `main.cpp:545-583` | screenshot tests | unverified | UI-раскладка порта | audit p2-p3 |
@@ -165,9 +168,9 @@ ID: `P4a-*`, `P4b-*`, `P4b2-*` — прежние A/B/C из аудита (пе�
 | ID | Подсистема | Пункт | Реализация | Evidence | Статус | Пробел/задача | Источник |
 |---|---|---|---|---|---|---|---|
 | P3b-1 | `.inv` | парсер таблиц | `inv_table.cpp` | 238/238 реальных файлов, 11 543 item, 362 four-number skip в 10 файлах, 0 failures; грамматика §3 | verified | synthetic-строгость (незакрытая кавычка, длина токена, перепроверка header) — minor | STATUS 1b2b2b; D-055; research §3–§5 |
-| P3b-2 | генератор | core initial spawn `FUN_1404b1c0` | `npc_loot.cpp` | research §15.2 (RVA/asm), независимый Python-референс, unit 11/11, real `l1_1` oracle (`174/218/323` — no-specials, `superseded` under true parity, D-059) | partial | нет live-оракула; merge `+1` (`FUN_1404e3a4`) `unverified`; zero-divisor/`max_stack==0` — guards; уровень — EXP-эквивалент `+0x26c4` без Scout/Identify; specials не генерируются (D-055) | research §15.2–§15.6; D-055/D-059 |
-| P3b-3 | контейнеры/запросы | NPC main `+0x10` + генерация при загрузке | `inventory_runtime.cpp`, `level_screen.cpp`, `main.cpp` | main = pass 2 читается `RS_TestPersonHasItem`/`RS_GetItemCountI`; SEF-порядок; тот же RNG в `LevelSimulation`; real `174/218/323` (no-specials, `superseded` under true parity, D-059); Hero не изменён | partial | hot `+0xc` отброшен (RNG pass 1 выполняется); дубликаты first-wins; NPC add/remove no-op; save на уже загруженном уровне не перегенерирует; нет live-оракула | research §15.3/§15.6; D-055/D-059 |
-| P3b-4 | specials | R4–R10 модификаторы | не реализовано | research `p3b2b2c-npc-loot-specials.md`: DB `scripts/item_class_specials/specials.scr` + hardcoded `IDSPEC/SPECF/T_*` в `GoldenLand.exe`, manager `DAT_14088df4 = *(host+0x84) = DAT_00469d54` (shared с Client); `FUN_14047284`/R4–R10/полный RNG-порядок восстановлены; analytic `l1_1` seed1 level1 (18 кандидатов, 9 срабатываний, 12 модов, 1057→1329 draw; level `v=int(fval*loot_level)`) | missing (research recovered; implementation pending) | live NPC-mod oracle и live FPU-CW (генерация+цена) не сняты; `random_sign` парсится, но не читается генерацией/ценой (unverified только место применения); item flag `0x40`, time-slots 4–6 `unverified`; no-specials oracle `174/218/323` под true parity `superseded`; реализация — отдельная фаза | research `p3b2b2c-npc-loot-specials.md` §0/§3–§7; D-059 |
+| P3b-2 | генератор | core initial spawn `FUN_1404b1c0` | `npc_loot.cpp` | research §15.2 (RVA/asm), независимый Python-референс, unit 11/11, real `l1_1` oracle (`174/218/323` — no-specials, `superseded` under true parity, D-059/D-060); specials-режим `l1_1` oracle (174/287/0) | partial | нет live-оракула; merge `+1` (`FUN_1404e3a4`) `unverified`; zero-divisor/`max_stack==0` — guards; уровень — EXP-эквивалент `+0x26c4` без Scout/Identify; specials реализованы (D-060), live-гейты OPEN | research §15.2–§15.6; D-055/D-059/D-060 |
+| P3b-3 | контейнеры/запросы | NPC main `+0x10` + генерация при загрузке | `inventory_runtime.cpp`, `level_screen.cpp`, `main.cpp` | main = pass 2 читается `RS_TestPersonHasItem`/`RS_GetItemCountI`; SEF-порядок; тот же RNG в `LevelSimulation`; real `174/218/323` (no-specials, `superseded` under true parity, D-059/D-060); specials-режим `174/287/0` (D-060); Hero не изменён | partial | hot `+0xc` сохранён как NPC trade-контейнер (D-057); дубликаты first-wins; NPC add/remove no-op; save на уже загруженном уровне не перегенерирует; нет live-оракула | research §15.3/§15.6; D-055/D-059/D-060 |
+| P3b-4 | specials | R4–R10 модификаторы | `specials.cpp`, `special_engine.cpp`, `npc_loot.cpp`, `glgame` | research `p3b2b2c-npc-loot-specials.md`: DB `scripts/item_class_specials/specials.scr` + hardcoded `IDSPEC/SPECF/T_*` в `GoldenLand.exe`, manager `DAT_14088df4 = *(host+0x84) = DAT_00469d54` (shared с Client); `FUN_14047284`/R4–R10/полный RNG-порядок реализованы; `l1_1` seed1 level1 oracle (18 кандидатов, 9 срабатываний, 12 модов, 1057→1329 draw, final `0x48CAA370`); production `mod_count` из ITM effects; `--no-specials` режим | partial/implemented | live NPC-mod oracle и live FPU-CW (генерация+цена) не сняты → full parity не заявлен; `random_sign` парсится, но не читается генерацией/ценой (unverified только место применения); item flag `0x40`, time-slots 4–6 `unverified`; no-specials oracle `174/218/323` под true parity `superseded` | research `p3b2b2c-npc-loot-specials.md` §0/§3–§7; D-059/D-060 |
 | P3b-5 | restock | regenerate во времени | не реализовано | `FUN_14048fac`; initial spawn только | missing | blocked: restock/regenerate после первого поколения вне scope | research §10.2; D-055 |
 
 ## P3c — inventory transfers (Phase 1b2b3, 2026-11-08)
@@ -184,7 +187,7 @@ ID: `P4a-*`, `P4b-*`, `P4b2-*` — прежние A/B/C из аудита (пе�
 |---|---|---|---|---|---|---|---|
 | P3d-1 | dispatch | `RS_PassToTradePanel` (`0x700000D`) | `NativeServices::trade_panel`; `native_registry.cpp`; `glgame` callback | handler RVA `0x41558`, return `0.0`; `NativeRegistry` 16/65; unit tests + real `glgame --dialog-answer 0` (`tests/app/test_glgame_screenshot.cpp:962`); oracle log slot0/slot2 | verified | trade-мутации (`0x5000006`/`0x5000007`) не реализованы | research §5; D-057 |
 | P3d-2 | UI/layout | trade panel 1024×768, assets, rows, filters, scroll, exit | `TradeLayout`/`TradeOverlay` (`src/app`) | `engineres/trade` (53 BMP), `scripts/ui/trade.scr`; per-id NPC filter Y `{94,94,95,95,95,95,95}`; unit + 1024×768 real screenshot (diff > 2 MB, top region > 100000 px) | partial | деньги/selected-name цвет/масштаб/позиция — invented UI values; интерактивность среднего/нижнего рядов закрыта P3e (1b2b4b); GDI-текст оригинала не сверен | research §2/§4; D-057; P3e |
-| P3d-3 | данные | NPC trade = pass-1 `entity+0xC`; Hero main `entity+0x10`; money | `InventoryRuntime::trade_items`/`trade_money`; `NpcLootGenerator` сохраняет `loot.hot` | real `l13_1` slot0 `16/42142/117/43875`, slot2 `17/48908/140/122008`; asserted все NPC items и первые 12 Hero main | partial | client `FUN_1206EC98` invocation не трассирован (server/native source only); нет live-memory oracle; specials NPC не генерируются (D-055) | research §4.1/§6; D-055/D-057 |
+| P3d-3 | данные | NPC trade = pass-1 `entity+0xC`; Hero main `entity+0x10`; money | `InventoryRuntime::trade_items`/`trade_money`; `NpcLootGenerator` сохраняет `loot.hot` | real `l13_1` slot0 `16/42142/117/43875`, slot2 `17/48908/140/122008`; asserted все NPC items и первые 12 Hero main | partial | client `FUN_1206EC98` invocation не трассирован (server/native source only); нет live-memory oracle; specials NPC-лута реализованы (D-060), live-гейты OPEN | research §4.1/§6; D-055/D-057/D-060 |
 | P3d-4 | поведение | selection/filter/scroll/exit; две money (buy/sell/Exchange — P3e) | `TradeOverlay` | unit hit-test/scroll/filter; real E2E dialog→overlay; regression `l1_1 --click-npc 13` | partial | buy/sell/confirm/цены перенесены в P3e (1b2b4b); NPC/hero-ряды фильтруются `gl::game::item_matches_filter` (inventory-группировка) — assumption, type→bit для trade не доказан; «all» не pressed при открытии; точная exit-команда `0x2B` не трассирована; списки — снимок на момент открытия | research §2.3/§4.4/§8; D-057; P3e |
 
 ## P3e — trade transactions (Phase 1b2b4b, 2026-11-09)
@@ -194,7 +197,7 @@ ID: `P4a-*`, `P4b-*`, `P4b2-*` — прежние A/B/C из аудита (пе�
 | P3e-1 | цена | `TradePrice` buy/sell (ITM/durability/skill, min 1, reciprocal, count) | `trade_price.cpp` | research §4.3/§9.1; unit (boat-trader oracle, durability/trunc/min/guard) | partial | double под явной `assume_pc53`; live FPU-CW не снят; modifier guard → unsupported; `gv_addon`/perks не моделируются; NPC modifier-free proof только slot0/slot2 | research §4/§8; D-058 |
 | P3e-2 | buy/sell | whole-stack `buy_trade`/`sell_trade` | `InventoryRuntime` | research §3.2/§9; unit + real E2E | partial | нет persistent staging `+0x4E4/+0x4E8`; single-item path не реализован; duplicate stacks matched by item id+count; append-порядок; after-state analytic | research §2/§3; D-058 |
 | P3e-3 | Exchange | `exchange_trade` net money, atomic errors | `InventoryRuntime::exchange_trade`; `TradeOverlay` | research §2.4–§2.5/§3; unit + real E2E slot0/slot2 | partial | staging — overlay quotes, нет server staging/rollback `0xD`; signed int32 net cap; client staging invocation не трассирован | research §2/§3/§6; D-058 |
-| P3e-4 | UI/E2E | staging rows, net totals, hooks, screenshots | `TradeOverlay`; `glgame` | research §2.3/§4.6; `--trade-buy/--trade-sell/--trade-exchange`; screenshot diffs; E2E slot0/slot2 | partial | after-state analytic (PC=53); нет specials NPC-лута; save не пишется | research §6/§8; D-058 |
+| P3e-4 | UI/E2E | staging rows, net totals, hooks, screenshots | `TradeOverlay`; `glgame` | research §2.3/§4.6; `--trade-buy/--trade-sell/--trade-exchange`; screenshot diffs; E2E slot0/slot2; specials-mode E2E (D-060) | partial | after-state analytic (PC=53); specials live-гейты OPEN; save не пишется | research §6/§8; D-058/D-060 |
 
 ## P4a — PAD/person/SEF/отрисовка NPC
 
@@ -224,19 +227,19 @@ ID: `P4a-*`, `P4b-*`, `P4b2-*` — прежние A/B/C из аудита (пе�
 |---|---|---|---|---|---|---|---|
 | P4b-1 | route types | 0..5 mapping | `person_movement.cpp:13-25` | live `FUN_1401f9bc` | partial | неизвестные → stay без warning | audit p4 |
 | P4b-2 | MOVED | index advance | `level_simulation.cpp:250-307` | live + A2/D-031 | superseded | закрыто A2 | audit p4; D-031 |
-| P4b-3 | MOVED_FLIP | ±1 coin | `level_simulation.cpp:301-405` | live + A1/A2; D-053 (float coin), D-054 | verified | формулы/seed verified; поток не непрерывен между уровнями; NPC-loot specials не реализованы (research implementable, D-059) | audit p4; D-031; D-053; D-054 |
+| P4b-3 | MOVED_FLIP | ±1 coin | `level_simulation.cpp:301-405` | live + A1/A2; D-053 (float coin), D-054 | verified | формулы/seed verified; поток не непрерывен между уровнями; NPC-loot specials реализованы (D-060), live-гейты OPEN | audit p4; D-031; D-053; D-054 |
 | P4b-4 | RANDOM_RADIUS | вокруг spawn | `level_simulation.cpp:256-289` | live `FUN_1401c2a0`; A3/D-032 | superseded | закрыто A3 | audit p4; D-032 |
 | P4b-5 | RANDOM | вокруг текущей | `level_simulation.cpp:256-289` | live; A3/D-032 | superseded | закрыто A3; C12 остаётся | audit p4; D-032 |
 | P4b-6 | STAY | возврат к spawn | `level_simulation.cpp:260-316` | A4/D-035 | superseded | закрыто A4 | audit p4; D-035 |
-| P4b-7 | STAY_ROTATE | поворот на месте | `level_simulation.cpp:278-305` | A4/D-035; RNG D-053 (truncation/float), D-054 | partial | `rand(10,25)` truncation/seed verified; длительность `SET_DIRECTION` = 500 мс — порт; поток не непрерывен; NPC-loot specials не реализованы (research implementable, D-059) | audit p4; D-035; D-053; D-054 |
+| P4b-7 | STAY_ROTATE | поворот на месте | `level_simulation.cpp:278-305` | A4/D-035; RNG D-053 (truncation/float), D-054 | partial | `rand(10,25)` truncation/seed verified; длительность `SET_DIRECTION` = 500 мс — порт; поток не непрерывен; NPC-loot specials реализованы (D-060), live-гейты OPEN | audit p4; D-035; D-053; D-054 |
 | P4b-8 | delay | `<500` без паузы | `level_simulation.cpp:129-164` | live `FUN_1401c378` | partial | fallback 500 мс — порт | audit p4 |
-| P4b-9 | delay | `rand(min..max)` | `level_simulation.cpp:106,156,221-247` | live `FUN_140061e4`; D-053 (truncation, inclusive), D-054 | verified | формулы/seed verified; поток не непрерывен между уровнями; NPC-loot specials не реализованы (research implementable, D-059) | audit p4; D-053; D-054 |
+| P4b-9 | delay | `rand(min..max)` | `level_simulation.cpp:106,156,221-247` | live `FUN_140061e4`; D-053 (truncation, inclusive), D-054 | verified | формулы/seed verified; поток не непрерывен между уровнями; NPC-loot specials реализованы (D-060), live-гейты OPEN | audit p4; D-053; D-054 |
 | P4b-10 | speed | `iso_speed*1000/(go*0.8)` | `level_simulation.cpp:180-182` | live; A5/D-033 | verified | 35 Гц интеграция | audit p4 |
 | P4b-11 | speed | изо-формула | `person_movement.cpp:88-94` | live | verified | — | audit p4 |
 | P4b-12 | arrival | `<4 px`, snap | `level_simulation.cpp:183-200` | live-замер | partial | extra `distance<=step` | audit p4 |
 | P4b-13 | direction | 16-way thresholds | `person_movement.cpp:7-75` | live `FUN_1402085c` | verified | нормализация 10..25 | audit p4 |
 | P4b-14 | direction | 16↔8 maps | `person_movement.cpp:77-86` | live | verified | — | audit p4 |
-| P4b-15 | RNG | CRT `rand` | `MsvcRandom` | live `_rand`; D-053 supersedes D-030, D-054 | verified | формулы truncation/float/seed verified; `timeGetTime` недетерминирован (порт — `steady_clock` ms); поток не непрерывен между уровнями; NPC-loot specials не реализованы (research implementable, D-059) | audit p4; D-053; D-054 |
+| P4b-15 | RNG | CRT `rand` | `MsvcRandom` | live `_rand`; D-053 supersedes D-030, D-054 | verified | формулы truncation/float/seed verified; `timeGetTime` недетерминирован (порт — `steady_clock` ms); поток не непрерывен между уровнями; NPC-loot specials реализованы (D-060), live-гейты OPEN | audit p4; D-053; D-054 |
 | P4b-16 | tick | 60 Гц vs 35 Гц | `level_simulation.cpp:16,143-150` | live `sv_fps=35` | verified (const) | интеграция 1/60 — порт | audit p4; A5 |
 | P4b-17 | init | начальная цель/пауза | `level_simulation.cpp:113-140` | только порт | unverified | spawn-поза/тайминг | audit p4 |
 | P4b-18 | fail | replan каждый тик | `level_simulation.cpp:194-342` | только порт | unverified | число retry/сдвиг цели | audit p4 |
@@ -334,8 +337,8 @@ ID: `P4a-*`, `P4b-*`, `P4b2-*` — прежние A/B/C из аудита (пе�
 
 ## Итог
 
-Всего строк: **174**. По статусам: `verified` 51, `partial` 72,
-`unverified` 22, `missing` 17, `contradicted` 2, `superseded` 10.
+Всего строк: **174**. По статусам: `verified` 51, `partial` 73,
+`unverified` 22, `missing` 16, `contradicted` 2, `superseded` 10.
 
 Native dispatch infrastructure (Phase 1a): `NativeRegistry` 65/65 +
 `GameScriptHost`. Phase 1b1 добавляет три person-натива, Phase 1b2a — три
@@ -344,8 +347,8 @@ inventory-натива (queries), Phase 1b2b1 — два mutation-натива, 
 Phase 1b2b4b — trade transactions (runtime/overlay, новых нативов нет):
 итого 16 supported, 3 vm_internal, 46 unsupported. Из 49 non-supported 46
 unsupported требуют подсистем (Hero-inventory закрыт; NPC core `.inv`
-loot — Phase 1b2b2b; specials research done/implementable scoped — D-059,
-реализация pending; restock/box — blocked); 3 vm_internal —
+loot — Phase 1b2b2b; specials реализованы — Phase 1b2b2d/D-060, live-гейты
+OPEN → `partial`; restock/box — blocked); 3 vm_internal —
 внутренние ID VM.
 
 `contradicted`: `P1-3` (ADSC) и `P2-9` (60 Гц vs `sv_fps=35`).
@@ -361,8 +364,8 @@ loot — Phase 1b2b2b; specials research done/implementable scoped — D-059,
    trade transactions (buy/sell/Exchange) — Phase 1b2b4b
    (Trade/`PassToTradePanel` и trade-обмен поддержаны; trade-нативы
    `0x5000006`/`0x5000007` — нет); NPC core `.inv` loot — Phase 1b2b2b
-   (specials research done/implementable scoped, D-059, implementation
-   pending; restock/box — blocked, D-055).
+   (specials реализованы Phase 1b2b2d/D-060; live FPU-CW и NPC-mod oracle
+   OPEN → `partial`; restock/box — blocked, D-055).
 2. `P2-15`: save payload/write/load.
 3. `P2-9`/`P4b-16`: 35 Гц vs 60 Гц.
 4. `P1-3`: ADSC `number/name`.
