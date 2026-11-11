@@ -1,6 +1,7 @@
 #include "gl/game/npc_loot.hpp"
 
 #include "gl/assets/log.hpp"
+#include "gl/game/person_rng.hpp"
 #include "gl/game/special_engine.hpp"
 
 #include <algorithm>
@@ -147,51 +148,57 @@ void generate_npc_inventories(InventoryRuntime &runtime, const std::vector<Perso
     runtime.clear_persons();
     std::map<std::string, std::optional<gl::assets::InvTable>, std::less<>> cache;
     for (const PersonInstance &person : persons) {
-        if (person.inventory.empty() || person.name == "Hero")
+        if (person.name == "Hero")
             continue;
-        auto cached = cache.find(person.inventory);
-        if (cached == cache.end()) {
-            auto table = gl::assets::load_inv(vfs, person.inventory);
-            if (!table) {
-                gl::log(gl::LogLevel::warning, "npc inventory: cannot load '" + person.inventory +
-                                                   "': " + table.error().message);
-                cached = cache.emplace(person.inventory, std::nullopt).first;
-            } else {
-                cached = cache.emplace(person.inventory, std::move(table.value())).first;
+
+        if (!person.inventory.empty()) {
+            auto cached = cache.find(person.inventory);
+            if (cached == cache.end()) {
+                auto table = gl::assets::load_inv(vfs, person.inventory);
+                if (!table) {
+                    gl::log(gl::LogLevel::warning,
+                            "npc inventory: cannot load '" + person.inventory +
+                                "': " + table.error().message);
+                    cached = cache.emplace(person.inventory, std::nullopt).first;
+                } else {
+                    cached = cache.emplace(person.inventory, std::move(table.value())).first;
+                }
+            }
+            if (cached->second) {
+                const NpcLoot loot = NpcLootGenerator::generate(*cached->second, loot_level, names,
+                                                                item_template, rng, specials);
+                std::vector<gl::assets::InventoryItem> hot;
+                hot.reserve(loot.hot.size());
+                for (const LootItem &item : loot.hot) {
+                    gl::assets::InventoryItem converted{item.item_id,
+                                                        static_cast<std::uint32_t>(item.count),
+                                                        item.flags,
+                                                        item.type,
+                                                        item.style,
+                                                        100,
+                                                        item.mod_count};
+                    converted.mods = item.mods;
+                    hot.push_back(std::move(converted));
+                }
+                std::vector<gl::assets::InventoryItem> main;
+                main.reserve(loot.main.size());
+                for (const LootItem &item : loot.main) {
+                    gl::assets::InventoryItem converted{item.item_id,
+                                                        static_cast<std::uint32_t>(item.count),
+                                                        item.flags,
+                                                        item.type,
+                                                        item.style,
+                                                        100,
+                                                        item.mod_count};
+                    converted.mods = item.mods;
+                    main.push_back(std::move(converted));
+                }
+                runtime.set_person_trade_items(person.name, std::move(hot));
+                runtime.set_person_items(person.name, std::move(main));
             }
         }
-        if (!cached->second)
-            continue;
-        const NpcLoot loot = NpcLootGenerator::generate(*cached->second, loot_level, names,
-                                                        item_template, rng, specials);
-        std::vector<gl::assets::InventoryItem> hot;
-        hot.reserve(loot.hot.size());
-        for (const LootItem &item : loot.hot) {
-            gl::assets::InventoryItem converted{item.item_id,
-                                                static_cast<std::uint32_t>(item.count),
-                                                item.flags,
-                                                item.type,
-                                                item.style,
-                                                100,
-                                                item.mod_count};
-            converted.mods = item.mods;
-            hot.push_back(std::move(converted));
-        }
-        std::vector<gl::assets::InventoryItem> main;
-        main.reserve(loot.main.size());
-        for (const LootItem &item : loot.main) {
-            gl::assets::InventoryItem converted{item.item_id,
-                                                static_cast<std::uint32_t>(item.count),
-                                                item.flags,
-                                                item.type,
-                                                item.style,
-                                                100,
-                                                item.mod_count};
-            converted.mods = item.mods;
-            main.push_back(std::move(converted));
-        }
-        runtime.set_person_trade_items(person.name, std::move(hot));
-        runtime.set_person_items(person.name, std::move(main));
+
+        consume_person_init_rng(person.def, rng);
     }
 }
 } // namespace gl::game

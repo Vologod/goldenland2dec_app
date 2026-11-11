@@ -994,6 +994,106 @@ TEST_CASE("generate_npc_inventories stores pass-1 hot as npc trade items") {
     CHECK(runtime.money() == 0);
 }
 
+TEST_CASE("generate_npc_inventories consumes weapon and spawn draws without inventory") {
+    struct ScopedDir {
+        std::filesystem::path path;
+        ~ScopedDir() {
+            std::error_code ignored;
+            std::filesystem::remove_all(path, ignored);
+        }
+    };
+    const auto stamp = std::chrono::steady_clock::now().time_since_epoch().count();
+    ScopedDir dir{std::filesystem::temp_directory_path() /
+                  ("gl_person_rng_inv_" + std::to_string(stamp))};
+    std::filesystem::create_directories(dir.path);
+
+    auto vfs = gl::assets::GameVfs::mount(dir.path);
+    REQUIRE(vfs.has_value());
+    auto runtime = InventoryRuntime::create({}, make_names(), template_for);
+
+    PersonInstance person;
+    person.name = "L0.NoInv";
+    person.def.level = 1;
+    person.def.has_weapon = true;
+    person.def.weapons = {{"A", 1, 10}, {"B", 1, 10}};
+
+    MsvcRandom rng(1);
+    generate_npc_inventories(runtime, std::vector<PersonInstance>{person}, vfs.value(),
+                             make_names(), template_for, 1, rng);
+
+    CHECK(rng.next() == 6334u);
+}
+
+TEST_CASE("generate_npc_inventories consumes duplicate person rng twice") {
+    struct ScopedDir {
+        std::filesystem::path path;
+        ~ScopedDir() {
+            std::error_code ignored;
+            std::filesystem::remove_all(path, ignored);
+        }
+    };
+    const auto stamp = std::chrono::steady_clock::now().time_since_epoch().count();
+    ScopedDir dir{std::filesystem::temp_directory_path() /
+                  ("gl_person_rng_dup_" + std::to_string(stamp))};
+    std::filesystem::create_directories(dir.path);
+
+    auto vfs = gl::assets::GameVfs::mount(dir.path);
+    REQUIRE(vfs.has_value());
+    auto runtime = InventoryRuntime::create({}, make_names(), template_for);
+
+    PersonInstance person;
+    person.name = "L0.Dup";
+    person.def.level = 1;
+    person.def.has_weapon = true;
+    person.def.weapons = {{"A", 1, 10}};
+
+    MsvcRandom rng(1);
+    generate_npc_inventories(runtime, std::vector<PersonInstance>{person, person}, vfs.value(),
+                             make_names(), template_for, 1, rng);
+
+    CHECK(rng.next() == 19169u);
+    CHECK(runtime.person_items("L0.Dup").empty());
+}
+
+TEST_CASE("generate_npc_inventories runs loot draws before person draws") {
+    struct ScopedDir {
+        std::filesystem::path path;
+        ~ScopedDir() {
+            std::error_code ignored;
+            std::filesystem::remove_all(path, ignored);
+        }
+    };
+    const auto stamp = std::chrono::steady_clock::now().time_since_epoch().count();
+    ScopedDir dir{std::filesystem::temp_directory_path() /
+                  ("gl_person_rng_order_" + std::to_string(stamp))};
+    const std::filesystem::path inv_path = dir.path / "scripts" / "inventory" / "empty_test.inv";
+    std::filesystem::create_directories(inv_path.parent_path());
+    {
+        std::ofstream out(inv_path, std::ios::binary);
+        REQUIRE(out.good());
+        out << "regenerate_chance 75\n"
+               "chance_decrease 1\n"
+               "quantity_decrease 1\n";
+    }
+
+    auto vfs = gl::assets::GameVfs::mount(dir.path);
+    REQUIRE(vfs.has_value());
+    auto runtime = InventoryRuntime::create({}, make_names(), template_for);
+
+    PersonInstance person;
+    person.name = "L0.Order";
+    person.inventory = "empty_test";
+    person.def.level = 1;
+    person.def.has_weapon = true;
+    person.def.weapons = {{"A", 1, 10}, {"B", 1, 10}};
+
+    MsvcRandom rng(1);
+    generate_npc_inventories(runtime, std::vector<PersonInstance>{person}, vfs.value(),
+                             make_names(), template_for, 1, rng);
+
+    CHECK(rng.next() == 19169u);
+}
+
 TEST_CASE("inventory_runtime buy_trade moves the whole npc stack and hero money") {
     auto runtime = make_trade_runtime(43875, 51, 42142, 14);
     const TradePrice price = whole_stack_price(1, 14);
