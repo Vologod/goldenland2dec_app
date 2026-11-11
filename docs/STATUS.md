@@ -1,7 +1,7 @@
 # STATUS
 
 Обновлено: 2026-11-11
-## Phase 1b2b2e — Specials live parity (design approved 2026-11-11; implementation not started)
+## Phase 1b2b2e — Specials live parity (design approved 2026-11-11; implementation in progress, partial)
 
 - **Задача:** закрыть live-гейты specials (`1b2b2d` был `partial`):
   provenance live-захвата, порядок/scope RNG, inherited ITM effects,
@@ -20,6 +20,18 @@
   `27/5/0x50`); container map — `FUN_1404bf8c` → `FUN_14004f14(manager+0xc)`
   → `FUN_14004a20` (count `+0`, entries `+4`, stride 8); `level->persons`
   уже в SEF-порядке.
+- **Live evidence (2026-11-11):** capture `.local/live/special-l1_1-trace.txt`
+  (`rng_state=0xad5bd7cd`, `loot_level=2` source=memory, 16 calls).
+  Live call order совпал с port SEF order **1:1**, включая дубль `P744`
+  (порядок/scope не причина расхождения). Gate:
+  `items captured=22 port=29 matched=1 mismatched=49; mods captured=14
+  port=7 matched=0 mismatched=21`. Inherited-effects модель подтверждена:
+  ITM `420` 6 effects = 6 live mods, ITM `938` 2 effects = 2 live mods.
+  `rng_second check=fail` — tool artifact (повторный DR1 до первого draw),
+  не признак плохого RNG; tool исправлен. Гипотезы (unverified): merge
+  стаков (`FUN_1404e3a4`), loot window/quantity (money 139 > 50..100),
+  поздняя RNG-дивергенция у `P678/P693`. Evidence:
+  `docs/research/p3b2b2c-npc-loot-specials.md` §11.
 - **Критерии приёмки:** live NPC oracle `mismatched_items==0 &&
   mismatched_mods==0` на `l1_1`; FPU-гейт на измеренных generation/price
   CW (PC=24, RC=nearest); полный `ctest` с `GL_GAME_DIR`; docs/parity.
@@ -28,15 +40,17 @@
   build\bin\gl_game_tests.exe --test-case="*special*gate*" --success`;
   `ctest --test-dir build --output-on-failure`.
 - **Open Questions (1b2b2e):**
-  1. Точный порядок вызовов `FUN_1404b1c0` (SEF vs entity/spawn).
+  1. Точный порядок вызовов `FUN_1404b1c0` (SEF vs entity/spawn) —
+     resolved 2026-11-11: live order = port SEF order 1:1.
   2. Нужен ли merge/stacking для 0/N на `l1_1`.
   3. Live CW у `FUN_1206E8D0` и модель цены.
   4. Причина отсутствия generated mod `372` при captured state
      (порядок, precision или provenance).
-- **Статус:** design approved; plan написан
-  (`docs/plans/2026-11-11-p3b2b2e-specials-live-parity.md`, part 1: Stage
-  0/1/2a/3; Stage 2b/4 — follow-up plan после live-evidence и price CW).
-  Реализация не начата.
+- **Статус:** design approved; plan part 1 (Stage 0/1/2a/3) реализуется
+  (`docs/plans/2026-11-11-p3b2b2e-specials-live-parity.md`). Live evidence
+  2026-11-11 снят; порядок и inherited effects подтверждены, но NPC oracle
+  `0/N` не достигнут — **`partial`**, полный паритет не заявлен. Stage 2b
+  (merge/stacking + window/quantity) и Stage 4 (price CW) остаются open.
 
 ## Phase 1b2b2d — NPC loot specials implementation (done 2026-11-10)
 

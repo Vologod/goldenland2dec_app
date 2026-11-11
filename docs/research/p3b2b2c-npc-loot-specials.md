@@ -781,3 +781,77 @@ tech_names.sdb BACFC79409DFEA4FAD1AB85D21235C2E4D7F37C4525B69C87F7838634F391796
   order/scope (live entity/SEF order vs port sorted persons), inherited
   ITM `effects>0` scope. STATUS remains `partial`; live gates OPEN.
   Follow-up: separate live-parity subproject/spec (D-061).
+
+## 11. Live provenance (2026-11-11)
+
+- **Artifact (not committed):** `.local/live/special-l1_1-trace.txt`.
+- **Header:** `level=l1_1`, `rng_state=0xad5bd7cd`,
+  `loot_level=2`, `# loot_level_source=memory`, `# calls=16`.
+- **RNG double-draw check:** `# rng_second=0xad5bd7cd check=fail`. This is a
+  **tool artifact**, not a bad RNG state: the second DR1 hit re-triggered the
+  same pre-draw instruction before the first draw executed, so the first
+  captured state is still the pre-draw state. The tool was fixed afterwards
+  (re-arm DR1 after the first draw); a future run is expected to show
+  `check=ok`.
+- **FPU CW comments:** `0x007f` at generation entry, first draw and scan time
+  (PC=24, RC=nearest).
+- **Scan:** entities=256, persons=15, items=22, mods=14.
+- **Live call order (16 calls, all `tid=9392`):**
+  `1 p387`, `2 inv012_rich_civil`, `3 inv018_garbage_reagent`,
+  `4 inv001_swordsman`, `5 inv011_caster`, `6 inv011_caster`,
+  `7 inv014_money`, `8 inv018_food_potion`, `9 inv014_money`,
+  `10 inv012_civil`, `11 inv001_swordsman`, `12 inv001_swordsman`,
+  `13 inv018_garbage_reagent`, `14 inv012_civil`, `15 inv012_civil`,
+  `16 inv012_civil`.
+- **Port order (`port order:` gate message):**
+  `L1_1.P387_Poison_Plotnik(p387)`,
+  `L0.P678_citizen4(inv012_rich_civil)`,
+  `L0.P7_Kolbasens_Rodstvennik1(inv018_garbage_reagent)`,
+  `L1_1.P389_Crying_Guardian(inv001_swordsman)`,
+  `L1_2.P404_Sister_Of_Mercy2(inv011_caster)`,
+  `L0.P785_witch3(inv011_caster)`,
+  `L1_2.P403_Sister_Of_Mercy1(inv014_money)`,
+  `L0.P693_citizen6(inv018_food_potion)`,
+  `L0.P711_citizen8(inv014_money)`,
+  `L0.P692_citizen5(inv012_civil)`,
+  `L0.P744_oficer1(inv001_swordsman)`,
+  `L0.P744_oficer1(inv001_swordsman)`,
+  `L0.P640_children2(inv018_garbage_reagent)`,
+  `L1.P621_Svet_3CircusWorkerV(inv012_civil)`,
+  `L0.P733_artist1(inv012_civil)`,
+  `L1.P620_Svet_3CircusWorker2(inv012_civil)`.
+- **Order comparison:** live call order matches the port SEF order 1:1,
+  including the duplicate `P744`. Person order/scope is **not** the cause of
+  the oracle mismatch.
+- **Gate (`GL_SPECIALS_LIVE`, no FPU-CW file):**
+  `oracle compare: items captured=22 port=29 matched=1 mismatched=49;
+  mods captured=14 port=7 matched=0 mismatched=21`.
+- **First mismatches (verbatim):**
+  `item L0.P678_citizen4 item=420 count=1 item_flags=0x8000000c
+  mod_count=6 captured=1 port=0`;
+  `item L0.P678_citizen4 item=812 count=78 item_flags=0xc0000000
+  mod_count=0 captured=0 port=1`;
+  `item L0.P678_citizen4 item=812 count=139 item_flags=0xc0000000
+  mod_count=0 captured=1 port=0`;
+  `item L0.P692_citizen5 item=812 count=67 ... captured=1 port=0`;
+  `item L0.P692_citizen5 item=812 count=98 ... captured=0 port=1`;
+  `item L0.P692_citizen5 item=812 count=127 ... captured=0 port=1`;
+  `item L0.P693_citizen6 item=407 count=3 item_flags=0x8000000c
+  mod_count=0 captured=0 port=1`;
+  `item L0.P693_citizen6 item=938 count=1 item_flags=0xc mod_count=2
+  captured=1 port=0`.
+- **Inherited-effects evidence:** ITM `420` has 6 effects
+  (`13..18 / 5 / 0x50`), exactly the 6 live mods; ITM `938` effects
+  `11/1/0x50` + `9/-1/0x50` exactly the 2 live mods. This confirms the
+  inherited-effects model. The port did not generate item 420/938 in its
+  stream, so the remaining gap is generation/merge/window, not effects
+  semantics.
+- **Hypotheses (unverified):**
+  (a) the original merges same-item stacks (`FUN_1404e3a4`), so live money
+  139 may be merged stacks while the port emits separate stacks (78 + ...);
+  (b) loot window/quantity or loot-level contract differences (live money
+  139 exceeds one rich_civil money entry's 50..100 range at level 2);
+  (c) a later RNG/specials divergence around P678/P693.
+  Order and inherited effects are ruled out as causes.
+- **Status: `partial`.** Not full parity. Stage 2b (merge/stacking +
+  window/quantity) and Stage 4 (price CW) remain open.
