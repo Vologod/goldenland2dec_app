@@ -1020,7 +1020,7 @@ class Game {
                 input.skill_trade =
                     static_cast<std::uint32_t>(std::max(0.0, std::min(skill, 15.0)));
                 input.count = item.count;
-                input.assume_pc53 = true;
+                input.assume_x87_single = true;
                 return gl::game::compute_trade_price(input);
             });
         trade_overlay_.set_exchange_handler(

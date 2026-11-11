@@ -17,7 +17,7 @@ TradePriceInput boat_trader_input(std::uint32_t skill, std::uint32_t count) {
     input.mod_count = 0;
     input.skill_trade = skill;
     input.count = count;
-    input.assume_pc53 = true;
+    input.assume_x87_single = true;
     return input;
 }
 } // namespace
@@ -113,9 +113,9 @@ TEST_CASE("trade_price carries the quoted item id") {
     CHECK(price->item_id == 953);
 }
 
-TEST_CASE("trade_price rejects a non-opted-in PC=53 assumption") {
+TEST_CASE("trade_price rejects a non-opted-in x87 single assumption") {
     TradePriceInput input = boat_trader_input(1, 1);
-    input.assume_pc53 = false;
+    input.assume_x87_single = false;
     CHECK_FALSE(compute_trade_price(input).has_value());
 }
 
@@ -142,4 +142,21 @@ TEST_CASE("trade_price rejects a whole-stack total that would overflow int64") {
 
 TEST_CASE("trade_price rejects an empty stack") {
     CHECK_FALSE(compute_trade_price(boat_trader_input(1, 0)).has_value());
+}
+
+TEST_CASE("trade_price uses x87 single precision for the skill factor") {
+    TradePriceInput input{};
+    input.item_id = 1;
+    input.item_price = 5;
+    input.durability = 100;
+    input.flags = 0;
+    input.mod_count = 0;
+    input.skill_trade = 9;
+    input.count = 1;
+    input.assume_x87_single = true;
+
+    const auto price = compute_trade_price(input);
+    REQUIRE(price.has_value());
+    CHECK(price->buy == 7);
+    CHECK(price->sell == 3);
 }

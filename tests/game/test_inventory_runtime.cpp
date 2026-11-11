@@ -104,7 +104,7 @@ TradePrice whole_stack_price(std::uint32_t skill, std::uint32_t count) {
     input.mod_count = 0;
     input.skill_trade = skill;
     input.count = count;
-    input.assume_pc53 = true;
+    input.assume_x87_single = true;
     return compute_trade_price(input).value();
 }
 
@@ -431,7 +431,7 @@ TEST_CASE("inventory_runtime add copies inherited ITM effects into mods") {
     input.mod_count = items[0].mod_count;
     input.skill_trade = 1;
     input.count = 1;
-    input.assume_pc53 = true;
+    input.assume_x87_single = true;
     CHECK_FALSE(compute_trade_price(input).has_value());
     input.mod_count = 0;
     CHECK(compute_trade_price(input).has_value());
@@ -720,7 +720,7 @@ TEST_CASE("inventory_runtime transfers preserve durability and modifiers") {
     input.mod_count = 2;
     input.skill_trade = 1;
     input.count = 6;
-    input.assume_pc53 = true;
+    input.assume_x87_single = true;
     CHECK_FALSE(compute_trade_price(input).has_value());
 }
 

@@ -912,7 +912,7 @@ TEST_CASE("real slot0 trade overlay stages both stacks and renders exchange" *
             input.mod_count = item.mod_count;
             input.skill_trade = 1;
             input.count = item.count;
-            input.assume_pc53 = true;
+            input.assume_x87_single = true;
             return gl::game::compute_trade_price(input);
         });
 

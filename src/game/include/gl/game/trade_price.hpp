@@ -4,16 +4,17 @@
 
 namespace gl::game {
 
-// The port evaluates the price formula with C++ `double` (IEEE-754 binary64,
-// 53-bit significand, SSE2 on x86-64), which is equivalent to x87 precision
-// control PC=53. Extended (80-bit) arithmetic must not be used, and the
-// translation unit is compiled with FP contraction disabled
+// The port emulates x87 control word 0x007F: precision control PC=24
+// (binary32/single) and round-to-nearest. Every intermediate is rounded to
+// float after each operation so the result does not depend on the host FPU
+// state. The translation unit is compiled with FP contraction disabled
 // (`-ffp-contract=off`, MSVC `/fp:precise`) so no FMA can widen an
 // intermediate.
 //
 // All inputs are required; there are no default values. A price is
 // unsupported unless:
-// - `assume_pc53` is explicitly true (caller verified/assumes PC=53);
+// - `assume_x87_single` is explicitly true (caller verified/assumes
+//   x87 PC=24/RC=nearest);
 // - `item_price > 0`, `durability <= 100`, `count > 0`;
 // - the modifier block is absent or gated by `(flags & 0x80) != 0`
 //   (magic modifier tables are not decoded);
@@ -28,7 +29,7 @@ struct TradePriceInput {
     std::uint32_t mod_count;
     std::uint32_t skill_trade;
     std::uint32_t count;
-    bool assume_pc53;
+    bool assume_x87_single;
 };
 
 // Whole-stack totals for one record (`count` is the record's count).

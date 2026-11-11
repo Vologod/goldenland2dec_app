@@ -1,7 +1,6 @@
 #include "gl/game/trade_price.hpp"
 
 #include <cassert>
-#include <cmath>
 #include <cstdint>
 #include <limits>
 
@@ -12,31 +11,35 @@
 namespace gl::game {
 
 std::optional<TradePrice> compute_trade_price(const TradePriceInput &input) {
-    if (!input.assume_pc53)
+    if (!input.assume_x87_single)
         return std::nullopt;
     if (input.item_price == 0 || input.durability > 100 || input.count == 0)
         return std::nullopt;
     if (input.mod_count != 0 && (input.flags & 0x80u) == 0)
         return std::nullopt;
 
-    const double durability_factor = static_cast<double>(input.durability) * 0.0025 + 0.75;
-    const double base_scaled = durability_factor * static_cast<double>(input.item_price);
-    const std::int64_t base0 = static_cast<std::int64_t>(std::trunc(base_scaled));
+    const float durability_scaled =
+        static_cast<float>(input.durability) * 0.0025f;
+    const float durability_factor = durability_scaled + 0.75f;
+    const float base_scaled =
+        durability_factor * static_cast<float>(input.item_price);
+    const std::int64_t base0 = static_cast<std::int64_t>(base_scaled);
 
     std::int64_t base = base0;
     if (base < base0 / 3)
         base = base0 / 3;
 
-    double factor = 2.5 - 0.1 * static_cast<double>(input.skill_trade);
-    if (factor < 1.0)
-        factor = 1.0;
+    const float skill_scaled = 0.1f * static_cast<float>(input.skill_trade);
+    float factor = 2.5f - skill_scaled;
+    if (factor < 1.0f)
+        factor = 1.0f;
 
-    const double buy_factor = factor;
-    const double sell_factor = 1.0 / factor;
+    const float buy_factor = factor;
+    const float sell_factor = 1.0f / factor;
     std::int64_t buy_unit =
-        static_cast<std::int64_t>(std::trunc(buy_factor * static_cast<double>(base)));
+        static_cast<std::int64_t>(buy_factor * static_cast<float>(base));
     std::int64_t sell_unit =
-        static_cast<std::int64_t>(std::trunc(sell_factor * static_cast<double>(base)));
+        static_cast<std::int64_t>(sell_factor * static_cast<float>(base));
     if (buy_unit < 1)
         buy_unit = 1;
     if (sell_unit < 1)

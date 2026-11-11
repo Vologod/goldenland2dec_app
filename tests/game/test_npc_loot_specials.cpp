@@ -225,7 +225,7 @@ TEST_CASE("npc_loot specials: qualifying empty-pool item consumes R4 and marks 0
     CHECK(null_rng.next() == 41u);
 }
 
-TEST_CASE("npc_loot specials: inherited ITM effects stay count-only and skip random specials") {
+TEST_CASE("npc_loot specials: inherited ITM effects are copied into mods and skip random specials") {
     gl::assets::InvTable table;
     table.regenerate_chance = 0.0;
     table.chance_decrease = 1.0;
@@ -246,7 +246,9 @@ TEST_CASE("npc_loot specials: inherited ITM effects stay count-only and skip ran
     const auto lookup = [](std::uint32_t item_id) -> std::optional<ItemTemplate> {
         if (item_id != 200)
             return std::nullopt;
-        return ItemTemplate{20, 0x04u, 0, 1, 2};
+        return ItemTemplate{20, 0x04u, 0, 1, 2,
+                            {gl::game::ItemTemplateEffect{7, 1, 0x50},
+                             gl::game::ItemTemplateEffect{8, -1, 0x50}}};
     };
 
     SpecialDatabase db;
@@ -255,7 +257,13 @@ TEST_CASE("npc_loot specials: inherited ITM effects stay count-only and skip ran
     const NpcLoot loot = NpcLootGenerator::generate(table, 1, names.value(), lookup, rng, &db);
     REQUIRE(loot.main.size() == 1);
     CHECK(loot.main[0].mod_count == 2u);
-    CHECK(loot.main[0].mods.empty());
+    REQUIRE(loot.main[0].mods.size() == 2u);
+    CHECK(loot.main[0].mods[0].id == 7u);
+    CHECK(loot.main[0].mods[0].value == 1);
+    CHECK(loot.main[0].mods[0].flags == 0x50u);
+    CHECK(loot.main[0].mods[1].id == 8u);
+    CHECK(loot.main[0].mods[1].value == -1);
+    CHECK(loot.main[0].mods[1].flags == 0x50u);
     CHECK(loot.main[0].flags == 0x04u);
 
     MsvcRandom null_rng(1);
@@ -273,7 +281,7 @@ TEST_CASE("npc_loot specials: inherited ITM effects stay count-only and skip ran
     price_input.mod_count = loot.main[0].mod_count;
     price_input.skill_trade = 1;
     price_input.count = 1;
-    price_input.assume_pc53 = true;
+    price_input.assume_x87_single = true;
     CHECK_FALSE(gl::game::compute_trade_price(price_input).has_value());
     price_input.mod_count = 0;
     CHECK(gl::game::compute_trade_price(price_input).has_value());
@@ -368,7 +376,7 @@ TEST_CASE("npc_loot specials: inventories keep generated mods and mod count" *
     price_input.mod_count = brl->mod_count;
     price_input.skill_trade = 1;
     price_input.count = 1;
-    price_input.assume_pc53 = true;
+    price_input.assume_x87_single = true;
     CHECK_FALSE(gl::game::compute_trade_price(price_input).has_value());
     price_input.mod_count = 0;
     CHECK(gl::game::compute_trade_price(price_input).has_value());
