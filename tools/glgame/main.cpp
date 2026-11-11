@@ -570,6 +570,19 @@ struct DialogContext {
     std::string speaker;
 };
 
+std::optional<gl::game::ItemTemplate>
+make_item_template(const gl::assets::ItemCatalogEntry *entry) {
+    if (entry == nullptr) return std::nullopt;
+    std::vector<gl::game::ItemTemplateEffect> effects;
+    effects.reserve(entry->item.effects.size());
+    for (const gl::assets::ItemEffect &effect : entry->item.effects)
+        effects.push_back({effect.type, static_cast<std::int32_t>(effect.amount), effect.flags});
+    return gl::game::ItemTemplate{
+        static_cast<std::uint32_t>(entry->item.type), entry->item.flags,
+        entry->item.unknown_b[1], entry->item.max_stack,
+        static_cast<std::uint32_t>(effects.size()), std::move(effects)};
+}
+
 class Game {
   public:
     Game(Options options, gl::core::Config config, fs::path config_path,
@@ -907,11 +920,7 @@ class Game {
         const auto item_template =
             [this](std::uint32_t id) -> std::optional<gl::game::ItemTemplate> {
             const gl::assets::ItemCatalogEntry* entry = item_catalog_.find(id);
-            if (entry == nullptr) return std::nullopt;
-            return gl::game::ItemTemplate{
-                static_cast<std::uint32_t>(entry->item.type), entry->item.flags,
-                entry->item.unknown_b[1], entry->item.max_stack,
-                static_cast<std::uint32_t>(entry->item.effects.size())};
+            return make_item_template(entry);
         };
         if (item_names_) {
             inventory_runtime_ =
@@ -937,12 +946,7 @@ class Game {
         const auto item_template =
             [this](std::uint32_t id) -> std::optional<gl::game::ItemTemplate> {
             const gl::assets::ItemCatalogEntry* entry = item_catalog_.find(id);
-            if (entry == nullptr) return std::nullopt;
-            return gl::game::ItemTemplate{static_cast<std::uint32_t>(entry->item.type),
-                                          entry->item.flags, entry->item.unknown_b[1],
-                                          entry->item.max_stack,
-                                          static_cast<std::uint32_t>(
-                                              entry->item.effects.size())};
+            return make_item_template(entry);
         };
         gl::game::generate_npc_inventories(inventory_runtime_, level.persons, vfs_, names,
                                            item_template, loot_level(), rng,

@@ -14,6 +14,7 @@
 #include <vector>
 
 using gl::game::ItemTemplate;
+using gl::game::ItemTemplateEffect;
 using gl::game::LootItem;
 using gl::game::MsvcRandom;
 using gl::game::NpcLoot;
@@ -275,4 +276,45 @@ TEST_CASE("npc_loot: zero divisor guards skip pass 2") {
     check_items(chance_loot.hot, {{104, 1, 4, 0, 1}});
     CHECK(chance_loot.main.empty());
     CHECK(chance_rng.next() == 6334u);
+}
+
+TEST_CASE("npc_loot: inherited ITM effects are copied without consuming RNG") {
+    const auto names = make_names();
+    gl::assets::InvTable table;
+    table.regenerate_chance = 0.75;
+    table.chance_decrease = 1.0;
+    table.quantity_decrease = 1.0;
+    table.items = {make_item("A", 0, 20, 100, 1, 1)};
+
+    auto plain_lookup = [](std::uint32_t item_id) -> std::optional<ItemTemplate> {
+        if (item_id == 100)
+            return ItemTemplate{1, 0x4u, 7, 4};
+        return std::nullopt;
+    };
+    auto effects_lookup = [](std::uint32_t item_id) -> std::optional<ItemTemplate> {
+        if (item_id == 100)
+            return ItemTemplate{1, 0x4u, 7, 4, 2,
+                                {ItemTemplateEffect{7, 1, 0x50},
+                                 ItemTemplateEffect{8, -1, 0x50}}};
+        return std::nullopt;
+    };
+
+    MsvcRandom plain_rng(1);
+    const NpcLoot plain =
+        NpcLootGenerator::generate(table, 11, names, plain_lookup, plain_rng);
+    MsvcRandom effects_rng(1);
+    const NpcLoot effects =
+        NpcLootGenerator::generate(table, 11, names, effects_lookup, effects_rng);
+
+    CHECK(effects_rng.state() == plain_rng.state());
+    REQUIRE(effects.main.size() == 1);
+    CHECK(effects.main[0].mod_count == 2);
+    REQUIRE(effects.main[0].mods.size() == 2);
+    CHECK(effects.main[0].mods[0].id == 7);
+    CHECK(effects.main[0].mods[0].value == 1);
+    CHECK(effects.main[0].mods[0].flags == 0x50u);
+    CHECK(effects.main[0].mods[1].id == 8);
+    CHECK(effects.main[0].mods[1].value == -1);
+    CHECK(effects.main[0].mods[1].flags == 0x50u);
+    CHECK(effects.main[0].flags == plain.main[0].flags);
 }

@@ -503,10 +503,16 @@ gl::game::InventoryRuntime::ItemTemplateLookup make_lookup(const gl::assets::Ite
         const gl::assets::ItemCatalogEntry *entry = catalog.find(item_id);
         if (entry == nullptr)
             return std::nullopt;
+        std::vector<gl::game::ItemTemplateEffect> effects;
+        effects.reserve(entry->item.effects.size());
+        for (const gl::assets::ItemEffect &effect : entry->item.effects)
+            effects.push_back({effect.type, static_cast<std::int32_t>(effect.amount),
+                               effect.flags});
         return gl::game::ItemTemplate{static_cast<std::uint32_t>(entry->item.type),
                                       entry->item.flags, entry->item.unknown_b[1],
                                       entry->item.max_stack,
-                                      static_cast<std::uint32_t>(entry->item.effects.size())};
+                                      static_cast<std::uint32_t>(effects.size()),
+                                      std::move(effects)};
     };
 }
 
@@ -516,27 +522,7 @@ struct PortRun {
     std::vector<std::string> order;
     std::size_t generated_persons = 0;
     std::size_t captured_persons = 0;
-    std::size_t inherited_capture_items = 0;
-    std::size_t inherited_capture_mods = 0;
-    std::size_t inherited_port_items = 0;
 };
-
-bool item_has_inherited_mods(const gl::assets::ItemCatalog &catalog, std::uint32_t item_id) {
-    const gl::assets::ItemCatalogEntry *entry = catalog.find(item_id);
-    return entry != nullptr && !entry->item.effects.empty();
-}
-
-void filter_inherited_capture(LiveCapture &capture, const gl::assets::ItemCatalog &catalog,
-                              PortRun &port) {
-    port.inherited_capture_items =
-        std::erase_if(capture.items, [&catalog](const CapturedItem &item) {
-            return item_has_inherited_mods(catalog, item.item_id);
-        });
-    port.inherited_capture_mods =
-        std::erase_if(capture.mods, [&catalog](const CapturedMod &mod) {
-            return item_has_inherited_mods(catalog, mod.item_id);
-        });
-}
 
 bool build_port_records(LiveCapture &capture, bool filter_to_captured, PortRun &port,
                         std::string &error) {
@@ -555,7 +541,6 @@ bool build_port_records(LiveCapture &capture, bool filter_to_captured, PortRun &
         error = "cannot load item catalog: " + catalog.error().message;
         return false;
     }
-    filter_inherited_capture(capture, catalog.value(), port);
     auto names = gl::assets::ItemNameIndex::load(vfs.value());
     if (!names) {
         error = "cannot load item names: " + names.error().message;
@@ -602,11 +587,6 @@ bool build_port_records(LiveCapture &capture, bool filter_to_captured, PortRun &
         if (filter_to_captured && !captured_persons.contains(person.name))
             continue;
         for (const gl::game::LootItem &item : loot.main) {
-            const auto item_template = lookup(item.item_id);
-            if (item_template.has_value() && item_template->mod_count > 0) {
-                ++port.inherited_port_items;
-                continue;
-            }
             port.items.insert(CapturedItem{person.name, item.item_id, item.count, item.flags,
                                            item.mod_count});
             for (const gl::assets::SpecialMod &mod : item.mods) {
@@ -786,13 +766,6 @@ TEST_CASE("special gates: live NPC-mod oracle" * doctest::skip(!live_capture_ava
     for (const std::string &name : port.order)
         order << name << " ";
     MESSAGE("port order: " << order.str());
-    if (port.inherited_capture_items != 0 || port.inherited_capture_mods != 0 ||
-        port.inherited_port_items != 0) {
-        MESSAGE("oracle scope: skipped inherited ITM-effect records (capture items="
-                << port.inherited_capture_items << ", capture mods=" << port.inherited_capture_mods
-                << ", port items=" << port.inherited_port_items
-                << "); prototype effect semantics are not modelled");
-    }
     if (port.captured_persons < port.generated_persons) {
         MESSAGE("partial capture: compared "
                 << port.captured_persons << "/" << port.generated_persons
@@ -906,50 +879,6 @@ TEST_CASE("special gates: oracle plumbing self-check" * doctest::skip(!game_dir_
         std::multiset<CapturedMod>(extra_mods.begin(), extra_mods.end()), filtered.mods);
     CHECK(extra_mod.mismatched_mods == 1u);
     MESSAGE("synthetic plumbing self-check only; not live capture evidence");
-}
-
-TEST_CASE("special gates: inherited ITM-effect rows are excluded from comparison" *
-          doctest::skip(!game_dir_available())) {
-    const char *dir = std::getenv("GL_GAME_DIR");
-    REQUIRE(dir != nullptr);
-    auto vfs = gl::assets::GameVfs::mount(dir);
-    REQUIRE(vfs.has_value());
-    auto catalog = gl::assets::ItemCatalog::load(vfs.value());
-    REQUIRE(catalog.has_value());
-
-    const gl::assets::ItemCatalogEntry *effects_entry = catalog.value().find(411);
-    REQUIRE(effects_entry != nullptr);
-    REQUIRE(!effects_entry->item.effects.empty());
-
-    const CapturedItem inherited{"L0.Prototype", 411, 1, 0x0Cu, 1};
-    const CapturedMod inherited_mod{"L0.Prototype", 411, 1, 0x0Cu, 7, 1, 0x80u};
-    const CapturedItem generated{"L1_2.P404_Sister_Of_Mercy2", 8, 1, 0x204u, 1};
-    const CapturedMod generated_mod{"L1_2.P404_Sister_Of_Mercy2", 8, 1, 0x204u, 25, -1, 0x81u};
-
-    LiveCapture capture;
-    capture.level = "l1_1";
-    capture.rng_state = 1;
-    capture.loot_level = 1;
-    capture.items = {inherited, generated};
-    capture.mods = {inherited_mod, generated_mod};
-
-    PortRun port;
-    filter_inherited_capture(capture, catalog.value(), port);
-    CHECK(port.inherited_capture_items == 1u);
-    CHECK(port.inherited_capture_mods == 1u);
-    REQUIRE(capture.items.size() == 1u);
-    CHECK(capture.items[0] == generated);
-    REQUIRE(capture.mods.size() == 1u);
-    CHECK(capture.mods[0] == generated_mod);
-
-    const OracleComparison comparison = compare_records(
-        std::multiset<CapturedItem>(capture.items.begin(), capture.items.end()),
-        std::multiset<CapturedItem>{generated},
-        std::multiset<CapturedMod>(capture.mods.begin(), capture.mods.end()),
-        std::multiset<CapturedMod>{generated_mod});
-    CHECK(comparison.mismatched() == 0u);
-    CHECK(comparison.captured_items == 1u);
-    CHECK(comparison.captured_mods == 1u);
 }
 
 TEST_CASE("special gates: FPU-CW file fallback") {

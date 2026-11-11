@@ -401,10 +401,12 @@ TEST_CASE("inventory_runtime add splits new records by max_stack") {
     CHECK(items[2].count == 1);
 }
 
-TEST_CASE("inventory_runtime add initializes inherited mod count from the template") {
+TEST_CASE("inventory_runtime add copies inherited ITM effects into mods") {
     auto lookup = [](std::uint32_t item_id) -> std::optional<ItemTemplate> {
         if (item_id == 1101)
-            return ItemTemplate{26, 0x04u, 0, 1, 2};
+            return ItemTemplate{26, 0x04u, 0, 1, 2,
+                                {ItemTemplateEffect{7, 1, 0x50},
+                                 ItemTemplateEffect{8, -1, 0x50}}};
         return std::nullopt;
     };
     auto runtime = InventoryRuntime::create({}, make_names(), lookup);
@@ -413,7 +415,13 @@ TEST_CASE("inventory_runtime add initializes inherited mod count from the templa
     const auto &items = runtime.hero_inventory().items;
     REQUIRE(items.size() == 1);
     CHECK(items[0].mod_count == 2);
-    CHECK(items[0].mods.empty());
+    REQUIRE(items[0].mods.size() == 2);
+    CHECK(items[0].mods[0].id == 7);
+    CHECK(items[0].mods[0].value == 1);
+    CHECK(items[0].mods[0].flags == 0x50u);
+    CHECK(items[0].mods[1].id == 8);
+    CHECK(items[0].mods[1].value == -1);
+    CHECK(items[0].mods[1].flags == 0x50u);
 
     TradePriceInput input{};
     input.item_id = 1101;

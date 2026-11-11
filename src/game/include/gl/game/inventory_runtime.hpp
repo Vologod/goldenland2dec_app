@@ -13,12 +13,19 @@
 #include <vector>
 
 namespace gl::game {
+struct ItemTemplateEffect {
+    std::uint32_t type = 0;
+    std::int32_t value = 0;
+    std::uint32_t flags = 0;
+};
+
 struct ItemTemplate {
     std::uint32_t type = 0;
     std::uint32_t flags = 0;
     std::uint32_t style = 0;
     std::uint32_t max_stack = 0;
     std::uint32_t mod_count = 0;
+    std::vector<ItemTemplateEffect> effects{};
 };
 
 enum class TradeStatus {

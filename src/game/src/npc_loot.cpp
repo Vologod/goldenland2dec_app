@@ -39,6 +39,9 @@ void append_chunks(std::vector<LootItem> &out, std::uint32_t item_id, std::int32
             std::min(remaining, static_cast<std::int32_t>(item_template.max_stack));
         LootItem loot{item_id, chunk, item_template.type, flags, item_template.style};
         loot.mod_count = item_template.mod_count;
+        loot.mods.reserve(item_template.effects.size());
+        for (const ItemTemplateEffect &effect : item_template.effects)
+            loot.mods.push_back({effect.type, effect.value, effect.flags});
         if (specials != nullptr && chunk == 1 && (flags & 0x4u) != 0 &&
             item_template.mod_count == 0) {
             const int nspec = random_special_count(flags, rng);
