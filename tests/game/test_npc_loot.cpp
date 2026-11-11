@@ -4,6 +4,7 @@
 #include "gl/assets/item_name_index.hpp"
 #include "gl/assets/sdb.hpp"
 #include "gl/game/msvc_random.hpp"
+#include "gl/game/special_engine.hpp"
 
 #include <doctest/doctest.h>
 
@@ -266,15 +267,13 @@ TEST_CASE("npc_loot: hot and main merge independently") {
     table.regenerate_chance = 0.0;
     table.chance_decrease = 1.0;
     table.quantity_decrease = 2.0;
-    table.items = {make_item("D", 0, 100, 100, 5, 5)};
+    table.items = {make_item("A", 0, 20, 100, 5, 5), make_item("A", 0, 20, 100, 5, 5)};
 
     MsvcRandom rng(1);
     const NpcLoot loot = NpcLootGenerator::generate(table, 11, names, lookup, rng);
 
-    REQUIRE(loot.hot.size() == 1);
-    CHECK(loot.hot[0].count == 5);
-    REQUIRE(loot.main.size() == 1);
-    CHECK(loot.main[0].count == 3);
+    check_items(loot.hot, {{100, 4, 1, 0x4u, 7}, {100, 4, 1, 0x4u, 7}, {100, 1, 1, 0x4u, 7}});
+    check_items(loot.main, {{100, 3, 1, 0x4u, 7}});
 }
 
 TEST_CASE("npc_loot: merge consumes no RNG") {
@@ -293,6 +292,52 @@ TEST_CASE("npc_loot: merge consumes no RNG") {
     for (int draw = 0; draw < 4; ++draw)
         expected.next();
     CHECK(rng.state() == expected.state());
+}
+
+TEST_CASE("npc_loot: merge into an already-specialed stack does not re-roll") {
+    const auto names = make_names();
+    gl::assets::InvTable table;
+    table.regenerate_chance = 0.0;
+    table.chance_decrease = 0.0;
+    table.quantity_decrease = 1.0;
+    table.items = {make_item("A", 0, 20, 101, 1, 1), make_item("A", 0, 20, 101, 1, 1)};
+
+    const auto lookup_stackable = [](std::uint32_t item_id) -> std::optional<ItemTemplate> {
+        if (item_id == 100)
+            return ItemTemplate{1, 0x4u, 7, 10, 0};
+        return std::nullopt;
+    };
+
+    gl::assets::SpecialDatabase db;
+    gl::assets::SpecialDef def;
+    def.id = 0;
+    def.value_slots[0] = gl::assets::SpecialSlot{0x40u, 1, 1.0f, 0.0f};
+    db.defs.push_back(def);
+    db.item_classes[static_cast<gl::assets::ItemType>(1)] = {0};
+
+    MsvcRandom probe(1);
+    REQUIRE(gl::game::random_special_count(0x4u, probe) > 0);
+
+    MsvcRandom rng(1);
+    const NpcLoot loot = NpcLootGenerator::generate(table, 1, names, lookup_stackable, rng, &db);
+    REQUIRE(loot.hot.size() == 1);
+    CHECK(loot.hot[0].count == 1);
+    REQUIRE(loot.hot[0].mods.size() == 1);
+    CHECK(loot.hot[0].mod_count == 1);
+    CHECK((loot.hot[0].flags & 0x200u) != 0);
+
+    gl::assets::InvTable single_table = table;
+    single_table.items = {make_item("A", 0, 20, 101, 1, 1)};
+    MsvcRandom single_rng(1);
+    const NpcLoot single =
+        NpcLootGenerator::generate(single_table, 1, names, lookup_stackable, single_rng, &db);
+    REQUIRE(single.hot.size() == 1);
+    REQUIRE(single.hot[0].mods.size() == 1);
+    CHECK(loot.hot[0].mods[0].id == single.hot[0].mods[0].id);
+    CHECK(loot.hot[0].mods[0].value == single.hot[0].mods[0].value);
+    CHECK(loot.hot[0].mods[0].flags == single.hot[0].mods[0].flags);
+
+    CHECK(rng.state() == single_rng.state());
 }
 
 TEST_CASE("npc_loot: scaled bounds use trunc plus one when fractional") {

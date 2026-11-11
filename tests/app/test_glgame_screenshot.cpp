@@ -2169,11 +2169,11 @@ TEST_CASE("glgame specials mode changes NPC loot and keeps modified trade unsupp
     CHECK(no_specials_output.find("specials: disabled (--no-specials)") != std::string::npos);
     CHECK(specials_output.find("specials: loaded 58 defs, 15 item classes") != std::string::npos);
 
-    CHECK(dumped_item_count(no_specials_output, kKolbasens, "main", kMoney) == 174);
-    CHECK(dumped_item_count(specials_output, kKolbasens, "main", kMoney) == 174);
-    CHECK(dumped_item_count(no_specials_output, kCrying, "main", kMoney) == 218);
-    CHECK(dumped_item_count(specials_output, kCrying, "main", kMoney) == 287);
-    CHECK(dumped_item_count(no_specials_output, kCitizen8, "main", kMoney) == 323);
+    CHECK(dumped_item_count(no_specials_output, kKolbasens, "main", kMoney) == 87);
+    CHECK(dumped_item_count(specials_output, kKolbasens, "main", kMoney) == 87);
+    CHECK(dumped_item_count(no_specials_output, kCrying, "main", kMoney) == 130);
+    CHECK(dumped_item_count(specials_output, kCrying, "main", kMoney) == 102);
+    CHECK(dumped_item_count(no_specials_output, kCitizen8, "main", kMoney) == 121);
     CHECK(dumped_item_count(specials_output, kCitizen8, "main", kMoney) == 0);
 
     CHECK(no_specials_output.find("npc mod:") == std::string::npos);
