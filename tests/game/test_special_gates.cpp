@@ -34,7 +34,7 @@
 
 namespace {
 
-constexpr std::uint16_t kReferenceControlWord = 0x027Fu;
+constexpr std::uint16_t kReferenceControlWord = 0x007Fu;
 
 using gl::assets::SpecialDatabase;
 using gl::assets::SpecialDef;
@@ -116,6 +116,8 @@ struct LiveCapture {
     std::uint32_t seed = 0;
     std::uint32_t rng_state = 0;
     std::int32_t loot_level = 0;
+    bool have_rng_check = false;
+    bool rng_check_ok = false;
     std::vector<CapturedItem> items;
     std::vector<CapturedMod> mods;
 };
@@ -212,8 +214,32 @@ bool parse_live_capture(std::string_view text, LiveCapture &capture, std::string
         offset = end == std::string_view::npos ? text.size() + 1 : end + 1;
         ++line_number;
         line = trim(line);
-        if (line.empty() || line.front() == '#')
+        if (line.empty())
             continue;
+        if (line.front() == '#') {
+            const std::string_view comment = trim(line.substr(1));
+            constexpr std::string_view rng_key = "rng_second=";
+            if (comment.substr(0, rng_key.size()) == rng_key) {
+                const std::size_t check_pos = comment.find("check=");
+                const std::string_view value =
+                    trim(comment.substr(rng_key.size(), check_pos == std::string_view::npos
+                                                           ? std::string_view::npos
+                                                           : check_pos - rng_key.size()));
+                std::uint32_t rng_second = 0;
+                if (!value.empty() && check_pos != std::string_view::npos &&
+                    parse_u32(value, rng_second)) {
+                    const std::string_view check = trim(comment.substr(check_pos + 6));
+                    if (check == "ok") {
+                        capture.have_rng_check = true;
+                        capture.rng_check_ok = true;
+                    } else if (check == "fail") {
+                        capture.have_rng_check = true;
+                        capture.rng_check_ok = false;
+                    }
+                }
+            }
+            continue;
+        }
 
         const std::size_t equals = line.find('=');
         const std::size_t pipe = line.find('|');
@@ -662,13 +688,16 @@ TEST_CASE("special gates: live original FPU control word" * doctest::skip(!live_
     REQUIRE_MESSAGE(captured.ok, captured.error);
     std::ostringstream message;
     message << "live FPU-CW source=" << captured.source << " generation=0x" << std::hex
-            << captured.generation << " price=0x" << captured.price << std::dec;
+            << captured.generation << " price=0x" << captured.price << std::dec
+            << "; generation is live-measured (0x007F, PC=24/RC=nearest); the price half"
+               " still needs a Stage 4 capture, and the single-value fallback is an explicit"
+               " assumption";
     MESSAGE(message.str());
     CHECK(captured.generation == kReferenceControlWord);
     CHECK(captured.price == kReferenceControlWord);
-    CHECK((captured.generation & 0x0300u) == 0x0200u);
+    CHECK((captured.generation & 0x0300u) == 0x0000u);
     CHECK((captured.generation & 0x0C00u) == 0x0000u);
-    CHECK((captured.price & 0x0300u) == 0x0200u);
+    CHECK((captured.price & 0x0300u) == 0x0000u);
     CHECK((captured.price & 0x0C00u) == 0x0000u);
 }
 
@@ -757,6 +786,9 @@ TEST_CASE("special gates: live NPC-mod oracle" * doctest::skip(!live_capture_ava
                        << " rng_state=0x" << std::hex << capture.rng_state << std::dec
                        << " loot_level=" << capture.loot_level << " items=" << capture.items.size()
                        << " mods=" << capture.mods.size());
+    const bool rng_check_acceptable = !capture.have_rng_check || capture.rng_check_ok;
+    REQUIRE_MESSAGE(rng_check_acceptable,
+                    "capture failed the LCG double-draw check; re-capture with the fixed tool");
     REQUIRE_MESSAGE(!capture.items.empty(), "capture contains no NPC item rows");
     REQUIRE_MESSAGE(!capture.mods.empty(), "capture contains no NPC mod records");
 

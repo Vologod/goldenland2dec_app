@@ -157,6 +157,23 @@ TEST_CASE("trade_price uses x87 single precision for the skill factor") {
 
     const auto price = compute_trade_price(input);
     REQUIRE(price.has_value());
-    CHECK(price->buy == 7);
+    CHECK(price->buy == 8);
     CHECK(price->sell == 3);
+}
+
+TEST_CASE("trade_price uses double constants with binary32 results") {
+    TradePriceInput input{};
+    input.item_id = 1;
+    input.item_price = 75;
+    input.durability = 36;
+    input.flags = 0;
+    input.mod_count = 0;
+    input.skill_trade = 1;
+    input.count = 1;
+    input.assume_x87_single = true;
+
+    const auto price = compute_trade_price(input);
+    REQUIRE(price.has_value());
+    CHECK(price->buy == 151);
+    CHECK(price->sell == 26);
 }

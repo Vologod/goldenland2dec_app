@@ -1,7 +1,8 @@
 # Phase 1b2b2e — Specials live parity (design)
 
 - Дата: 2026-11-11
-- Статус: design approved (brainstorming), реализация не начата
+- Статус: implemented/partial (part 1); Stage 2b (merge/stacking) и Stage 4
+  (price CW capture) — follow-up
 - Предыдущая фаза: `2026-11-10-p3b2b2d-specials-implementation-design.md` (`partial`)
 - Связанные документы: `docs/STATUS.md` (1b2b2d), `docs/DECISIONS.md` (D-055,
   D-058–D-061), `docs/research/p3b2b2c-npc-loot-specials.md` (§10),

@@ -18,28 +18,30 @@ std::optional<TradePrice> compute_trade_price(const TradePriceInput &input) {
     if (input.mod_count != 0 && (input.flags & 0x80u) == 0)
         return std::nullopt;
 
-    const float durability_scaled =
-        static_cast<float>(input.durability) * 0.0025f;
-    const float durability_factor = durability_scaled + 0.75f;
-    const float base_scaled =
-        durability_factor * static_cast<float>(input.item_price);
+    const float durability_scaled = static_cast<float>(
+        static_cast<double>(input.durability) * 0.0025);
+    const float durability_factor = static_cast<float>(
+        static_cast<double>(durability_scaled) + 0.75);
+    const float base_scaled = static_cast<float>(
+        static_cast<double>(durability_factor) * static_cast<double>(input.item_price));
     const std::int64_t base0 = static_cast<std::int64_t>(base_scaled);
 
     std::int64_t base = base0;
     if (base < base0 / 3)
         base = base0 / 3;
 
-    const float skill_scaled = 0.1f * static_cast<float>(input.skill_trade);
-    float factor = 2.5f - skill_scaled;
+    const float skill_scaled = static_cast<float>(
+        static_cast<double>(input.skill_trade) * -0.1);
+    float factor = static_cast<float>(static_cast<double>(skill_scaled) + 2.5);
     if (factor < 1.0f)
         factor = 1.0f;
 
     const float buy_factor = factor;
-    const float sell_factor = 1.0f / factor;
-    std::int64_t buy_unit =
-        static_cast<std::int64_t>(buy_factor * static_cast<float>(base));
-    std::int64_t sell_unit =
-        static_cast<std::int64_t>(sell_factor * static_cast<float>(base));
+    const float sell_factor = static_cast<float>(1.0 / static_cast<double>(factor));
+    std::int64_t buy_unit = static_cast<std::int64_t>(
+        static_cast<float>(static_cast<double>(buy_factor) * static_cast<double>(base)));
+    std::int64_t sell_unit = static_cast<std::int64_t>(
+        static_cast<float>(static_cast<double>(sell_factor) * static_cast<double>(base)));
     if (buy_unit < 1)
         buy_unit = 1;
     if (sell_unit < 1)

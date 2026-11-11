@@ -146,7 +146,7 @@ loot_level=1
 # loot_level_source=memory
 # fpu_cw=0x007f source=generation-entry
 # fpu_cw=0x007f source=first-draw
-# fpu_cw=0x037f source=scan-time
+# fpu_cw=0x007f source=scan-time
 item|L1_2.P404_Sister_Of_Mercy2|8|1|0x204|1
 mod|L1_2.P404_Sister_Of_Mercy2|8|1|0x204|25|-1|0x81
 ```

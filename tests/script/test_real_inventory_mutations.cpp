@@ -20,6 +20,8 @@
 #include <iterator>
 #include <optional>
 #include <string>
+#include <utility>
+#include <vector>
 
 namespace {
 bool game_dir_available() { return std::getenv("GL_GAME_DIR") != nullptr; }
@@ -65,10 +67,15 @@ void check_slot(int slot, std::int32_t start_money, std::int32_t expected_money)
         -> std::optional<gl::game::ItemTemplate> {
         const gl::assets::ItemCatalogEntry *entry = catalog->find(item_id);
         if (entry == nullptr) return std::nullopt;
+        std::vector<gl::game::ItemTemplateEffect> effects;
+        effects.reserve(entry->item.effects.size());
+        for (const gl::assets::ItemEffect &effect : entry->item.effects)
+            effects.push_back({effect.type, static_cast<std::int32_t>(effect.amount), effect.flags});
         return gl::game::ItemTemplate{static_cast<std::uint32_t>(entry->item.type),
                                       entry->item.flags, entry->item.unknown_b[1],
                                       entry->item.max_stack,
-                                      static_cast<std::uint32_t>(entry->item.effects.size())};
+                                      static_cast<std::uint32_t>(effects.size()),
+                                      std::move(effects)};
     };
     gl::game::InventoryRuntime runtime =
         gl::game::InventoryRuntime::create(inventory.value(), names.value(), item_template);

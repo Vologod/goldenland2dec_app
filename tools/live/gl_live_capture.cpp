@@ -582,7 +582,9 @@ class Debugger {
         slot.have_original = true;
         context.Dr0 = bp0_;
         context.Dr1 = 0;
-        context.Dr7 = (context.Dr7 & ~0x00ff0000u) | 0x00000001u;
+        context.Dr2 = 0;
+        context.Dr3 = 0;
+        context.Dr7 = (context.Dr7 & ~0x00fc00ffu) | 0x00000001u;
         if (!SetThreadContext(handle, &context)) {
             log_warn("cannot arm thread " + std::to_string(tid) + ": " + wide_error(GetLastError()));
             threads_.emplace(tid, slot);
@@ -1200,11 +1202,6 @@ int run(const Options &options) {
     state.bp0 = server.base + kNpcSpawnRva;
     state.bp1 = server.base + kRandBeforeDrawRva;
 
-    std::optional<std::chrono::steady_clock::time_point> trace_deadline;
-    if (options.trace_calls_ms != 0)
-        trace_deadline = std::chrono::steady_clock::now() +
-                         std::chrono::milliseconds(options.trace_calls_ms);
-
     Debugger debugger(options.pid, state.bp0, state.bp1);
     if (!debugger.attach(error)) {
         log_error(error);
@@ -1214,6 +1211,11 @@ int run(const Options &options) {
     log_info("attached; DR0=" + address_string(state.bp0) + " DR1=" + address_string(state.bp1));
     if (!debugger.arm_all_threads(error))
         log_warn(error);
+
+    std::optional<std::chrono::steady_clock::time_point> trace_deadline;
+    if (options.trace_calls_ms != 0)
+        trace_deadline = std::chrono::steady_clock::now() +
+                         std::chrono::milliseconds(options.trace_calls_ms);
 
     const auto deadline =
         std::chrono::steady_clock::now() + std::chrono::seconds(options.timeout_seconds);
@@ -1396,9 +1398,11 @@ int run(const Options &options) {
              " items=" + std::to_string(scan.items.size()) +
              " mods=" + std::to_string(scan.total_mods));
 
-    const bool valid = state.state_captured && !scan.items.empty();
+    const bool valid = state.state_captured && state.second_draw_valid && !scan.items.empty();
     if (!state.state_captured)
         log_error("RNG state was not captured; writing a partial diagnostic file only");
+    else if (!state.second_draw_valid)
+        log_error("LCG double-draw check failed; writing a partial diagnostic file only");
     else if (scan.items.empty())
         log_error("no NPC main-container items were found; writing a partial diagnostic file only");
 
@@ -1411,7 +1415,7 @@ int run(const Options &options) {
     log_info("wrote " + to_utf8(options.out_path) + (valid ? "" : ".partial"));
     CloseHandle(process);
     if (!valid)
-        return state.state_captured ? 4 : 3;
+        return (state.state_captured && state.second_draw_valid) ? 4 : 3;
     return 0;
 }
 

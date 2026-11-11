@@ -58,6 +58,20 @@
   test-case); FPU-CW gate skipped без `GL_SPECIALS_FPU_CW`. Полный
   `ctest --test-dir build --output-on-failure` (`GL_GAME_DIR=I:\Games\Златогорье-2`) —
   `100% tests passed out of 19`, `Total Test time (real) = 1991.87 sec`, exit 0.
+- **Final review fix wave (2026-11-11, base `aeac96d`):** `TradePrice`
+  использует double-константы/операнды с округлением каждого результата до
+  binary32 (live `0x007F`): boundary `5/100/skill 9` → buy 8/sell 3,
+  новый durability-кейс `75/36/skill 1` → 151/26; boat-trader оракулы без
+  изменений. FPU-гейт: reference `0x007F` (PC=24/RC=nearest), price-половина
+  остаётся Stage 4. Live-гейт отвергает `rng_second ... check=fail`
+  (pre-fix `special-l1_1-trace.txt` падает на этой проверке и остаётся
+  pre-fix evidence). Real-data lookups передают ITM `effects`; аналитический
+  NPC-oracle отделяет inherited effects от документированных 12 generated
+  mods / 9 events. Focused runs: `gl_game_tests` full **314/314** (2 skipped,
+  560309 assertions), `*trade_price*` **16/16** (49 assertions),
+  `trade_overlay_tests` **23/23** (2 skipped, 610 assertions); live gate
+  **7/8** (FPU pass; live oracle fails `check=fail`); i686 tool rebuild 0
+  warnings, `--help` exit 0. Full `ctest` — за controller.
 - **Open Questions (1b2b2e):**
   1. Точный порядок вызовов `FUN_1404b1c0` (SEF vs entity/spawn) —
      resolved 2026-11-11: live order = port SEF order 1:1.
@@ -101,7 +115,8 @@
   `mod=25/-1/0x81`, `mod_count=1`; price/buy → `unsupported`
   (D-058 guard не менялся), no-specials — item отсутствует.
 - **Гейты (OPEN, 2026-11-10):** `GL_SPECIALS_FPU_CW` (live CW до
-  `FUN_14047284`/`FUN_1206E8D0`, ожидается `0x027F` PC=53/RC=nearest) и
+  `FUN_14047284`/`FUN_1206E8D0`, ожидается `0x027F` PC=53/RC=nearest;
+  **superseded by D-062:** live `0x007F`/PC=24) и
   `GL_SPECIALS_LIVE` (NPC-mod oracle v2, `rng_state` + item/mod
   multiset) не заданы → skip с причиной; live-захваты не сняты.
   `0x027F` остаётся extraction-assumption; build-машина `0x037F` — только

@@ -60,9 +60,13 @@ gl::game::InventoryRuntime::ItemTemplateLookup make_lookup(const gl::assets::Ite
         const gl::assets::ItemCatalogEntry *entry = catalog.find(item_id);
         if (entry == nullptr)
             return std::nullopt;
+        std::vector<gl::game::ItemTemplateEffect> effects;
+        effects.reserve(entry->item.effects.size());
+        for (const gl::assets::ItemEffect &effect : entry->item.effects)
+            effects.push_back({effect.type, static_cast<std::int32_t>(effect.amount), effect.flags});
         return ItemTemplate{static_cast<std::uint32_t>(entry->item.type), entry->item.flags,
                             entry->item.unknown_b[1], entry->item.max_stack,
-                            static_cast<std::uint32_t>(entry->item.effects.size())};
+                            static_cast<std::uint32_t>(effects.size()), std::move(effects)};
     };
 }
 
@@ -173,6 +177,25 @@ std::vector<ObservedEvent> collect_events(const RunResult &run) {
         }
     }
     return events;
+}
+
+std::size_t count_generated_events(
+    const RunResult &run,
+    const gl::game::InventoryRuntime::ItemTemplateLookup &lookup) {
+    std::size_t total = 0;
+    const auto count_items = [&](const std::vector<LootItem> &items) {
+        for (const LootItem &item : items) {
+            const auto item_template = lookup(item.item_id);
+            if (!item.mods.empty() && item_template.has_value() &&
+                item_template->effects.empty())
+                ++total;
+        }
+    };
+    for (const PersonLoot &person : run.persons) {
+        count_items(person.loot.hot);
+        count_items(person.loot.main);
+    }
+    return total;
 }
 
 std::uint32_t item_id_for(const gl::assets::ItemNameIndex &names, std::string_view tech_name) {
@@ -411,11 +434,16 @@ TEST_CASE("npc_loot specials: l1_1 seed 1 loot level 1 deterministic oracle" *
     std::size_t candidates = 0;
     std::size_t triggers = 0;
     std::size_t mods = 0;
+    std::size_t inherited_mods = 0;
+    std::size_t inherited_event_items = 0;
     for (const PersonLoot &person : with_specials.persons) {
         mods += count_mods(person.loot);
         for (const LootItem &item : person.loot.hot) {
             const auto item_template = lookup(item.item_id);
             REQUIRE(item_template.has_value());
+            inherited_mods += item_template->effects.size();
+            if (!item_template->effects.empty())
+                ++inherited_event_items;
             if (item.count == 1 && (item.flags & 0x4u) != 0 && item_template->mod_count == 0)
                 ++candidates;
             const std::uint32_t base_flags = item_template->flags & ~0x80u;
@@ -425,6 +453,9 @@ TEST_CASE("npc_loot specials: l1_1 seed 1 loot level 1 deterministic oracle" *
         for (const LootItem &item : person.loot.main) {
             const auto item_template = lookup(item.item_id);
             REQUIRE(item_template.has_value());
+            inherited_mods += item_template->effects.size();
+            if (!item_template->effects.empty())
+                ++inherited_event_items;
             if (item.count == 1 && (item.flags & 0x4u) != 0 && item_template->mod_count == 0)
                 ++candidates;
             if ((item.flags & 0x200u) != 0 && (item_template->flags & 0x200u) == 0)
@@ -433,11 +464,13 @@ TEST_CASE("npc_loot specials: l1_1 seed 1 loot level 1 deterministic oracle" *
     }
     CHECK(candidates == 18u);
     CHECK(triggers == 9u);
-    CHECK(mods == 12u);
+    REQUIRE(mods >= inherited_mods);
+    const std::size_t generated_mods = mods - inherited_mods;
+    CHECK(generated_mods == 12u);
 
     const std::vector<ObservedEvent> events = collect_events(with_specials);
-    REQUIRE(events.size() == 9u);
-    CHECK(collect_events(no_specials).empty());
+    REQUIRE(events.size() == inherited_event_items + 9u);
+    CHECK(count_generated_events(no_specials, lookup) == 0u);
 
     const std::uint32_t mon = item_id_for(names.value(), "MON_1_0_1");
     REQUIRE(mon != 0);
@@ -488,7 +521,7 @@ TEST_CASE("npc_loot specials: l1_1 seed 1 loot level 1 deterministic oracle" *
     CHECK(r5_draws == 12u);
     CHECK(candidates + r5_draws == 30u);
     CHECK(r6_draws == 233u);
-    CHECK(candidates + r5_draws + r6_draws + mods == 275u);
+    CHECK(candidates + r5_draws + r6_draws + generated_mods == 275u);
     CHECK(count_to_state(no_specials.final_state) + 275u - 3u ==
           count_to_state(with_specials.final_state));
 

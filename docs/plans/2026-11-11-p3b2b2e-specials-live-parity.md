@@ -1,5 +1,9 @@
 # Phase 1b2b2e — Specials live parity (part 1) Implementation Plan
 
+> **Executed 2026-11-11** (part 1: Stage 0/1/2a/3). Results, residuals and
+> command output are recorded in `docs/STATUS.md` (1b2b2e); Stage 2b/4 remain
+> a follow-up.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Сделать live-захват NPC-лута доказуемым, смоделировать inherited ITM effects и привести specials/`TradePrice` к доказанной x87 single-precision модели, не ослабляя гейты.
@@ -884,12 +888,13 @@ TEST_CASE("trade_price uses x87 single precision for the skill factor") {
 
     const auto price = compute_trade_price(input);
     REQUIRE(price.has_value());
-    CHECK(price->buy == 7);
+    CHECK(price->buy == 8);
     CHECK(price->sell == 3);
 }
 ```
 
-Expected: FAIL `8 == 7` (текущая double-модель).
+Expected: FAIL `7 == 8` (текущая float-literal-модель; правильная модель —
+double-константы с binary32-результатом).
 
 - [ ] **Step 2: Переименовать флаг**
 
@@ -917,33 +922,37 @@ Select-String -Path src\**\*.cpp,src\**\*.hpp,tests\**\*.cpp,tools\**\*.cpp -Pat
 
 Expected: пусто.
 
-- [ ] **Step 3: Перевести цену на float**
+- [ ] **Step 3: Перевести цену на binary32-результаты**
 
+`FUN_1206E8D0` грузит константы как m64 doubles (`0.0025`, `0.75`, `-0.1`,
+`2.5`), а x87 CW=0x007F округляет **каждый результат** до binary32.
 В `src/game/src/trade_price.cpp` заменить тело после guard'ов на:
 
 ```cpp
-    const float durability_scaled =
-        static_cast<float>(input.durability) * 0.0025f;
-    const float durability_factor = durability_scaled + 0.75f;
-    const float base_scaled =
-        durability_factor * static_cast<float>(input.item_price);
+    const float durability_scaled = static_cast<float>(
+        static_cast<double>(input.durability) * 0.0025);
+    const float durability_factor = static_cast<float>(
+        static_cast<double>(durability_scaled) + 0.75);
+    const float base_scaled = static_cast<float>(
+        static_cast<double>(durability_factor) * static_cast<double>(input.item_price));
     const std::int64_t base0 = static_cast<std::int64_t>(base_scaled);
 
     std::int64_t base = base0;
     if (base < base0 / 3)
         base = base0 / 3;
 
-    const float skill_scaled = 0.1f * static_cast<float>(input.skill_trade);
-    float factor = 2.5f - skill_scaled;
+    const float skill_scaled = static_cast<float>(
+        static_cast<double>(input.skill_trade) * -0.1);
+    float factor = static_cast<float>(static_cast<double>(skill_scaled) + 2.5);
     if (factor < 1.0f)
         factor = 1.0f;
 
     const float buy_factor = factor;
-    const float sell_factor = 1.0f / factor;
-    std::int64_t buy_unit =
-        static_cast<std::int64_t>(buy_factor * static_cast<float>(base));
-    std::int64_t sell_unit =
-        static_cast<std::int64_t>(sell_factor * static_cast<float>(base));
+    const float sell_factor = static_cast<float>(1.0 / static_cast<double>(factor));
+    std::int64_t buy_unit = static_cast<std::int64_t>(
+        static_cast<float>(static_cast<double>(buy_factor) * static_cast<double>(base)));
+    std::int64_t sell_unit = static_cast<std::int64_t>(
+        static_cast<float>(static_cast<double>(sell_factor) * static_cast<double>(base)));
     if (buy_unit < 1)
         buy_unit = 1;
     if (sell_unit < 1)
@@ -964,7 +973,7 @@ build\bin\trade_overlay_tests.exe
 ```
 
 Expected: PASS; прежние boat-trader оракулы (16800/2912, 17000/4250 и т.д.)
-не изменились, новый boundary-тест даёт 7/3.
+не изменились, новый boundary-тест даёт 8/3.
 
 - [ ] **Step 5: Commit (после approve)**
 

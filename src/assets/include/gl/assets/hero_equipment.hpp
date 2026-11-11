@@ -36,8 +36,9 @@ struct InventoryItem {
     std::uint32_t type = 0;
     std::uint32_t style = 0;
     std::uint32_t durability = 100;
-    // Saves store only the mod count. Generated specials and inherited ITM
-    // prototype effects both populate mods; mod_count == mods.size().
+    // Saves store only the mod count. For added/generated records,
+    // mod_count == mods.size() (generated specials and inherited ITM prototype
+    // effects both populate mods); save-loaded records keep the count-only value.
     std::uint32_t mod_count = 0;
     std::vector<SpecialMod> mods;
 };
