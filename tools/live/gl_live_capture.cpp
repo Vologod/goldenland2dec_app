@@ -36,6 +36,8 @@ constexpr uint32_t kRandBeforeDrawRva = 0x6c0a4;
 constexpr uint32_t kManagerPointersOffset = 0x18;
 constexpr uint32_t kManagerCountOffset = 0x1c;
 constexpr uint32_t kManagerBitmapOffset = 0x20;
+constexpr uint32_t kContainerMapCountOffset = 0x0c;
+constexpr uint32_t kContainerMapEntriesOffset = 0x10;
 constexpr uint32_t kContainerIdsOffset = 0x0c;
 constexpr uint32_t kContainerSlotsOffset = 0x10;
 constexpr uint32_t kContainerBitmapOffset = 0x14;
@@ -53,7 +55,7 @@ constexpr uint32_t kMaxContainerSlots = 65536;
 constexpr uint32_t kMaxMods = 4096;
 constexpr std::size_t kMaxNameBytes = 192;
 constexpr int kDefaultTimeoutSeconds = 120;
-constexpr int kScanSettleMs = 5000;
+constexpr int kScanSettleMs = 15000;
 constexpr int kScanPollMs = 100;
 constexpr int kScanStablePolls = 5;
 constexpr std::size_t kMaxWarnings = 80;
@@ -65,6 +67,7 @@ struct Options {
     std::wstring out_path;
     int timeout_seconds = kDefaultTimeoutSeconds;
     std::wstring server_dll = L"Server.dll";
+    bool scan_only = false;
 };
 
 struct ModuleInfo {
@@ -221,7 +224,7 @@ void print_usage() {
         "\n"
         "Usage:\n"
         "  gl_live_capture.exe --pid <pid> --level <id> --loot-level <n> --out <file>\n"
-        "                      [--timeout <sec>] [--server <dll>]\n"
+        "                      [--timeout <sec>] [--server <dll>] [--scan-only]\n"
         "\n"
         "Options:\n"
         "  --pid <pid>          PID of the running 32-bit GoldenLand.exe\n"
@@ -324,13 +327,19 @@ bool parse_args(int argc, wchar_t **argv, Options &options, std::string &error) 
                 return false;
             }
             options.server_dll = value;
+        } else if (key == L"--scan-only") {
+            options.scan_only = true;
         } else {
             error = "unknown argument " + to_utf8(key);
             return false;
         }
     }
-    if (!have_pid || !have_level || !have_loot || !have_out) {
-        error = "--pid, --level, --loot-level and --out are required";
+    if (!have_pid) {
+        error = "--pid is required";
+        return false;
+    }
+    if (!options.scan_only && (!have_level || !have_loot || !have_out)) {
+        error = "--level, --loot-level and --out are required (unless --scan-only)";
         return false;
     }
     return true;
@@ -542,8 +551,8 @@ class Debugger {
         slot.original = context;
         slot.have_original = true;
         context.Dr0 = bp0_;
-        context.Dr1 = bp1_;
-        context.Dr7 = (context.Dr7 & ~0x00ff0000u) | 0x00000001u | 0x00000004u;
+        context.Dr1 = 0;
+        context.Dr7 = (context.Dr7 & ~0x00ff0000u) | 0x00000001u;
         if (!SetThreadContext(handle, &context)) {
             log_warn("cannot arm thread " + std::to_string(tid) + ": " + wide_error(GetLastError()));
             threads_.emplace(tid, slot);
@@ -551,6 +560,16 @@ class Debugger {
         }
         slot.armed = true;
         threads_.emplace(tid, slot);
+        CONTEXT readback{};
+        readback.ContextFlags = CONTEXT_DEBUG_REGISTERS;
+        if (GetThreadContext(handle, &readback)) {
+            char buffer[96];
+            std::snprintf(buffer, sizeof(buffer), "armed tid=%lu dr0=0x%08lx dr7=0x%08lx",
+                          static_cast<unsigned long>(tid),
+                          static_cast<unsigned long>(readback.Dr0),
+                          static_cast<unsigned long>(readback.Dr7));
+            log_info(buffer);
+        }
         return true;
     }
 
@@ -563,6 +582,12 @@ class Debugger {
             CONTEXT_CONTROL | CONTEXT_INTEGER | CONTEXT_FLOATING_POINT | CONTEXT_DEBUG_REGISTERS;
         return GetThreadContext(found->second.handle, &context) != FALSE;
     }
+
+    void arm_dr1(DWORD tid) { modify_context(tid, [this](CONTEXT &context) {
+                                  context.Dr1 = bp1_;
+                                  context.Dr6 = 0;
+                                  context.Dr7 = (context.Dr7 & ~0x00f00000u) | 0x00000004u;
+                              }); }
 
     void clear_dr0(DWORD tid) { modify_context(tid, [](CONTEXT &context) {
                                    context.Dr0 = 0;
@@ -687,28 +712,35 @@ std::optional<uint16_t> scan_control_word_for_pid(DWORD pid, DWORD preferred_tid
     return std::nullopt;
 }
 
-bool resolve_container(const MemReader &mem, uint32_t manager, uint32_t manager_count,
-                       uint32_t manager_bitmap, uint32_t container_id, uint32_t &container,
-                       std::string &error) {
-    if (container_id >= manager_count) {
-        error = "container id " + std::to_string(container_id) + " >= manager count " +
-                std::to_string(manager_count);
+bool resolve_container(const MemReader &mem, uint32_t manager, uint32_t container_id,
+                       uint32_t &container, std::string &error) {
+    uint32_t map_count = 0;
+    uint32_t map_entries = 0;
+    if (!mem.u32(manager + kContainerMapCountOffset, map_count) ||
+        !mem.u32(manager + kContainerMapEntriesOffset, map_entries) || map_entries == 0) {
+        error = "item manager container map is unreadable";
         return false;
     }
-    if (!bit_set(mem, manager_bitmap, container_id)) {
-        error = "container id " + std::to_string(container_id) + " is not marked used";
+    if (map_count > kMaxManagerCount) {
+        error = "implausible container map count " + std::to_string(map_count);
         return false;
     }
-    uint32_t pointers = 0;
-    if (!mem.u32(manager + kManagerPointersOffset, pointers) || pointers == 0) {
-        error = "item manager record-pointer array is null";
-        return false;
+    for (uint32_t index = 0; index < map_count; ++index) {
+        uint32_t key = 0;
+        uint32_t value = 0;
+        if (!mem.u32(map_entries + index * 8, key) || !mem.u32(map_entries + index * 8 + 4, value))
+            continue;
+        if (key != container_id)
+            continue;
+        if (value == 0) {
+            error = "null container pointer for id " + std::to_string(container_id);
+            return false;
+        }
+        container = value;
+        return true;
     }
-    if (!mem.u32(pointers + container_id * 4, container) || container == 0) {
-        error = "null container record for id " + std::to_string(container_id);
-        return false;
-    }
-    return true;
+    error = "container id " + std::to_string(container_id) + " not found in item manager map";
+    return false;
 }
 
 bool scan_once(const MemReader &mem, const ModuleInfo &server, ScanResult &result) {
@@ -724,11 +756,13 @@ bool scan_once(const MemReader &mem, const ModuleInfo &server, ScanResult &resul
     }
     result.level_read = true;
     uint32_t entities = 0;
+    uint32_t entity_bitmap_ptr = 0;
     uint32_t entity_bitmap = 0;
     uint32_t entity_count = 0;
     if (!mem.u32(level_ptr + kEntityArrayOffset, entities) ||
-        !mem.u32(level_ptr + kEntityBitmapOffset, entity_bitmap) ||
-        !mem.u32(level_ptr + kEntityCountOffset, entity_count)) {
+        !mem.u32(level_ptr + kEntityBitmapOffset, entity_bitmap_ptr) ||
+        !mem.u32(level_ptr + kEntityCountOffset, entity_count) ||
+        !mem.u32(entity_bitmap_ptr, entity_bitmap)) {
         add_warning(result, "cannot read the level entity table");
         return false;
     }
@@ -801,8 +835,7 @@ bool scan_once(const MemReader &mem, const ModuleInfo &server, ScanResult &resul
         }
         uint32_t container = 0;
         std::string error;
-        if (!resolve_container(mem, manager, manager_count, manager_bitmap, container_id, container,
-                               error)) {
+        if (!resolve_container(mem, manager, container_id, container, error)) {
             add_warning(result, "'" + name + "': " + error);
             continue;
         }
@@ -1068,6 +1101,31 @@ int run(const Options &options) {
     }
     MemReader mem(process);
 
+    if (options.scan_only) {
+        const ScanResult scan = scan_until_stable(mem, server);
+        log_info("scan-only: entities=" + std::to_string(scan.entity_count) +
+                 " persons=" + std::to_string(scan.person_count) +
+                 " items=" + std::to_string(scan.items.size()) +
+                 " mods=" + std::to_string(scan.total_mods) +
+                 (scan.complete ? "" : " (incomplete)"));
+        std::size_t shown = 0;
+        for (const ItemRow &item : scan.items) {
+            if (shown++ >= 20)
+                break;
+            std::string line = "  " + item.person + " item=" + std::to_string(item.item_id) +
+                               " count=" + std::to_string(item.count) + " mods=";
+            for (const ModRow &mod : item.mods) {
+                line += "[" + std::to_string(mod.id) + ":" + std::to_string(mod.value) + ":0x" +
+                        address_string(mod.flags).substr(2) + "]";
+            }
+            log_info(line);
+        }
+        for (const std::string &warning : scan.warnings)
+            log_warn(warning);
+        CloseHandle(process);
+        return scan.complete && scan.person_count != 0 ? 0 : 4;
+    }
+
     CaptureState state;
     state.bp0 = server.base + kNpcSpawnRva;
     state.bp1 = server.base + kRandBeforeDrawRva;
@@ -1138,8 +1196,10 @@ int run(const Options &options) {
                         log_info("NPC generation active (thread " +
                                  std::to_string(event.dwThreadId) + ")");
                     }
+                    debugger.arm_dr1(event.dwThreadId);
                     debugger.clear_dr0(event.dwThreadId);
                 } else if (address == state.bp1) {
+                    log_info("single-step at DR1 on thread " + std::to_string(event.dwThreadId));
                     if (state.generation_active) {
                         if (event.dwThreadId != state.generation_tid) {
                             debugger.clear_dr1(event.dwThreadId);

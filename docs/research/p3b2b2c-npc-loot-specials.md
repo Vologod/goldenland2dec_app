@@ -763,3 +763,21 @@ tech_names.sdb BACFC79409DFEA4FAD1AB85D21235C2E4D7F37C4525B69C87F7838634F391796
   `p3b2b1-inventory-mutations-server.md` (item records, containers).
 - `docs/DECISIONS.md` D-058 (modifier price guard), D-029 (no guesses),
   D-055 (specials skipped → RNG desync).
+
+## 10. Live capture 2026-11-10 (BLOCKED/PARTIAL)
+
+- **Tool:** `tools/live/gl_live_capture.exe` (32-bit, read-only attach;
+  hardware DR0 at `Server.dll+0x4b1c0`, DR1 at `+0x6c0a4`; scan-only mode).
+- **Artifact (not committed):** `.local/live/special-l1_1-entry.txt`.
+  `level=l1_1`, `rng_state=0x71df3143`, `loot_level=2`, 21 item / 4 mod.
+- **FPU:** live x87 `ControlWord = 0x007F` at generation entry, first draw
+  and scan time (PC=24, RC=nearest), not the expected `0x027F` (PC=53).
+  This is a direct live measurement and contradicts the extraction
+  assumption used by the analytic oracle.
+- **Gate result (`GL_SPECIALS_FPU_CW=0x007F`, captured state):** CW check
+  127 vs 639 fails; NPC oracle captured items=19 / port=31, matched=1 /
+  mismatched=48; mods captured=1 / port=0. No test weakened.
+- **Unresolved:** precision model (single vs double), common RNG stream
+  order/scope (live entity/SEF order vs port sorted persons), inherited
+  ITM `effects>0` scope. STATUS remains `partial`; live gates OPEN.
+  Follow-up: separate live-parity subproject/spec (D-061).

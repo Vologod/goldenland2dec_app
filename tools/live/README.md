@@ -53,6 +53,11 @@ Smoke check:
    32-bit game. `SeDebugPrivilege` is requested; without it, attach may still work for a
    same-user process, otherwise run from an elevated shell.
 
+   `--scan-only` attaches without installing breakpoints, scans the already loaded
+   level once, prints up to 20 `person/item/count/mods` rows, and exits 0 when the
+   scan is complete with at least one person, otherwise 4. It is a diagnostic mode;
+   it never writes an oracle capture.
+
 3. When the first NPC generation draw is hit, the tool records the CRT `_rand` state and
    the live x87 control word, detaches, waits for the level containers to settle, scans
    every `EF_PERSON` main container, and writes the capture. Without a level load within
@@ -90,9 +95,12 @@ Smoke check:
   bitmap at `+0x2568`, count at `+0x256c`; `EF_PERSON` is `(entity+0x14 & 0x3e) == 2`.
   The person name is the C string at `entity+0x4c`; the main container id is at
   `entity+0x10`.
-- `DAT_14088df8` item manager, `+0x18` record-pointer array, `+0x1c` count, `+0x20`
-  used bitmap. A container record is `manager_array[container_id]`; `+0x0c` is the
-  `u32` record-id array, `+0x10` is the slot count, `+0x14` is the used bitmap.
+- `DAT_14088df8` item manager. Containers are resolved through the manager's
+  key→value map at `+0x0c` (count at `+0`, entry array at `+4`, stride 8:
+  key at `+0`, container pointer at `+4`), matching `FUN_1404bf8c` →
+  `FUN_14004f14(manager+0xc)` → `FUN_14004a20`. The old array-index lookup was
+  wrong. A container record has `+0x0c` record-id array, `+0x10` slot count,
+  `+0x14` used bitmap.
 - Item record: flags `+0x0c`, uid `+0xa4`, item id `+0xa8`, count `+0xb0`, mod count
   `+0x78`, mod array `+0x7c`. Mod stride is `0x14`: id `+0x00`, value `+0x04`,
   flags `+0x08`.
@@ -145,7 +153,7 @@ rejects that format, so an incomplete run cannot be mistaken for a real oracle.
 - Start the tool before the level load. If the first NPC generation already happened,
   the breakpoints cannot recover the pre-draw CRT state; the tool times out and writes a
   partial diagnostic file. It does not guess a seed.
-- The scan starts after `DebugActiveProcessStop` and polls for up to 5 seconds until the
+- The scan starts after `DebugActiveProcessStop` and polls for up to 15 seconds until the
   item/mod count is stable for 500 ms. This gives level generation time to finish; it is
   not a fixed sleep and it is not evidence by itself.
 - Only the main container (`entity+0x10`) is captured. The trade container

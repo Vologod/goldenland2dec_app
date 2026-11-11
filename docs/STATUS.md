@@ -1,6 +1,43 @@
 # STATUS
 
-Обновлено: 2026-11-10
+Обновлено: 2026-11-11
+## Phase 1b2b2e — Specials live parity (design approved 2026-11-11; implementation not started)
+
+- **Задача:** закрыть live-гейты specials (`1b2b2d` был `partial`):
+  provenance live-захвата, порядок/scope RNG, inherited ITM effects,
+  precision-модель, финальный 0/N на `l1_1`.
+- **Spec:** `docs/specs/2026-11-11-p3b2b2e-specials-live-parity-design.md`.
+- **Plan:** `docs/plans/2026-11-11-p3b2b2e-specials-live-parity.md`.
+- **Стадии:** Stage 0 tool correctness (map-резолв + `--scan-only`);
+  Stage 1 provenance (call-order, LCG double-draw, `loot_level` из
+  `BT_INFO+0x26c4`); Stage 2 модель по evidence (порядок persons,
+  inherited effects, merge при необходимости); Stage 3 precision
+  (binary32/PC=24 для specials и `TradePrice`); Stage 4 live-приёмка
+  (NPC 0/N + CW у `FUN_1206E8D0`).
+- **Доказано при design:** live item flags = raw ITM flags (маска не
+  нужна: `812`=`0xC0000000`, `372`=`0xC0000284`, `933`=`0x8000000C`);
+  inherited mods = ITM effects (`933` `7/1/0x50`+`8/-1/0x50`, `418`
+  `27/5/0x50`); container map — `FUN_1404bf8c` → `FUN_14004f14(manager+0xc)`
+  → `FUN_14004a20` (count `+0`, entries `+4`, stride 8); `level->persons`
+  уже в SEF-порядке.
+- **Критерии приёмки:** live NPC oracle `mismatched_items==0 &&
+  mismatched_mods==0` на `l1_1`; FPU-гейт на измеренных generation/price
+  CW (PC=24, RC=nearest); полный `ctest` с `GL_GAME_DIR`; docs/parity.
+- **Команды проверки:** i686-сборка tool + `--help`; `cmake --build
+  build`; `GL_SPECIALS_LIVE=<capture> GL_SPECIALS_FPU_CW=<file>
+  build\bin\gl_game_tests.exe --test-case="*special*gate*" --success`;
+  `ctest --test-dir build --output-on-failure`.
+- **Open Questions (1b2b2e):**
+  1. Точный порядок вызовов `FUN_1404b1c0` (SEF vs entity/spawn).
+  2. Нужен ли merge/stacking для 0/N на `l1_1`.
+  3. Live CW у `FUN_1206E8D0` и модель цены.
+  4. Причина отсутствия generated mod `372` при captured state
+     (порядок, precision или provenance).
+- **Статус:** design approved; plan написан
+  (`docs/plans/2026-11-11-p3b2b2e-specials-live-parity.md`, part 1: Stage
+  0/1/2a/3; Stage 2b/4 — follow-up plan после live-evidence и price CW).
+  Реализация не начата.
+
 ## Phase 1b2b2d — NPC loot specials implementation (done 2026-11-10)
 
 - **Задача:** `specials.scr` parser, `SpecialEngine` (R4–R10),
@@ -65,7 +102,24 @@
   clean. Ready to merge = Yes как `partial`; full parity — только после
   live FPU-CW/NPC-mod. Отложенные minors: vacuous 0/0 gate assertion,
   merge не копирует mods в существующий стек, helper unexercised.
-- **Дальше:** live FPU-CW + live NPC-mod capture (закрытие гейтов) либо
+- **Live gates (2026-11-10, BLOCKED/PARTIAL):** user-assisted capture
+  (`.local/live/special-l1_1-entry.txt`, 32-bit read-only tracer,
+  артефакт не коммитить): `level=l1_1`, `rng_state=0x71df3143`,
+  `loot_level=2`, 21 item / 4 mod (P389 item 372 mod 28/2/0x41;
+  P693 item 933 mods 7/1/0x50 и 8/-1/0x50).
+  **Live x87 CW = `0x007F`** (generation-entry/first-draw/scan-time),
+  не `0x027F` → single precision; gate `*special*gate*` падает на
+  CW-check (127 vs 639). NPC-oracle: captured items=19 / port=31,
+  matched=1, mismatched=48; mods captured=1 / port=0. Гипотезы (не
+  подтверждены): single vs double precision; порядок/scope общего
+  RNG-потока (port сортирует persons, live идёт в entity/SEF-порядке);
+  inherited ITM `effects>0` вне scope. Полный паритет НЕ заявлен —
+  статус **`partial`**; live-гейты остаются OPEN/BLOCKED.
+- **Next task (planned, отдельный подпроект):** live-parity разбор:
+  (1) зафиксировать live CW `0x007F` и пересмотреть precision-модель
+  specials/price; (2) модель порядка генерации persons;
+  (3) scope inherited effects. До этого — не «дожать гейт» ослаблением.
+- **Дальше:** отдельный подпроект live-parity (см. выше) либо
   `P2-15` (save payload), затем 35 Гц (`P2-9`).
 
 ## Phase 1b2b2c — NPC loot specials research (done 2026-11-10)
