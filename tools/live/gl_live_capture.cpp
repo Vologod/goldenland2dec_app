@@ -33,6 +33,11 @@ constexpr uint32_t kEntityNameOffset = 0x4c;
 constexpr uint32_t kEntityMainContainerOffset = 0x10;
 constexpr uint32_t kNpcSpawnRva = 0x4b1c0;
 constexpr uint32_t kRandBeforeDrawRva = 0x6c0a4;
+constexpr uint32_t kRandIntRangeRetRva = 0x6200;
+constexpr uint32_t kRandFloatRangeRetRva = 0x6269;
+constexpr uint32_t kRandCoinRetRva = 0x62b7;
+constexpr uint32_t kRandIntRangeCallerStackOffset = 0x30;
+constexpr uint32_t kRandFrame8CallerStackOffset = 0xc;
 constexpr uint32_t kPriceCallRva = 0x6e8d0;
 constexpr uint32_t kLootLevelOffset = 0x26c4;
 constexpr uint32_t kNpcSpawnHotStackOffset = 4;
@@ -1523,7 +1528,14 @@ int run(const Options &options) {
                             debugger.get_context(event.dwThreadId, context);
                         if (have_context) {
                             mem.u32(context.Esp, ret);
-                            mem.u32(context.Esp + 4, caller);
+                            uint32_t caller_offset = 0;
+                            if (ret == server.base + kRandIntRangeRetRva)
+                                caller_offset = kRandIntRangeCallerStackOffset;
+                            else if (ret == server.base + kRandFloatRangeRetRva ||
+                                     ret == server.base + kRandCoinRetRva)
+                                caller_offset = kRandFrame8CallerStackOffset;
+                            if (caller_offset != 0)
+                                mem.u32(context.Esp + caller_offset, caller);
                             const uint32_t crt = context.Eax;
                             state_read = crt != 0 && mem.u32(crt + 0x14, rng_state);
                         }

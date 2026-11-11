@@ -161,9 +161,13 @@ or from a separate generation capture; the `price=` value comes from this mode.
 - In trace mode DR1 also stays armed for the whole trace window: every DR1 hit counts as
   one `_rand` draw on the current NPC call (`draws=<M>`) and records the wrapper return
   address (`ret`, read from `[esp]` at the pre-draw site), the wrapper's own caller
-  (`caller`, read from `[esp+4]`), and the pre-draw state, up to `kMaxDrawTrace` draws per
-  call. Each DR1 hit sets RF like DR0. The first hit still captures `rng_state`, the
-  second still performs the LCG check, and later hits are counted only. Per-draw rows are
+  (`caller`), and the pre-draw state, up to `kMaxDrawTrace` draws per call. `ret` selects
+  the caller frame offset because the wrappers have different frames:
+  `ret == server.base + 0x6200` (int `range`) reads the caller at `[esp+0x30]`, while
+  `ret == server.base + 0x6269` (float range) or `server.base + 0x62b7` (`coin`) reads it
+  at `[esp+0xc]`. Unknown wrappers leave `caller=0x00000000`. Each DR1 hit sets RF like
+  DR0. The first hit still captures `rng_state`, the second still performs the LCG check,
+  and later hits are counted only. Per-draw rows are
   `# draw=<call> <k> ret=0x........ caller=0x........ state=0x........`; `caller` is the
   address to use when locating the extra RNG consumers (the `ret` values alone only
   identify the CRT `_rand` wrappers). `draws=<M>` counts every draw while `# draw=` rows
