@@ -101,3 +101,53 @@ TEST_CASE("person script: converts cp1251 values to UTF-8") {
     CHECK(result->values.at("title") ==
           "\xD0\x9F\xD1\x80\xD0\xB8\xD0\xB2\xD0\xB5\xD1\x82");
 }
+
+TEST_CASE("person script: weapon block keeps file order and level offset") {
+    const std::string text = "res_name: \"L0.P6_Test\"\n"
+                             "level: 7\n"
+                             "weapon:\n"
+                             "{\n"
+                             "  level_offset -3\n"
+                             "  NPC_HANDS_A 10 20\n"
+                             "  NPC_HANDS_B -100 10\n"
+                             "  NPC_HANDS_C 1 3\n"
+                             "}\n";
+    auto result = parse_person_script(as_bytes(text));
+    REQUIRE(result.has_value());
+    CHECK(result->has_weapon);
+    CHECK(result->weapon_level_offset == -3);
+    REQUIRE(result->weapons.size() == 3);
+    CHECK(result->weapons[0].name == "NPC_HANDS_A");
+    CHECK(result->weapons[0].min_level == 10);
+    CHECK(result->weapons[0].max_level == 20);
+    CHECK(result->weapons[1].name == "NPC_HANDS_B");
+    CHECK(result->weapons[2].name == "NPC_HANDS_C");
+    CHECK(result->values.at("weapon.NPC_HANDS_A") == "10 20");
+    CHECK(result->values.at("weapon.level_offset") == "-3");
+}
+
+TEST_CASE("person script: absent weapon block leaves weapon fields clear") {
+    auto result = parse_person_script(
+        as_bytes("res_name: \"L0.P7_Test\"\nlevel: 3\nstrength: 4\n"));
+    REQUIRE(result.has_value());
+    CHECK_FALSE(result->has_weapon);
+    CHECK(result->weapons.empty());
+    CHECK(result->weapon_level_offset == 0);
+}
+
+TEST_CASE("person script: inline weapon block skips non-numeric rows") {
+    const std::string text = "res_name: \"L0.P8_Test\"\n"
+                             "level: 5\n"
+                             "weapon: {\n"
+                             "  res_name: \"ignored\"\n"
+                             "  level: 99\n"
+                             "  NPC_OK 1 10 // comment\n"
+                             "}\n";
+    auto result = parse_person_script(as_bytes(text));
+    REQUIRE(result.has_value());
+    CHECK(result->has_weapon);
+    REQUIRE(result->weapons.size() == 1);
+    CHECK(result->weapons[0].name == "NPC_OK");
+    CHECK(result->weapons[0].min_level == 1);
+    CHECK(result->weapons[0].max_level == 10);
+}

@@ -95,6 +95,23 @@ bool parse_level(std::string_view value, std::int32_t &out) {
     return true;
 }
 
+bool parse_two_ints(std::string_view value, std::int32_t &first, std::int32_t &second) {
+    auto read_int = [&](std::int32_t &out) {
+        value = trim(value);
+        if (value.empty())
+            return false;
+        std::int32_t parsed = 0;
+        const auto [end, error] =
+            std::from_chars(value.data(), value.data() + value.size(), parsed);
+        if (error != std::errc{} || end == value.data())
+            return false;
+        out = parsed;
+        value.remove_prefix(static_cast<std::size_t>(end - value.data()));
+        return true;
+    };
+    return read_int(first) && read_int(second) && trim(value).empty();
+}
+
 VoidResult parse_line(std::string_view line, const std::vector<std::string> &blocks,
                       bool top_level, PersonDef &person, std::string &pending_block) {
     std::size_t key_end = 0;
@@ -115,6 +132,8 @@ VoidResult parse_line(std::string_view line, const std::vector<std::string> &blo
 
     std::string_view value = trim(line.substr(position));
     if (value.empty()) {
+        if (top_level && key == "weapon")
+            person.has_weapon = true;
         pending_block = std::string(key);
         return VoidResult{std::monostate{}};
     }
@@ -129,6 +148,20 @@ VoidResult parse_line(std::string_view line, const std::vector<std::string> &blo
     }
 
     pending_block.clear();
+    const bool in_weapon_block = blocks.size() == 1 && blocks[0] == "weapon";
+    if (in_weapon_block) {
+        if (key == "level_offset") {
+            std::int32_t offset = 0;
+            if (parse_level(value, offset))
+                person.weapon_level_offset = offset;
+        } else {
+            PersonWeapon weapon;
+            if (parse_two_ints(value, weapon.min_level, weapon.max_level)) {
+                weapon.name = std::string(key);
+                person.weapons.push_back(std::move(weapon));
+            }
+        }
+    }
     if (top_level && key == "res_name") {
         if (value.empty())
             return format_error("person script has an empty res_name");
@@ -191,6 +224,8 @@ Result<PersonDef> parse_person_script(std::span<const std::uint8_t> data) {
 
             if (opens > 0) {
                 const std::string_view key = header_key(line);
+                if (depth == 0 && key == "weapon")
+                    person.has_weapon = true;
                 if (!key.empty())
                     blocks.emplace_back(key);
                 else
