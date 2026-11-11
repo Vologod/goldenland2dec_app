@@ -7,6 +7,7 @@
 #include "gl/game/msvc_random.hpp"
 #include "gl/game/npc_loot.hpp"
 #include "gl/game/person.hpp"
+#include "gl/game/person_rng.hpp"
 #include "gl/game/special_engine.hpp"
 #include "gl/game/trade_price.hpp"
 
@@ -593,34 +594,42 @@ bool build_port_records(LiveCapture &capture, bool filter_to_captured, PortRun &
     const auto lookup = make_lookup(catalog.value());
     gl::game::MsvcRandom rng(capture.rng_state);
     std::map<std::string, std::optional<gl::assets::InvTable>, std::less<>> cache;
+    std::set<std::string> inserted_persons;
     for (const gl::game::PersonInstance &person : level->persons) {
-        if (person.inventory.empty() || person.name == "Hero")
+        if (person.name == "Hero")
             continue;
-        ++port.generated_persons;
-        port.order.push_back(person.name + "(" + person.inventory + ")");
-        auto cached = cache.find(person.inventory);
-        if (cached == cache.end()) {
-            auto table = gl::assets::load_inv(vfs.value(), person.inventory);
-            if (!table)
-                cached = cache.emplace(person.inventory, std::nullopt).first;
-            else
-                cached = cache.emplace(person.inventory, std::move(table.value())).first;
-        }
-        if (!cached->second)
-            continue;
-        const gl::game::NpcLoot loot = gl::game::NpcLootGenerator::generate(
-            *cached->second, capture.loot_level, names.value(), lookup, rng, &specials.value());
-        if (filter_to_captured && !captured_persons.contains(person.name))
-            continue;
-        for (const gl::game::LootItem &item : loot.main) {
-            port.items.insert(CapturedItem{person.name, item.item_id, item.count, item.flags,
-                                           item.mod_count});
-            for (const gl::assets::SpecialMod &mod : item.mods) {
-                port.mods.insert(CapturedMod{person.name, item.item_id, item.count, item.flags,
-                                             static_cast<std::int32_t>(mod.id), mod.value,
-                                             mod.flags});
+        const bool first_instance = inserted_persons.insert(person.name).second;
+        if (!person.inventory.empty()) {
+            port.order.push_back(person.name + "(" + person.inventory + ")");
+            if (first_instance)
+                ++port.generated_persons;
+            auto cached = cache.find(person.inventory);
+            if (cached == cache.end()) {
+                auto table = gl::assets::load_inv(vfs.value(), person.inventory);
+                if (!table)
+                    cached = cache.emplace(person.inventory, std::nullopt).first;
+                else
+                    cached = cache.emplace(person.inventory, std::move(table.value())).first;
+            }
+            if (cached->second) {
+                const gl::game::NpcLoot loot = gl::game::NpcLootGenerator::generate(
+                    *cached->second, capture.loot_level, names.value(), lookup, rng,
+                    &specials.value());
+                if (first_instance &&
+                    (!filter_to_captured || captured_persons.contains(person.name))) {
+                    for (const gl::game::LootItem &item : loot.main) {
+                        port.items.insert(CapturedItem{person.name, item.item_id, item.count,
+                                                       item.flags, item.mod_count});
+                        for (const gl::assets::SpecialMod &mod : item.mods) {
+                            port.mods.insert(CapturedMod{
+                                person.name, item.item_id, item.count, item.flags,
+                                static_cast<std::int32_t>(mod.id), mod.value, mod.flags});
+                        }
+                    }
+                }
             }
         }
+        gl::game::consume_person_init_rng(person.def, rng);
     }
     return true;
 }
