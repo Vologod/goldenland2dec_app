@@ -71,7 +71,17 @@
   560309 assertions), `*trade_price*` **16/16** (49 assertions),
   `trade_overlay_tests` **23/23** (2 skipped, 610 assertions); live gate
   **7/8** (FPU pass; live oracle fails `check=fail`); i686 tool rebuild 0
-  warnings, `--help` exit 0. Full `ctest` — за controller.
+  warnings, `--help` exit 0.
+- **Final verification after fix wave (2026-11-11, HEAD `593be52`):**
+  `cmake --build build` exit 0; full
+  `ctest --test-dir build --output-on-failure` (`GL_GAME_DIR=...`) —
+  `100% tests passed out of 19`, `Total Test time (real) = 2175.64 sec`,
+  exit 0. Final scoped re-review: все Critical/Important закрыты; deferred
+  minors: `tools/live/README.md` всё ещё говорит, что все `#`-комментарии
+  игнорируются (но `rng_second check=` парсится), и DR0 `RW0`-биты
+  (16–17) не очищаются в `ensure_thread` (маска `0x00FF00FF` была бы
+  безопаснее). Live oracle остаётся `partial` (pre-fix capture `check=fail`;
+  Stage 2b/4 — follow-up).
 - **Open Questions (1b2b2e):**
   1. Точный порядок вызовов `FUN_1404b1c0` (SEF vs entity/spawn) —
      resolved 2026-11-11: live order = port SEF order 1:1.
