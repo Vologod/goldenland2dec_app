@@ -1330,6 +1330,7 @@ int run(const Options &options) {
                                 log_error("cannot read the generation thread context at the "
                                           "first NPC draw");
                             }
+                            debugger.set_resume_flag(event.dwThreadId);
                         } else if (!state.second_draw_seen) {
                             CONTEXT context{};
                             state.second_draw_seen = true;
