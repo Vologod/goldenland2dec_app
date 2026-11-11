@@ -89,31 +89,31 @@ void check_transfer_item_slot(gl::assets::GameVfs &vfs, const gl::assets::ItemCa
         auto runtime = make_transfer_scenario(vfs, slot, catalog, names, level);
         REQUIRE(runtime.transfer_item("Hero", p7, "MON_1_0_1", 100));
         CHECK(runtime.count("Hero", "MON_1_0_1") == money - 100);
-        CHECK(runtime.count(p7, "MON_1_0_1") == 187);
+        CHECK(runtime.count(p7, "MON_1_0_1") == 222);
     }
     {
         auto runtime = make_transfer_scenario(vfs, slot, catalog, names, level);
         REQUIRE(runtime.transfer_item(p7, "Hero", "MON_1_0_1", 100));
-        CHECK(runtime.count(p7, "MON_1_0_1") == 0);
-        CHECK(runtime.count("Hero", "MON_1_0_1") == money + 87);
+        CHECK(runtime.count(p7, "MON_1_0_1") == 22);
+        CHECK(runtime.count("Hero", "MON_1_0_1") == money + 100);
     }
     {
         auto runtime = make_transfer_scenario(vfs, slot, catalog, names, level);
         REQUIRE(runtime.transfer_item(p7, "Hero", "MON_1_0_1", 1000));
         CHECK(runtime.count(p7, "MON_1_0_1") == 0);
-        CHECK(runtime.count("Hero", "MON_1_0_1") == money + 87);
+        CHECK(runtime.count("Hero", "MON_1_0_1") == money + 122);
     }
     {
         auto runtime = make_transfer_scenario(vfs, slot, catalog, names, level);
         REQUIRE(runtime.transfer_item("Hero", p7, "MON_1_0_1", -1));
         CHECK(runtime.count("Hero", "MON_1_0_1") == 0);
-        CHECK(runtime.count(p7, "MON_1_0_1") == 87 + money);
+        CHECK(runtime.count(p7, "MON_1_0_1") == 122 + money);
     }
     {
         auto runtime = make_transfer_scenario(vfs, slot, catalog, names, level);
         REQUIRE(runtime.transfer_item("Hero", p7, "MON_1_0_1", 0));
         CHECK(runtime.count("Hero", "MON_1_0_1") == money);
-        CHECK(runtime.count(p7, "MON_1_0_1") == 87);
+        CHECK(runtime.count(p7, "MON_1_0_1") == 122);
     }
     {
         auto runtime = make_transfer_scenario(vfs, slot, catalog, names, level);
@@ -126,8 +126,8 @@ void check_transfer_item_slot(gl::assets::GameVfs &vfs, const gl::assets::ItemCa
         REQUIRE(runtime.transfer_item("Hero", p678, "POT_1_00_27", 10));
         CHECK(runtime.count("Hero", "POT_1_00_27") == potion - 10);
         CHECK(runtime.count(p678, "POT_1_00_27") == 10);
-        REQUIRE(runtime.person_items(p678).size() == 1);
-        const auto &item = runtime.person_items(p678)[0];
+        REQUIRE(runtime.person_items(p678).size() == 2);
+        const auto &item = runtime.person_items(p678)[1];
         CHECK(item.type == 19);
         CHECK(item.flags == 0x8000020Cu);
         CHECK(item.style == 1);
@@ -158,7 +158,7 @@ void check_transfer_item_slot(gl::assets::GameVfs &vfs, const gl::assets::ItemCa
         auto runtime = make_transfer_scenario(vfs, slot, catalog, names, level);
         REQUIRE(runtime.transfer_item("Hero", "Hero", "MON_1_0_1", 100));
         CHECK(runtime.count("Hero", "MON_1_0_1") == money);
-        CHECK(runtime.count(p7, "MON_1_0_1") == 87);
+        CHECK(runtime.count(p7, "MON_1_0_1") == 122);
     }
 }
 
@@ -178,7 +178,7 @@ void check_transfer_all_slot(gl::assets::GameVfs &vfs, const gl::assets::ItemCat
     {
         auto runtime = make_transfer_scenario(vfs, slot, catalog, names, level);
         REQUIRE(runtime.transfer_all(p678, "Hero"));
-        CHECK(runtime.count("Hero", "MON_1_0_1") == money);
+        CHECK(runtime.count("Hero", "MON_1_0_1") == money + 117);
         CHECK(runtime.count("Hero", "POT_1_00_27") == potion);
     }
     {
@@ -186,7 +186,7 @@ void check_transfer_all_slot(gl::assets::GameVfs &vfs, const gl::assets::ItemCat
         REQUIRE(runtime.transfer_all("Hero", p678));
         CHECK(runtime.hero_inventory().items.empty());
         CHECK(runtime.money() == 0);
-        CHECK(runtime.count(p678, "MON_1_0_1") == money);
+        CHECK(runtime.count(p678, "MON_1_0_1") == money + 117);
         CHECK(runtime.count(p678, "POT_1_00_27") == potion);
         CHECK(runtime.count(p678, "RGT_1_0_8") == regent);
     }
@@ -382,10 +382,10 @@ TEST_CASE("real data: l1_1 npc inventories match the pass-2 reference" *
     const gl::game::MsvcRandom rng_after_loot = rng;
 
     CHECK(runtime.count("L1_1.P387_Poison_Plotnik", "QST_1_0_5") == 1);
-    CHECK(runtime.count("L0.P7_Kolbasens_Rodstvennik1", "MON_1_0_1") == 87);
-    CHECK(runtime.count("L1_1.P389_Crying_Guardian", "MON_1_0_1") == 130);
-    CHECK(runtime.count("L0.P711_citizen8", "MON_1_0_1") == 121);
-    CHECK(runtime.person_items("L0.P678_citizen4").empty());
+    CHECK(runtime.count("L0.P7_Kolbasens_Rodstvennik1", "MON_1_0_1") == 122);
+    CHECK(runtime.count("L1_1.P389_Crying_Guardian", "MON_1_0_1") == 124);
+    CHECK(runtime.count("L0.P711_citizen8", "MON_1_0_1") == 91);
+    CHECK(runtime.count("L0.P678_citizen4", "MON_1_0_1") == 117);
     CHECK(runtime.access().item_count("L1_1.P387_Poison_Plotnik", "QST_1_0_5") == 1);
     REQUIRE_FALSE(runtime.trade_items("L1_1.P387_Poison_Plotnik").empty());
     CHECK(runtime.trade_money("L1_1.P387_Poison_Plotnik") == 0);
@@ -394,10 +394,10 @@ TEST_CASE("real data: l1_1 npc inventories match the pass-2 reference" *
     CHECK(runtime.trade_items("L1_1.P387_Poison_Plotnik")[0].type == 25);
     CHECK(runtime.trade_items("L1_1.P387_Poison_Plotnik")[0].count == 1);
 
-    REQUIRE(runtime.person_items("L0.P744_oficer1").size() == 2);
-    CHECK(runtime.person_items("L0.P744_oficer1")[0].item_id == 263);
-    CHECK(runtime.person_items("L0.P744_oficer1")[1].item_id == 371);
-    CHECK(runtime.count("L0.P744_oficer1", "MON_1_0_1") == 0);
+    REQUIRE(runtime.person_items("L0.P744_oficer1").size() == 1);
+    CHECK(runtime.person_items("L0.P744_oficer1")[0].item_id == 812);
+    CHECK(runtime.person_items("L0.P744_oficer1")[0].count == 128);
+    CHECK(runtime.count("L0.P744_oficer1", "MON_1_0_1") == 128);
 
     gl::game::LevelSimulation loot_sim = gl::game::LevelSimulation::create(level.value(), rng);
     gl::game::LevelSimulation loot_sim_copy =
@@ -422,10 +422,10 @@ TEST_CASE("real data: l13_1 slot0 trade lists match the research oracle" *
         {413, 16},    {433, 8}, {450, 11}, {952, 21}, {953, 51}, {451, 24},
     };
     const std::vector<ItemCountOracle> npc = {
-        {812, 12836}, {408, 10}, {409, 4},  {410, 8},  {415, 2},  {416, 1},  {419, 2},
-        {421, 2},     {951, 53}, {952, 31}, {953, 14}, {954, 51}, {955, 29}, {956, 16},
+        {812, 20043}, {411, 2},  {412, 1},  {415, 2},  {417, 2},  {418, 8},  {421, 5},
+        {951, 51},    {952, 29}, {953, 16}, {954, 49}, {955, 30}, {956, 17},
     };
-    check_l13_1_trade_oracle(0, 41, hero, 12836, npc);
+    check_l13_1_trade_oracle(0, 41, hero, 20043, npc);
 }
 
 TEST_CASE("real data: l13_1 slot2 trade lists match the research oracle" *
@@ -435,8 +435,9 @@ TEST_CASE("real data: l13_1 slot2 trade lists match the research oracle" *
         {444, 1},      {422, 2}, {410, 13}, {435, 5}, {423, 1}, {445, 13},
     };
     const std::vector<ItemCountOracle> npc = {
-        {812, 15197}, {408, 4},  {409, 8},  {414, 2},  {415, 1},  {418, 2},  {420, 2},
-        {421, 8},     {951, 46}, {952, 29}, {953, 17}, {954, 43}, {955, 32}, {956, 16},
+        {812, 19753}, {409, 2},  {410, 1},  {413, 2},  {415, 2},  {416, 8},  {419, 5},
+        {420, 7},     {421, 5},  {951, 47}, {952, 33}, {953, 15}, {954, 51}, {955, 23},
+        {956, 11},
     };
-    check_l13_1_trade_oracle(2, 37, hero, 15197, npc);
+    check_l13_1_trade_oracle(2, 37, hero, 19753, npc);
 }

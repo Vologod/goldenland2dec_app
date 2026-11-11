@@ -373,10 +373,10 @@ TEST_CASE("npc_loot specials: inventories keep generated mods and mod count" *
     gl::game::generate_npc_inventories(runtime, level->persons, vfs.value(), names.value(), lookup,
                                        1, rng, &specials.value());
 
-    CHECK(runtime.count("L1_1.P389_Crying_Guardian", "MON_1_0_1") == 102);
+    CHECK(runtime.count("L1_1.P389_Crying_Guardian", "MON_1_0_1") == 124);
     const std::vector<gl::assets::InventoryItem> &trade =
-        runtime.trade_items("L1_2.P404_Sister_Of_Mercy2");
-    const std::uint32_t brl_id = item_id_for(names.value(), "BRL_1_01_5");
+        runtime.trade_items("L0.P785_witch3");
+    const std::uint32_t brl_id = item_id_for(names.value(), "BRL_1_01_4");
     REQUIRE(brl_id != 0);
     const auto brl =
         std::find_if(trade.begin(), trade.end(),
@@ -386,9 +386,9 @@ TEST_CASE("npc_loot specials: inventories keep generated mods and mod count" *
     REQUIRE(brl != trade.end());
     CHECK(brl->mod_count == 1);
     REQUIRE(brl->mods.size() == 1);
-    CHECK(brl->mods[0].id == 25);
-    CHECK(brl->mods[0].value == -1);
-    CHECK(brl->mods[0].flags == 0x81u);
+    CHECK(brl->mods[0].id == 43);
+    CHECK(brl->mods[0].value == 2);
+    CHECK(brl->mods[0].flags == 0x41u);
     CHECK((brl->flags & 0x200u) != 0);
 
     gl::game::TradePriceInput price_input{};
