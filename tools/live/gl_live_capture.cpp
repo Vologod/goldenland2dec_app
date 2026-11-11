@@ -1278,7 +1278,8 @@ int run(const Options &options) {
                                  call.inventory);
                         state.calls.push_back(std::move(call));
                     }
-                    debugger.arm_dr1(event.dwThreadId);
+                    if (!state.second_draw_seen)
+                        debugger.arm_dr1(event.dwThreadId);
                     if (options.trace_calls_ms == 0)
                         debugger.clear_dr0(event.dwThreadId);
                 } else if (address == state.bp1) {
@@ -1327,6 +1328,8 @@ int run(const Options &options) {
                             debugger.clear_dr1(event.dwThreadId);
                             if (options.trace_calls_ms == 0)
                                 stop = true;
+                        } else {
+                            debugger.clear_dr1(event.dwThreadId);
                         }
                     }
                 }
