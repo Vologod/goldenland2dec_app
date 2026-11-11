@@ -82,21 +82,35 @@
   (16–17) не очищаются в `ensure_thread` (маска `0x00FF00FF` была бы
   безопаснее). Live oracle остаётся `partial` (pre-fix capture `check=fail`;
   Stage 2b/4 — follow-up).
+- **Part 2 (merge + RNG phase + price CW, 2026-11-11):** merge/stacking
+  `FUN_1404e3a4` реализован: per-container, same item id, `max_stack>=2`,
+  `count<max_stack`; caller **overwrites** count с текущим chunk (не sum),
+  RNG не потребляется. Полный `ctest` после merge — **19/19 passed**,
+  2068.71 s, exit 0; app-level trade oracles обновлены под 14-item NPC stock
+  (`12836`/`15197` money). Live draw-trace (новый старт игры,
+  `.local/live/special-start-draws5.txt`, `check=ok`, 8 calls) нашёл источник
+  переменной фазы: `FUN_1401d99c` — per-person random initial weapon
+  (`coin(0.5)` до успеха, 1–7 draw) и `FUN_14021bc8` — spawn init
+  (`range(+0x5e4,+0x5e8)`, 1 draw), между loot-вызовами. Порт эти системы не
+  моделирует → loot-stream сдвинут на 2–8 draw/person; это Part 3
+  (P4/P5 equipment/spawn RNG interleaving), не loot-баг. Tool: `--price-cw`
+  (`Client.dll+0x6e8d0`, ambient CW) готов; live price CW ещё не снят.
+  Evidence: `docs/research/p3b2b2e-live-parity-stage2b.md` §8; D-063.
 - **Open Questions (1b2b2e):**
   1. Точный порядок вызовов `FUN_1404b1c0` (SEF vs entity/spawn) —
      resolved 2026-11-11: live order = port SEF order 1:1.
-  2. Нужен ли merge/stacking для 0/N на `l1_1`.
-  3. Live CW у `FUN_1206E8D0` и модель цены.
-  4. ~~Отсутствие generated mod `372`~~ — относится к старому capture
-     `special-l1_1-entry.txt`; новый capture `special-l1_1-trace.txt`
-     (D-062) item 372 не содержит, вопрос снят как артефакт старого
-     захвата; остаток — P678/P693 (Stage 2b).
-- **Статус:** plan part 1 (Stage 0/1/2a/3) реализован; regression/docs
-  Task 6 закрыт. Live evidence 2026-11-11 снят; порядок и inherited effects
-  подтверждены, но NPC oracle `0/N` не достигнут — **`partial`**, полный
-  паритет не заявлен. Residual: Stage 2b (merge/stacking `FUN_1404e3a4` +
-  window/quantity) и Stage 4 (live price CW `FUN_1206E8D0`) остаются open;
-  follow-up plan создаётся после evidence.
+  2. Нужен ли merge/stacking для 0/N на `l1_1` — resolved: да, реализован
+     (overwrite per container).
+  3. Live CW у `FUN_1206E8D0` и модель цены — tool `--price-cw` готов;
+     live-значение ещё не снято (Stage 4).
+  4. ~~Отсутствие generated mod `372`~~ — артефакт старого capture.
+  5. Per-person initial weapon (`FUN_1401d99c`) и spawn init
+     (`FUN_14021bc8`) RNG draws: реализовать в SEF-порядке (Part 3).
+- **Статус:** Part 1 (Stage 0/1/2a/3) и Part 2 (merge, draw-trace, price-CW
+  tool) реализованы; полный `ctest` 19/19. NPC oracle `0/N` не достигнут —
+  **`partial`**: остаток вызван не loot-моделью, а per-person equipment/spawn
+  RNG (Part 3) и непроверенным live price CW (Stage 4). Полный паритет не
+  заявлен.
 
 ## Phase 1b2b2d — NPC loot specials implementation (done 2026-11-10)
 

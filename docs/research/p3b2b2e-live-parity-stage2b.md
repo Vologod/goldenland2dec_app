@@ -373,3 +373,52 @@ decompiled loot draw sites**, not a specials/window/quantity artefact.
   tool (per-call draw counts) is the recommended next live step.
 - No production code or tests were modified; the research copy of the capture
   lives only under `%TEMP%`.
+
+## 8. Per-call draw trace (2026-11-11)
+
+Valid new-game capture `.local/live/special-start-draws5.txt`:
+`# rng_second=0x33a1acb4 check=ok`, `rng_state=0x8e09c205`, 8 calls,
+1869 `# draw=` rows. Caller offsets were corrected per wrapper:
+`FUN_140061e4` (int range) caller at `[esp+0x30]`;
+`FUN_1400624c` (float range) and `FUN_14006288` (coin) caller at
+`[esp+0xc]`.
+
+Caller histogram (RVA → function):
+
+| caller RVA | function | draws | role |
+|---|---|---:|---|
+| `0x4b32d/0x4b406/0x4b444/0x4b6fd/0x4b7e8/0x4baf2/0x4ba0e` | `FUN_1404b1c0` | 344+343+… | NPC loot (R1/pass1/pass2) |
+| `0x47378/0x47604/0x47625/0x47677/0x4773b` | `FUN_14047284` | 131 | specials |
+| `0x1dd4e` | `FUN_1401d99c` | 9–? per call | per-person random initial weapon (`coin(0.5)` loop) |
+| `0x221c0` | `FUN_14021bc8` | 1 per call | per-entity spawn init `range(+0x5e4,+0x5e8)` |
+| `0x48c0b/0x48c4c` | `FUN_140489ec` | 139+33 | generic/hero loot (post-generation) |
+| `0x4951d` | `FUN_14048fac` | 6 | generic loot |
+| `0x5c53f` | `FUN_1405c4c8` | 672 | post-generation AI/update |
+| `0x1c3a4/0x1c2f8/0x1c305` | movement | 42/7/7 | post-generation AI/update |
+| `0x186dc/0x18786` | not in functions.csv | 9/8 | additional init (unmapped) |
+
+Per-call draws and the tail extras (draws between this loot call and the
+next one):
+
+| call | inventory | draws | tail extras before next call |
+|---:|---|---:|---|
+| 1 | `inv011_caster` | 284 | `0x1dd4e`×2 + `0x221c0`×1 |
+| 2 | `inv002_rich_spearman` | 69 | `0x1dd4e`×7 + `0x221c0`×1 |
+| 3 | `q1` | 3 | `0x1dd4e`×1 + `0x221c0`×1 |
+| 4 | `inv001_swordsman` | 83 | `0x1dd4e`×4 + `0x221c0`×1 |
+| 5 | `inv001_swordsman` | 107 | `0x1dd4e`×? + `0x221c0`×1 |
+| 6 | `inv014_money` | 14 | `0x1dd4e` + `0x221c0` |
+| 7 | `inv011_caster` | 246 | `0x1dd4e` + `0x221c0` |
+| 8 | `inv001_swordsman` | 1063 | post-generation pollution (not loot) |
+
+Conclusion: the variable per-call phase is **per-person pre-loot RNG**.
+`FUN_1401d99c` parses the person parameter file (`weapon` block) and selects
+an initial weapon by repeating `coin(0.5)` until success (1–7 draws);
+`FUN_14021bc8` performs spawn init (`range(this+0x5e4,this+0x5e8)`, one
+draw). These draws happen after the previous person's loot call and before
+the next person's `FUN_1404b1c0`, so the port's pure loot stream is shifted
+by 2–8 draws per person. The port does not model these systems
+(`NpcLootGenerator` is loot-only). Part 3 must implement the person
+parameter/equipment selection and spawn-init draws in the SEF order; without
+that, the `l1_1` loot oracle cannot reach 0/N. Merge/stacking and
+window/quantity are already correct (Part 2 Task 1).
