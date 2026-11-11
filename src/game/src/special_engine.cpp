@@ -65,7 +65,7 @@ std::vector<gl::assets::SpecialMod> SpecialEngine::apply(const gl::assets::Speci
         if (def == nullptr)
             continue;
 
-        double fval = 0.0;
+        float fval = 0.0f;
         gl::assets::SpecialFlags tag1 = 0;
         gl::assets::SpecialFlags tag2 = 0;
 
@@ -80,7 +80,7 @@ std::vector<gl::assets::SpecialMod> SpecialEngine::apply(const gl::assets::Speci
                 continue;
             if (pick == 0) {
                 tag1 = slot.tag;
-                fval = static_cast<double>(slot.value);
+                fval = slot.value;
                 break;
             }
             --pick;
@@ -98,16 +98,16 @@ std::vector<gl::assets::SpecialMod> SpecialEngine::apply(const gl::assets::Speci
                 continue;
             if (pick == 0) {
                 tag2 = slot.tag;
-                fval *= static_cast<double>(slot.value);
+                fval *= slot.value;
                 break;
             }
             --pick;
         }
 
         const gl::assets::SpecialFlags flags = tag1 | tag2;
-        int value = static_cast<int>(fval * static_cast<double>(loot_level));
+        int value = static_cast<int>(fval * static_cast<float>(loot_level));
         int half = value >> 1;
-        if (fval < 0.0) {
+        if (fval < 0.0f) {
             if (value >= 0)
                 value = -1;
             if (half >= 0)

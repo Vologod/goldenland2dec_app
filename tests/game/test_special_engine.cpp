@@ -305,3 +305,20 @@ TEST_CASE("special engine skips a pool id without a SpecialDef") {
     REQUIRE(mods.size() == 1);
     check_mod(mods[0], 5u, 1, 0x41u);
 }
+
+TEST_CASE("special engine uses x87 single-precision product") {
+    SpecialDatabase db;
+    SpecialDef def;
+    def.id = 0;
+    def.value_slots[0] = value_slot(0x40, 1, 0x1.4d29c2p+0f);
+    def.time_slots[0] = value_slot(0, 1, 1.0f);
+    db.defs = {def};
+    db.item_classes[ItemType::sword] = {0};
+
+    MsvcRandom rng(9969);
+    const std::vector<SpecialMod> mods =
+        SpecialEngine::apply(db, ItemType::sword, 1, 282, rng);
+    REQUIRE(mods.size() == 1);
+    CHECK(mods[0].id == 0);
+    CHECK(mods[0].value == 367);
+}
