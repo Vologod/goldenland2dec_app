@@ -121,6 +121,7 @@ struct ThreadSlot {
 
 struct DrawTrace {
     uint32_t ret = 0;
+    uint32_t caller = 0;
     uint32_t state = 0;
 };
 
@@ -1135,11 +1136,12 @@ bool write_capture(const std::filesystem::path &path, bool valid, const Options 
              << " inv=" << call.inventory << " draws=" << call.draws << "\n";
         for (std::size_t k = 0; k < call.draw_returns.size(); ++k) {
             const DrawTrace &draw = call.draw_returns[k];
-            char line[64];
-            std::snprintf(line, sizeof(line), "# draw=%u %u ret=%s state=%s\n",
+            char line[128];
+            std::snprintf(line, sizeof(line), "# draw=%u %u ret=%s caller=%s state=%s\n",
                           static_cast<unsigned>(call.index),
                           static_cast<unsigned>(k + 1),
                           address_string(draw.ret).c_str(),
+                          address_string(draw.caller).c_str(),
                           address_string(draw.state).c_str());
             file << line;
         }
@@ -1514,12 +1516,14 @@ int run(const Options &options) {
                     if (options.trace_calls_ms != 0) {
                         CONTEXT context{};
                         uint32_t ret = 0;
+                        uint32_t caller = 0;
                         uint32_t rng_state = 0;
                         bool state_read = false;
                         const bool have_context =
                             debugger.get_context(event.dwThreadId, context);
                         if (have_context) {
                             mem.u32(context.Esp, ret);
+                            mem.u32(context.Esp + 4, caller);
                             const uint32_t crt = context.Eax;
                             state_read = crt != 0 && mem.u32(crt + 0x14, rng_state);
                         }
@@ -1559,7 +1563,7 @@ int run(const Options &options) {
                                 CallTrace &call = state.calls.back();
                                 ++call.draws;
                                 if (call.draw_returns.size() < kMaxDrawTrace)
-                                    call.draw_returns.push_back(DrawTrace{ret, rng_state});
+                                    call.draw_returns.push_back(DrawTrace{ret, caller, rng_state});
                             }
                             debugger.set_resume_flag(event.dwThreadId);
                         } else {

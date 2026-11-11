@@ -159,14 +159,16 @@ or from a separate generation capture; the `price=` value comes from this mode.
   the next real `FUN_1404b1c0` call trap normally; without RF the CPU would re-trigger
   the same instruction forever.
 - In trace mode DR1 also stays armed for the whole trace window: every DR1 hit counts as
-  one `_rand` draw on the current NPC call (`draws=<M>`) and records the caller return
-  address (`ret`, read from `[esp]` at the pre-draw site) with the pre-draw state, up to
-  `kMaxDrawTrace` draws per call. Each DR1 hit sets RF like DR0. The first hit still
-   captures `rng_state`, the second still performs the LCG check, and later hits are
-   counted only. Per-draw rows are `# draw=<call> <k> ret=0x........ state=0x........`;
-   `draws=<M>` counts every draw while `# draw=` rows are capped at `kMaxDrawTrace`
-   (4096) per call, so the example above has `draws=2` and two rows.
-   `# draw=` is diagnostic provenance, not oracle data.
+  one `_rand` draw on the current NPC call (`draws=<M>`) and records the wrapper return
+  address (`ret`, read from `[esp]` at the pre-draw site), the wrapper's own caller
+  (`caller`, read from `[esp+4]`), and the pre-draw state, up to `kMaxDrawTrace` draws per
+  call. Each DR1 hit sets RF like DR0. The first hit still captures `rng_state`, the
+  second still performs the LCG check, and later hits are counted only. Per-draw rows are
+  `# draw=<call> <k> ret=0x........ caller=0x........ state=0x........`; `caller` is the
+  address to use when locating the extra RNG consumers (the `ret` values alone only
+  identify the CRT `_rand` wrappers). `draws=<M>` counts every draw while `# draw=` rows
+  are capped at `kMaxDrawTrace` (4096) per call, so the example above has `draws=2` and
+  two rows. `# draw=` is diagnostic provenance, not oracle data.
 - After detach: `DAT_14088dc4` level manager, the level entity array at `+0x2564`, a
   used-bitmap **pointer** at `+0x2568` (dereferenced to the bitmap), count at `+0x256c`;
   `EF_PERSON` is `(entity+0x14 & 0x3e) == 2`. The person name is the C string at
@@ -199,8 +201,8 @@ or from a separate generation capture; the `price=` value comes from this mode.
 # rng_second=0x1234yyyy check=ok
 # calls=1
 # call=1 tid=1234 hot=1 main=2 inv=Rat draws=2
-# draw=1 1 ret=0x1004b2a0 state=0x12345678
-# draw=1 2 ret=0x1004b2a0 state=0x5678abcd
+# draw=1 1 ret=0x10006200 caller=0x1004b2a0 state=0x12345678
+# draw=1 2 ret=0x10006269 caller=0x1004b2a0 state=0x5678abcd
 format=gl-specials-live-2
 level=l1_1
 seed=0
