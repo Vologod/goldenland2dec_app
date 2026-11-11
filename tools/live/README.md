@@ -102,6 +102,10 @@ Smoke check:
   `# call=<n> tid=<tid> hot=<id> main=<id> inv=<name>`, where `hot`/`main` come from
   `[esp+4]`/`[esp+8]` and `inv` from the cp1251 C string at `[esp+0xc]` (`__thiscall`
   entry). `# calls=<n>` precedes them. Without the flag, DR0 is cleared on the first hit.
+  In trace mode DR0 stays armed, so after each hit the tool sets the thread resume flag
+  (RF, `EFLAGS` bit 16) to skip the breakpointed instruction and let the next real
+  `FUN_1404b1c0` call trap normally; without RF the CPU would re-trigger the same
+  instruction forever.
 - After detach: `DAT_14088dc4` level manager, the level entity array at `+0x2564`, a
   used-bitmap **pointer** at `+0x2568` (dereferenced to the bitmap), count at `+0x256c`;
   `EF_PERSON` is `(entity+0x14 & 0x3e) == 2`. The person name is the C string at

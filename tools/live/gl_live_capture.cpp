@@ -619,6 +619,24 @@ class Debugger {
                                   context.Dr7 = (context.Dr7 & ~0x00f00000u) | 0x00000004u;
                               }); }
 
+    void set_resume_flag(DWORD tid) {
+        const auto found = threads_.find(tid);
+        if (found == threads_.end() || found->second.handle == nullptr)
+            return;
+        CONTEXT context{};
+        context.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER | CONTEXT_DEBUG_REGISTERS;
+        if (!GetThreadContext(found->second.handle, &context)) {
+            log_warn("cannot read context to set the resume flag on thread " +
+                     std::to_string(tid) + ": " + wide_error(GetLastError()));
+            return;
+        }
+        context.EFlags |= 0x10000u;
+        if (!SetThreadContext(found->second.handle, &context)) {
+            log_warn("cannot set the resume flag on thread " + std::to_string(tid) + ": " +
+                     wide_error(GetLastError()));
+        }
+    }
+
     void clear_dr0(DWORD tid) { modify_context(tid, [](CONTEXT &context) {
                                    context.Dr0 = 0;
                                    context.Dr6 = 0;
@@ -1280,6 +1298,8 @@ int run(const Options &options) {
                     }
                     if (!state.second_draw_seen)
                         debugger.arm_dr1(event.dwThreadId);
+                    if (options.trace_calls_ms != 0)
+                        debugger.set_resume_flag(event.dwThreadId);
                     if (options.trace_calls_ms == 0)
                         debugger.clear_dr0(event.dwThreadId);
                 } else if (address == state.bp1) {
