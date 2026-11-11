@@ -99,13 +99,20 @@ Smoke check:
   CRT `_rand` LCG step (`state2 == state1 * 0x343FD + 0x269EC3`); `# rng_second` and
   `check=ok|fail|unavailable` record that result.
 - With `--trace-calls <ms>` every DR0 hit is logged and appended to the capture as
-  `# call=<n> tid=<tid> hot=<id> main=<id> inv=<name>`, where `hot`/`main` come from
-  `[esp+4]`/`[esp+8]` and `inv` from the cp1251 C string at `[esp+0xc]` (`__thiscall`
-  entry). `# calls=<n>` precedes them. Without the flag, DR0 is cleared on the first hit.
-  In trace mode DR0 stays armed, so after each hit the tool sets the thread resume flag
-  (RF, `EFLAGS` bit 16) to skip the breakpointed instruction and let the next real
-  `FUN_1404b1c0` call trap normally; without RF the CPU would re-trigger the same
-  instruction forever.
+  `# call=<n> tid=<tid> hot=<id> main=<id> inv=<name> draws=<M>`, where `hot`/`main` come
+  from `[esp+4]`/`[esp+8]` and `inv` from the cp1251 C string at `[esp+0xc]`
+  (`__thiscall` entry). `# calls=<n>` precedes them. Without the flag, DR0 is cleared on
+  the first hit. In trace mode DR0 stays armed, so after each hit the tool sets the
+  thread resume flag (RF, `EFLAGS` bit 16) to skip the breakpointed instruction and let
+  the next real `FUN_1404b1c0` call trap normally; without RF the CPU would re-trigger
+  the same instruction forever.
+- In trace mode DR1 also stays armed for the whole trace window: every DR1 hit counts as
+  one `_rand` draw on the current NPC call (`draws=<M>`) and records the caller return
+  address (`ret`, read from `[esp]` at the pre-draw site) with the pre-draw state, up to
+  `kMaxDrawTrace` draws per call. Each DR1 hit sets RF like DR0. The first hit still
+  captures `rng_state`, the second still performs the LCG check, and later hits are
+  counted only. Per-draw rows are `# draw=<call> <k> ret=0x........ state=0x........`.
+  `# draw=` is diagnostic provenance, not oracle data.
 - After detach: `DAT_14088dc4` level manager, the level entity array at `+0x2564`, a
   used-bitmap **pointer** at `+0x2568` (dereferenced to the bitmap), count at `+0x256c`;
   `EF_PERSON` is `(entity+0x14 & 0x3e) == 2`. The person name is the C string at
@@ -137,7 +144,9 @@ Smoke check:
 # server_base=0x10000000
 # rng_second=0x1234yyyy check=ok
 # calls=1
-# call=1 tid=1234 hot=1 main=2 inv=Rat
+# call=1 tid=1234 hot=1 main=2 inv=Rat draws=6
+# draw=1 1 ret=0x1004b2a0 state=0x12345678
+# draw=1 2 ret=0x1004b2a0 state=0x5678abcd
 format=gl-specials-live-2
 level=l1_1
 seed=0
@@ -153,7 +162,9 @@ mod|L1_2.P404_Sister_Of_Mercy2|8|1|0x204|25|-1|0x81
 
 `# rng_second`/`check` records the second-draw LCG self-check (`unavailable` when no
 second draw was seen); `# calls=`/`# call=` record the DR0 call trace from
-`--trace-calls`; `# loot_level_source` says whether `loot_level` came from memory or the
+`--trace-calls` and `# draw=` records the per-call `_rand` draw provenance
+(`draws=<M>` is the count for that call; `# draw=` is diagnostics, not oracle data);
+`# loot_level_source` says whether `loot_level` came from memory or the
 CLI flag. All of these are `#` comments and are ignored by the gate parser. `seed=0` is
 provenance metadata only; `rng_state` is authoritative. One `item` row is written per main-container item
 (including zero-mod items) and one `mod` row per modifier. Numeric fields accept decimal

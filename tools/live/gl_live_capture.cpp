@@ -38,6 +38,7 @@ constexpr uint32_t kNpcSpawnHotStackOffset = 4;
 constexpr uint32_t kNpcSpawnMainStackOffset = 8;
 constexpr uint32_t kNpcSpawnInventoryStackOffset = 0xc;
 constexpr std::size_t kMaxCallTrace = 512;
+constexpr std::size_t kMaxDrawTrace = 4096;
 constexpr uint32_t kManagerPointersOffset = 0x18;
 constexpr uint32_t kManagerCountOffset = 0x1c;
 constexpr uint32_t kManagerBitmapOffset = 0x20;
@@ -115,12 +116,19 @@ struct ThreadSlot {
     bool armed = false;
 };
 
+struct DrawTrace {
+    uint32_t ret = 0;
+    uint32_t state = 0;
+};
+
 struct CallTrace {
     uint32_t index = 0;
     DWORD tid = 0;
     uint32_t hot = 0;
     uint32_t main = 0;
     std::string inventory;
+    uint32_t draws = 0;
+    std::vector<DrawTrace> draw_returns;
 };
 
 struct CaptureState {
@@ -1063,6 +1071,8 @@ void write_rows(std::ostream &out, const ScanResult &scan) {
     }
 }
 
+std::string address_string(uint32_t value);
+
 bool write_capture(const std::filesystem::path &path, bool valid, const Options &options,
                    const ModuleInfo &server, const CaptureState &state,
                    const std::optional<uint16_t> &scan_cw, const ScanResult &scan,
@@ -1088,7 +1098,17 @@ bool write_capture(const std::filesystem::path &path, bool valid, const Options 
     for (const CallTrace &call : state.calls) {
         file << "# call=" << call.index << " tid=" << call.tid
              << " hot=" << call.hot << " main=" << call.main
-             << " inv=" << call.inventory << "\n";
+             << " inv=" << call.inventory << " draws=" << call.draws << "\n";
+        for (std::size_t k = 0; k < call.draw_returns.size(); ++k) {
+            const DrawTrace &draw = call.draw_returns[k];
+            char line[64];
+            std::snprintf(line, sizeof(line), "# draw=%u %u ret=%s state=%s\n",
+                          static_cast<unsigned>(call.index),
+                          static_cast<unsigned>(k + 1),
+                          address_string(draw.ret).c_str(),
+                          address_string(draw.state).c_str());
+            file << line;
+        }
     }
     if (!valid)
         file << "# incomplete capture: not a valid live oracle\n";
@@ -1306,7 +1326,59 @@ int run(const Options &options) {
                         debugger.clear_dr0(event.dwThreadId);
                 } else if (address == state.bp1) {
                     log_info("single-step at DR1 on thread " + std::to_string(event.dwThreadId));
-                    if (state.generation_active) {
+                    if (options.trace_calls_ms != 0) {
+                        CONTEXT context{};
+                        uint32_t ret = 0;
+                        uint32_t rng_state = 0;
+                        bool state_read = false;
+                        const bool have_context =
+                            debugger.get_context(event.dwThreadId, context);
+                        if (have_context) {
+                            mem.u32(context.Esp, ret);
+                            const uint32_t crt = context.Eax;
+                            state_read = crt != 0 && mem.u32(crt + 0x14, rng_state);
+                        }
+                        if (state.generation_active) {
+                            const bool have_state = have_context && state_read;
+                            if (!state.state_captured) {
+                                if (have_state) {
+                                    state.rng_state = rng_state;
+                                    state.draw_cw = static_cast<uint16_t>(
+                                        context.FloatSave.ControlWord & 0xffffu);
+                                    state.state_captured = true;
+                                    log_info("captured CRT _rand state " +
+                                             address_string(rng_state) +
+                                             " before the first NPC draw");
+                                } else if (!have_context) {
+                                    state.capture_failed = true;
+                                    log_error("cannot read the generation thread context at the "
+                                              "first NPC draw");
+                                } else {
+                                    state.capture_failed = true;
+                                    log_error("cannot read CRT state from EAX=" +
+                                              address_string(context.Eax) +
+                                              " at the first NPC draw");
+                                }
+                            } else if (!state.second_draw_seen) {
+                                state.second_draw_seen = true;
+                                if (have_state) {
+                                    state.second_rng_state = rng_state;
+                                    state.second_draw_valid =
+                                        rng_state == state.rng_state * 0x343FDu + 0x269EC3u;
+                                    log_info("second draw state " + address_string(rng_state) +
+                                             (state.second_draw_valid ? " LCG check ok"
+                                                                      : " LCG CHECK FAILED"));
+                                }
+                            }
+                            if (!state.calls.empty()) {
+                                CallTrace &call = state.calls.back();
+                                ++call.draws;
+                                if (call.draw_returns.size() < kMaxDrawTrace)
+                                    call.draw_returns.push_back(DrawTrace{ret, rng_state});
+                            }
+                        }
+                        debugger.set_resume_flag(event.dwThreadId);
+                    } else if (state.generation_active) {
                         if (event.dwThreadId != state.generation_tid) {
                             debugger.clear_dr1(event.dwThreadId);
                         } else if (!state.state_captured) {
