@@ -48,21 +48,25 @@ Smoke check:
        --out .\special-l1_1.txt
    ```
 
-   Optional arguments: `--timeout <sec>` (default 120) and `--server <dll>` (default
-   `Server.dll`; a full path is accepted). The capture tool must be 32-bit to debug the
+   Optional arguments: `--timeout <sec>` (default 120), `--server <dll>` (default
+   `Server.dll`; a full path is accepted) and `--trace-calls <ms>` (keep logging NPC
+   spawn calls for `<ms>` after attach). The capture tool must be 32-bit to debug the
    32-bit game. `SeDebugPrivilege` is requested; without it, attach may still work for a
    same-user process, otherwise run from an elevated shell.
 
-   `--scan-only` attaches without installing breakpoints, scans the already loaded
-   level once, prints up to 20 `person/item/count/mods` rows, and exits 0 when the
-   scan is complete with at least one person, otherwise 4. It is a diagnostic mode;
-   it never writes an oracle capture.
+   `--scan-only` attaches without installing breakpoints, polls the already loaded level
+   until the person/item/mod counts are stable, prints up to 20 `person/item/count/mods`
+   rows, and exits 0 when the scan is complete with at least one person, otherwise 4. It
+   never writes an oracle capture.
 
 3. When the first NPC generation draw is hit, the tool records the CRT `_rand` state and
-   the live x87 control word, detaches, waits for the level containers to settle, scans
-   every `EF_PERSON` main container, and writes the capture. Without a level load within
-   the timeout it detaches, scans what is available, and exits non-zero with a
-   `.partial` diagnostic file (it never fabricates a valid capture).
+   the live x87 control word; on the second draw it validates the LCG step
+   (`state2 == state1 * 0x343FD + 0x269EC3`), detaches, waits for the level containers to
+   settle, scans every `EF_PERSON` main container, and writes the capture. With
+   `--trace-calls <ms>` it keeps logging NPC spawn calls instead of detaching at the
+   second draw, until the trace window elapses. Without a level load within the timeout
+   it detaches, scans what is available, and exits non-zero with a `.partial` diagnostic
+   file (it never fabricates a valid capture).
 
 4. Run the live gates:
 
@@ -91,16 +95,28 @@ Smoke check:
 - DR1 at the `_rand` pre-draw instruction (RVA `0x6c0a4`, `mov ecx,[eax+0x14]`). At this
   point `EAX` is the CRT per-thread pointer and `*(u32*)(EAX+0x14)` is the state **before**
   the first draw; the thread context supplies `FloatSave.ControlWord`.
-- After detach: `DAT_14088dc4` level manager, the level entity array at `+0x2564`, used
-  bitmap at `+0x2568`, count at `+0x256c`; `EF_PERSON` is `(entity+0x14 & 0x3e) == 2`.
-  The person name is the C string at `entity+0x4c`; the main container id is at
-  `entity+0x10`.
+- DR1 stays armed after the first draw so the second draw can be validated against the
+  CRT `_rand` LCG step (`state2 == state1 * 0x343FD + 0x269EC3`); `# rng_second` and
+  `check=ok|fail|unavailable` record that result.
+- With `--trace-calls <ms>` every DR0 hit is logged and appended to the capture as
+  `# call=<n> tid=<tid> hot=<id> main=<id> inv=<name>`, where `hot`/`main` come from
+  `[esp+4]`/`[esp+8]` and `inv` from the cp1251 C string at `[esp+0xc]` (`__thiscall`
+  entry). `# calls=<n>` precedes them. Without the flag, DR0 is cleared on the first hit.
+- After detach: `DAT_14088dc4` level manager, the level entity array at `+0x2564`, a
+  used-bitmap **pointer** at `+0x2568` (dereferenced to the bitmap), count at `+0x256c`;
+  `EF_PERSON` is `(entity+0x14 & 0x3e) == 2`. The person name is the C string at
+  `entity+0x4c`; the main container id is at `entity+0x10`. Live `loot_level` is
+  `*(u32*)(level+0x26c4) + 1` when readable, otherwise the `--loot-level` value; the
+  source is recorded as `# loot_level_source=memory|cli`.
 - `DAT_14088df8` item manager. Containers are resolved through the manager's
   key→value map at `+0x0c` (count at `+0`, entry array at `+4`, stride 8:
   key at `+0`, container pointer at `+4`), matching `FUN_1404bf8c` →
   `FUN_14004f14(manager+0xc)` → `FUN_14004a20`. The old array-index lookup was
   wrong. A container record has `+0x0c` record-id array, `+0x10` slot count,
   `+0x14` used bitmap.
+- Item records are still read through the manager record table: pointer array at
+  `+0x18`, record count at `+0x1c`, used bitmap at `+0x20`; a container slot's record
+  id indexes that array.
 - Item record: flags `+0x0c`, uid `+0xa4`, item id `+0xa8`, count `+0xb0`, mod count
   `+0x78`, mod array `+0x7c`. Mod stride is `0x14`: id `+0x00`, value `+0x04`,
   flags `+0x08`.
@@ -113,11 +129,17 @@ Smoke check:
 
 ```
 # gl-specials-live-capture v2
+# source=gl_live_capture read-only
+# server_base=0x10000000
+# rng_second=0x1234yyyy check=ok
+# calls=1
+# call=1 tid=1234 hot=1 main=2 inv=Rat
 format=gl-specials-live-2
 level=l1_1
 seed=0
 rng_state=0x12345678
 loot_level=1
+# loot_level_source=memory
 # fpu_cw=0x027f source=generation-entry
 # fpu_cw=0x027f source=first-draw
 # fpu_cw=0x037f source=scan-time
@@ -125,8 +147,11 @@ item|L1_2.P404_Sister_Of_Mercy2|8|1|0x204|1
 mod|L1_2.P404_Sister_Of_Mercy2|8|1|0x204|25|-1|0x81
 ```
 
-`seed=0` is provenance metadata only; `rng_state` is authoritative. Comments start with
-`#` and are ignored by the gate parser. One `item` row is written per main-container item
+`# rng_second`/`check` records the second-draw LCG self-check (`unavailable` when no
+second draw was seen); `# calls=`/`# call=` record the DR0 call trace from
+`--trace-calls`; `# loot_level_source` says whether `loot_level` came from memory or the
+CLI flag. All of these are `#` comments and are ignored by the gate parser. `seed=0` is
+provenance metadata only; `rng_state` is authoritative. One `item` row is written per main-container item
 (including zero-mod items) and one `mod` row per modifier. Numeric fields accept decimal
 or `0x` hex in the parser; the tool writes decimal counts/ids and `0x` flags.
 
@@ -142,7 +167,7 @@ rejects that format, so an incomplete run cannot be mistaken for a real oracle.
 | 1 | Usage or argument error |
 | 2 | Module/process/attach error |
 | 3 | Timeout or RNG state not captured (partial file) |
-| 4 | RNG state captured but no NPC items found (partial file) |
+| 4 | RNG state captured but no NPC items found (partial file); with `--scan-only`, incomplete scan or zero persons (no file written) |
 | 5 | Output write error |
 | 6 | Target process exited before capture completed |
 

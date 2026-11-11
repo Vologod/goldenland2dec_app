@@ -33,6 +33,11 @@ constexpr uint32_t kEntityNameOffset = 0x4c;
 constexpr uint32_t kEntityMainContainerOffset = 0x10;
 constexpr uint32_t kNpcSpawnRva = 0x4b1c0;
 constexpr uint32_t kRandBeforeDrawRva = 0x6c0a4;
+constexpr uint32_t kLootLevelOffset = 0x26c4;
+constexpr uint32_t kNpcSpawnHotStackOffset = 4;
+constexpr uint32_t kNpcSpawnMainStackOffset = 8;
+constexpr uint32_t kNpcSpawnInventoryStackOffset = 0xc;
+constexpr std::size_t kMaxCallTrace = 512;
 constexpr uint32_t kManagerPointersOffset = 0x18;
 constexpr uint32_t kManagerCountOffset = 0x1c;
 constexpr uint32_t kManagerBitmapOffset = 0x20;
@@ -68,6 +73,7 @@ struct Options {
     int timeout_seconds = kDefaultTimeoutSeconds;
     std::wstring server_dll = L"Server.dll";
     bool scan_only = false;
+    int trace_calls_ms = 0;
 };
 
 struct ModuleInfo {
@@ -99,6 +105,7 @@ struct ScanResult {
     bool level_read = false;
     bool manager_read = false;
     bool complete = false;
+    std::optional<uint32_t> loot_level;
 };
 
 struct ThreadSlot {
@@ -108,18 +115,29 @@ struct ThreadSlot {
     bool armed = false;
 };
 
+struct CallTrace {
+    uint32_t index = 0;
+    DWORD tid = 0;
+    uint32_t hot = 0;
+    uint32_t main = 0;
+    std::string inventory;
+};
+
 struct CaptureState {
     uint32_t bp0 = 0;
     uint32_t bp1 = 0;
     bool generation_active = false;
     bool state_captured = false;
-    bool draw_attempted = false;
     bool capture_failed = false;
     bool process_exited = false;
     DWORD generation_tid = 0;
     uint32_t rng_state = 0;
     std::optional<uint16_t> entry_cw;
     std::optional<uint16_t> draw_cw;
+    std::vector<CallTrace> calls;
+    uint32_t second_rng_state = 0;
+    bool second_draw_seen = false;
+    bool second_draw_valid = false;
 };
 
 std::string to_utf8(std::wstring_view text) {
@@ -233,6 +251,8 @@ void print_usage() {
         "  --out <file>         Output capture file (UTF-8, gl-specials-live-2)\n"
         "  --timeout <sec>      Wait for level load / first NPC draw (default %d)\n"
         "  --server <dll>       Server module name or path (default Server.dll)\n"
+        "  --trace-calls <ms>   keep logging NPC spawn calls for <ms> after attach\n"
+        "  --scan-only          Scan an already loaded level without breakpoints\n"
         "  --help, -h           Show this help\n"
         "\n"
         "The tool attaches with DebugActiveProcess, installs hardware execute\n"
@@ -327,6 +347,16 @@ bool parse_args(int argc, wchar_t **argv, Options &options, std::string &error) 
                 return false;
             }
             options.server_dll = value;
+        } else if (key == L"--trace-calls") {
+            if (!take_value())
+                return false;
+            int32_t milliseconds = 0;
+            if (!parse_i32(value, milliseconds) || milliseconds < 0 ||
+                milliseconds > 600000) {
+                error = "invalid --trace-calls";
+                return false;
+            }
+            options.trace_calls_ms = milliseconds;
         } else if (key == L"--scan-only") {
             options.scan_only = true;
         } else {
@@ -755,6 +785,10 @@ bool scan_once(const MemReader &mem, const ModuleInfo &server, ScanResult &resul
         return false;
     }
     result.level_read = true;
+    uint32_t raw_loot_level = 0;
+    if (mem.u32(level_ptr + kLootLevelOffset, raw_loot_level) &&
+        raw_loot_level < 1000000u)
+        result.loot_level = raw_loot_level + 1;
     uint32_t entities = 0;
     uint32_t entity_bitmap_ptr = 0;
     uint32_t entity_bitmap = 0;
@@ -1025,13 +1059,29 @@ bool write_capture(const std::filesystem::path &path, bool valid, const Options 
     file << "# source=gl_live_capture read-only\n";
     file << "# server_module=" << to_utf8(server.path) << "\n";
     file << "# server_base=0x" << std::hex << server.base << std::dec << "\n";
+    file << "# rng_second=0x" << std::hex << state.second_rng_state << std::dec
+         << " check=" << (state.second_draw_seen
+                              ? (state.second_draw_valid ? "ok" : "fail")
+                              : "unavailable")
+         << "\n";
+    file << "# calls=" << state.calls.size() << "\n";
+    for (const CallTrace &call : state.calls) {
+        file << "# call=" << call.index << " tid=" << call.tid
+             << " hot=" << call.hot << " main=" << call.main
+             << " inv=" << call.inventory << "\n";
+    }
     if (!valid)
         file << "# incomplete capture: not a valid live oracle\n";
     file << "format=" << (valid ? "gl-specials-live-2" : "gl-specials-live-2-partial") << "\n";
     file << "level=" << to_utf8(options.level) << "\n";
     file << "seed=0\n";
     file << "rng_state=0x" << std::hex << state.rng_state << std::dec << "\n";
-    file << "loot_level=" << options.loot_level << "\n";
+    const std::optional<uint32_t> loot_level =
+        scan.loot_level.has_value() ? scan.loot_level
+                                    : std::optional<uint32_t>(
+                                          static_cast<uint32_t>(options.loot_level));
+    file << "loot_level=" << *loot_level << "\n";
+    file << "# loot_level_source=" << (scan.loot_level.has_value() ? "memory" : "cli") << "\n";
     if (state.entry_cw.has_value()) {
         char line[128];
         std::snprintf(line, sizeof(line), "# fpu_cw=0x%04x source=generation-entry\n",
@@ -1084,13 +1134,15 @@ int run(const Options &options) {
     log_info("target PID " + std::to_string(options.pid) + ", " + to_utf8(file_name(server.path)) +
              " base " + address_string(server.base) + " size " + address_string(server.size));
 
-    for (const std::pair<const char *, uint32_t> check : {std::pair<const char *, uint32_t>{
-             "NPC spawn entry", kNpcSpawnRva},
-         std::pair<const char *, uint32_t>{"_rand pre-draw", kRandBeforeDrawRva}}) {
-        if (!module_range_ok(server, check.second, 1)) {
-            log_error(std::string(check.first) + " RVA " + address_string(check.second) +
-                      " is outside the resolved " + to_utf8(file_name(server.path)) + " image");
-            return 2;
+    if (!options.scan_only) {
+        for (const std::pair<const char *, uint32_t> check : {
+                 std::pair<const char *, uint32_t>{"NPC spawn entry", kNpcSpawnRva},
+                 std::pair<const char *, uint32_t>{"_rand pre-draw", kRandBeforeDrawRva}}) {
+            if (!module_range_ok(server, check.second, 1)) {
+                log_error(std::string(check.first) + " RVA " + address_string(check.second) +
+                          " is outside the resolved " + to_utf8(file_name(server.path)) + " image");
+                return 2;
+            }
         }
     }
 
@@ -1130,6 +1182,11 @@ int run(const Options &options) {
     state.bp0 = server.base + kNpcSpawnRva;
     state.bp1 = server.base + kRandBeforeDrawRva;
 
+    std::optional<std::chrono::steady_clock::time_point> trace_deadline;
+    if (options.trace_calls_ms != 0)
+        trace_deadline = std::chrono::steady_clock::now() +
+                         std::chrono::milliseconds(options.trace_calls_ms);
+
     Debugger debugger(options.pid, state.bp0, state.bp1);
     if (!debugger.attach(error)) {
         log_error(error);
@@ -1147,6 +1204,11 @@ int run(const Options &options) {
         const auto now = std::chrono::steady_clock::now();
         if (now >= deadline) {
             log_warn("timeout waiting for the first NPC generation draw");
+            break;
+        }
+        if (trace_deadline.has_value() && now >= *trace_deadline) {
+            log_info("trace window elapsed; detaching");
+            stop = true;
             break;
         }
         const auto remaining = std::chrono::duration_cast<std::chrono::milliseconds>(deadline - now);
@@ -1196,15 +1258,35 @@ int run(const Options &options) {
                         log_info("NPC generation active (thread " +
                                  std::to_string(event.dwThreadId) + ")");
                     }
+                    if (state.calls.size() < kMaxCallTrace) {
+                        CallTrace call;
+                        call.index = static_cast<uint32_t>(state.calls.size() + 1);
+                        call.tid = event.dwThreadId;
+                        CONTEXT context{};
+                        if (debugger.get_context(event.dwThreadId, context)) {
+                            std::uint32_t name_ptr = 0;
+                            mem.u32(context.Esp + kNpcSpawnHotStackOffset, call.hot);
+                            mem.u32(context.Esp + kNpcSpawnMainStackOffset, call.main);
+                            mem.u32(context.Esp + kNpcSpawnInventoryStackOffset, name_ptr);
+                            std::string raw;
+                            if (name_ptr != 0 && mem.cstring(name_ptr, kMaxNameBytes, raw))
+                                call.inventory = sanitize_name(cp1251_to_utf8(raw));
+                        }
+                        log_info("npc call " + std::to_string(call.index) + " tid=" +
+                                 std::to_string(call.tid) + " hot=" + address_string(call.hot) +
+                                 " main=" + address_string(call.main) + " inv=" +
+                                 call.inventory);
+                        state.calls.push_back(std::move(call));
+                    }
                     debugger.arm_dr1(event.dwThreadId);
-                    debugger.clear_dr0(event.dwThreadId);
+                    if (options.trace_calls_ms == 0)
+                        debugger.clear_dr0(event.dwThreadId);
                 } else if (address == state.bp1) {
                     log_info("single-step at DR1 on thread " + std::to_string(event.dwThreadId));
                     if (state.generation_active) {
                         if (event.dwThreadId != state.generation_tid) {
                             debugger.clear_dr1(event.dwThreadId);
-                        } else if (!state.draw_attempted) {
-                            state.draw_attempted = true;
+                        } else if (!state.state_captured) {
                             CONTEXT context{};
                             if (debugger.get_context(event.dwThreadId, context)) {
                                 const uint32_t crt = context.Eax;
@@ -1224,13 +1306,27 @@ int run(const Options &options) {
                                 }
                             } else {
                                 state.capture_failed = true;
-                                log_error("cannot read the generation thread context at the first "
-                                          "NPC draw");
+                                log_error("cannot read the generation thread context at the "
+                                          "first NPC draw");
                             }
-                            stop = true;
+                        } else if (!state.second_draw_seen) {
+                            CONTEXT context{};
+                            state.second_draw_seen = true;
+                            if (debugger.get_context(event.dwThreadId, context)) {
+                                const uint32_t crt = context.Eax;
+                                uint32_t rng_state = 0;
+                                if (crt != 0 && mem.u32(crt + 0x14, rng_state)) {
+                                    state.second_rng_state = rng_state;
+                                    state.second_draw_valid =
+                                        rng_state == state.rng_state * 0x343FDu + 0x269EC3u;
+                                    log_info("second draw state " + address_string(rng_state) +
+                                             (state.second_draw_valid ? " LCG check ok"
+                                                                      : " LCG CHECK FAILED"));
+                                }
+                            }
                             debugger.clear_dr1(event.dwThreadId);
-                        } else {
-                            debugger.clear_dr1(event.dwThreadId);
+                            if (options.trace_calls_ms == 0)
+                                stop = true;
                         }
                     }
                 }
