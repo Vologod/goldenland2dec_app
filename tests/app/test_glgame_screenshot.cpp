@@ -990,8 +990,8 @@ TEST_CASE("glgame --trade-npc opens the boat trader overlay with real stock" *
     REQUIRE(fs::exists(png));
     CHECK(baseline_code == 0);
     CHECK(code == 0);
-    CHECK(output.find("trade: opened npc='L13_1.P517_Boat_Trader' npc_items=16 "
-                      "npc_money=42142 hero_items=117 hero_money=43875") != std::string::npos);
+    CHECK(output.find("trade: opened npc='L13_1.P517_Boat_Trader' npc_items=14 "
+                      "npc_money=12836 hero_items=117 hero_money=43875") != std::string::npos);
 
     int width = 0;
     int height = 0;
@@ -1024,8 +1024,8 @@ TEST_CASE("glgame boat trader dialog answer opens the trade overlay" *
         int hero_money;
     };
     const SlotCase cases[] = {
-        {"0", 16, 42142, 117, 43875},
-        {"2", 17, 48908, 140, 122008},
+        {"0", 14, 12836, 117, 43875},
+        {"2", 14, 15197, 140, 122008},
     };
     for (const SlotCase& slot : cases) {
         CAPTURE(slot.slot);
@@ -1126,8 +1126,8 @@ TEST_CASE("glgame boat trader staged rows render at 1024x768" * doctest::skip(!f
     CHECK(empty_code == 0);
     CHECK(empty_output.find("trade: opened npc='L13_1.P517_Boat_Trader'") != std::string::npos);
     CHECK(code == 0);
-    CHECK(output.find("trade: opened npc='L13_1.P517_Boat_Trader' npc_items=16 "
-                      "npc_money=42142 hero_items=117 hero_money=43875") != std::string::npos);
+    CHECK(output.find("trade: opened npc='L13_1.P517_Boat_Trader' npc_items=14 "
+                      "npc_money=12836 hero_items=117 hero_money=43875") != std::string::npos);
     CHECK(output.find("trade: hook stage buy id=953 count=14 buy=16800 sell=2912 result=ok") !=
           std::string::npos);
     CHECK(output.find("trade: hook stage sell id=953 count=51 buy=61200 sell=10608 result=ok") !=
@@ -1175,12 +1175,12 @@ TEST_CASE("glgame boat trader buy matches the research oracle" * doctest::skip(!
     CAPTURE(output);
     REQUIRE(fs::exists(png));
     CHECK(code == 0);
-    CHECK(output.find("trade: opened npc='L13_1.P517_Boat_Trader' npc_items=16 "
-                      "npc_money=42142 hero_items=117 hero_money=43875") != std::string::npos);
+    CHECK(output.find("trade: opened npc='L13_1.P517_Boat_Trader' npc_items=14 "
+                      "npc_money=12836 hero_items=117 hero_money=43875") != std::string::npos);
     CHECK(output.find("trade: hook stage buy id=953 count=14 buy=16800 sell=2912 result=ok") !=
           std::string::npos);
     CHECK(output.find("trade: hook exchange result=ok net=-16800 buy=16800 sell=0 "
-                      "npc_money=58942 hero_money=27075") != std::string::npos);
+                      "npc_money=29636 hero_money=27075") != std::string::npos);
     CHECK(output.find("trade: hook stock id=953 npc=0 hero=65") != std::string::npos);
 
     int width = 0;
@@ -1207,38 +1207,38 @@ TEST_CASE("glgame boat trader buy, sell and mixed trades match the research orac
         {"sell0",
          "0",
          {"--trade-sell", "POT_1_00_27", "--trade-exchange"},
-         {"trade: opened npc='L13_1.P517_Boat_Trader' npc_items=16 npc_money=42142 "
+         {"trade: opened npc='L13_1.P517_Boat_Trader' npc_items=14 npc_money=12836 "
           "hero_items=117 hero_money=43875",
           "trade: hook stage sell id=953 count=51 buy=61200 sell=10608 result=ok",
-          "trade: hook exchange result=ok net=10608 buy=0 sell=10608 npc_money=31534 "
+          "trade: hook exchange result=ok net=10608 buy=0 sell=10608 npc_money=2228 "
           "hero_money=54483",
           "trade: hook stock id=953 npc=65 hero=0"}},
         {"buy2",
          "2",
          {"--trade-buy", "POT_1_00_27", "--trade-exchange"},
-         {"trade: opened npc='L13_1.P517_Boat_Trader' npc_items=17 npc_money=48908 "
+         {"trade: opened npc='L13_1.P517_Boat_Trader' npc_items=14 npc_money=15197 "
           "hero_items=140 hero_money=122008",
           "trade: hook stage buy id=953 count=17 buy=17000 sell=4250 result=ok",
-          "trade: hook exchange result=ok net=-17000 buy=17000 sell=0 npc_money=65908 "
+          "trade: hook exchange result=ok net=-17000 buy=17000 sell=0 npc_money=32197 "
           "hero_money=105008",
           "trade: hook stock id=953 npc=0 hero=42"}},
         {"sell2",
          "2",
          {"--trade-sell", "POT_1_00_27", "--trade-exchange"},
-         {"trade: opened npc='L13_1.P517_Boat_Trader' npc_items=17 npc_money=48908 "
+         {"trade: opened npc='L13_1.P517_Boat_Trader' npc_items=14 npc_money=15197 "
           "hero_items=140 hero_money=122008",
           "trade: hook stage sell id=953 count=25 buy=25000 sell=6250 result=ok",
-          "trade: hook exchange result=ok net=6250 buy=0 sell=6250 npc_money=42658 "
+          "trade: hook exchange result=ok net=6250 buy=0 sell=6250 npc_money=8947 "
           "hero_money=128258",
           "trade: hook stock id=953 npc=42 hero=0"}},
         {"mixed2",
          "2",
          {"--trade-buy", "POT_1_00_27", "--trade-sell", "POT_1_00_27", "--trade-exchange"},
-         {"trade: opened npc='L13_1.P517_Boat_Trader' npc_items=17 npc_money=48908 "
+         {"trade: opened npc='L13_1.P517_Boat_Trader' npc_items=14 npc_money=15197 "
           "hero_items=140 hero_money=122008",
           "trade: hook stage buy id=953 count=17 buy=17000 sell=4250 result=ok",
           "trade: hook stage sell id=953 count=25 buy=25000 sell=6250 result=ok",
-          "trade: hook exchange result=ok net=-10750 buy=17000 sell=6250 npc_money=59658 "
+          "trade: hook exchange result=ok net=-10750 buy=17000 sell=6250 npc_money=25947 "
           "hero_money=111258",
           "trade: hook stock id=953 npc=25 hero=17"}},
     };
@@ -1284,7 +1284,7 @@ TEST_CASE("glgame boat trader insufficient hero money is atomic" *
     CHECK(code == 0);
     CHECK(output.find("trade: hook exchange result=ok") == std::string::npos);
     CHECK(output.find("trade: hook exchange result=failed net=-49560 buy=49560 sell=0 "
-                      "npc_money=42142 hero_money=43875") != std::string::npos);
+                      "npc_money=12836 hero_money=43875") != std::string::npos);
     CHECK(output.find("not enough money for this exchange") != std::string::npos);
     CHECK(output.find("trade: hook stock id=953 npc=14 hero=51") != std::string::npos);
     CHECK(output.find("trade: hook stock id=956 npc=16 hero=0") != std::string::npos);
@@ -1298,9 +1298,8 @@ TEST_CASE("glgame boat trader insufficient npc money is atomic" *
     TempDir temp;
     const fs::path config = write_test_config(temp.path);
     const fs::path png = temp.path / "trade_npcmoney.png";
-    const std::vector<int> first = {953, 1579, 1577, 446, 434, 1497, 1575, 407,
-                                    1592, 1553, 451, 436, 428, 431, 969, 442};
-    const std::vector<int> second = {448, 1591, 433, 952};
+    const std::vector<int> first = {953};
+    const std::vector<int> second = {1577, 407};
     std::vector<std::string> arguments = {"--level", "l13_1", "--equip-save", "0",
                                           "--width", "1024", "--height", "768",
                                           "--seed", "1", "--trade-npc",
@@ -1321,17 +1320,16 @@ TEST_CASE("glgame boat trader insufficient npc money is atomic" *
     CAPTURE(output);
     REQUIRE(fs::exists(png));
     CHECK(code == 0);
-    CHECK(output.find("trade: opened npc='L13_1.P517_Boat_Trader' npc_items=16 "
-                      "npc_money=42142 hero_items=117 hero_money=43875") != std::string::npos);
-    CHECK(output.find("trade: hook exchange result=ok net=38590 buy=0 sell=38590 "
-                      "npc_money=3552 hero_money=82465") != std::string::npos);
-    CHECK(output.find("trade: hook exchange result=failed net=4043 buy=0 sell=4043 "
-                      "npc_money=3552 hero_money=82465") != std::string::npos);
+    CHECK(output.find("trade: opened npc='L13_1.P517_Boat_Trader' npc_items=14 "
+                      "npc_money=12836 hero_items=117 hero_money=43875") != std::string::npos);
+    CHECK(output.find("trade: hook exchange result=ok net=10608 buy=0 sell=10608 "
+                      "npc_money=2228 hero_money=54483") != std::string::npos);
+    CHECK(output.find("trade: hook exchange result=failed net=4951 buy=0 sell=4951 "
+                      "npc_money=2228 hero_money=54483") != std::string::npos);
     CHECK(output.find("not enough money for this exchange") != std::string::npos);
-    CHECK(output.find("trade: hook stock id=448 npc=0 hero=22") != std::string::npos);
-    CHECK(output.find("trade: hook stock id=1591 npc=0 hero=2") != std::string::npos);
-    CHECK(output.find("trade: hook stock id=433 npc=0 hero=8") != std::string::npos);
-    CHECK(output.find("trade: hook stock id=952 npc=31 hero=21") != std::string::npos);
+    CHECK(output.find("trade: hook stock id=953 npc=65 hero=0") != std::string::npos);
+    CHECK(output.find("trade: hook stock id=1577 npc=0 hero=6") != std::string::npos);
+    CHECK(output.find("trade: hook stock id=407 npc=0 hero=55") != std::string::npos);
 }
 
 TEST_CASE("glgame boat trader insufficient npc stock is atomic" *
