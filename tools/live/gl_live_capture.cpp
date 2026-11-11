@@ -33,6 +33,7 @@ constexpr uint32_t kEntityNameOffset = 0x4c;
 constexpr uint32_t kEntityMainContainerOffset = 0x10;
 constexpr uint32_t kNpcSpawnRva = 0x4b1c0;
 constexpr uint32_t kRandBeforeDrawRva = 0x6c0a4;
+constexpr uint32_t kPriceCallRva = 0x6e8d0;
 constexpr uint32_t kLootLevelOffset = 0x26c4;
 constexpr uint32_t kNpcSpawnHotStackOffset = 4;
 constexpr uint32_t kNpcSpawnMainStackOffset = 8;
@@ -73,7 +74,9 @@ struct Options {
     std::wstring out_path;
     int timeout_seconds = kDefaultTimeoutSeconds;
     std::wstring server_dll = L"Server.dll";
+    std::wstring client_dll = L"Client.dll";
     bool scan_only = false;
+    bool price_cw = false;
     int trace_calls_ms = 0;
 };
 
@@ -251,6 +254,8 @@ void print_usage() {
         "Usage:\n"
         "  gl_live_capture.exe --pid <pid> --level <id> --loot-level <n> --out <file>\n"
         "                      [--timeout <sec>] [--server <dll>] [--scan-only]\n"
+        "  gl_live_capture.exe --price-cw --pid <pid> --out <file>\n"
+        "                      [--client <dll>] [--timeout <sec>]\n"
         "\n"
         "Options:\n"
         "  --pid <pid>          PID of the running 32-bit GoldenLand.exe\n"
@@ -259,8 +264,10 @@ void print_usage() {
         "  --out <file>         Output capture file (UTF-8, gl-specials-live-2)\n"
         "  --timeout <sec>      Wait for level load / first NPC draw (default %d)\n"
         "  --server <dll>       Server module name or path (default Server.dll)\n"
+        "  --client <dll>       Client module name or path (default Client.dll)\n"
         "  --trace-calls <ms>   keep logging NPC spawn calls for <ms> after attach\n"
         "  --scan-only          Scan an already loaded level without breakpoints\n"
+        "  --price-cw           Capture the client price x87 control word only\n"
         "  --help, -h           Show this help\n"
         "\n"
         "The tool attaches with DebugActiveProcess, installs hardware execute\n"
@@ -269,6 +276,12 @@ void print_usage() {
         "uses WriteProcessMemory, remote threads, code patching, injection or DRM\n"
         "bypasses. Start it before loading a level so the first generation draw can\n"
         "be captured.\n"
+        "\n"
+        "With --price-cw the tool attaches only to Client.dll+0x6e8d0 (the price\n"
+        "call on the trade/inventory path), reads the ambient x87 control word at\n"
+        "the first hit and writes 'price=0x....' plus '# source=client-price'. It\n"
+        "does not scan containers and does not require --level or --loot-level.\n"
+        "The expected value is 0x007f (PC=24, RC=nearest).\n"
         "\n"
         "Exit codes: 0 capture written, 1 usage error, 2 attach/module error,\n"
         "3 timeout or RNG state not captured (partial file), 4 no NPC items found\n"
@@ -355,6 +368,16 @@ bool parse_args(int argc, wchar_t **argv, Options &options, std::string &error) 
                 return false;
             }
             options.server_dll = value;
+        } else if (key == L"--client") {
+            if (!take_value())
+                return false;
+            if (value.empty()) {
+                error = "invalid --client";
+                return false;
+            }
+            options.client_dll = value;
+        } else if (key == L"--price-cw") {
+            options.price_cw = true;
         } else if (key == L"--trace-calls") {
             if (!take_value())
                 return false;
@@ -375,6 +398,17 @@ bool parse_args(int argc, wchar_t **argv, Options &options, std::string &error) 
     if (!have_pid) {
         error = "--pid is required";
         return false;
+    }
+    if (options.price_cw) {
+        if (!have_out) {
+            error = "--out is required with --price-cw";
+            return false;
+        }
+        if (options.scan_only) {
+            error = "--price-cw cannot be combined with --scan-only";
+            return false;
+        }
+        return true;
     }
     if (!options.scan_only && (!have_level || !have_loot || !have_out)) {
         error = "--level, --loot-level and --out are required (unless --scan-only)";
@@ -1161,7 +1195,156 @@ std::string address_string(uint32_t value) {
     return buffer;
 }
 
+int run_price(const Options &options) {
+    if (!enable_debug_privilege())
+        log_warn("SeDebugPrivilege is not available; attach/read may still work");
+
+    ModuleInfo client;
+    std::string error;
+    if (!find_module(options.pid, options.client_dll, client, error)) {
+        log_error(error);
+        return 2;
+    }
+    log_info("target PID " + std::to_string(options.pid) + ", " + to_utf8(file_name(client.path)) +
+             " base " + address_string(client.base) + " size " + address_string(client.size));
+    if (!module_range_ok(client, kPriceCallRva, 1)) {
+        log_error("price call RVA " + address_string(kPriceCallRva) +
+                  " is outside the resolved " + to_utf8(file_name(client.path)) + " image");
+        return 2;
+    }
+
+    const uint32_t breakpoint = client.base + kPriceCallRva;
+    Debugger debugger(options.pid, breakpoint, 0);
+    if (!debugger.attach(error)) {
+        log_error(error);
+        return 2;
+    }
+    log_info("attached; DR0=" + address_string(breakpoint));
+    if (!debugger.arm_all_threads(error))
+        log_warn(error);
+
+    const auto deadline =
+        std::chrono::steady_clock::now() + std::chrono::seconds(options.timeout_seconds);
+    std::optional<uint16_t> price_cw;
+    bool process_exited = false;
+    bool debug_failed = false;
+    while (!price_cw.has_value() && !process_exited && !debug_failed) {
+        const auto now = std::chrono::steady_clock::now();
+        if (now >= deadline) {
+            log_warn("timeout waiting for the client price x87 call");
+            break;
+        }
+        const auto remaining =
+            std::chrono::duration_cast<std::chrono::milliseconds>(deadline - now);
+        const DWORD wait_ms = static_cast<DWORD>(std::min<long long>(remaining.count(), 1000));
+        DEBUG_EVENT event{};
+        if (!WaitForDebugEvent(&event, wait_ms)) {
+            const DWORD wait_error = GetLastError();
+            if (wait_error == ERROR_SEM_TIMEOUT || wait_error == WAIT_TIMEOUT)
+                continue;
+            log_error("WaitForDebugEvent failed: " + wide_error(wait_error));
+            debug_failed = true;
+            break;
+        }
+
+        DWORD continue_status = DBG_CONTINUE;
+        bool should_continue = true;
+        switch (event.dwDebugEventCode) {
+        case CREATE_PROCESS_DEBUG_EVENT:
+            if (event.u.CreateProcessInfo.hFile != nullptr)
+                CloseHandle(event.u.CreateProcessInfo.hFile);
+            debugger.ensure_thread(event.dwThreadId, event.u.CreateProcessInfo.hThread);
+            break;
+        case CREATE_THREAD_DEBUG_EVENT:
+            debugger.ensure_thread(event.dwThreadId, event.u.CreateThread.hThread);
+            break;
+        case EXIT_THREAD_DEBUG_EVENT:
+            debugger.close_thread(event.dwThreadId);
+            break;
+        case LOAD_DLL_DEBUG_EVENT:
+            if (event.u.LoadDll.hFile != nullptr)
+                CloseHandle(event.u.LoadDll.hFile);
+            break;
+        case EXCEPTION_DEBUG_EVENT: {
+            const EXCEPTION_RECORD &record = event.u.Exception.ExceptionRecord;
+            if (record.ExceptionCode == EXCEPTION_SINGLE_STEP) {
+                const uint32_t address =
+                    static_cast<uint32_t>(reinterpret_cast<uintptr_t>(record.ExceptionAddress));
+                if (address == breakpoint) {
+                    CONTEXT context{};
+                    if (debugger.get_context(event.dwThreadId, context)) {
+                        price_cw = static_cast<uint16_t>(context.FloatSave.ControlWord & 0xffffu);
+                        char buffer[96];
+                        std::snprintf(buffer, sizeof(buffer),
+                                      "captured client price control word 0x%04x on thread %lu",
+                                      static_cast<unsigned>(*price_cw),
+                                      static_cast<unsigned long>(event.dwThreadId));
+                        log_info(buffer);
+                    } else {
+                        log_error("cannot read the client price thread context");
+                        debug_failed = true;
+                    }
+                    debugger.clear_dr0(event.dwThreadId);
+                }
+            } else if (record.ExceptionCode != EXCEPTION_BREAKPOINT) {
+                continue_status = DBG_EXCEPTION_NOT_HANDLED;
+            }
+            break;
+        }
+        case EXIT_PROCESS_DEBUG_EVENT:
+            process_exited = true;
+            break;
+        case RIP_EVENT:
+            log_warn("debug RIP event " + std::to_string(event.u.RipInfo.dwError));
+            break;
+        default:
+            break;
+        }
+        if (!ContinueDebugEvent(event.dwProcessId, event.dwThreadId, continue_status)) {
+            log_error("ContinueDebugEvent failed: " + wide_error(GetLastError()));
+            should_continue = false;
+        }
+        if (!should_continue) {
+            debug_failed = true;
+            break;
+        }
+    }
+
+    debugger.restore_and_detach();
+
+    if (process_exited) {
+        log_error("the target process exited before the price control word was captured");
+        return 6;
+    }
+    if (!price_cw.has_value()) {
+        if (!debug_failed)
+            log_error("timeout waiting for the client price x87 control word");
+        return 3;
+    }
+
+    const std::filesystem::path target(options.out_path);
+    std::ofstream file(target, std::ios::binary | std::ios::trunc);
+    if (!file) {
+        log_error("cannot open output file '" + to_utf8(target.wstring()) + "'");
+        return 5;
+    }
+    char line[64];
+    std::snprintf(line, sizeof(line), "price=0x%04x\n# source=client-price\n",
+                  static_cast<unsigned>(*price_cw));
+    file << line;
+    file.flush();
+    if (!file) {
+        log_error("cannot write output file '" + to_utf8(target.wstring()) + "'");
+        return 5;
+    }
+    log_info("wrote " + to_utf8(options.out_path));
+    return 0;
+}
+
 int run(const Options &options) {
+    if (options.price_cw)
+        return run_price(options);
+
     if (!enable_debug_privilege())
         log_warn("SeDebugPrivilege is not available; attach/read may still work");
 
@@ -1326,6 +1509,8 @@ int run(const Options &options) {
                         debugger.clear_dr0(event.dwThreadId);
                 } else if (address == state.bp1) {
                     log_info("single-step at DR1 on thread " + std::to_string(event.dwThreadId));
+                    const bool is_generation_thread =
+                        state.generation_active && event.dwThreadId == state.generation_tid;
                     if (options.trace_calls_ms != 0) {
                         CONTEXT context{};
                         uint32_t ret = 0;
@@ -1338,7 +1523,7 @@ int run(const Options &options) {
                             const uint32_t crt = context.Eax;
                             state_read = crt != 0 && mem.u32(crt + 0x14, rng_state);
                         }
-                        if (state.generation_active) {
+                        if (is_generation_thread) {
                             const bool have_state = have_context && state_read;
                             if (!state.state_captured) {
                                 if (have_state) {
@@ -1376,8 +1561,10 @@ int run(const Options &options) {
                                 if (call.draw_returns.size() < kMaxDrawTrace)
                                     call.draw_returns.push_back(DrawTrace{ret, rng_state});
                             }
+                            debugger.set_resume_flag(event.dwThreadId);
+                        } else {
+                            debugger.clear_dr1(event.dwThreadId);
                         }
-                        debugger.set_resume_flag(event.dwThreadId);
                     } else if (state.generation_active) {
                         if (event.dwThreadId != state.generation_tid) {
                             debugger.clear_dr1(event.dwThreadId);

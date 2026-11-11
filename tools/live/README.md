@@ -83,10 +83,62 @@ Smoke check:
    ```
 
    The capture file contains `# fpu_cw=0x.... source=first-draw` and
-   `# fpu_cw=0x.... source=scan-time` comment lines. The tool does not capture the
-   client-side price call site, so the `price=` half of `GL_SPECIALS_FPU_CW` must come
-   from a separate capture (or from the measured generation CW `0x007F` as a temporary
-   stand-in until the price site is captured).
+   `# fpu_cw=0x.... source=scan-time` comment lines. The client-side price CW is
+   captured separately with `--price-cw` (see below). Combine the two into one file
+   for `GL_SPECIALS_FPU_CW`:
+
+   ```text
+   generation=0x007f
+   price=0x007f
+   ```
+
+   ```powershell
+   $env:GL_SPECIALS_FPU_CW = "I:\path\to\fpu-cw.txt"
+   ```
+
+## Price control word capture (`--price-cw`)
+
+`FUN_1206E8D0` in `Client.dll` (RVA `0x6e8d0`) is the price/trade call. The
+function temporarily forces RC=truncate for its final `fistp` and then restores
+the ambient control word, so the **ambient** CW at function entry is what the
+port must reproduce. This mode arms a single hardware execute breakpoint at
+`Client.dll base + 0x6e8d0`, waits for the first hit, reads
+`CONTEXT.FloatSave.ControlWord`, and writes one line plus a provenance comment.
+
+1. Put the original game near a trader or with an inventory open; do not open the
+   price/trade action yet.
+2. Find the PID as above.
+3. Start the capture, then open the price/trade action in the game:
+
+   ```powershell
+   .\tools\live\gl_live_capture.exe --price-cw --pid 12345 --out .\price-cw.txt
+   ```
+
+   Optional: `--client <dll>` (default `Client.dll`, full path accepted) and
+   `--timeout <sec>` (default 120).
+
+4. The output file contains:
+
+   ```text
+   price=0x007f
+   # source=client-price
+   ```
+
+   The expected value is `0x007f` (PC=24, RC=nearest), matching the generation CW.
+   Exit codes: 0 captured, 2 module/attach error, 3 timeout, 5 write error, 6 the
+   game exited first. This mode does not scan containers and does not require
+   `--level` or `--loot-level`.
+
+To combine for `GL_SPECIALS_FPU_CW`, write one file with both keys (append the
+`price=` line and drop/keep the comment):
+
+```text
+generation=0x007f
+price=0x007f
+```
+
+The `generation=` value comes from the level capture (`source=generation-entry`)
+or from a separate generation capture; the `price=` value comes from this mode.
 
 ## What it captures
 
@@ -110,9 +162,11 @@ Smoke check:
   one `_rand` draw on the current NPC call (`draws=<M>`) and records the caller return
   address (`ret`, read from `[esp]` at the pre-draw site) with the pre-draw state, up to
   `kMaxDrawTrace` draws per call. Each DR1 hit sets RF like DR0. The first hit still
-  captures `rng_state`, the second still performs the LCG check, and later hits are
-  counted only. Per-draw rows are `# draw=<call> <k> ret=0x........ state=0x........`.
-  `# draw=` is diagnostic provenance, not oracle data.
+   captures `rng_state`, the second still performs the LCG check, and later hits are
+   counted only. Per-draw rows are `# draw=<call> <k> ret=0x........ state=0x........`;
+   `draws=<M>` counts every draw while `# draw=` rows are capped at `kMaxDrawTrace`
+   (4096) per call, so the example above has `draws=2` and two rows.
+   `# draw=` is diagnostic provenance, not oracle data.
 - After detach: `DAT_14088dc4` level manager, the level entity array at `+0x2564`, a
   used-bitmap **pointer** at `+0x2568` (dereferenced to the bitmap), count at `+0x256c`;
   `EF_PERSON` is `(entity+0x14 & 0x3e) == 2`. The person name is the C string at
@@ -144,7 +198,7 @@ Smoke check:
 # server_base=0x10000000
 # rng_second=0x1234yyyy check=ok
 # calls=1
-# call=1 tid=1234 hot=1 main=2 inv=Rat draws=6
+# call=1 tid=1234 hot=1 main=2 inv=Rat draws=2
 # draw=1 1 ret=0x1004b2a0 state=0x12345678
 # draw=1 2 ret=0x1004b2a0 state=0x5678abcd
 format=gl-specials-live-2
@@ -204,8 +258,8 @@ rejects that format, so an incomplete run cannot be mistaken for a real oracle.
   `mod_count = effects.size() + generated` (D-062).
 - The live x87 control word is captured at the NPC spawn entry and at the first `_rand`
   pre-draw site, plus a scan-time sample. The client-side `FUN_1206E8D0` price call site
-  is not captured; `GL_SPECIALS_FPU_CW` still needs a `price=` value from a separate
-  capture or the measured generation CW `0x007F` as a temporary stand-in.
+  is captured only by the separate `--price-cw` mode (RVA `0x6e8d0`), which writes
+  `price=0x....`; it is not part of the level/oracle capture file.
 - `SeDebugPrivilege` may be unavailable in a non-elevated shell. Attach can still work
   for a same-user process, but protected/anti-debug targets may deny it. The tool does
   not bypass DRM; it reports the failure and exits.
