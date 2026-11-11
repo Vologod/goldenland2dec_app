@@ -49,21 +49,24 @@
   build`; `GL_SPECIALS_LIVE=<capture> GL_SPECIALS_FPU_CW=<file>
   build\bin\gl_game_tests.exe --test-case="*special*gate*" --success`;
   `ctest --test-dir build --output-on-failure`.
-- **Проверка (2026-11-11, HEAD `7ee7646`):** `cmake --build build` — up to
+- **Проверка (2026-11-11, HEAD `9962d38`):** `cmake --build build` — up to
   date, exit 0; `gl_game_tests.exe` — 313/313 passed, 2 skipped, 560305
   assertions, exit 0; `trade_overlay_tests.exe` — 25/25, 669 assertions,
   exit 0; live gate с `GL_SPECIALS_LIVE` — ожидаемый `partial` fail:
   `items captured=22 port=29 matched=1 mismatched=49; mods captured=14
   port=7 matched=0 mismatched=21` (6 failed assertions в live-oracle
-  test-case); FPU-CW gate skipped без `GL_SPECIALS_FPU_CW`. Полный `ctest`
-  запускает контроллер.
+  test-case); FPU-CW gate skipped без `GL_SPECIALS_FPU_CW`. Полный
+  `ctest --test-dir build --output-on-failure` (`GL_GAME_DIR=I:\Games\Златогорье-2`) —
+  `100% tests passed out of 19`, `Total Test time (real) = 1991.87 sec`, exit 0.
 - **Open Questions (1b2b2e):**
   1. Точный порядок вызовов `FUN_1404b1c0` (SEF vs entity/spawn) —
      resolved 2026-11-11: live order = port SEF order 1:1.
   2. Нужен ли merge/stacking для 0/N на `l1_1`.
   3. Live CW у `FUN_1206E8D0` и модель цены.
-  4. Причина отсутствия generated mod `372` при captured state
-     (порядок, precision или provenance).
+  4. ~~Отсутствие generated mod `372`~~ — относится к старому capture
+     `special-l1_1-entry.txt`; новый capture `special-l1_1-trace.txt`
+     (D-062) item 372 не содержит, вопрос снят как артефакт старого
+     захвата; остаток — P678/P693 (Stage 2b).
 - **Статус:** plan part 1 (Stage 0/1/2a/3) реализован; regression/docs
   Task 6 закрыт. Live evidence 2026-11-11 снят; порядок и inherited effects
   подтверждены, но NPC oracle `0/N` не достигнут — **`partial`**, полный
@@ -103,7 +106,9 @@
   multiset) не заданы → skip с причиной; live-захваты не сняты.
   `0x027F` остаётся extraction-assumption; build-машина `0x037F` — только
   diagnostic. Port обязан сохранять default MXCSR rounding (nearest):
-  `TradePrice` чувствителен к non-nearest (2/3 режима).
+  `TradePrice` чувствителен к non-nearest (2/3 режима). **Superseded by
+  D-062 (1b2b2e):** live generation CW `0x007F` (PC=24) снят; ожидание
+  `0x027F`/PC=53 — историческая extraction-предпосылка.
 - **Проверка fix wave (`GL_GAME_DIR=I:\Games\Златогорье-2`):**
   `cmake --build build` exit 0. Focus reruns: `gl_game_tests` full
   **311/311** (2 skipped, 560289 assertions); `*special*gate*` **7/7**
@@ -116,6 +121,8 @@
   исключает `effects>0` rows (Open Question ниже). Добавлены tests:
   inherited template (price guard), `chunk!=1`, missing `SpecialDef`,
   FPU-CW file fallback, synthetic inherited capture, transfer mods.
+  **Superseded by D-062 (scope):** inherited effects теперь сравниваются,
+  не исключаются.
 - **Статус:** **`partial`**; full parity запрещён до live NPC-mod 0/N и
   live FPU-CW `0x027F`. Остаётся unverified: `random_sign` (место
   применения), item flag `0x40`, time-slots 4–6; save/сериализация mods —
@@ -123,7 +130,9 @@
   сохраняются count-only (`mod_count = template.mod_count + generated`,
   `mods` пуст) — value/flags/duration семантика не доказана; live-гейт
   исключает такие item/mod rows и сообщает skipped counts
-  (`tools/live/README.md`).
+  (`tools/live/README.md`). **Superseded by D-062:** inherited ITM effects
+  копируются в `mods` (`id=type`, `value=int32(amount)`, `flags`) и
+  сравниваются live-гейтом.
 - **Коммиты Task 4:** `3b62fc8` + `ca4fdca` (`test(game): harden specials
   live gates`).
 - **Коммиты Task 5:** `feat(tools): enable NPC specials` (production
@@ -147,11 +156,15 @@
   подтверждены): single vs double precision; порядок/scope общего
   RNG-потока (port сортирует persons, live идёт в entity/SEF-порядке);
   inherited ITM `effects>0` вне scope. Полный паритет НЕ заявлен —
-  статус **`partial`**; live-гейты остаются OPEN/BLOCKED.
+  статус **`partial`**; live-гейты остаются OPEN/BLOCKED. **Superseded by
+  D-062 (1b2b2e):** precision = binary32/PC=24, порядок = SEF 1:1,
+  inherited effects реализованы; NPC-oracle остаётся `partial`
+  (1/49 items, 0/21 mods).
 - **Next task (planned, отдельный подпроект):** live-parity разбор:
   (1) зафиксировать live CW `0x007F` и пересмотреть precision-модель
   specials/price; (2) модель порядка генерации persons;
   (3) scope inherited effects. До этого — не «дожать гейт» ослаблением.
+  **Update:** выполнено в 1b2b2e/D-062; residual — Stage 2b/4.
 - **Дальше:** отдельный подпроект live-parity (см. выше) либо
   `P2-15` (save payload), затем 35 Гц (`P2-9`).
 
@@ -171,7 +184,8 @@
   восстановлены. `FUN_14047284`/`roll_special_count` (R4/R5) и полный
   RNG-порядок R6–R10 восстановлены; `ROUND` = trunc только на финальном
   `fistp` (RC=`0xC00`), `fval`/`fval*level` — под входящим CW
-  (default `0x027F`: PC=53/RC=nearest). Conditions:
+  (default `0x027F`: PC=53/RC=nearest; **superseded by D-062:** live
+  `0x007F`/PC=24). Conditions:
   `assigned==1 && flags&4 && item+0x78==0`; R4/R5 лимиты
   3 (`flags&0x40==0`) / 9 (`flags&0x40!=0`); даже `nspec==0` потребляет R4;
   coin/range без `_rand` при `p<=0`/`p>1`/`hi<=lo`.
@@ -194,7 +208,8 @@
   `DAT_12110ed8` и server `DAT_14088df4` — один объект (host `+0x84`);
   price читает только `id/value/flags` (не `+0x0c/+0x10`; generated —
   0/0). Основной missing-gap `p3b2b4b` §8 п.2 закрыт структурно;
-  остаётся live FPU-CW (PC=53/RC=nearest) и реализация.
+  остаётся live FPU-CW (PC=53/RC=nearest; **superseded by D-062:**
+  generation CW `0x007F`/PC=24; live price CW — Stage 4) и реализация.
 - **Не доказано live:** захват NPC-модов из запущенной игры; live
   FPU-CW **перед `FUN_14047284` (генерация) и `FUN_1206E8D0` (цена)**;
   `random_sign` (def+0x04) парсится, но не читается генерацией/ценой
@@ -209,7 +224,7 @@
   **docs-only**, production-код не менялся; не запушено.
 - **Следующее:** implementation spec/plan для specials (parser
   `specials.scr`, `FUN_14047284`, R4–R10 в обоих проходах, modifier
-  price под PC=53) **можно начинать сейчас**; live NPC-mod oracle и
+  price под PC=53; D-062: binary32/PC=24) **можно начинать сейчас**; live NPC-mod oracle и
   live FPU-CW — обязательные acceptance-гейты **до заявки на full
   parity**, не блокеры старта. Затем `P2-15`/35 Гц.
 
@@ -223,8 +238,9 @@
   (`lbig2`, 579,320) → net money; без отдельного confirm/quantity
   selector. Modifier guard `mod_count != 0 && (flags & 0x80) == 0` →
   `unsupported` для buy и sell; `gv_addon`/perks (`0x10/0x400`) не
-  моделируются. Цена считается в `double` под явной `assume_pc53`
-  (PC=53), TU с `-ffp-contract=off`.
+   моделируются. Цена считается в `double` под явной `assume_pc53`
+   (PC=53), TU с `-ffp-contract=off`. **Superseded by D-062:**
+   binary32/`assume_x87_single` (PC=24).
 - **Spec:** `docs/specs/2026-11-09-p3b2b4b-trade-transactions-design.md`.
 - **Plan:** `docs/plans/2026-11-09-p3b2b4b-trade-transactions.md`.
 - **Research:** `docs/research/p3b2b4b-trade-transactions.md`; D-058.
@@ -256,8 +272,9 @@
   **105008/65908**, sell **128258/42658**, mixed (unit 1000/250);
   item totals сохраняются (65/42). Screenshot diffs на 1024×768
   (`trade_staging*`, `trade_buy/sell0/2`, `trade_mixed2`,
-  `trade_nomoney/npcmoney/stock`). After-state — **analytic (PC=53),
-  not observed**; before-state real/validated.
+  `trade_nomoney/npcmoney/stock`). After-state — **analytic (PC=53 —
+  superseded by D-062: binary32/PC=24), not observed**; before-state
+  real/validated.
 - **Ограничения:** no persistent server staging `+0x4E4/+0x4E8` и
   rollback action `0xD` (staging = overlay quotes); save не пишется;
   дубликаты item id матчатся по item id+count (не first-id); net/суммы
@@ -265,7 +282,8 @@
   unstage append в конец source; клиентский invocation staging id не
   трассирован; `gv_addon`/perks не моделируются; specials NPC-лута не
   генерируются (D-055); modifier-free NPC stock доказан только
-  slot0/slot2; live FPU-CW не снят.
+  slot0/slot2; live FPU-CW не снят (generation CW снят в 1b2b2e/D-062;
+  price CW — Stage 4).
 - **Final review (2026-11-09):** With fixes (transfer metadata retention,
   item_id+count stack match, guards/int32/docs) → final fix `19087a9`;
   scoped re-review clean. Ready to merge = Yes. Полный `ctest` после

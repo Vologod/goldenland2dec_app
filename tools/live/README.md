@@ -79,7 +79,7 @@ Smoke check:
    keys:
 
    ```powershell
-   $env:GL_SPECIALS_FPU_CW = "0x027F"
+   $env:GL_SPECIALS_FPU_CW = "0x007F"
    ```
 
    The capture file contains `# fpu_cw=0x.... source=first-draw` and
@@ -144,8 +144,8 @@ seed=0
 rng_state=0x12345678
 loot_level=1
 # loot_level_source=memory
-# fpu_cw=0x027f source=generation-entry
-# fpu_cw=0x027f source=first-draw
+# fpu_cw=0x007f source=generation-entry
+# fpu_cw=0x007f source=first-draw
 # fpu_cw=0x037f source=scan-time
 item|L1_2.P404_Sister_Of_Mercy2|8|1|0x204|1
 mod|L1_2.P404_Sister_Of_Mercy2|8|1|0x204|25|-1|0x81
@@ -215,4 +215,4 @@ llvm-objdump -p Server.dll Client.dll GoldenLand.exe
 None of the three binaries imports `_controlfp` or `_control87`. The original does not
 program the x87 control word through those CRT entry points; the documented `0x027F`
 reference is therefore an extraction-time assumption until a live breakpoint capture
-proves it.
+proves it. A live capture has since measured `0x007F` (PC=24) at generation; see D-062.
