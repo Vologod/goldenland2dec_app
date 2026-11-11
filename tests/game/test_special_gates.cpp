@@ -513,6 +513,7 @@ gl::game::InventoryRuntime::ItemTemplateLookup make_lookup(const gl::assets::Ite
 struct PortRun {
     std::multiset<CapturedItem> items;
     std::multiset<CapturedMod> mods;
+    std::vector<std::string> order;
     std::size_t generated_persons = 0;
     std::size_t captured_persons = 0;
     std::size_t inherited_capture_items = 0;
@@ -585,6 +586,7 @@ bool build_port_records(LiveCapture &capture, bool filter_to_captured, PortRun &
         if (person.inventory.empty() || person.name == "Hero")
             continue;
         ++port.generated_persons;
+        port.order.push_back(person.name + "(" + person.inventory + ")");
         auto cached = cache.find(person.inventory);
         if (cached == cache.end()) {
             auto table = gl::assets::load_inv(vfs.value(), person.inventory);
@@ -780,6 +782,10 @@ TEST_CASE("special gates: live NPC-mod oracle" * doctest::skip(!live_capture_ava
 
     PortRun port;
     REQUIRE_MESSAGE(build_port_records(capture, true, port, error), error);
+    std::ostringstream order;
+    for (const std::string &name : port.order)
+        order << name << " ";
+    MESSAGE("port order: " << order.str());
     if (port.inherited_capture_items != 0 || port.inherited_capture_mods != 0 ||
         port.inherited_port_items != 0) {
         MESSAGE("oracle scope: skipped inherited ITM-effect records (capture items="
@@ -849,6 +855,10 @@ TEST_CASE("special gates: oracle plumbing self-check" * doctest::skip(!game_dir_
     PortRun all;
     std::string error;
     REQUIRE_MESSAGE(build_port_records(session, false, all, error), error);
+    std::ostringstream order;
+    for (const std::string &name : all.order)
+        order << name << " ";
+    MESSAGE("port order (synthetic): " << order.str());
     REQUIRE_MESSAGE(!all.items.empty(), "port generated no main-container items");
     REQUIRE_MESSAGE(!all.mods.empty(), "port generated no main-container mods");
     CHECK(std::any_of(all.items.begin(), all.items.end(),
