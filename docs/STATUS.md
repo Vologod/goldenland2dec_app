@@ -1,7 +1,7 @@
 # STATUS
 
 Обновлено: 2026-11-11
-## Phase 1b2b2e — Specials live parity (design approved 2026-11-11; implementation in progress, partial)
+## Phase 1b2b2e — Specials live parity (regression/docs done 2026-11-11; live oracle partial)
 
 - **Задача:** закрыть live-гейты specials (`1b2b2d` был `partial`):
   provenance live-захвата, порядок/scope RNG, inherited ITM effects,
@@ -14,6 +14,16 @@
   inherited effects, merge при необходимости); Stage 3 precision
   (binary32/PC=24 для specials и `TradePrice`); Stage 4 live-приёмка
   (NPC 0/N + CW у `FUN_1206E8D0`).
+- **Сделано (Tasks 0–5):** Stage 0 — tool map-резолв + `--scan-only`
+  (без ложного capture); Stage 1 — provenance: call-order trace (RF после
+  первого draw), LCG double-draw, `loot_level` из `BT_INFO+0x26c4`
+  (source=memory); Stage 2a — inherited ITM effects копируются в runtime
+  mods (`id=type`, `value=int32(amount)`, `flags`) и
+  `mod_count = effects.size() + generated`; live-гейт их сравнивает;
+  Stage 3 — specials и `TradePrice` переведены на binary32
+  (`assume_x87_single`, live CW
+  `0x007F` = PC=24/RC=nearest). Stage 2b (merge/window) и Stage 4 (price
+  CW) не входили в этот plan.
 - **Доказано при design:** live item flags = raw ITM flags (маска не
   нужна: `812`=`0xC0000000`, `372`=`0xC0000284`, `933`=`0x8000000C`);
   inherited mods = ITM effects (`933` `7/1/0x50`+`8/-1/0x50`, `418`
@@ -39,6 +49,14 @@
   build`; `GL_SPECIALS_LIVE=<capture> GL_SPECIALS_FPU_CW=<file>
   build\bin\gl_game_tests.exe --test-case="*special*gate*" --success`;
   `ctest --test-dir build --output-on-failure`.
+- **Проверка (2026-11-11, HEAD `7ee7646`):** `cmake --build build` — up to
+  date, exit 0; `gl_game_tests.exe` — 313/313 passed, 2 skipped, 560305
+  assertions, exit 0; `trade_overlay_tests.exe` — 25/25, 669 assertions,
+  exit 0; live gate с `GL_SPECIALS_LIVE` — ожидаемый `partial` fail:
+  `items captured=22 port=29 matched=1 mismatched=49; mods captured=14
+  port=7 matched=0 mismatched=21` (6 failed assertions в live-oracle
+  test-case); FPU-CW gate skipped без `GL_SPECIALS_FPU_CW`. Полный `ctest`
+  запускает контроллер.
 - **Open Questions (1b2b2e):**
   1. Точный порядок вызовов `FUN_1404b1c0` (SEF vs entity/spawn) —
      resolved 2026-11-11: live order = port SEF order 1:1.
@@ -46,11 +64,12 @@
   3. Live CW у `FUN_1206E8D0` и модель цены.
   4. Причина отсутствия generated mod `372` при captured state
      (порядок, precision или provenance).
-- **Статус:** design approved; plan part 1 (Stage 0/1/2a/3) реализуется
-  (`docs/plans/2026-11-11-p3b2b2e-specials-live-parity.md`). Live evidence
-  2026-11-11 снят; порядок и inherited effects подтверждены, но NPC oracle
-  `0/N` не достигнут — **`partial`**, полный паритет не заявлен. Stage 2b
-  (merge/stacking + window/quantity) и Stage 4 (price CW) остаются open.
+- **Статус:** plan part 1 (Stage 0/1/2a/3) реализован; regression/docs
+  Task 6 закрыт. Live evidence 2026-11-11 снят; порядок и inherited effects
+  подтверждены, но NPC oracle `0/N` не достигнут — **`partial`**, полный
+  паритет не заявлен. Residual: Stage 2b (merge/stacking `FUN_1404e3a4` +
+  window/quantity) и Stage 4 (live price CW `FUN_1206E8D0`) остаются open;
+  follow-up plan создаётся после evidence.
 
 ## Phase 1b2b2d — NPC loot specials implementation (done 2026-11-10)
 

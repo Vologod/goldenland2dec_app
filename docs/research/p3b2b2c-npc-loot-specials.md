@@ -854,4 +854,6 @@ tech_names.sdb BACFC79409DFEA4FAD1AB85D21235C2E4D7F37C4525B69C87F7838634F391796
   (c) a later RNG/specials divergence around P678/P693.
   Order and inherited effects are ruled out as causes.
 - **Status: `partial`.** Not full parity. Stage 2b (merge/stacking +
-  window/quantity) and Stage 4 (price CW) remain open.
+  window/quantity) and Stage 4 (price CW) remain open. The precision/inherited
+  model is recorded in D-062; the live price CW at `FUN_1206E8D0` is still
+  unmeasured (generation CW `0x007F`/PC=24 is measured).

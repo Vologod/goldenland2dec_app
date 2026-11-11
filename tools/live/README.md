@@ -85,8 +85,8 @@ Smoke check:
    The capture file contains `# fpu_cw=0x.... source=first-draw` and
    `# fpu_cw=0x.... source=scan-time` comment lines. The tool does not capture the
    client-side price call site, so the `price=` half of `GL_SPECIALS_FPU_CW` must come
-   from a separate capture (or from the documented `0x027F` assumption, which remains an
-   assumption until proven live).
+   from a separate capture (or from the measured generation CW `0x007F` as a temporary
+   stand-in until the price site is captured).
 
 ## What it captures
 
@@ -188,12 +188,13 @@ rejects that format, so an incomplete run cannot be mistaken for a real oracle.
 - Only the main container (`entity+0x10`) is captured. The trade container
   (`entity+0x0c`) is out of scope for this oracle.
 - Captured rows include inherited ITM prototype effects in the same `+0x78/+0x7c` mod
-  array. The gate excludes items with ITM `effects > 0` and reports how many rows were
-  skipped; inherited effect semantics are not modelled.
+  array. The gate now compares them: the port copies each ITM effect into the runtime
+  mod array as `id=type`, `value=int32(amount)`, `flags`, and sets
+  `mod_count = effects.size() + generated` (D-062).
 - The live x87 control word is captured at the NPC spawn entry and at the first `_rand`
   pre-draw site, plus a scan-time sample. The client-side `FUN_1206E8D0` price call site
   is not captured; `GL_SPECIALS_FPU_CW` still needs a `price=` value from a separate
-  capture or the explicit `0x027F` assumption.
+  capture or the measured generation CW `0x007F` as a temporary stand-in.
 - `SeDebugPrivilege` may be unavailable in a non-elevated shell. Attach can still work
   for a same-user process, but protected/anti-debug targets may deny it. The tool does
   not bypass DRM; it reports the failure and exits.

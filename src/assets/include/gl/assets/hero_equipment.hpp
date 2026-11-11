@@ -36,9 +36,8 @@ struct InventoryItem {
     std::uint32_t type = 0;
     std::uint32_t style = 0;
     std::uint32_t durability = 100;
-    // Saves store only the mod count. Generated specials keep
-    // mod_count == mods.size(); inherited ITM prototype effects are count-only
-    // (mod_count > 0, mods empty) and are not modelled.
+    // Saves store only the mod count. Generated specials and inherited ITM
+    // prototype effects both populate mods; mod_count == mods.size().
     std::uint32_t mod_count = 0;
     std::vector<SpecialMod> mods;
 };
