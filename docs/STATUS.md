@@ -1,6 +1,21 @@
 # STATUS
 
 Обновлено: 2026-11-11
+## Phase 1b2b2f — Per-person pre-loot RNG (in progress)
+
+- **Задача:** потреблять weapon (`FUN_1401d99c`) + spawn
+  (`FUN_14021bc8`) RNG-draw в SEF-порядке после loot каждого персонажа.
+- **Spec:** `docs/specs/2026-11-11-p3b2b2f-person-rng-design.md`.
+- **Plan:** `docs/plans/2026-11-11-p3b2b2f-person-rng.md`.
+- **Критерии приёмки:** live l1_1 oracle
+  `mismatched_items==0 && mismatched_mods==0`; deterministic seed-1 оракулы
+  пересчитаны независимым reference; полный `ctest` с `GL_GAME_DIR`.
+- **Команды проверки:** `cmake --build build`;
+  `build\bin\gl_game_tests.exe --test-case="*person_rng*,*npc_loot*"`;
+  `GL_SPECIALS_LIVE=<capture> build\bin\gl_game_tests.exe
+  --test-case="*live NPC-mod oracle*" --success`;
+  `ctest --test-dir build --output-on-failure`.
+- **Статус:** `in progress`.
 ## Phase 1b2b2e — Specials live parity (regression/docs done 2026-11-11; live oracle partial)
 
 - **Задача:** закрыть live-гейты specials (`1b2b2d` был `partial`):
