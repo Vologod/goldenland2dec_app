@@ -215,6 +215,86 @@ TEST_CASE("npc_loot: no four-stack cap") {
     CHECK(rng.next() == 26500u);
 }
 
+TEST_CASE("npc_loot: same-prototype chunks merge with overwrite count") {
+    const auto names = make_names();
+    gl::assets::InvTable table;
+    table.regenerate_chance = 0.0;
+    table.chance_decrease = 1.0;
+    table.quantity_decrease = 1.0;
+    table.items = {make_item("A", 0, 20, 100, 2, 2), make_item("A", 0, 20, 100, 3, 3)};
+
+    MsvcRandom rng(1);
+    const NpcLoot loot = NpcLootGenerator::generate(table, 11, names, lookup, rng);
+    REQUIRE(loot.main.size() == 1);
+    CHECK(loot.main[0].item_id == 100);
+    CHECK(loot.main[0].count == 3); // overwrite, not 2+3
+}
+
+TEST_CASE("npc_loot: full stack does not merge into a new record") {
+    const auto names = make_names();
+    gl::assets::InvTable table;
+    table.regenerate_chance = 0.0;
+    table.chance_decrease = 1.0;
+    table.quantity_decrease = 1.0;
+    table.items = {make_item("C", 0, 100, 100, 5, 5)};
+
+    MsvcRandom rng(1);
+    const NpcLoot loot = NpcLootGenerator::generate(table, 11, names, lookup, rng);
+
+    check_items(loot.hot, {{103, 2, 3, 0x40u, 5}, {103, 2, 3, 0x40u, 5}, {103, 1, 3, 0x40u, 5}});
+    check_items(loot.main, {{103, 2, 3, 0x40u, 5}, {103, 2, 3, 0x40u, 5}, {103, 1, 3, 0x40u, 5}});
+}
+
+TEST_CASE("npc_loot: max_stack below two never merges chunks") {
+    const auto names = make_names();
+    gl::assets::InvTable table;
+    table.regenerate_chance = 0.0;
+    table.chance_decrease = 1.0;
+    table.quantity_decrease = 1.0;
+    table.items = {make_item("E", 0, 100, 100, 3, 3)};
+
+    MsvcRandom rng(1);
+    const NpcLoot loot = NpcLootGenerator::generate(table, 11, names, lookup, rng);
+
+    check_items(loot.hot, {{105, 1, 5, 0, 2}, {105, 1, 5, 0, 2}, {105, 1, 5, 0, 2}});
+    check_items(loot.main, {{105, 1, 5, 0, 2}, {105, 1, 5, 0, 2}, {105, 1, 5, 0, 2}});
+}
+
+TEST_CASE("npc_loot: hot and main merge independently") {
+    const auto names = make_names();
+    gl::assets::InvTable table;
+    table.regenerate_chance = 0.0;
+    table.chance_decrease = 1.0;
+    table.quantity_decrease = 2.0;
+    table.items = {make_item("D", 0, 100, 100, 5, 5)};
+
+    MsvcRandom rng(1);
+    const NpcLoot loot = NpcLootGenerator::generate(table, 11, names, lookup, rng);
+
+    REQUIRE(loot.hot.size() == 1);
+    CHECK(loot.hot[0].count == 5);
+    REQUIRE(loot.main.size() == 1);
+    CHECK(loot.main[0].count == 3);
+}
+
+TEST_CASE("npc_loot: merge consumes no RNG") {
+    const auto names = make_names();
+    gl::assets::InvTable table;
+    table.regenerate_chance = 0.0;
+    table.chance_decrease = 1.0;
+    table.quantity_decrease = 1.0;
+    table.items = {make_item("A", 0, 20, 100, 2, 2), make_item("A", 0, 20, 100, 3, 3)};
+
+    MsvcRandom rng(1);
+    const NpcLoot loot = NpcLootGenerator::generate(table, 11, names, lookup, rng);
+    REQUIRE(loot.main.size() == 1);
+
+    MsvcRandom expected(1);
+    for (int draw = 0; draw < 4; ++draw)
+        expected.next();
+    CHECK(rng.state() == expected.state());
+}
+
 TEST_CASE("npc_loot: scaled bounds use trunc plus one when fractional") {
     const auto names = make_names();
     gl::assets::InvTable table;

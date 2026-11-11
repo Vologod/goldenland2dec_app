@@ -33,17 +33,30 @@ void append_chunks(std::vector<LootItem> &out, std::uint32_t item_id, std::int32
                    MsvcRandom &rng) {
     if (item_template.max_stack == 0)
         return;
-    std::int32_t remaining = quantity;
-    while (remaining > 0) {
-        const std::int32_t chunk =
-            std::min(remaining, static_cast<std::int32_t>(item_template.max_stack));
+    auto add_chunk = [&](std::int32_t chunk) -> LootItem & {
+        if (item_template.max_stack >= 2) {
+            for (LootItem &existing : out) {
+                if (existing.item_id == item_id &&
+                    static_cast<std::uint32_t>(existing.count) < item_template.max_stack) {
+                    existing.count = chunk;
+                    return existing;
+                }
+            }
+        }
         LootItem loot{item_id, chunk, item_template.type, flags, item_template.style};
         loot.mod_count = item_template.mod_count;
         loot.mods.reserve(item_template.effects.size());
         for (const ItemTemplateEffect &effect : item_template.effects)
             loot.mods.push_back({effect.type, effect.value, effect.flags});
-        if (specials != nullptr && chunk == 1 && (flags & 0x4u) != 0 &&
-            item_template.mod_count == 0) {
+        out.push_back(std::move(loot));
+        return out.back();
+    };
+    std::int32_t remaining = quantity;
+    while (remaining > 0) {
+        const std::int32_t chunk =
+            std::min(remaining, static_cast<std::int32_t>(item_template.max_stack));
+        LootItem &loot = add_chunk(chunk);
+        if (specials != nullptr && chunk == 1 && (loot.flags & 0x4u) != 0 && loot.mod_count == 0) {
             const int nspec = random_special_count(flags, rng);
             if (nspec > 0) {
                 loot.mods = SpecialEngine::apply(
@@ -53,7 +66,6 @@ void append_chunks(std::vector<LootItem> &out, std::uint32_t item_id, std::int32
                 loot.mod_count += static_cast<std::uint32_t>(loot.mods.size());
             }
         }
-        out.push_back(std::move(loot));
         remaining -= chunk;
     }
 }

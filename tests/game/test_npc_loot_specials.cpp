@@ -373,7 +373,7 @@ TEST_CASE("npc_loot specials: inventories keep generated mods and mod count" *
     gl::game::generate_npc_inventories(runtime, level->persons, vfs.value(), names.value(), lookup,
                                        1, rng, &specials.value());
 
-    CHECK(runtime.count("L1_1.P389_Crying_Guardian", "MON_1_0_1") == 287);
+    CHECK(runtime.count("L1_1.P389_Crying_Guardian", "MON_1_0_1") == 102);
     const std::vector<gl::assets::InventoryItem> &trade =
         runtime.trade_items("L1_2.P404_Sister_Of_Mercy2");
     const std::uint32_t brl_id = item_id_for(names.value(), "BRL_1_01_5");
@@ -541,7 +541,7 @@ TEST_CASE("npc_loot specials: l1_1 seed 1 loot level 1 deterministic oracle" *
         if (item.item_id == mon)
             kolbasens_mon.push_back(item.count);
     }
-    CHECK(kolbasens_mon == std::vector<std::int32_t>{87, 87});
+    CHECK(kolbasens_mon == std::vector<std::int32_t>{87});
 
     REQUIRE(with_specials.persons.size() == no_specials.persons.size());
     for (std::size_t index = 0; index < with_specials.persons.size(); ++index) {
@@ -551,8 +551,8 @@ TEST_CASE("npc_loot specials: l1_1 seed 1 loot level 1 deterministic oracle" *
             continue;
         CHECK(left.name == "L1_1.P389_Crying_Guardian");
         CHECK(same_items(left.loot.hot, right.loot.hot));
-        CHECK(count_item(left.loot.main, mon) == 287);
-        CHECK(count_item(right.loot.main, mon) == 218);
+        CHECK(count_item(left.loot.main, mon) == 102);
+        CHECK(count_item(right.loot.main, mon) == 130);
         break;
     }
 
