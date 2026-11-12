@@ -1,6 +1,18 @@
 # STATUS
 
 Обновлено: 2026-11-12
+## P2-15b — Save load, first increment (in progress 2026-11-12)
+
+- **Задача:** декодировать `.sav` payload, загрузить уровень по `BT_INFO` +
+  hero (P5a), Continue/`--load-save`; без записи.
+- **Spec:** `docs/specs/2026-11-12-p2-15b-save-load-design.md`.
+- **Plan:** `docs/plans/2026-11-12-p2-15b-save-load.md`.
+- **Критерии:** 28/28 decode; slot0/slot2 pinned; `--load-save 0` грузит
+  `L93_4`; `--dump-save` exit 0; полный `ctest`.
+- **Команды:** build; `gl_assets_tests`/`gl_assets_real_tests`
+  `--test-case="*save payload*"`; `glgame_screenshot_tests --test-case="*save*"`;
+  `ctest`.
+- **Статус:** `in progress`.
 ## P2-15a — Save payload research (done 2026-11-12)
 
 - **Задача:** research-only разбор `.sav` payload после 112 байт: zlib,
