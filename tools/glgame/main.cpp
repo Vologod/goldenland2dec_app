@@ -1918,7 +1918,8 @@ class Game {
         return synthetic;
     }
 
-    bool apply_hero_from_body(std::span<const std::uint8_t> body, int slot) {
+    bool apply_hero_from_body(std::span<const std::uint8_t> body, int slot,
+                              bool rebuild_inventory) {
         reset_pending_hero();
 
         auto hero_stats = gl::assets::parse_hero_stats(body);
@@ -1942,7 +1943,7 @@ class Game {
                     "inventory: slot " + std::to_string(slot) + ": " +
                         inventory.error().message);
         }
-        rebuild_inventory_runtime();
+        if (rebuild_inventory) rebuild_inventory_runtime();
 
         auto equipment = gl::assets::parse_hero_equipment(body);
         if (!equipment) {
@@ -2006,7 +2007,7 @@ class Game {
             return;
         }
 
-        apply_hero_from_body(body, slot);
+        apply_hero_from_body(body, slot, true);
     }
 
     void apply_loaded_equip_save() {
@@ -2098,7 +2099,7 @@ class Game {
         const std::span<const std::uint8_t> hero_body =
             std::span<const std::uint8_t>(payload->decompressed)
                 .subspan(hero->offset, hero->size);
-        apply_hero_from_body(hero_body, slot);
+        apply_hero_from_body(hero_body, slot, false);
 
         if (!load_level(payload->info.level_id)) {
             reset_pending_hero();
@@ -2110,6 +2111,7 @@ class Game {
             return false;
         }
 
+        rebuild_inventory_runtime();
         rebuild_person_runtime(level_->level().persons);
         apply_loaded_equip_save();
 

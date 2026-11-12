@@ -6,6 +6,7 @@
 #include <gl/assets/vfs.hpp>
 #include <gl/game/level.hpp>
 #include <gl/render/font.hpp>
+#include <miniz.h>
 #include <stb_image.h>
 
 #include <algorithm>
@@ -21,6 +22,7 @@
 #include <memory>
 #include <optional>
 #include <set>
+#include <span>
 #include <string>
 #include <string_view>
 #include <system_error>
@@ -285,6 +287,89 @@ std::string setting_value(const std::vector<std::string>& lines, std::string_vie
         return value;
     }
     return {};
+}
+
+void put_u32_le(std::vector<std::uint8_t>& out, std::uint32_t value) {
+    for (int i = 0; i < 4; ++i) out.push_back(static_cast<std::uint8_t>(value >> (8 * i)));
+}
+
+void put_block_le(std::vector<std::uint8_t>& out, std::string_view tag,
+                  const std::vector<std::uint8_t>& body) {
+    out.insert(out.end(), tag.begin(), tag.end());
+    put_u32_le(out, static_cast<std::uint32_t>(body.size()));
+    out.insert(out.end(), body.begin(), body.end());
+}
+
+void put_string_le(std::vector<std::uint8_t>& out, std::string_view text) {
+    put_u32_le(out, static_cast<std::uint32_t>(text.size()));
+    out.insert(out.end(), text.begin(), text.end());
+}
+
+std::vector<std::uint8_t> compress_zlib(std::span<const std::uint8_t> data) {
+    std::vector<std::uint8_t> out(mz_compressBound(data.size()));
+    mz_ulong length = static_cast<mz_ulong>(out.size());
+    if (mz_compress(out.data(), &length, data.data(), data.size()) != MZ_OK) return {};
+    out.resize(static_cast<std::size_t>(length));
+    return out;
+}
+
+std::vector<std::uint8_t> synthetic_save(std::string_view level) {
+    std::vector<std::uint8_t> info;
+    put_string_le(info, "session");
+    put_u32_le(info, 0);
+    info.insert(info.end(), 0x20, 0x11);
+    put_string_le(info, "desc");
+    put_string_le(info, level);
+    put_u32_le(info, 40);
+    for (int i = 0; i < 8; ++i) info.push_back(static_cast<std::uint8_t>(i));
+
+    std::vector<std::uint8_t> vars;
+    put_u32_le(vars, 0);
+
+    std::vector<std::uint8_t> body;
+    put_block_le(body, "BT_SCRN ", {});
+    put_block_le(body, "BT_INFO ", info);
+    put_block_le(body, "BT_VARS ", vars);
+    put_block_le(body, "BT_TRIBE", {});
+    put_block_le(body, "BT_DIARY", {});
+    put_block_le(body, "BT_HSTRY", {});
+    put_block_le(body, "BT_HERO ", {});
+
+    std::vector<std::uint8_t> section_blocks;
+    std::vector<std::uint8_t> rginf(36);
+    for (std::size_t i = 0; i < rginf.size(); ++i)
+        rginf[i] = static_cast<std::uint8_t>(0x40 + i);
+    put_block_le(section_blocks, "BT_RGINF", rginf);
+    std::vector<std::uint8_t> ents;
+    put_u32_le(ents, 0);
+    put_block_le(section_blocks, "BT_ENTS ", ents);
+
+    const std::vector<std::uint8_t> section_compressed = compress_zlib(section_blocks);
+    std::vector<std::uint8_t> section;
+    put_u32_le(section, static_cast<std::uint32_t>(section_blocks.size()));
+    put_u32_le(section, static_cast<std::uint32_t>(section_compressed.size()));
+    section.insert(section.end(), section_compressed.begin(), section_compressed.end());
+
+    std::vector<std::uint8_t> tail;
+    put_u32_le(tail, 1);
+    put_string_le(tail, level);
+    put_u32_le(tail, static_cast<std::uint32_t>(section.size()));
+    tail.insert(tail.end(), section.begin(), section.end());
+
+    std::vector<std::uint8_t> file(112, 0);
+    const std::string magic = "Goldenland II save ";
+    for (std::size_t i = 0; i < magic.size(); ++i) file[i] = magic[i];
+    for (int i = 0; i < 4; ++i) file[20 + i] = static_cast<std::uint8_t>(17u >> (8 * i));
+    const std::vector<std::uint8_t> compressed = compress_zlib(body);
+    const auto put_at = [&file](std::size_t offset, std::uint32_t value) {
+        for (int i = 0; i < 4; ++i)
+            file[offset + i] = static_cast<std::uint8_t>(value >> (8 * i));
+    };
+    put_at(0x68, static_cast<std::uint32_t>(body.size()));
+    put_at(0x6c, static_cast<std::uint32_t>(compressed.size()));
+    file.insert(file.end(), compressed.begin(), compressed.end());
+    file.insert(file.end(), tail.begin(), tail.end());
+    return file;
 }
 
 void check_png(const fs::path& png, int expected_width, int expected_height) {
@@ -605,6 +690,36 @@ TEST_CASE("glgame --load-save loads the level and hero from the save") {
     CHECK(output.find("save: loaded slot=0 level=L93_4") != std::string::npos);
     CHECK(output.find("inventory: slot 0") != std::string::npos);
     CHECK(output.find("outfit: slot 0") != std::string::npos);
+}
+
+TEST_CASE("glgame --load-save leaves the inventory runtime untouched when the level fails") {
+    TempDir temp;
+    const fs::path config = write_test_config(temp.path);
+    const fs::path saves = temp.path / "Saves";
+    std::error_code error;
+    fs::create_directories(saves, error);
+    REQUIRE_FALSE(error);
+    const std::vector<std::uint8_t> bytes = synthetic_save("NOPE_9");
+    const fs::path save_path = saves / "slot0.sav";
+    {
+        std::ofstream out(save_path, std::ios::binary);
+        out.write(reinterpret_cast<const char*>(bytes.data()),
+                  static_cast<std::streamsize>(bytes.size()));
+        REQUIRE(out);
+    }
+    const fs::path png = temp.path / "load_save_fail.png";
+    std::string output;
+    const int code = run_glgame_capture(
+        {"--game-dir", temp.path.string(), "--config", config.string(),
+         "--screenshot", png.string(), "--width", "1024", "--height", "768", "--seed", "1",
+         "--load-save", "0"},
+        output);
+    CAPTURE(code);
+    CAPTURE(output);
+    CHECK(code == 3);
+    CHECK(output.find("save: loaded") == std::string::npos);
+    CHECK(output.find("cannot load level") != std::string::npos);
+    CHECK(count_occurrences(output, "inventory runtime: Hero money=") == 1);
 }
 
 TEST_CASE("glgame renders a dialog into a 1280x720 PNG" *
