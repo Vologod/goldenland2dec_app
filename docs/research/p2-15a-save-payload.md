@@ -412,7 +412,7 @@ Other observed writer/reader asymmetries:
 
 ### `BT_SCRN ` status
 
-**Server side: unverified — absent from `FUN_1403210c`.** `FUN_1403210c`
+**Server side: confirmed absent — not parsed by `FUN_1403210c`.** `FUN_1403210c`
 never opens `BT_SCRN ` by tag and never calls the writer's `iVar3+0x50`
 preview-generation callback (35385). Its first lookup is `BT_INFO ` at 35628; the
 tag+size scan inside `FUN_14001084` starts at offset 0 (59), reads the
@@ -845,13 +845,14 @@ located and mapped: writer `FUN_14031b64` (RVA `0x31b64`) and reader
 client-only 500×375 preview, the tail dictionary holds per-level dynamic
 snapshots (`BT_RGINF`/`BT_ENTS`), and the remaining gaps are field semantics
 (OQ-1…OQ-12) with named decompile steps, not unknown framing. P2-15b can
-start from the minimum read set in §Block domains and port coverage;
-P2-15c builds on the same writer order.
+start from the minimum read set in §Minimum read set for P2-15b;
+P2-15c builds on the writer order documented in §Writer.
 
 ### P2-15b — read-only load
 
 Scope: load a `.sav` into the port's world/server state without writing
-anything. Ordered read set (mirrors `FUN_1403210c`/`FUN_14033214`):
+anything. Ordered read set (reader order from `FUN_1403210c`, with the
+header/inflate and tail dictionary that precede it):
 
 1. Header + inflate: `raw[0:0x68]`, uncompressed length at `0x68`,
    compressed length at `0x6c`, zlib at `0x70` (`FUN_14001668`, 493-512).
@@ -866,20 +867,28 @@ anything. Ordered read set (mirrors `FUN_1403210c`/`FUN_14033214`):
    `cell_groups`) + dynamic snapshot `BT_RGINF` / `BT_ENTS` from the tail
    section (35779-35914; entity list terminated by type 1).
 5. `BT_VARS ` script globals (35664-35665).
-6. `BT_HERO ` hero + attached entities (35670-35684).
-7. `BT_TRIBE` faction matrix, loaded opaquely until the relation labels are
+6. `BT_TRIBE` faction matrix, loaded opaquely until the relation labels are
    known (35666-35667).
-8. `BT_DIARY` journal and `BT_HSTRY` event log (35668-35669, 35685-35686);
-   deferrable to a follow-up inside P2-15b.
-9. `BT_SCRN ` is skipped by tag+size; the server never reads it.
+7. `BT_DIARY` journal (35668-35669); may be deferred within the first
+   increment, but full P2-15b acceptance includes quests.
+8. `BT_HERO ` hero + attached entities (35670-35684).
+9. `BT_HSTRY` event log (35685-35686); deferrable within the first
+   increment.
+10. `BT_SCRN ` is skipped by tag+size; the server never reads it.
+
+The port already parses/decodes `BT_HERO ` inventory/equipment/stats; for
+the other blocks only the container/field layout exists, and P2-15b must add
+the loaders.
 
 Acceptance:
 
 - Loading slot0 (and at least one other save) reproduces the save's decoded
   values with **0/N mismatches** for: level id, dynamic persons (`BT_ENTS`
   type sequence + per-person fields), quests (`BT_DIARY` entry/record
-  counts), script globals (`BT_VARS` names/count) and hero
-  inventory/equipment/stats (`BT_HERO`, already pinned by P5a real tests).
+  counts; full acceptance, not part of the deferrable first increment),
+  script globals (`BT_VARS` names/count only until OQ-5 resolves numeric
+  conversion) and hero inventory/equipment/stats (`BT_HERO`, already pinned
+  by P5a real tests).
 - Determinism: loading the same file twice yields identical state (no
   iteration-order/RNG dependence).
 - Read-only: no file writes, no `game_save`, no process-memory writes;
@@ -892,18 +901,20 @@ semantics questions with named decompile steps (see Open Questions).
 
 Scope: serialize port state into a valid `.sav` and wire `game_save`.
 
-- Block order: `BT_SCRN ` → `BT_INFO ` → `BT_VARS ` → `BT_TRIBE` →
-  `BT_DIARY` → `BT_HSTRY` → `BT_HERO ` (writer 35384-35405), then
-  `FUN_14032c2c(this)` and the `this+0x26d8` tail dictionary
-  (35478-35492), then the `0x68` header (magic, version `0x11`,
-  `GetLocalTime`, name) + the 8 stream-layer bytes + the zlib stream
-  (`FUN_14001580`/`FUN_1400153c`).
-- Writer reuse: follow `FUN_14031b64`'s per-block call table (§Writer) and
-  reuse the existing port encoders for `BT_HERO `
-  inventory/equipment/stats; `BT_VARS ` must convert typed variants back to
-  the on-disk f64/string encoding (OQ-5). `BT_SCRN ` can be emitted as a
-  deterministic placeholder or a regenerated 500×375 buffer; OQ-2 only
-  affects pixel fidelity.
+- On-disk order: `0x68` header (magic, version `0x11`, `GetLocalTime`,
+  name; 35475) + the 8 stream-layer bytes + zlib(main blocks) (35477) +
+  tail dictionary (`FUN_14032c2c(this)` then `this+0x26d8`, 35478-35492).
+  Inside the zlib stream, main blocks are `BT_SCRN ` → `BT_INFO ` →
+  `BT_VARS ` → `BT_TRIBE` → `BT_DIARY` → `BT_HSTRY` → `BT_HERO `
+  (writer 35384-35405).
+- Writer reuse: follow `FUN_14031b64`'s per-block call table (§Writer).
+  The port currently has only parsers/decoders (`decode_save_body`,
+  `parse_hero_equipment`, `parse_hero_inventory`, `parse_hero_stats`), not
+  save encoders; reuse their field model but write new `BT_HERO `
+  encoders. `BT_VARS ` must likewise gain a writer that converts typed
+  variants back to the on-disk f64/string encoding (OQ-5). `BT_SCRN ` can
+  be emitted as a deterministic placeholder or a regenerated 500×375
+  buffer; OQ-2 only affects pixel fidelity.
 - File target: `Saves\slot<N>.sav`; header `version 17`; name field from the
   save name.
 - Acceptance (round-trip): write port state → decode the produced file with

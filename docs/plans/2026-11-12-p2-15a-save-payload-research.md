@@ -8,6 +8,8 @@
 
 **Tech Stack:** Python 3 (`zlib`, `struct`), Ghidra headless (уже разобранный `Server.dll`), `.local/decomp/server/decompiled.c`.
 
+**Status (2026-11-12):** research complete (verdict `implementable`); the step checkboxes below are historical and left unchecked. Task 6 concluded that a live diff was not needed; no step requiring a live run was executed.
+
 ## Global Constraints
 
 - Research-only: никаких изменений `src/`, `tests/`, `tools/` и production-поведения.

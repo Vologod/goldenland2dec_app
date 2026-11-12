@@ -1,6 +1,6 @@
 # P2-15a — Save payload research (design)
 
-Status: draft for approval (2026-11-12)
+Status: implemented (2026-11-12)
 Phase: P2-15a (research-only; follow-up to P2c header-only save slots)
 Layer: research (`docs/research/`), no production code
 
