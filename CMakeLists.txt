@@ -41,6 +41,7 @@ add_library(gl_assets STATIC
     src/assets/src/lao.cpp
     src/assets/src/sef.cpp
     src/assets/src/save.cpp
+    src/assets/src/save_payload.cpp
     src/assets/src/cs.cpp
     src/assets/src/pad.cpp
     src/assets/src/iad.cpp

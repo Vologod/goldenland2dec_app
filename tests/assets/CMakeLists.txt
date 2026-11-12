@@ -15,6 +15,7 @@ add_executable(gl_assets_tests
     test_lao.cpp
     test_sef.cpp
     test_save.cpp
+    test_save_payload.cpp
     test_cs.cpp
     test_pad.cpp
     test_iad.cpp
