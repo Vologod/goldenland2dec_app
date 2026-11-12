@@ -19,14 +19,17 @@
   (`BT_RGINF`/`BT_ENTS`, 213 entry в slot0); `BT_SCRN ` = client-only
   preview 500×375×4 (`750008 = 8 + 500*375*4`), server его не читает;
   domains: `BT_VARS ` globals, `BT_TRIBE` 234×234 matrix, `BT_DIARY`
-  journal, `BT_HSTRY` 40-slot log, `BT_HERO ` hero+inventory. 12 Open
-  Questions (OQ-1…OQ-12) с точными decompile-шагами; live diff не нужен.
+  journal, `BT_HSTRY` 40-slot log, `BT_HERO ` hero+inventory. 13 Open
+  Questions (OQ-1…OQ-13) с точными decompile-шагами; live diff не нужен.
 - **Команды:** Python scan 28 save; Ghidra/decompiled.c refs; encoding check.
 - **Статус:** `done`; write/load остаются `absent` до P2-15b/P2-15c.
-- **Дальше:** `P2-15b` (read-only load; порядок: header/inflate → tail
-  dict → `BT_INFO ` → SEF+`BT_RGINF`/`BT_ENTS` → `BT_VARS ` → `BT_HERO `;
-  acceptance 0/N по level/persons/quests/globals/hero, deterministic).
-  Затем `P2-15c` (write/`game_save`, round-trip write→read→compare).
+- **Дальше:** `P2-15b` (read-only load; core subset first: header/inflate →
+  tail dict → `BT_INFO ` → SEF+`BT_RGINF`/`BT_ENTS` → `BT_VARS `
+  names/count → `BT_HERO `; затем `BT_TRIBE` → `BT_DIARY` → `BT_HSTRY`).
+  First-increment acceptance: 0/N level, raw `BT_ENTS` bytes, globals
+  names/count, hero inventory/equipment/stats; deterministic. Full
+  acceptance requires OQ-5/OQ-10/OQ-11/OQ-12 (+OQ-9 for log) and quest/log
+  checks. Затем `P2-15c` (write/`game_save`, round-trip write→read→compare).
 ## Phase 1b2b2e Stage 4 — Live price x87 CW (done 2026-11-12)
 
 - **Задача:** снять live `FloatSave.ControlWord` у `Client.dll+0x6e8d0`

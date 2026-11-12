@@ -18,17 +18,18 @@ write/`game_save`). Production-код не меняется.
 | `Server.dll` | SHA-256 `418E256063748F2E90DB35AE7C6ABE6EAC401FB86908CB5F27EBF565A21CC837` |
 | `.local/decomp/server/decompiled.c` | SHA-256 `F51F931EE7EC8207B8633360D254AB0D8AF975CA9E0BCBC5E62F3011825FB2FA` |
 | `Saves/slot0.sav` | SHA-256 `8AC545FE9715EF11C68B1CCA8617BEB03003ECA360F07F71C26E3FC5E5C73442` |
-| 28 saves (slot0..slot27, sorted hashes) | manifest SHA-256 `F996E2C1762CB8BD6151576B7BAE311190FC86E95B6A4C7FA06389A2AF0E603B` |
+| 28 saves (slot0..slot27, uppercase per-file SHA-256 joined by `\n`) | manifest SHA-256 `F996E2C1762CB8BD6151576B7BAE311190FC86E95B6A4C7FA06389A2AF0E603B` |
 
 Предварительный скан (Python `zlib.decompress(raw[112:])`, 28/28) уже дал
-одинаковый набор и порядок блоков:
+одинаковый набор и порядок блоков. Гипотезы ниже — исходный скан; итоговые
+значения уточнены research (`docs/research/p2-15a-save-payload.md`):
 
-| # | tag (8 байт) | offset rule | size (slot0) | domain (гипотеза) |
+| # | tag (8 байт) | offset rule | size (slot0) | domain |
 |---|---|---|---|---|
-| 1 | `BT_SCRN ` | `0x0` | 750008 (fixed) | save preview screenshot: 8 header + 500×375×4 RGBA (client consumer; Task 3 evidence) |
-| 2 | `BT_INFO ` | `0xB71C4` | 100 (var) | level/party info (`+0x26c4` loot level, 1b2b2b) |
+| 1 | `BT_SCRN ` | `0x0` | 750008 (fixed) | client save preview: 8-byte dimensions + 500×375 u32 cells + pixel-format descriptor (not RGBA; server never reads it) |
+| 2 | `BT_INFO ` | `0xB71C4` | 100 (var) | level/party info (`+0x26c4` party level; loot level = `+0x26c4 + 1`, 1b2b2b) |
 | 3 | `BT_VARS ` | после `BT_INFO` | 31035 (var) | script globals/variables |
-| 4 | `BT_TRIBE` | после `BT_VARS` | 58884 (var) | tribes/factions/persons metadata |
+| 4 | `BT_TRIBE` | после `BT_VARS` | 58884 (fixed) | tribe ids/names + N×N relation byte matrix |
 | 5 | `BT_DIARY` | после `BT_TRIBE` | 32960 (var) | journal/quest diary |
 | 6 | `BT_HSTRY` | после `BT_DIARY` | 1592 (var) | history/event log |
 | 7 | `BT_HERO ` | после `BT_HSTRY` | 30388 (var) | hero + 3 inventories (P5a) |
@@ -51,7 +52,7 @@ size `750008`; блоки идут подряд без padding (конец бл�
    статика уровня перезагружается из SEF; связь с `FUN_1401edc4`/SEF.
 4. **`BT_INFO`:** поля (включая `+0x26c4`), что уже известно (1b2b2b).
 5. **`BT_VARS`:** script globals map (names/values/types), writer
-   `FUN_14006...`/reader; нужен для диалогов/квестов.
+   `FUN_14002324`/reader `FUN_140023f0`; нужен для диалогов/квестов.
 6. **`BT_TRIBE`, `BT_DIARY`, `BT_HSTRY`:** domain, ключевые поля,
    зависимости от `BT_HERO`/persons.
 7. **`BT_HERO `:** уже разобран P5a; research фиксирует только

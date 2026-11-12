@@ -14,11 +14,17 @@ Scope: `docs/research/` only; no production code changes.
 | `Server.dll` | `418E256063748F2E90DB35AE7C6ABE6EAC401FB86908CB5F27EBF565A21CC837` |
 | `.local/decomp/server/decompiled.c` | `F51F931EE7EC8207B8633360D254AB0D8AF975CA9E0BCBC5E62F3011825FB2FA` |
 | `Saves/slot0.sav` | `8AC545FE9715EF11C68B1CCA8617BEB03003ECA360F07F71C26E3FC5E5C73442` |
-| 28 saves (slot0..slot27, sorted hashes) | manifest SHA-256 `F996E2C1762CB8BD6151576B7BAE311190FC86E95B6A4C7FA06389A2AF0E603B` |
+| 28 saves (slot0..slot27, uppercase per-file SHA-256 joined by `\n`) | manifest SHA-256 `F996E2C1762CB8BD6151576B7BAE311190FC86E95B6A4C7FA06389A2AF0E603B` |
 
 Source: `I:\Games\Златогорье-2\Saves` (28 files `slot0.sav` … `slot27.sav`).
 Tool: Python 3 (`zlib`, `struct`), independent container scan (script kept in
-`%TEMP%`, not committed). Hashes above re-checked with `Get-FileHash -Algorithm SHA256`.
+`%TEMP%`, not committed). Slot0/`Server.dll`/`decompiled.c` hashes above were
+re-checked with `Get-FileHash -Algorithm SHA256`.
+
+Manifest construction (reproduced 2026-11-12): take the uppercase SHA-256 hex
+of each `slot0.sav`..`slot27.sav` in numeric slot order, join with `\n` and no
+trailing newline, then SHA-256 that ASCII string. The scan script is in
+`%TEMP%`, not committed.
 
 ## §Container
 
@@ -28,7 +34,8 @@ Tool: Python 3 (`zlib`, `struct`), independent container scan (script kept in
   not part of the payload scan. The payload is the zlib stream starting at
   **`raw[112:]`**: `zlib.decompress(raw[112:])` succeeds for all 28 files.
 - The decompressed payload is a flat sequence of blocks. Each block is:
-  - **8-byte tag** — ASCII, NUL-free, right-padded with `0x20` (space):
+  - **8-byte tag** — ASCII, NUL-free; 7-letter tags carry one trailing
+    `0x20` (space) pad and 8-letter tags have no pad:
     `BT_SCRN `, `BT_INFO `, `BT_VARS `, `BT_TRIBE`, `BT_DIARY`, `BT_HSTRY`,
     `BT_HERO `.
   - **`u32` little-endian size** — number of body bytes that follow.
@@ -52,8 +59,8 @@ all files.
 
 | # | tag (8 bytes) | offset rule | slot0 size | size across 28 saves (min…max, distinct) | domain hypothesis |
 |---|---|---|---|---|---|
-| 1 | `BT_SCRN ` | fixed `0x0` | 750008 | 750008…750008 (1, fixed) | save preview screenshot (client-only) |
-| 2 | `BT_INFO ` | after `BT_SCRN ` | 100 | 77…100 (13) | level/party info (`+0x26c4` loot level, 1b2b2b) |
+| 1 | `BT_SCRN ` | fixed `0x0` | 750008 | 750008…750008 (1, fixed) | save-slot preview: 8-byte dims + 500×375 u32 cells, client-only |
+| 2 | `BT_INFO ` | after `BT_SCRN ` | 100 | 77…100 (13) | level/party info (`+0x26c4` party level; loot level = `+0x26c4 + 1`, 1b2b2b) |
 | 3 | `BT_VARS ` | after `BT_INFO ` | 31035 | 27611…31144 (16) | script globals/variables |
 | 4 | `BT_TRIBE` | after `BT_VARS ` | 58884 | 58884…58884 (1, fixed) | tribe ids/names + N×N relation byte matrix |
 | 5 | `BT_DIARY` | after `BT_TRIBE` | 32960 | 188…33664 (24) | journal/quest diary |
@@ -138,9 +145,9 @@ records `rva=0x31b64 size=1445 callers=0`. `this` is the game/server object;
 
 - 35374: saving is attempted only when `*(int *)(DAT_1407fc10 + 0x8c) != 0`
   and `FUN_14027f7c(this) != -1`; otherwise only cleanup runs (35512-35516).
-- 35382: `iVar3 = (**(code **)(DAT_140891bc + 0xcc))()` — world/manager vtable
-  object used by `BT_SCRN ` (35385), `BT_HSTRY` (35404) and the feedback path
-  (35495-35501).
+- 35382: `iVar3 = (**(code **)(DAT_140891bc + 0xcc))()` — host-provided
+  object returned by `DAT_140891bc+0xcc`, used by `BT_SCRN ` (35385),
+  `BT_HSTRY` (35404) and the feedback path (35495-35501).
 - 35383: `CreateDirectoryA(s_Saves_1408ff5c, 0)` with `s_Saves_1408ff5c` =
   `"Saves"` (string RVA `0x8ff5c`, verified in `Server.dll`).
 - Two serializers with vtable `PTR_FUN_1408fe58`: `local_300` for the block
@@ -271,8 +278,7 @@ Tags are fixed 8-byte values taken from literals in `Server.dll`:
 `BT_TRIBE` `0x8ff88`, `BT_DIARY` `0x8ff94`, `BT_HSTRY` `0x8ffa0`,
 `BT_HERO ` `0x8ffac`. `BT_SCRN `/`BT_INFO `/`BT_VARS `/`BT_HERO ` are 7 chars
 plus trailing `0x20`; `BT_TRIBE`/`BT_DIARY`/`BT_HSTRY` are exactly 8 letters
-with no pad byte. This refines the "right-padded with `0x20`" wording of
-§Container/Framing for those three tags.
+with no pad byte, matching the tag-padding rule in §Container/Framing.
 
 ## Reader (`FUN_1403210c`)
 
@@ -287,7 +293,7 @@ and `.local/decomp/client/decompiled.c`.
 
 | lines | call | effect |
 |---|---|---|
-| 35598 | `iVar3 = (**(code **)(DAT_140891bc + 0xcc))()` | same world/manager object as writer 35382 |
+| 35598 | `iVar3 = (**(code **)(DAT_140891bc + 0xcc))()` | same host-provided object (`DAT_140891bc+0xcc`) as writer 35382 |
 | 35599 | `(**(code **)(**(int **)(iVar3 + 0x18) + 0x1c))(0)` | pre-load call on object `*(iVar3+0x18)`, vtable `+0x1c`, argument `0`; happens before the `.sav` is opened |
 | 35600 | `FUN_1406ad5a(local_36c, "Saves\slot%d.sav")` | path format |
 | 35601 | `FUN_140014c0(local_40c)` | open and read the whole `.sav` (RVA `0x14c0`) |
@@ -379,7 +385,7 @@ Requested BT_INFO offsets, exact lines:
 slot0 cross-check (`.sav` `8AC545FE...`, `py -3`): `BT_INFO ` body is 100
 bytes and parses exactly as writer order — string1 `Вертас` (cp1251),
 `u32 #1 = 0x0`, 0x20 blob (`466 5 1e 4 14 1d 19 78` as `u32`s), string2
-`Запчасть Черного - тронный зал`, string3 `L93_4`, `u32 #2 = 0x28`,
+`Замок Чернобога - тронный зал`, string3 `L93_4`, `u32 #2 = 0x28`,
 8 bytes `(0x4d0, 0x1a8)`; consumed 100/100. `L93_4` is present in the 213
 extra entries. This confirms the field order and the
 `FUN_140325fc` name → extra-entry relationship.
@@ -554,7 +560,7 @@ bytes = three 12-byte tag+size headers + bodies 302 + 36 + 22601; `L93_4` is
 | `BT_VARS ` | writer `FUN_14002324` 1383-1416; reader `FUN_140023f0` 1424-1456 | script globals: `u32` count, then per item `u32` type, name string, value (8 bytes for type <3, string for type 3). slot0: 1002 vars, types `{0:905, 1:94, 2:3}`, e.g. `voevoda_povtor`, `L1_plotnik_son_life` |
 | `BT_TRIBE` | writer `FUN_14016828` 16955-16990; reader `FUN_140168e4` 16996-17032 | tribe ids/names + relation matrix: `u32` count, count×( `u32` id + string ), then count×count bytes. slot0: count 234, header 4128, matrix 234²=54756, total 58884. `FUN_14016998` (17038-17045) returns `matrix[i][j]`, default 2; call sites compare entity tribe id `+0x150c` (18551, 18564, 19275, 19370, 19669, 38961) |
 | `BT_DIARY` | writer `FUN_14058768` 60171-60226; reader `FUN_140588c8` 60232-60358 | journal/quest records: `u32` count, per entry `u32 block_count = n+1` then `block_count*0x58` bytes (block 0 = entry header, blocks 1..n = records); second `u32` count then that many 0x58-byte records. slot0: 76 entries, second count 0, consumes all 32960 bytes |
-| `BT_HSTRY` | writer 35404 (object `iVar3+0x28`, vtable `+4`); reader 35686 (vtable `+0`) | event/history log: slot0 1592 bytes, outer `u32` 5, then cp1251 length-prefixed strings + ids (first text `"Вертас использует предмет Слабое зелье здоровья"`); not world data |
+| `BT_HSTRY` | writer 35404 (object `iVar3+0x28`, vtable `+4`); reader 35686 (vtable `+0`) | event/history log: `u32 head` + fixed 40 ring slots (each `u32 text_len` + cp1251 text + `u32 id`) + `u32 tail`; slot0 `head=5`, all 40 slots non-empty, `tail=1` (first text `"Вертас использует предмет Слабое зелье здоровья"`); not world data |
 | `BT_HERO ` | writer `FUN_1401e690` 21880-21899 + `FUN_1401e340` 21743-21774; reader `FUN_1401e424` 21780-21874 + 35670-35684 | the active hero person (three `u32` fields, 0x11c state, 0x600 buffer, 3 coordinates, nested `FUN_1401d84c` data) plus a count-prefixed list of attached entities installed with `FUN_140368d4`. slot0 starts `123, 131, 1`; this is hero/party state, not all level entities |
 
 Conclusion: `BT_TRIBE` is a faction-relation matrix, `BT_VARS` holds script
@@ -590,7 +596,7 @@ snapshot keyed by level id.
 
 ### Minimum read set for P2-15b
 
-Ordered by dependency (mirrors `FUN_1403210c` / `FUN_14033214`):
+Ordered by dependency (follows the `FUN_1403210c` / `FUN_14033214` flow):
 
 1. **Header + inflate.** `raw[0:0x68]` header, `raw[0x68]` uncompressed
    length, `raw[0x6c]` compressed length, zlib at `raw[0x70 : 0x70+len]`
@@ -614,11 +620,13 @@ Ordered by dependency (mirrors `FUN_1403210c` / `FUN_14033214`):
 8. **`BT_HERO `** hero + attached entities (35670-35684).
 9. **`BT_HSTRY`** event log (35685-35686).
 
-Essential for restoring a playable level: 1-5 + `BT_HERO `. `BT_TRIBE` can be
-loaded opaquely until faction AI needs it. Deferrable: `BT_DIARY` and
-`BT_HSTRY` (journal/log UI), and `BT_SCRN ` entirely (preview thumbnail; the
-server never reads it, so P2-15b can skip it by tag+size and regenerate or
-ignore the slot preview).
+Core subset for restoring a playable level: 1-4, `BT_VARS ` names/count
+(numeric values require OQ-5) and `BT_HERO ` (inventory/equipment/stats,
+pinned by P5a). `BT_TRIBE` can be loaded opaquely until faction AI needs it.
+Deferrable within the first increment: `BT_DIARY` (journal) and `BT_HSTRY`
+(log); full P2-15b acceptance still includes quests and the log. `BT_SCRN `
+is always skipped by tag+size (preview thumbnail; the server never reads
+it).
 
 ## Block domains and port coverage
 
@@ -691,9 +699,9 @@ exactly (`0` length mismatches on 28/28).
   35399-35400.
 - Body: `u32 count`, then `count × (u32 id, u32 name_len, cp1251 name)`
   (no NUL), then `count × count` single bytes, row-major (`char`). Writer:
-  count read at 16967, written at 16969, reset vtable `+0x14`, iterator vtable `+0x18` emits
-  id+name, then each row is written as `count` raw bytes via the serializer
-  vtable at 16975-16982. Reader: reset `FUN_140167c4` (17004), count into
+  count read at 16967, written at 16969, reset vtable `+0x14`; entry
+  iteration (id+name) at 16975-16979; matrix rows at 16980-16988 (`count`
+  raw bytes per row). Reader: reset `FUN_140167c4` (17004), count into
   `this+0x20`, insert each `(name,id)` via vtable `+0x1c` (17010-17012),
   allocate `count*4` row pointers (`this+0x24`), allocate/read each `count`-byte
   row (17020-17030).
@@ -777,7 +785,8 @@ exactly (`0` length mismatches on 28/28).
   `"Вертас - отравление"`.
   Across 28 saves: size 384-1950 (27 distinct); `head` 1-37; `tail = 1` in 26
   saves and `2` in the two 2-record saves (slot6/slot21).
-- Domain: UI event/history log (status-bar history), not world state; the
+- Domain: UI event/history log (hypothesis: status-bar history; UI consumer
+  not cited), not world state; the
   texts are player-visible event messages. `head`/`tail` semantics and ring
   ordering are **`unverified`** (hypothesis: `head` is the most recently
   written ring index, since the 2-record saves have `head = 1`). Exact next
@@ -844,7 +853,7 @@ located and mapped: writer `FUN_14031b64` (RVA `0x31b64`) and reader
 `FUN_1403210c` (RVA `0x3210c`), with per-block helper RVAs. `BT_SCRN ` is a
 client-only 500×375 preview, the tail dictionary holds per-level dynamic
 snapshots (`BT_RGINF`/`BT_ENTS`), and the remaining gaps are field semantics
-(OQ-1…OQ-12) with named decompile steps, not unknown framing. P2-15b can
+(OQ-1…OQ-13) with named decompile steps, not unknown framing. P2-15b can
 start from the minimum read set in §Minimum read set for P2-15b;
 P2-15c builds on the writer order documented in §Writer.
 
@@ -880,19 +889,35 @@ The port already parses/decodes `BT_HERO ` inventory/equipment/stats; for
 the other blocks only the container/field layout exists, and P2-15b must add
 the loaders.
 
-Acceptance:
+Acceptance — first increment (core subset):
 
-- Loading slot0 (and at least one other save) reproduces the save's decoded
-  values with **0/N mismatches** for: level id, dynamic persons (`BT_ENTS`
-  type sequence + per-person fields), quests (`BT_DIARY` entry/record
-  counts; full acceptance, not part of the deferrable first increment),
-  script globals (`BT_VARS` names/count only until OQ-5 resolves numeric
-  conversion) and hero inventory/equipment/stats (`BT_HERO`, already pinned
-  by P5a real tests).
-- Determinism: loading the same file twice yields identical state (no
-  iteration-order/RNG dependence).
-- Read-only: no file writes, no `game_save`, no process-memory writes;
-  `BT_SCRN ` may be ignored entirely.
+- Level: with slot0 and one other save, assert the loaded level id equals
+  `BT_INFO ` string3 from the decoded file (slot0 `L93_4`) and that the
+  matching tail section is selected; 0/N mismatches.
+- Persons: compare each `BT_ENTS` entity body byte-for-byte with the
+  decoded save section after the `u32 type` (raw-byte equality; per-person
+  named fields are not mapped until OQ-12), and assert the type sequence
+  and the `type == 1` terminator (0/N).
+- Globals: assert `BT_VARS ` count and the name sequence equal the decoded
+  values (0/N); numeric values are not asserted until OQ-5.
+- Hero: inventory container counts, equipped ids and stat fields match the
+  decoded `BT_HERO ` block (already pinned for slot0/slot2 by P5a).
+- Determinism: two loads of the same file produce identical state; no file
+  or process-memory writes; `BT_SCRN ` skipped.
+- `BT_TRIBE` loaded opaquely; `BT_DIARY`/`BT_HSTRY` may be absent.
+
+Acceptance — full P2-15b (prerequisites OQ-5, OQ-10, OQ-11, OQ-12;
+OQ-9 for the log):
+
+- OQ-5: `BT_VARS ` numeric values match the declared int/DWORD/float types.
+- OQ-10/OQ-11: `BT_HERO ` nested fields and `BT_RGINF` match their decoded
+  bytes/semantics.
+- OQ-12: `BT_ENTS` per-person named fields match (not just raw bytes).
+- Quests: `BT_DIARY` entry count, `header[+0x04] == block_count-1` for every
+  entry, and sparse count match the decoded save (0/N).
+- Log: `BT_HSTRY` 40 slot texts/ids match the decoded save (0/N).
+- `BT_INFO ` 0x20 time blob, `+0x26c4` and `+0x26c8` match the decoded bytes
+  (semantics still OQ-3/OQ-4).
 
 No acceptance item depends on a live original run; the residuals are
 semantics questions with named decompile steps (see Open Questions).
@@ -1003,7 +1028,7 @@ line/corpus) and the exact next check; none is closed by a live diff (see
   35629-35630), string2 (`DAT_14088e30` vtable `+8`, 35391-35392 / 35635),
   the `u32` at `+0x218` (35631-35632) and the 8-byte `+0x26c8` (35396 / 35639)
   mean?
-- **Checked:** slot0 is `Вертас` / `Запчасть Черного - тронный зал` /
+- **Checked:** slot0 is `Вертас` / `Замок Чернобога - тронный зал` /
   `L93_4`, `+0x218 = 0`, `+0x26c8 = (0x4d0, 0x1a8)`, `+0x26c4 = 0x28`;
   string3 (level id) → `FUN_140325fc` and `+0x26c4` are already resolved; the
   other fields have no identified consumer beyond storage.
@@ -1124,6 +1149,23 @@ line/corpus) and the exact next check; none is closed by a live diff (see
   vtable `+0`/`+4`; diff entity-type sequences across the 28 saves.
 - **Impact:** high for P2-15b dynamic entity population.
 
+### OQ-13 SEF `person.tribe` name → numeric `BT_TRIBE` id
+
+- **Question:** how does a SEF `person.tribe` name map to the numeric id
+  stored at `person+0x150c` and used as the `BT_TRIBE` matrix index?
+- **Checked:** `FUN_140162e4` (server RVA `0x162e4`, 28 bytes, 5 callers)
+  forwards to `DAT_14089fc0` vtable `+0x2c` and returns the supplied id
+  argument; callers store the result at `person+0x150c` (18032, 18083,
+  21867, 22013, 22386). `FUN_14016998` indexes the matrix with those ids;
+  the `BT_TRIBE` reader inserts `(name,id)` via vtable `+0x1c`
+  (17010-17012).
+- **Next:** decompile the `DAT_14089fc0` vtable `+0x2c` insert/lookup method
+  and the callers at 18031/18082/19346/21866 to confirm name→id insertion
+  order, default id and whether names are interned on first use; then verify
+  the SEF `person.tribe` names against the 234-entry table in a real save.
+- **Impact:** high for P2-15b faction AI and P2-15c: without this mapping the
+  port cannot resolve a SEF person's tribe against the saved matrix.
+
 ## Live diff decision
 
 Task 6 result (2026-11-12): **live diff not needed** for P2-15a.
@@ -1137,7 +1179,7 @@ Rationale:
   static code plus 28/28 corpus scans. `BT_HERO ` equipment, inventories and
   stats are verified; its remaining nested fields are OQ-10. None of the
   confirmed pieces is ambiguous after Tasks 1-5.
-- Every remaining item (OQ-1…OQ-12) is a semantics question whose answer sits
+- Every remaining item (OQ-1…OQ-13) is a semantics question whose answer sits
   in named functions/RVAs available for static decompilation; each "next
   check" is a decompile step, not a memory comparison.
 - The two host-side items (OQ-2, OQ-9) live in `GoldenLand.exe`, which is
@@ -1149,7 +1191,7 @@ Rationale:
   game memory, which this task prohibits.
 
 Revisit trigger: perform the read-only live diff only if the static
-decompile of the functions named in OQ-1…OQ-12 is inconclusive (missing or
+decompile of the functions named in OQ-1…OQ-13 is inconclusive (missing or
 inlined code, host methods absent). Exact procedure, if triggered:
 
 1. User launches the original `GoldenLand.exe` and loads `Saves/slot0.sav`
