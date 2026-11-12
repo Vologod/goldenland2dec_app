@@ -584,6 +584,29 @@ TEST_CASE("glgame --dump-save prints the decoded save payload and exits") {
                       "ents=8381 hero_items=117 hero_equipped=11") != std::string::npos);
 }
 
+TEST_CASE("glgame --load-save loads the level and hero from the save") {
+    const char* game_dir = std::getenv("GL_GAME_DIR");
+    REQUIRE(game_dir != nullptr);
+
+    TempDir temp;
+    const fs::path config = write_test_config(temp.path);
+    const fs::path png = temp.path / "load_save.png";
+    std::string output;
+    const int code = run_glgame_capture(
+        screenshot_arguments(game_dir, config, png,
+                             {"--load-save", "0", "--width", "1024", "--height", "768",
+                              "--seed", "1"}),
+        output);
+    CAPTURE(code);
+    CAPTURE(output);
+    REQUIRE(fs::exists(png));
+    CHECK(code == 0);
+    CHECK(output.find("level 'L93_4'") != std::string::npos);
+    CHECK(output.find("save: loaded slot=0 level=L93_4") != std::string::npos);
+    CHECK(output.find("inventory: slot 0") != std::string::npos);
+    CHECK(output.find("outfit: slot 0") != std::string::npos);
+}
+
 TEST_CASE("glgame renders a dialog into a 1280x720 PNG" *
           doctest::skip(!font_available())) {
     const char* game_dir = std::getenv("GL_GAME_DIR");

@@ -111,6 +111,7 @@ struct Options {
     bool hero_outfit_none = false;
     std::optional<int> equip_save;
     bool equip_save_pending = false;
+    std::optional<int> load_save;
     bool inventory = false;
     std::optional<int> inventory_select;
     std::string trade_npc;
@@ -154,6 +155,7 @@ void print_usage() {
         "  --dump-npc <name>    Headless direct-level test: log generated main/trade items for <name>\n"
         "  --equip-save <slot>  Apply hero equipment from save slot <slot>\n"
         "  --equip-save-pending Apply --equip-save on the next level load only\n"
+        "  --load-save <slot>   Load the save level and hero (--level is ignored)\n"
         "  --inventory          Open the inventory overlay for the selected save\n"
         "  --inventory-select <n> Select bottom-strip slot <n> when the inventory opens\n"
         "  --trade-npc <name>   Open the trade overlay for person <name> after loading\n"
@@ -345,6 +347,15 @@ ParseStatus parse_args(int argc, char** argv, Options& options) {
             options.equip_save = slot;
         } else if (arg == "--equip-save-pending") {
             options.equip_save_pending = true;
+        } else if (arg == "--load-save") {
+            if (!next_value(arg, value)) return ParseStatus::error;
+            int slot = 0;
+            if (!parse_int(value, slot) || slot < 0) {
+                std::fprintf(stderr, "glgame: invalid --load-save: %.*s\n",
+                             static_cast<int>(value.size()), value.data());
+                return ParseStatus::error;
+            }
+            options.load_save = slot;
         } else if (arg == "--inventory") {
             options.inventory = true;
         } else if (arg == "--inventory-select") {
@@ -689,7 +700,9 @@ class Game {
 
         if (options_.equip_save) load_equip_save(*options_.equip_save);
 
-        if (options_.has_dialog) {
+        if (options_.load_save) {
+            if (!load_save(*options_.load_save)) return 3;
+        } else if (options_.has_dialog) {
             rebuild_person_runtime({});
             const gl::Result<void> opened = open_dialog(options_.dialog);
             if (!opened) return exit_code_for(opened.error());
@@ -1889,43 +1902,24 @@ class Game {
         gl::log(info ? gl::LogLevel::info : gl::LogLevel::warning, message);
     }
 
-    void load_equip_save(int slot) {
+    void reset_pending_hero() {
         pending_equipment_.reset();
         pending_inventory_.reset();
         pending_hero_stats_.reset();
         pending_outfit_.reset();
+    }
 
-        const gl::core::SaveSlotInfo* info = saves_.find(slot);
-        gl::core::SaveSlotInfo synthetic;
-        if (info == nullptr) {
-            synthetic.slot = slot;
-            synthetic.path = options_.game_dir / "Saves" /
-                             ("slot" + std::to_string(slot) + ".sav");
-            info = &synthetic;
-        }
+    const gl::core::SaveSlotInfo& resolve_save_slot(int slot,
+                                                    gl::core::SaveSlotInfo& synthetic) {
+        if (const gl::core::SaveSlotInfo* info = saves_.find(slot)) return *info;
+        synthetic.slot = slot;
+        synthetic.path = options_.game_dir / "Saves" /
+                         ("slot" + std::to_string(slot) + ".sav");
+        return synthetic;
+    }
 
-        std::error_code path_error;
-        if (!fs::exists(info->path, path_error)) {
-            pending_equipment_ = gl::assets::HeroEquipment{};
-            pending_inventory_ = gl::assets::HeroInventory{};
-            pending_outfit_ = make_naked_outfit();
-            rebuild_inventory_runtime();
-            report_outfit_message(
-                "outfit: naked (invalid save slot " + std::to_string(slot) + ")", false);
-            return;
-        }
-
-        std::vector<std::uint8_t> body;
-        std::string error;
-        if (!read_save_body(*info, body, error)) {
-            pending_equipment_ = gl::assets::HeroEquipment{};
-            pending_inventory_ = gl::assets::HeroInventory{};
-            pending_outfit_ = make_naked_outfit();
-            rebuild_inventory_runtime();
-            report_outfit_message(
-                "outfit: naked (slot " + std::to_string(slot) + "): " + error, false);
-            return;
-        }
+    bool apply_hero_from_body(std::span<const std::uint8_t> body, int slot) {
+        reset_pending_hero();
 
         auto hero_stats = gl::assets::parse_hero_stats(body);
         if (hero_stats) {
@@ -1958,7 +1952,7 @@ class Game {
                 "outfit: naked (slot " + std::to_string(slot) + "): " +
                     equipment.error().message,
                 false);
-            return;
+            return false;
         }
         pending_equipment_ = std::move(equipment.value());
 
@@ -1967,7 +1961,7 @@ class Game {
             report_outfit_message("outfit: slot " + std::to_string(slot) +
                                       " ignored (--hero-outfit none)",
                                   true);
-            return;
+            return true;
         }
 
         std::string resolve_error;
@@ -1976,10 +1970,43 @@ class Game {
             pending_outfit_ = make_naked_outfit();
             report_outfit_message(
                 "outfit: naked (slot " + std::to_string(slot) + "): " + resolve_error, false);
-            return;
+            return false;
         }
         pending_outfit_ = std::move(outfit.value());
         report_outfit_message("outfit: slot " + std::to_string(slot), true);
+        return true;
+    }
+
+    void load_equip_save(int slot) {
+        reset_pending_hero();
+
+        gl::core::SaveSlotInfo synthetic;
+        const gl::core::SaveSlotInfo& info = resolve_save_slot(slot, synthetic);
+
+        std::error_code path_error;
+        if (!fs::exists(info.path, path_error)) {
+            pending_equipment_ = gl::assets::HeroEquipment{};
+            pending_inventory_ = gl::assets::HeroInventory{};
+            pending_outfit_ = make_naked_outfit();
+            rebuild_inventory_runtime();
+            report_outfit_message(
+                "outfit: naked (invalid save slot " + std::to_string(slot) + ")", false);
+            return;
+        }
+
+        std::vector<std::uint8_t> body;
+        std::string error;
+        if (!read_save_body(info, body, error)) {
+            pending_equipment_ = gl::assets::HeroEquipment{};
+            pending_inventory_ = gl::assets::HeroInventory{};
+            pending_outfit_ = make_naked_outfit();
+            rebuild_inventory_runtime();
+            report_outfit_message(
+                "outfit: naked (slot " + std::to_string(slot) + "): " + error, false);
+            return;
+        }
+
+        apply_hero_from_body(body, slot);
     }
 
     void apply_loaded_equip_save() {
@@ -2031,6 +2058,68 @@ class Game {
         pending_talk_tile_.reset();
         update_viewport();
         rebuild_person_runtime(level_->level().persons);
+        return true;
+    }
+
+    bool load_save(int slot) {
+        gl::core::SaveSlotInfo synthetic;
+        const gl::core::SaveSlotInfo& info = resolve_save_slot(slot, synthetic);
+
+        std::ifstream in(info.path, std::ios::binary);
+        if (!in) {
+            const std::string message = "save: cannot open '" + info.path.string() + "'";
+            save_message_ = message;
+            console_print(message);
+            gl::log(gl::LogLevel::warning, message);
+            return false;
+        }
+        const std::vector<std::uint8_t> file((std::istreambuf_iterator<char>(in)),
+                                             std::istreambuf_iterator<char>());
+        auto payload = gl::assets::parse_save_payload(file);
+        if (!payload) {
+            const std::string message = "save: " + payload.error().message;
+            save_message_ = message;
+            console_print(message);
+            gl::log(gl::LogLevel::warning, message);
+            return false;
+        }
+
+        const gl::assets::SaveBlockView* hero = nullptr;
+        for (const gl::assets::SaveBlockView& block : payload->blocks) {
+            if (block.tag == "BT_HERO ") hero = &block;
+        }
+        if (hero == nullptr) {
+            const std::string message = "save: missing BT_HERO";
+            save_message_ = message;
+            console_print(message);
+            gl::log(gl::LogLevel::warning, message);
+            return false;
+        }
+        const std::span<const std::uint8_t> hero_body =
+            std::span<const std::uint8_t>(payload->decompressed)
+                .subspan(hero->offset, hero->size);
+        apply_hero_from_body(hero_body, slot);
+
+        if (!load_level(payload->info.level_id)) {
+            reset_pending_hero();
+            const std::string message =
+                "save: cannot load level '" + payload->info.level_id + "'";
+            save_message_ = message;
+            console_print(message);
+            gl::log(gl::LogLevel::warning, message);
+            return false;
+        }
+
+        rebuild_person_runtime(level_->level().persons);
+        apply_loaded_equip_save();
+
+        const std::string line = "save: loaded slot=" + std::to_string(slot) +
+                                 " level=" + payload->info.level_id +
+                                 " vars=" + std::to_string(payload->vars.size()) +
+                                 " tail=" + std::to_string(payload->tail.size());
+        gl::log(gl::LogLevel::info, line);
+        last_save_payload_ = std::move(payload.value());
+        if (!state_.transition(gl::core::AppState::level)) return false;
         return true;
     }
 
@@ -2584,11 +2673,7 @@ class Game {
         save_selected_ = std::clamp(save_selected_, 0, last);
         const gl::core::SaveSlotInfo& slot =
             *display_saves_[static_cast<std::size_t>(save_selected_)];
-        load_equip_save(slot.slot);
-        if (level_) {
-            rebuild_person_runtime(level_->level().persons);
-            apply_loaded_equip_save();
-        }
+        if (load_save(slot.slot)) save_slots_ = false;
     }
 
     void render(std::uint64_t now_ms, std::uint64_t animation_ms) {
@@ -2827,6 +2912,7 @@ class Game {
     std::optional<gl::assets::HeroInventory> pending_inventory_;
     std::optional<gl::assets::HeroStats> pending_hero_stats_;
     std::optional<gl::game::HeroOutfit> pending_outfit_;
+    std::optional<gl::assets::SavePayload> last_save_payload_;
     gl::game::PersonRuntime person_runtime_;
     gl::game::InventoryRuntime inventory_runtime_;
     std::optional<gl::assets::ItemNameIndex> item_names_;
