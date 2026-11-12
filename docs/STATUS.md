@@ -1,17 +1,32 @@
 # STATUS
 
 Обновлено: 2026-11-12
-## P2-15a — Save payload research (in progress 2026-11-12)
+## P2-15a — Save payload research (done 2026-11-12)
 
 - **Задача:** research-only разбор `.sav` payload после 112 байт: zlib,
   каталог блоков, reader/writer `Server.dll`, state domains, декомпозиция
   P2-15b/P2-15c.
 - **Spec:** `docs/specs/2026-11-12-p2-15a-save-payload-research-design.md`.
 - **Plan:** `docs/plans/2026-11-12-p2-15a-save-payload-research.md`.
-- **Критерии:** таблица 7 блоков 28/28; reader/writer RVA+lines для каждого;
-  `BT_SCRN` layout минимум; декомпозиция с acceptance; docs-only.
+- **Research:** `docs/research/p2-15a-save-payload.md` (verdict
+  `implementable`).
+- **Доказано:** payload = zlib от `raw[112:]`; 7 блоков (`BT_SCRN `/
+  `BT_INFO `/`BT_VARS `/`BT_TRIBE`/`BT_DIARY`/`BT_HSTRY`/`BT_HERO `),
+  один порядок 28/28, конец = decompressed length; writer `FUN_14031b64`
+  RVA `0x31b64` (per-block calls 35384-35422), reader `FUN_1403210c`
+  RVA `0x3210c` (35628-35686) + `FUN_14001668` framing (`raw[0x68]` =
+  uncompressed, `raw[0x6c]` = compressed); tail-словарь уровней
+  (`BT_RGINF`/`BT_ENTS`, 213 entry в slot0); `BT_SCRN ` = client-only
+  preview 500×375×4 (`750008 = 8 + 500*375*4`), server его не читает;
+  domains: `BT_VARS ` globals, `BT_TRIBE` 234×234 matrix, `BT_DIARY`
+  journal, `BT_HSTRY` 40-slot log, `BT_HERO ` hero+inventory. 12 Open
+  Questions (OQ-1…OQ-12) с точными decompile-шагами; live diff не нужен.
 - **Команды:** Python scan 28 save; Ghidra/decompiled.c refs; encoding check.
-- **Статус:** `in progress`.
+- **Статус:** `done`; write/load остаются `absent` до P2-15b/P2-15c.
+- **Дальше:** `P2-15b` (read-only load; порядок: header/inflate → tail
+  dict → `BT_INFO ` → SEF+`BT_RGINF`/`BT_ENTS` → `BT_VARS ` → `BT_HERO `;
+  acceptance 0/N по level/persons/quests/globals/hero, deterministic).
+  Затем `P2-15c` (write/`game_save`, round-trip write→read→compare).
 ## Phase 1b2b2e Stage 4 — Live price x87 CW (done 2026-11-12)
 
 - **Задача:** снять live `FloatSave.ControlWord` у `Client.dll+0x6e8d0`

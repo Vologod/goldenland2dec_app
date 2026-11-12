@@ -1,6 +1,6 @@
 # Parity matrix
 
-Обновлено: 2026-11-11. Исходно (2026-11-05) — read-only аудит существующего
+Обновлено: 2026-11-12. Исходно (2026-11-05) — read-only аудит существующего
 состояния; Phase 1a добавила evidence VM-паритета и native dispatch (код
 порта менялся, см. D-049); Phase 1b1 добавила evidence person-параметров
 и Hero stat-блока (D-050); Phase 1b2a добавила inventory-запросы Hero
@@ -24,7 +24,9 @@ Phase 1b2b2d (specials implementation, D-060) реализовала парсе�
 `0x5000006`/`0x5000007`, restock и save остаются вне scope; live-гейты
 specials были OPEN → historical `partial` (NPC-loot oracle закрыт 1b2b2f/D-064; live price CW закрыт 2026-11-12/D-065); Phase 1b2b2f (per-person pre-loot RNG,
 D-064) закрыла live NPC-loot oracle на `l1_1` (0/N): weapon + spawn-init
-draws в SEF-порядке после loot каждой персоны.
+draws в SEF-порядке после loot каждой персоны. P2-15a (save payload
+research, 2026-11-12) разобрала контейнер, reader/writer и domains и выдала
+verdict `implementable`; write/load остаются `missing` до P2-15b/c.
 
 Матрица — единый источник истины о покрытии паритета. Строка без evidence не
 считается подтверждённой. Источники: `parity-audit-p0-p1.md`,
@@ -68,7 +70,8 @@ ID: `P4a-*`, `P4b-*`, `P4b2-*` — прежние A/B/C из аудита (пе�
    встречается 51 раз (`P3-3`). Phase 1b2b4b добавила runtime/overlay
    trade (`TradePrice`, buy/sell/Exchange), не новые нативы;
    `0x5000006`/`0x5000007` остаются unsupported.
-3. **B3 save/load** — payload не читается и не пишется (`P2-15`).
+3. **B3 save/load** — формат разобран (P2-15a, `implementable`), но payload
+   не читается и не пишется (`P2-15`; P2-15b/c).
 4. **B4 тайминг** — порт 60 Гц, оригинал `sv_fps=35` (`P2-9`, `P4b-16`).
 5. **C1 ADSC** — `number/name` игнорируются, анимации ломаются на 4 уровнях
    (`P1-3`).
@@ -138,7 +141,7 @@ ID: `P4a-*`, `P4b-*`, `P4b2-*` — прежние A/B/C из аудита (пе�
 | P2-12 | save header | 112 байт/версия/title | `save.cpp:12-50` | 28 слотов | verified | unknown 28/38/104/108 | audit p2-p3 |
 | P2-13 | save scan | `slot<N>.sav` | `save_manager.cpp:34-123` | 28 файлов | partial | лимит слотов/чужие файлы | audit p2-p3 |
 | P2-14 | save UI | список/скролл/сообщение | `main.cpp:1300-1406` | screenshot tests | partial | оригинальный `save_load_menu.scr` | audit p2-p3 |
-| P2-15 | save payload | чтение/запись мира | отсутствует | `game_save` stub | missing | блокирует кампанию | audit p2-p3 |
+| P2-15 | save payload | чтение/запись мира | отсутствует | research `p2-15a-save-payload.md`: 7 блоков 28/28; reader `FUN_1403210c` `0x3210c`, writer `FUN_14031b64` `0x31b64`; `BT_SCRN ` = client preview; OQ-1…OQ-12 | missing | формат `implementable`; write/load отсутствуют до P2-15b/c | audit p2-p3; p2-15a |
 | P2-16 | provenance | RVA/live для P2 | — | research без RVA | unverified | нужен reverse `GoldenLand.exe` | audit p2-p3 |
 
 ## P3 — CS/VM/диалоги/шрифты
