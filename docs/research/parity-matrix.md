@@ -141,7 +141,7 @@ ID: `P4a-*`, `P4b-*`, `P4b2-*` — прежние A/B/C из аудита (пе�
 | P2-12 | save header | 112 байт/версия/title | `save.cpp:12-50` | 28 слотов | verified | unknown 28/38/104/108 | audit p2-p3 |
 | P2-13 | save scan | `slot<N>.sav` | `save_manager.cpp:34-123` | 28 файлов | partial | лимит слотов/чужие файлы | audit p2-p3 |
 | P2-14 | save UI | список/скролл/сообщение | `main.cpp:1300-1406` | screenshot tests | partial | оригинальный `save_load_menu.scr` | audit p2-p3 |
-| P2-15 | save payload | чтение/запись мира | отсутствует | research `p2-15a-save-payload.md`: 7 блоков 28/28; reader `FUN_1403210c` `0x3210c`, writer `FUN_14031b64` `0x31b64`; `BT_SCRN ` = client preview; OQ-1…OQ-13 | missing | формат `implementable`; write/load отсутствуют до P2-15b/c | audit p2-p3; p2-15a |
+| P2-15 | save payload | чтение/запись мира | first increment: decode + load | research `p2-15a-save-payload.md`: 7 блоков 28/28; reader `FUN_1403210c` `0x3210c`, writer `FUN_14031b64` `0x31b64`; `BT_SCRN ` = client preview; OQ-1…OQ-13. **P2-15b (D-066):** `SavePayload` decode 28/28, `--dump-save`, `--load-save`/Continue грузят уровень (SEF) + P5a hero, atomic rollback | partial | read/load first increment done; write отсутствует; вне scope `BT_DIARY`/`BT_HSTRY`, named `BT_ENTS`, `BT_VARS` values, `BT_TRIBE` | audit p2-p3; p2-15a; D-066 |
 | P2-16 | provenance | RVA/live для P2 | — | research без RVA | unverified | нужен reverse `GoldenLand.exe` | audit p2-p3 |
 
 ## P3 — CS/VM/диалоги/шрифты
