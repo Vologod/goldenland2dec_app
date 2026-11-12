@@ -107,6 +107,33 @@ Result<SavePayload> parse_save_payload(std::span<const std::uint8_t> file) {
         std::memcpy(payload.info.field_26c8.data(), tail8.data(), tail8.size());
         if (!info.at_end())
             return format_error("BT_INFO has trailing bytes");
+
+        const SaveBlockView &vars_view = payload.blocks[2];
+        ByteReader vars(std::span<const std::uint8_t>(payload.decompressed)
+                            .subspan(vars_view.offset, vars_view.size));
+        std::uint32_t var_count = 0;
+        if (!vars.read_u32le(var_count))
+            return format_error("BT_VARS count is truncated");
+        for (std::uint32_t index = 0; index < var_count; ++index) {
+            SaveVar var;
+            if (!vars.read_u32le(var.type))
+                return format_error("BT_VARS type is truncated");
+            if (var.type > 3)
+                return format_error("BT_VARS type is unknown");
+            if (!read_string(vars, var.name))
+                return format_error("BT_VARS name is truncated");
+            if (var.type < 3) {
+                std::span<const std::uint8_t> value;
+                if (!vars.read_bytes(var.value.size(), value))
+                    return format_error("BT_VARS value is truncated");
+                std::memcpy(var.value.data(), value.data(), value.size());
+            } else if (!read_string(vars, var.text_value)) {
+                return format_error("BT_VARS text value is truncated");
+            }
+            payload.vars.push_back(std::move(var));
+        }
+        if (!vars.at_end())
+            return format_error("BT_VARS has trailing bytes");
         return payload;
     } catch (const std::bad_alloc &) {
         return format_error("save payload allocation failed");

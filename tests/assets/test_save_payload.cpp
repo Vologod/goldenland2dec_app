@@ -1,6 +1,7 @@
 #include "gl/assets/save_payload.hpp"
 #include <doctest/doctest.h>
 #include <miniz.h>
+#include <array>
 #include <cstdint>
 #include <span>
 #include <string>
@@ -34,6 +35,20 @@ std::vector<std::uint8_t> make_info(std::string_view level) {
     put_string(body, level);
     put_u32(body, 40);
     for (int i = 0; i < 8; ++i) body.push_back(static_cast<std::uint8_t>(i));
+    return body;
+}
+std::vector<std::uint8_t> make_vars() {
+    std::vector<std::uint8_t> body;
+    put_u32(body, 3);
+    put_u32(body, 0);
+    put_string(body, "voevoda_povtor");
+    for (int i = 1; i <= 8; ++i) body.push_back(static_cast<std::uint8_t>(i));
+    put_u32(body, 3);
+    put_string(body, "note");
+    put_string(body, "hello");
+    put_u32(body, 2);
+    put_string(body, "f");
+    for (int i = 0; i < 8; ++i) body.push_back(static_cast<std::uint8_t>(0xf0 + i));
     return body;
 }
 std::vector<std::uint8_t> make_body(std::string_view level,
@@ -80,7 +95,44 @@ TEST_CASE("save payload: parses blocks and BT_INFO") {
     CHECK(payload->info.level_id == "L93_4");
     CHECK(payload->info.field_218 == 0);
     CHECK(payload->info.party_level == 40);
+    std::array<std::uint8_t, 0x20> expected_time;
+    expected_time.fill(0x11);
+    CHECK(payload->info.time == expected_time);
+    std::array<std::uint8_t, 8> expected_tail;
+    for (int i = 0; i < 8; ++i) expected_tail[static_cast<std::size_t>(i)] = static_cast<std::uint8_t>(i);
+    CHECK(payload->info.field_26c8 == expected_tail);
     CHECK(payload->blocks.size() == 7u);
     CHECK(payload->blocks[0].tag == "BT_SCRN ");
     CHECK(payload->blocks[1].tag == "BT_INFO ");
+}
+
+TEST_CASE("save payload: parses BT_VARS") {
+    const auto file = make_save(make_body("L93_4", make_vars()));
+    auto payload = gl::assets::parse_save_payload(file);
+    REQUIRE(payload.has_value());
+    REQUIRE(payload->vars.size() == 3u);
+
+    CHECK(payload->vars[0].type == 0);
+    CHECK(payload->vars[0].name == "voevoda_povtor");
+    CHECK(payload->vars[0].value ==
+          std::array<std::uint8_t, 8>{1, 2, 3, 4, 5, 6, 7, 8});
+    CHECK(payload->vars[0].text_value.empty());
+
+    CHECK(payload->vars[1].type == 3);
+    CHECK(payload->vars[1].name == "note");
+    CHECK(payload->vars[1].text_value == "hello");
+
+    CHECK(payload->vars[2].type == 2);
+    CHECK(payload->vars[2].name == "f");
+    CHECK(payload->vars[2].value ==
+          std::array<std::uint8_t, 8>{0xf0, 0xf1, 0xf2, 0xf3, 0xf4, 0xf5, 0xf6, 0xf7});
+}
+
+TEST_CASE("save payload: rejects unknown var type") {
+    std::vector<std::uint8_t> vars;
+    put_u32(vars, 1);
+    put_u32(vars, 9);
+    put_string(vars, "x");
+    const auto file = make_save(make_body("L93_4", vars));
+    CHECK_FALSE(gl::assets::parse_save_payload(file).has_value());
 }
