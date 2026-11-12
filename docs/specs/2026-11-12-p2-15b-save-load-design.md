@@ -126,8 +126,7 @@ Result<SavePayload> parse_save_payload(std::span<const std::uint8_t> file);
 - При успехе: `pending_*` из существующего `load_equip_save` (stats,
   inventory, equipment, outfit) на том же `decompressed` body;
   `load_level(info.level_id)`; `rebuild_person_runtime(level.persons)`;
-  `apply_loaded_equip_save()`; сохранить `last_save_payload_` для dump;
-  `state_.transition(level)`.
+   `apply_loaded_equip_save()`; `state_.transition(level)`.
 - Continue (`save_activate`) вызывает `load_save(slot.slot)`; при успехе
   закрывает save-slots screen, при ошибке остаётся и печатает сообщение.
 - `--load-save <slot>`: на старте загружает save (level из `BT_INFO`);

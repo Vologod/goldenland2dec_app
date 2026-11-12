@@ -1,6 +1,7 @@
 # STATUS
 
 Обновлено: 2026-11-12
+
 ## P2-15b — Save load, first increment (done 2026-11-12)
 
 - **Задача:** декодировать `.sav` payload, загрузить уровень по `BT_INFO` +
@@ -14,20 +15,28 @@
   (P5a stats/inventory/equipment/outfit); `BT_SCRN`/`BT_DIARY`/`BT_HSTRY`/`BT_TRIBE`
   пропускаются; `glgame --dump-save <slot>` печатает decoded counts;
   `--load-save <slot>` и Continue загружают уровень из save (SEF) и применяют
-  hero; при ошибке загрузки уровня — atomic rollback (inventory runtime не
-  мутируется), NPC-контейнеры генерируются после успешной загрузки.
+  hero; при ошибке загрузки уровня — inventory runtime восстанавливается из
+  snapshot (atomic rollback), NPC-контейнеры генерируются после успешной загрузки.
 - **Доказательства:** real decode `28/28`; slot0 `L93_4` vars=1002 tail=213
   section=8551 rginf=36 ents=8381 hero_items=117 hero_equipped=11; slot2 `L6_3`;
   live `--load-save 0` — `save: loaded slot=0 level=L93_4 vars=1002 tail=213`,
   `inventory: slot 0`, `outfit: slot 0`; полный `ctest` 19/19 passed
   (1471.40 s, exit 0, 2026-11-12).
+- **Fix wave (2026-11-12):** rollback E2E (`save: rollback slot=0`), new
+  malformed-payload тесты (truncated body, wrong order, trailing bytes),
+  `raw_len <= kMaxEntrySize` + `std::length_error`; полный `ctest` 19/19
+  passed (1569.37 s, exit 0); `gl_assets_tests` 227/227,
+  `glgame_screenshot_tests --test-case="*save*"` 9/9, `gl_game_tests`
+  332/332.
 - **Остаточные ограничения / deferred minors:** `BT_DIARY`/`BT_HSTRY`
   (квесты/лог), именованные поля `BT_ENTS` (raw, не split, OQ-12), значения
   `BT_VARS`, семантика `BT_TRIBE`, сохранение (write) — вне scope (full
-  P2-15b/P2-15c). Также: failure-path тест больше не проверяет
-  `count_occurrences("inventory runtime: Hero money=")==1` (rollback подтверждён
-  инспекцией); дублирующий `rebuild_person_runtime` в `load_save`; copy-cost
-  `InventoryRuntime` на успехе; pinned NPC name/item в E2E привязан к real slot0.
+  P2-15b/P2-15c). Failure-path rollback теперь test-backed: E2E проверяет
+  `save: rollback slot=0` вместе с `cannot load level` и exit 3; дублирующий
+  `rebuild_person_runtime` в `load_save` удалён; `raw_len` ограничен
+  `kMaxEntrySize` (+ `std::length_error`); неиспользуемый `last_save_payload_`
+  удалён. Остаются: copy-cost `InventoryRuntime` на успехе; pinned NPC
+  name/item в E2E привязан к real slot0.
 - **Дальше:** full P2-15b (diary/hstry, `BT_ENTS` named fields, `BT_VARS`
   values, `BT_TRIBE`) и P2-15c (write/`game_save`, round-trip).
 ## P2-15a — Save payload research (done 2026-11-12)
