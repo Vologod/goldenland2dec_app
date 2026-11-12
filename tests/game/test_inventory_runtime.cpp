@@ -1024,6 +1024,68 @@ TEST_CASE("generate_npc_inventories consumes weapon and spawn draws without inve
     CHECK(rng.next() == 6334u);
 }
 
+TEST_CASE("generate_npc_inventories consumes no draws for Hero") {
+    struct ScopedDir {
+        std::filesystem::path path;
+        ~ScopedDir() {
+            std::error_code ignored;
+            std::filesystem::remove_all(path, ignored);
+        }
+    };
+    const auto stamp = std::chrono::steady_clock::now().time_since_epoch().count();
+    ScopedDir dir{std::filesystem::temp_directory_path() /
+                  ("gl_person_rng_hero_" + std::to_string(stamp))};
+    std::filesystem::create_directories(dir.path);
+
+    auto vfs = gl::assets::GameVfs::mount(dir.path);
+    REQUIRE(vfs.has_value());
+    auto runtime = InventoryRuntime::create({}, make_names(), template_for);
+
+    PersonInstance person;
+    person.name = "Hero";
+    person.def.level = 1;
+    person.def.has_weapon = true;
+    person.def.weapons = {{"A", 1, 10}};
+
+    MsvcRandom rng(1);
+    generate_npc_inventories(runtime, std::vector<PersonInstance>{person}, vfs.value(),
+                             make_names(), template_for, 1, rng);
+
+    CHECK(rng.next() == 41u);
+}
+
+TEST_CASE("generate_npc_inventories consumes person draws when inventory is unloadable") {
+    struct ScopedDir {
+        std::filesystem::path path;
+        ~ScopedDir() {
+            std::error_code ignored;
+            std::filesystem::remove_all(path, ignored);
+        }
+    };
+    const auto stamp = std::chrono::steady_clock::now().time_since_epoch().count();
+    ScopedDir dir{std::filesystem::temp_directory_path() /
+                  ("gl_person_rng_badinv_" + std::to_string(stamp))};
+    std::filesystem::create_directories(dir.path);
+
+    auto vfs = gl::assets::GameVfs::mount(dir.path);
+    REQUIRE(vfs.has_value());
+    auto runtime = InventoryRuntime::create({}, make_names(), template_for);
+
+    PersonInstance person;
+    person.name = "L0.Bad";
+    person.inventory = "missing_inv";
+    person.def.level = 1;
+    person.def.has_weapon = true;
+    person.def.weapons = {{"A", 1, 10}};
+
+    MsvcRandom rng(1);
+    generate_npc_inventories(runtime, std::vector<PersonInstance>{person}, vfs.value(),
+                             make_names(), template_for, 1, rng);
+
+    CHECK(rng.next() == 6334u);
+    CHECK(runtime.person_items("L0.Bad").empty());
+}
+
 TEST_CASE("generate_npc_inventories consumes duplicate person rng twice") {
     struct ScopedDir {
         std::filesystem::path path;

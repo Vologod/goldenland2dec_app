@@ -1330,6 +1330,9 @@ TEST_CASE("glgame boat trader insufficient npc money is atomic" *
     CHECK(output.find("trade: hook stock id=953 npc=67 hero=0") != std::string::npos);
     CHECK(output.find("trade: hook stock id=1577 npc=0 hero=6") != std::string::npos);
     CHECK(output.find("trade: hook stock id=407 npc=0 hero=55") != std::string::npos);
+    CHECK(output.find("trade: hook stock id=1579 npc=0 hero=2") != std::string::npos);
+    CHECK(output.find("trade: hook stock id=952 npc=29 hero=21") != std::string::npos);
+    CHECK(output.find("trade: hook stock id=450 npc=0 hero=11") != std::string::npos);
 }
 
 TEST_CASE("glgame boat trader insufficient npc stock is atomic" *
@@ -2174,8 +2177,7 @@ TEST_CASE("glgame specials mode changes NPC loot and keeps modified trade unsupp
     CHECK(dumped_item_count(no_specials_output, kCitizen8, "main", kMoney) == 91);
     CHECK(dumped_item_count(specials_output, kCitizen8, "main", kMoney) == 76);
 
-    CHECK(no_specials_output.find("npc mod: person='" + std::string(kWitch) +
-                                  "' container='trade' item=" + brl_id) == std::string::npos);
+    CHECK(dumped_item_count(no_specials_output, kWitch, "trade", *brl_item) == 0);
     CHECK(specials_output.find("npc mod: person='" + std::string(kWitch) +
                                "' container='trade' item=" + brl_id +
                                " mod=43 value=2 flags=65") != std::string::npos);

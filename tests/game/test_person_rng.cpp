@@ -86,6 +86,20 @@ TEST_CASE("person rng: two eligible weapons can select the second index") {
     CHECK(rng.next() == 19169u);
 }
 
+TEST_CASE("person rng: ineligible weapon before eligible keeps its definition index") {
+    PersonDef person;
+    person.level = 1;
+    person.has_weapon = true;
+    person.weapons = {make_weapon("HIGH", 18, 200), make_weapon("ELIGIBLE", 1, 10)};
+
+    MsvcRandom rng(1);
+    CHECK(rng.next() == 41u);
+    const auto rolls = consume_person_init_rng(person, rng);
+    REQUIRE(rolls.weapon_index.has_value());
+    CHECK(*rolls.weapon_index == 1u);
+    CHECK(rng.next() == 19169u);
+}
+
 TEST_CASE("person rng: weapon block without eligible rows consumes no weapon draw") {
     PersonDef person;
     person.level = 500;
