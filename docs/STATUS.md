@@ -1,6 +1,17 @@
 # STATUS
 
 Обновлено: 2026-11-12
+## P2-15a — Save payload research (in progress 2026-11-12)
+
+- **Задача:** research-only разбор `.sav` payload после 112 байт: zlib,
+  каталог блоков, reader/writer `Server.dll`, state domains, декомпозиция
+  P2-15b/P2-15c.
+- **Spec:** `docs/specs/2026-11-12-p2-15a-save-payload-research-design.md`.
+- **Plan:** `docs/plans/2026-11-12-p2-15a-save-payload-research.md`.
+- **Критерии:** таблица 7 блоков 28/28; reader/writer RVA+lines для каждого;
+  `BT_SCRN` layout минимум; декомпозиция с acceptance; docs-only.
+- **Команды:** Python scan 28 save; Ghidra/decompiled.c refs; encoding check.
+- **Статус:** `in progress`.
 ## Phase 1b2b2e Stage 4 — Live price x87 CW (done 2026-11-12)
 
 - **Задача:** снять live `FloatSave.ControlWord` у `Client.dll+0x6e8d0`
