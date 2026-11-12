@@ -12,6 +12,7 @@
 #include <gl/assets/item_catalog.hpp>
 #include <gl/assets/item_name_index.hpp>
 #include <gl/assets/log.hpp>
+#include <gl/assets/save_payload.hpp>
 #include <gl/assets/sdb.hpp>
 #include <gl/assets/specials.hpp>
 #include <gl/assets/vfs.hpp>
@@ -96,6 +97,7 @@ struct Options {
     bool has_level = false;
     bool menu = false;
     bool list_saves = false;
+    std::optional<int> dump_save;
     int width = kDefaultWidth;
     int height = kDefaultHeight;
     bool width_set = false;
@@ -167,6 +169,7 @@ void print_usage() {
         "  --click-npc <index>  Headless test: click the person instance by index\n"
         "  --click-world <x> <y> Headless test: click the walk tile at x y\n"
         "  --list-saves         Print save slots as tab-separated lines and exit\n"
+        "  --dump-save <slot>   Print the decoded save slot payload and exit\n"
         "  --screenshot <png>   Render the current state, save PNG and exit\n"
         "  --exec \"<command>\"   Run a console command after boot (repeatable)\n"
         "  -h, --help           Show this help and exit\n"
@@ -439,6 +442,15 @@ ParseStatus parse_args(int argc, char** argv, Options& options) {
             options.dialog_answer = answer;
         } else if (arg == "--list-saves") {
             options.list_saves = true;
+        } else if (arg == "--dump-save") {
+            if (!next_value(arg, value)) return ParseStatus::error;
+            int slot = 0;
+            if (!parse_int(value, slot) || slot < 0) {
+                std::fprintf(stderr, "glgame: invalid --dump-save: %.*s\n",
+                             static_cast<int>(value.size()), value.data());
+                return ParseStatus::error;
+            }
+            options.dump_save = slot;
         } else if (arg == "--screenshot") {
             if (!next_value(arg, value)) return ParseStatus::error;
             if (value.empty()) {
@@ -522,6 +534,50 @@ std::string format_save_list_line(const gl::core::SaveSlotInfo& slot) {
 
 bool is_displayable(const gl::core::SaveSlotInfo& slot) {
     return slot.slot >= 0 && slot.valid;
+}
+
+int dump_save_payload(const fs::path& game_dir, int slot) {
+    const fs::path path = game_dir / "Saves" / ("slot" + std::to_string(slot) + ".sav");
+    std::ifstream in(path, std::ios::binary);
+    if (!in) {
+        std::fprintf(stderr, "save: error: cannot open '%s'\n", path.string().c_str());
+        return 2;
+    }
+    const std::vector<std::uint8_t> file((std::istreambuf_iterator<char>(in)),
+                                         std::istreambuf_iterator<char>());
+    auto payload = gl::assets::parse_save_payload(file);
+    if (!payload) {
+        std::fprintf(stderr, "save: error: %s\n", payload.error().message.c_str());
+        return 2;
+    }
+
+    const gl::assets::SaveBlockView* hero = nullptr;
+    for (const gl::assets::SaveBlockView& block : payload->blocks) {
+        if (block.tag == "BT_HERO ") hero = &block;
+    }
+    if (hero == nullptr) {
+        std::fputs("save: error: save payload is missing BT_HERO\n", stderr);
+        return 2;
+    }
+    auto inventory = gl::assets::parse_hero_inventory(
+        std::span<const std::uint8_t>(payload->decompressed).subspan(hero->offset, hero->size));
+    if (!inventory) {
+        std::fprintf(stderr, "save: error: %s\n", inventory.error().message.c_str());
+        return 2;
+    }
+
+    const gl::assets::SaveTailEntry& selected = payload->tail[*payload->level_tail_index];
+    const std::string line =
+        "save: slot=" + std::to_string(slot) + " level=" + payload->info.level_id +
+        " vars=" + std::to_string(payload->vars.size()) +
+        " tail=" + std::to_string(payload->tail.size()) +
+        " section=" + std::to_string(selected.raw_len) +
+        " rginf=" + std::to_string(payload->rginf.size()) +
+        " ents=" + std::to_string(payload->ents.size()) +
+        " hero_items=" + std::to_string(inventory->items.size()) +
+        " hero_equipped=" + std::to_string(inventory->equipped.size());
+    std::printf("%s\n", line.c_str());
+    return 0;
 }
 
 gl::game::HeroOutfit make_naked_outfit() {
@@ -2837,6 +2893,8 @@ int main(int argc, char** argv) {
                          options.game_dir.string().c_str());
             return 2;
         }
+
+        if (options.dump_save) return dump_save_payload(options.game_dir, *options.dump_save);
 
         if (options.list_saves) {
             auto saves = gl::core::SaveManager::scan(options.game_dir / "Saves");

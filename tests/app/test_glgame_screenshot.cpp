@@ -570,6 +570,20 @@ TEST_CASE("glgame --list-saves prints the real save slots and exits") {
     CHECK(slot0_has_title);
 }
 
+TEST_CASE("glgame --dump-save prints the decoded save payload and exits") {
+    const char* game_dir = std::getenv("GL_GAME_DIR");
+    REQUIRE(game_dir != nullptr);
+
+    std::string output;
+    const int code =
+        run_glgame_capture({"--game-dir", game_dir, "--dump-save", "0"}, output);
+    CAPTURE(code);
+    CAPTURE(output);
+    CHECK(code == 0);
+    CHECK(output.find("save: slot=0 level=L93_4 vars=1002 tail=213 section=8551 rginf=36 "
+                      "ents=8381 hero_items=117 hero_equipped=11") != std::string::npos);
+}
+
 TEST_CASE("glgame renders a dialog into a 1280x720 PNG" *
           doctest::skip(!font_available())) {
     const char* game_dir = std::getenv("GL_GAME_DIR");
