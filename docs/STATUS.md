@@ -40,7 +40,7 @@
   `test_inventory_runtime_real.cpp` и live-гейтом; переписывать этот оракул
   — отдельная задача.
 - **Статус:** `done`.
-## Phase 1b2b2e — Specials live parity (regression/docs done 2026-11-11; live oracle partial)
+## Phase 1b2b2e — Specials live parity (regression/docs done 2026-11-11; live oracle partial — historical, NPC oracle closed by 1b2b2f/D-064)
 
 - **Задача:** закрыть live-гейты specials (`1b2b2d` был `partial`):
   provenance live-захвата, порядок/scope RNG, inherited ITM effects,

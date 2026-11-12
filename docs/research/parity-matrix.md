@@ -22,7 +22,7 @@ Phase 1b2b2d (specials implementation, D-060) реализовала парсе�
 `specials.scr`, `SpecialEngine` (R4–R10), интеграцию в production
 `glgame` (`mod_count` из ITM effects, `--no-specials` режим); trade-нативы
 `0x5000006`/`0x5000007`, restock и save остаются вне scope; live-гейты
-specials OPEN → паритет `partial`; Phase 1b2b2f (per-person pre-loot RNG,
+specials были OPEN → historical `partial` (NPC-loot oracle закрыт 1b2b2f/D-064; live price CW OPEN); Phase 1b2b2f (per-person pre-loot RNG,
 D-064) закрыла live NPC-loot oracle на `l1_1` (0/N): weapon + spawn-init
 draws в SEF-порядке после loot каждой персоны.
 
