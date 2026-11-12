@@ -702,6 +702,7 @@ class Game {
 
         if (options_.load_save) {
             if (!load_save(*options_.load_save)) return 3;
+            dump_npc_inventories();
         } else if (options_.has_dialog) {
             rebuild_person_runtime({});
             const gl::Result<void> opened = open_dialog(options_.dialog);
@@ -2099,10 +2100,23 @@ class Game {
         const std::span<const std::uint8_t> hero_body =
             std::span<const std::uint8_t>(payload->decompressed)
                 .subspan(hero->offset, hero->size);
-        apply_hero_from_body(hero_body, slot, false);
+
+        auto inventory_before = inventory_runtime_;
+        auto equipment_before = pending_equipment_;
+        auto inventory_state_before = pending_inventory_;
+        auto hero_stats_before = pending_hero_stats_;
+        auto outfit_before = pending_outfit_;
+        const bool hero_stats_absent_before = hero_stats_absent_logged_;
+
+        apply_hero_from_body(hero_body, slot, true);
 
         if (!load_level(payload->info.level_id)) {
-            reset_pending_hero();
+            pending_equipment_ = std::move(equipment_before);
+            pending_inventory_ = std::move(inventory_state_before);
+            pending_hero_stats_ = std::move(hero_stats_before);
+            pending_outfit_ = std::move(outfit_before);
+            hero_stats_absent_logged_ = hero_stats_absent_before;
+            inventory_runtime_ = std::move(inventory_before);
             const std::string message =
                 "save: cannot load level '" + payload->info.level_id + "'";
             save_message_ = message;
@@ -2111,7 +2125,6 @@ class Game {
             return false;
         }
 
-        rebuild_inventory_runtime();
         rebuild_person_runtime(level_->level().persons);
         apply_loaded_equip_save();
 

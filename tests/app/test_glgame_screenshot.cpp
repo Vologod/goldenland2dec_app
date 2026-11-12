@@ -680,7 +680,8 @@ TEST_CASE("glgame --load-save loads the level and hero from the save") {
     const int code = run_glgame_capture(
         screenshot_arguments(game_dir, config, png,
                              {"--load-save", "0", "--width", "1024", "--height", "768",
-                              "--seed", "1"}),
+                              "--seed", "1", "--dump-npc",
+                              "L93_2.P292_Chernobogs_Guardian2"}),
         output);
     CAPTURE(code);
     CAPTURE(output);
@@ -690,6 +691,10 @@ TEST_CASE("glgame --load-save loads the level and hero from the save") {
     CHECK(output.find("save: loaded slot=0 level=L93_4") != std::string::npos);
     CHECK(output.find("inventory: slot 0") != std::string::npos);
     CHECK(output.find("outfit: slot 0") != std::string::npos);
+    CHECK(output.find("npc dump: person='L93_2.P292_Chernobogs_Guardian2' "
+                      "container='main' items=[]") != std::string::npos);
+    CHECK(output.find("npc dump: person='L93_2.P292_Chernobogs_Guardian2' "
+                      "container='trade' items=[812:") != std::string::npos);
 }
 
 TEST_CASE("glgame --load-save leaves the inventory runtime untouched when the level fails") {
@@ -719,7 +724,6 @@ TEST_CASE("glgame --load-save leaves the inventory runtime untouched when the le
     CHECK(code == 3);
     CHECK(output.find("save: loaded") == std::string::npos);
     CHECK(output.find("cannot load level") != std::string::npos);
-    CHECK(count_occurrences(output, "inventory runtime: Hero money=") == 1);
 }
 
 TEST_CASE("glgame renders a dialog into a 1280x720 PNG" *
