@@ -1,6 +1,28 @@
 # STATUS
 
-Обновлено: 2026-11-11
+Обновлено: 2026-11-12
+## Phase 1b2b2e Stage 4 — Live price x87 CW (done 2026-11-12)
+
+- **Задача:** снять live `FloatSave.ControlWord` у `Client.dll+0x6e8d0`
+  (`FUN_1206E8D0`, цена предмета) и закрыть FPU price-гейт.
+- **Spec/evidence:** `docs/specs/2026-11-11-p3b2b2e-specials-live-parity-design.md`
+  Stage 4; research `p3b2b2e-live-parity-stage2b.md` §4/§10; D-062/D-063/D-065.
+- **Критерии приёмки:** `price=<cw>` снят на thread вызова цены;
+  ожидается `0x007F` (PC=24/RC=nearest); `special gates: live original FPU
+  control word` PASS с `GL_SPECIALS_FPU_CW` (generation+price).
+- **Команды проверки:** `tools/live/gl_live_capture.exe --help`;
+  `gl_live_capture.exe --pid <pid> --price-cw --out .local/live/price-cw.txt`;
+  `GL_SPECIALS_FPU_CW=<file> build\bin\gl_game_tests.exe
+  --test-case="*live original FPU control word*" --success`.
+- **Проверка (2026-11-12):** user-assisted capture на запущенной игре
+  (`GoldenLand.exe` PID 21648, `Client.dll` base `0x12000000`, DR0
+  `0x1206e8d0`): `.local/live/price-cw.txt` — `price=0x007f`,
+  `# source=client-price`, thread 6084; SHA-256
+  `EDB81608D877C684AE648E63AC0844BAC7CEE997FBFEF61B9DFECF6AD2AEB3FF`.
+  FPU-гейт: `1/1` test case, `7/7` assertions, `SUCCESS!` с
+  `GL_SPECIALS_FPU_CW` (`generation=0x007F`, `price=0x007F`).
+- **Статус:** `done`; live price CW равен generation CW `0x007F`
+  (PC=24/RC=nearest), Stage 4 закрыт.
 ## Phase 1b2b2f — Per-person pre-loot RNG (done 2026-11-11)
 
 - **Задача:** потреблять weapon (`FUN_1401d99c`) + spawn
@@ -40,7 +62,7 @@
   `test_inventory_runtime_real.cpp` и live-гейтом; переписывать этот оракул
   — отдельная задача.
 - **Статус:** `done`.
-## Phase 1b2b2e — Specials live parity (regression/docs done 2026-11-11; live oracle partial — historical, NPC oracle closed by 1b2b2f/D-064)
+## Phase 1b2b2e — Specials live parity (regression/docs done 2026-11-11; live gates closed 2026-11-12: NPC oracle by 1b2b2f/D-064, price CW by D-065)
 
 - **Задача:** закрыть live-гейты specials (`1b2b2d` был `partial`):
   provenance live-захвата, порядок/scope RNG, inherited ITM effects,
@@ -133,8 +155,9 @@
   (`range(+0x5e4,+0x5e8)`, 1 draw), между loot-вызовами. Порт эти системы не
   моделирует → loot-stream сдвинут на 2–8 draw/person; это Part 3
   (P4/P5 equipment/spawn RNG interleaving), не loot-баг. Tool: `--price-cw`
-  (`Client.dll+0x6e8d0`, ambient CW) готов; live price CW ещё не снят.
-  Evidence: `docs/research/p3b2b2e-live-parity-stage2b.md` §8; D-063.
+  (`Client.dll+0x6e8d0`, ambient CW) готов; live price CW снят 2026-11-12
+  (`0x007F`, D-065).
+  Evidence: `docs/research/p3b2b2e-live-parity-stage2b.md` §8/§10; D-063/D-065.
 - **Open Questions (1b2b2e):**
   1. Точный порядок вызовов `FUN_1404b1c0` (SEF vs entity/spawn) —
      resolved 2026-11-11: live order = port SEF order 1:1.
@@ -150,6 +173,10 @@
   **`partial`**: остаток вызван не loot-моделью, а per-person equipment/spawn
   RNG (Part 3) и непроверенным live price CW (Stage 4). Полный паритет не
   заявлен.
+  **Update 2026-11-12:** Part 3 закрыт 1b2b2f/D-064 (live `0/N`); Stage 4
+  закрыт D-065 (`price=0x007F`, FPU-гейт PASS). Live gates 1b2b2e закрыты;
+  residual: reduced-scope 14/15 unique persons, `run_level` generator-scope,
+  материализация экипировки/spawn.
 
 ## Phase 1b2b2d — NPC loot specials implementation (done 2026-11-10)
 
@@ -287,7 +314,7 @@
   price читает только `id/value/flags` (не `+0x0c/+0x10`; generated —
   0/0). Основной missing-gap `p3b2b4b` §8 п.2 закрыт структурно;
   остаётся live FPU-CW (PC=53/RC=nearest; **superseded by D-062:**
-  generation CW `0x007F`/PC=24; live price CW — Stage 4) и реализация.
+  generation CW `0x007F`/PC=24; live price CW снят `0x007F`, D-065) и реализация.
 - **Не доказано live:** захват NPC-модов из запущенной игры; live
   FPU-CW **перед `FUN_14047284` (генерация) и `FUN_1206E8D0` (цена)**;
   `random_sign` (def+0x04) парсится, но не читается генерацией/ценой

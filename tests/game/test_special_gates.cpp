@@ -698,9 +698,9 @@ TEST_CASE("special gates: live original FPU control word" * doctest::skip(!live_
     std::ostringstream message;
     message << "live FPU-CW source=" << captured.source << " generation=0x" << std::hex
             << captured.generation << " price=0x" << captured.price << std::dec
-            << "; generation is live-measured (0x007F, PC=24/RC=nearest); the price half"
-               " still needs a Stage 4 capture, and the single-value fallback is an explicit"
-               " assumption";
+            << "; both generation (NPC spawn) and price (FUN_1206E8D0) control words are"
+               " live-measured as 0x007F (PC=24/RC=nearest); the single-value fallback is an"
+               " explicit assumption";
     MESSAGE(message.str());
     CHECK(captured.generation == kReferenceControlWord);
     CHECK(captured.price == kReferenceControlWord);

@@ -432,3 +432,26 @@ loot: `coin(0.5)` over the person-script `weapon` block (file order,
 Retail corpus: 782/782 person scripts have a weapon block with >=1 eligible
 row. Implemented in `game::consume_person_init_rng`; live l1_1 gate is
 `items 22/22, mods 14/14` (0 mismatched).
+
+## 10. Live price CW (Stage 4, 2026-11-12)
+
+User-assisted capture on the running original game (`GoldenLand.exe` PID
+21648; `Client.dll` base `0x12000000`; hardware execute breakpoint
+`Client.dll+0x6e8d0` = `FUN_1206E8D0`). The tool attached before opening the
+trade panel, then captured on the price-call thread 6084:
+
+```text
+price=0x007f
+# source=client-price
+```
+
+`.local/live/price-cw.txt` SHA-256
+`EDB81608D877C684AE648E63AC0844BAC7CEE997FBFEF61B9DFECF6AD2AEB3FF`.
+The ambient price CW equals the generation CW `0x007F` (PC=24/RC=nearest);
+`FUN_1206E8D0` still forces only the final rounding bits to truncate
+(`orl $0xC00`), which `TradePrice` models separately. FPU gate
+`special gates: live original FPU control word` passes with
+`generation=0x007F`, `price=0x007F` (1/1 case, 7/7 assertions). Stage 4 is
+closed; remaining residuals are the reduced-scope NPC oracle (14/15 unique
+persons), the generator-scope `run_level` oracle, and equipment/spawn
+materialization.
