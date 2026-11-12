@@ -2,6 +2,7 @@
 
 #include "gl/assets/byte_reader.hpp"
 #include "gl/assets/cp1251.hpp"
+#include "gl/assets/pak.hpp"
 
 #include <miniz.h>
 
@@ -134,6 +135,82 @@ Result<SavePayload> parse_save_payload(std::span<const std::uint8_t> file) {
         }
         if (!vars.at_end())
             return format_error("BT_VARS has trailing bytes");
+
+        const std::size_t tail_offset = 0x70 + static_cast<std::size_t>(compressed_len);
+        ByteReader tail(file.subspan(tail_offset));
+        std::uint32_t tail_count = 0;
+        if (!tail.read_u32le(tail_count))
+            return format_error("save payload tail count is truncated");
+        for (std::uint32_t index = 0; index < tail_count; ++index) {
+            SaveTailEntry entry;
+            if (!read_string(tail, entry.name))
+                return format_error("save payload tail name is truncated");
+            std::uint32_t section_len = 0;
+            if (!tail.read_u32le(section_len))
+                return format_error("save payload tail section length is truncated");
+            std::span<const std::uint8_t> section_bytes;
+            if (!tail.read_bytes(section_len, section_bytes))
+                return format_error("save payload tail section is truncated");
+            if (section_bytes.size() < 8)
+                return format_error("save payload tail section header is truncated");
+            const std::uint32_t section_raw_len = u32_at(section_bytes, 0);
+            const std::uint32_t section_zlib_len = u32_at(section_bytes, 4);
+            if (section_raw_len == 0 || section_raw_len > kMaxEntrySize ||
+                static_cast<std::size_t>(section_zlib_len) != section_bytes.size() - 8)
+                return format_error("save payload tail section length is invalid");
+            entry.raw_len = section_raw_len;
+            entry.section.resize(section_raw_len);
+            mz_ulong section_out_len = section_raw_len;
+            if (mz_uncompress(entry.section.data(), &section_out_len, section_bytes.data() + 8,
+                              section_zlib_len) != MZ_OK)
+                return format_error("save payload tail section zlib decompression failed");
+            if (section_out_len != section_raw_len)
+                return format_error("save payload tail section length mismatch");
+            payload.tail.push_back(std::move(entry));
+        }
+        if (!tail.at_end())
+            return format_error("save payload tail has trailing bytes");
+
+        for (std::size_t index = 0; index < payload.tail.size(); ++index) {
+            if (payload.tail[index].name == payload.info.level_id) {
+                payload.level_tail_index = index;
+                break;
+            }
+        }
+        if (!payload.level_tail_index)
+            return format_error("save payload tail is missing the selected level");
+
+        ByteReader snapshot(payload.tail[*payload.level_tail_index].section);
+        bool have_rginf = false;
+        bool have_ents = false;
+        while (!snapshot.at_end()) {
+            std::span<const std::uint8_t> tag;
+            if (!snapshot.read_bytes(8, tag))
+                return format_error("save payload tail snapshot tag is truncated");
+            std::uint32_t block_size = 0;
+            if (!snapshot.read_u32le(block_size))
+                return format_error("save payload tail snapshot block size is truncated");
+            const std::string tag_text(reinterpret_cast<const char *>(tag.data()), tag.size());
+            if (tag_text == "BT_RGINF") {
+                if (block_size != 36)
+                    return format_error("save payload tail snapshot BT_RGINF size is invalid");
+                std::span<const std::uint8_t> body;
+                if (!snapshot.read_bytes(block_size, body))
+                    return format_error("save payload tail snapshot BT_RGINF is truncated");
+                payload.rginf.assign(body.begin(), body.end());
+                have_rginf = true;
+            } else if (tag_text == "BT_ENTS ") {
+                const std::span<const std::uint8_t> body = snapshot.remaining();
+                payload.ents.assign(body.begin(), body.end());
+                snapshot.skip(body.size());
+                have_ents = true;
+                break;
+            } else if (!snapshot.skip(block_size)) {
+                return format_error("save payload tail snapshot block is truncated");
+            }
+        }
+        if (!have_rginf || !have_ents)
+            return format_error("save payload tail snapshot is missing BT_RGINF or BT_ENTS");
         return payload;
     } catch (const std::bad_alloc &) {
         return format_error("save payload allocation failed");

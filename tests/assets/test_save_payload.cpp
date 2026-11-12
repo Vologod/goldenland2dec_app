@@ -51,6 +51,56 @@ std::vector<std::uint8_t> make_vars() {
     for (int i = 0; i < 8; ++i) body.push_back(static_cast<std::uint8_t>(0xf0 + i));
     return body;
 }
+std::vector<std::uint8_t> make_rginf_body() {
+    std::vector<std::uint8_t> body(36);
+    for (std::size_t i = 0; i < body.size(); ++i)
+        body[i] = static_cast<std::uint8_t>(0x40 + i);
+    return body;
+}
+std::vector<std::uint8_t> make_ents_body() {
+    std::vector<std::uint8_t> body;
+    put_u32(body, 2);
+    body.push_back(0xaa);
+    body.push_back(0xbb);
+    body.push_back(0xcc);
+    body.push_back(0xdd);
+    put_u32(body, 1);
+    return body;
+}
+std::vector<std::uint8_t> make_section_blocks() {
+    std::vector<std::uint8_t> d;
+    put_block(d, "BT_RGINF", make_rginf_body());
+    put_block(d, "BT_ENTS ", make_ents_body());
+    return d;
+}
+std::vector<std::uint8_t> make_section(const std::vector<std::uint8_t> &raw_blocks) {
+    std::vector<std::uint8_t> section;
+    put_u32(section, static_cast<std::uint32_t>(raw_blocks.size()));
+    std::vector<std::uint8_t> compressed(mz_compressBound(raw_blocks.size()));
+    mz_ulong length = static_cast<mz_ulong>(compressed.size());
+    REQUIRE(mz_compress(compressed.data(), &length, raw_blocks.data(), raw_blocks.size()) == MZ_OK);
+    compressed.resize(static_cast<std::size_t>(length));
+    put_u32(section, static_cast<std::uint32_t>(compressed.size()));
+    section.insert(section.end(), compressed.begin(), compressed.end());
+    return section;
+}
+std::vector<std::uint8_t> make_tail_entry(std::string_view name,
+                                          const std::vector<std::uint8_t> &section) {
+    std::vector<std::uint8_t> out;
+    put_string(out, name);
+    put_u32(out, static_cast<std::uint32_t>(section.size()));
+    out.insert(out.end(), section.begin(), section.end());
+    return out;
+}
+std::vector<std::uint8_t> make_tail(const std::vector<std::vector<std::uint8_t>> &entries) {
+    std::vector<std::uint8_t> out;
+    put_u32(out, static_cast<std::uint32_t>(entries.size()));
+    for (const auto &entry : entries) out.insert(out.end(), entry.begin(), entry.end());
+    return out;
+}
+std::vector<std::uint8_t> make_default_tail(std::string_view level) {
+    return make_tail({make_tail_entry(level, make_section(make_section_blocks()))});
+}
 std::vector<std::uint8_t> make_body(std::string_view level,
                                     const std::vector<std::uint8_t> &vars) {
     std::vector<std::uint8_t> d;
@@ -63,7 +113,8 @@ std::vector<std::uint8_t> make_body(std::string_view level,
     put_block(d, "BT_HERO ", {});
     return d;
 }
-std::vector<std::uint8_t> make_save(const std::vector<std::uint8_t> &body) {
+std::vector<std::uint8_t> make_save(const std::vector<std::uint8_t> &body,
+                                    const std::vector<std::uint8_t> &tail = {}) {
     std::vector<std::uint8_t> file(112, 0);
     const std::string magic = "Goldenland II save ";
     for (std::size_t i = 0; i < magic.size(); ++i) file[i] = magic[i];
@@ -79,6 +130,7 @@ std::vector<std::uint8_t> make_save(const std::vector<std::uint8_t> &body) {
     put_at(0x68, static_cast<std::uint32_t>(body.size()));
     put_at(0x6c, static_cast<std::uint32_t>(compressed.size()));
     file.insert(file.end(), compressed.begin(), compressed.end());
+    file.insert(file.end(), tail.begin(), tail.end());
     return file;
 }
 } // namespace
@@ -89,7 +141,7 @@ TEST_CASE("save payload: parses blocks and BT_INFO") {
         put_u32(v, 0);
         return v;
     }();
-    const auto file = make_save(make_body("L93_4", vars));
+    const auto file = make_save(make_body("L93_4", vars), make_default_tail("L93_4"));
     auto payload = gl::assets::parse_save_payload(file);
     REQUIRE(payload.has_value());
     CHECK(payload->info.level_id == "L93_4");
@@ -107,7 +159,7 @@ TEST_CASE("save payload: parses blocks and BT_INFO") {
 }
 
 TEST_CASE("save payload: parses BT_VARS") {
-    const auto file = make_save(make_body("L93_4", make_vars()));
+    const auto file = make_save(make_body("L93_4", make_vars()), make_default_tail("L93_4"));
     auto payload = gl::assets::parse_save_payload(file);
     REQUIRE(payload.has_value());
     REQUIRE(payload->vars.size() == 3u);
@@ -133,6 +185,47 @@ TEST_CASE("save payload: rejects unknown var type") {
     put_u32(vars, 1);
     put_u32(vars, 9);
     put_string(vars, "x");
-    const auto file = make_save(make_body("L93_4", vars));
+    const auto file = make_save(make_body("L93_4", vars), make_default_tail("L93_4"));
+    CHECK_FALSE(gl::assets::parse_save_payload(file).has_value());
+}
+
+TEST_CASE("save payload: parses tail and selected BT_RGINF/BT_ENTS") {
+    const auto file = make_save(make_body("L93_4", make_vars()), make_default_tail("L93_4"));
+    auto payload = gl::assets::parse_save_payload(file);
+    REQUIRE(payload.has_value());
+    REQUIRE(payload->tail.size() == 1u);
+    CHECK(payload->tail[0].name == "L93_4");
+    REQUIRE(payload->level_tail_index.has_value());
+    CHECK(*payload->level_tail_index == 0u);
+    CHECK(payload->rginf == make_rginf_body());
+    CHECK(payload->rginf.size() == 36u);
+    CHECK(payload->ents == make_ents_body());
+}
+
+TEST_CASE("save payload: selects the matching tail entry by level") {
+    const auto tail = make_tail({
+        make_tail_entry("L1_1", make_section(make_section_blocks())),
+        make_tail_entry("L93_4", make_section(make_section_blocks())),
+    });
+    const auto file = make_save(make_body("L93_4", make_vars()), tail);
+    auto payload = gl::assets::parse_save_payload(file);
+    REQUIRE(payload.has_value());
+    REQUIRE(payload->tail.size() == 2u);
+    REQUIRE(payload->level_tail_index.has_value());
+    CHECK(*payload->level_tail_index == 1u);
+    CHECK(payload->rginf == make_rginf_body());
+    CHECK(payload->ents == make_ents_body());
+}
+
+TEST_CASE("save payload: rejects missing selected tail entry") {
+    const auto file = make_save(make_body("L93_4", make_vars()), make_default_tail("L6_3"));
+    CHECK_FALSE(gl::assets::parse_save_payload(file).has_value());
+}
+
+TEST_CASE("save payload: rejects bad tail section zlib") {
+    auto section = make_section(make_section_blocks());
+    section[8] ^= 0xff;
+    const auto file = make_save(make_body("L93_4", make_vars()),
+                                make_tail({make_tail_entry("L93_4", section)}));
     CHECK_FALSE(gl::assets::parse_save_payload(file).has_value());
 }
