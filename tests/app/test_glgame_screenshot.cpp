@@ -724,6 +724,7 @@ TEST_CASE("glgame --load-save leaves the inventory runtime untouched when the le
     CHECK(code == 3);
     CHECK(output.find("save: loaded") == std::string::npos);
     CHECK(output.find("cannot load level") != std::string::npos);
+    CHECK(output.find("save: rollback slot=0") != std::string::npos);
 }
 
 TEST_CASE("glgame renders a dialog into a 1280x720 PNG" *

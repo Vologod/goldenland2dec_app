@@ -9,6 +9,7 @@
 #include <array>
 #include <cstring>
 #include <new>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -49,6 +50,7 @@ Result<SavePayload> parse_save_payload(std::span<const std::uint8_t> file) {
         const std::uint32_t raw_len = u32_at(file, 0x68);
         const std::uint32_t compressed_len = u32_at(file, 0x6c);
         if (raw_len == 0 || compressed_len == 0 ||
+            static_cast<std::size_t>(raw_len) > kMaxEntrySize ||
             static_cast<std::size_t>(compressed_len) > file.size() - 0x70)
             return format_error("save payload zlib length is invalid");
 
@@ -213,6 +215,8 @@ Result<SavePayload> parse_save_payload(std::span<const std::uint8_t> file) {
             return format_error("save payload tail snapshot is missing BT_RGINF or BT_ENTS");
         return payload;
     } catch (const std::bad_alloc &) {
+        return format_error("save payload allocation failed");
+    } catch (const std::length_error &) {
         return format_error("save payload allocation failed");
     }
 }

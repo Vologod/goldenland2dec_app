@@ -2117,6 +2117,8 @@ class Game {
             pending_outfit_ = std::move(outfit_before);
             hero_stats_absent_logged_ = hero_stats_absent_before;
             inventory_runtime_ = std::move(inventory_before);
+            gl::log(gl::LogLevel::warning,
+                    "save: rollback slot=" + std::to_string(slot));
             const std::string message =
                 "save: cannot load level '" + payload->info.level_id + "'";
             save_message_ = message;
@@ -2125,7 +2127,6 @@ class Game {
             return false;
         }
 
-        rebuild_person_runtime(level_->level().persons);
         apply_loaded_equip_save();
 
         const std::string line = "save: loaded slot=" + std::to_string(slot) +
@@ -2133,7 +2134,6 @@ class Game {
                                  " vars=" + std::to_string(payload->vars.size()) +
                                  " tail=" + std::to_string(payload->tail.size());
         gl::log(gl::LogLevel::info, line);
-        last_save_payload_ = std::move(payload.value());
         if (!state_.transition(gl::core::AppState::level)) return false;
         return true;
     }
@@ -2927,7 +2927,6 @@ class Game {
     std::optional<gl::assets::HeroInventory> pending_inventory_;
     std::optional<gl::assets::HeroStats> pending_hero_stats_;
     std::optional<gl::game::HeroOutfit> pending_outfit_;
-    std::optional<gl::assets::SavePayload> last_save_payload_;
     gl::game::PersonRuntime person_runtime_;
     gl::game::InventoryRuntime inventory_runtime_;
     std::optional<gl::assets::ItemNameIndex> item_names_;

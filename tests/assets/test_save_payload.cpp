@@ -229,3 +229,32 @@ TEST_CASE("save payload: rejects bad tail section zlib") {
                                 make_tail({make_tail_entry("L93_4", section)}));
     CHECK_FALSE(gl::assets::parse_save_payload(file).has_value());
 }
+
+TEST_CASE("save payload: rejects a truncated block body") {
+    std::vector<std::uint8_t> body;
+    put_block(body, "BT_SCRN ", {});
+    put_tag(body, "BT_INFO ");
+    put_u32(body, 1024);
+    const auto file = make_save(body, make_default_tail("L93_4"));
+    CHECK_FALSE(gl::assets::parse_save_payload(file).has_value());
+}
+
+TEST_CASE("save payload: rejects wrong block order") {
+    std::vector<std::uint8_t> body;
+    put_block(body, "BT_SCRN ", {});
+    put_block(body, "BT_VARS ", make_vars());
+    put_block(body, "BT_INFO ", make_info("L93_4"));
+    put_block(body, "BT_TRIBE", {});
+    put_block(body, "BT_DIARY", {});
+    put_block(body, "BT_HSTRY", {});
+    put_block(body, "BT_HERO ", {});
+    const auto file = make_save(body, make_default_tail("L93_4"));
+    CHECK_FALSE(gl::assets::parse_save_payload(file).has_value());
+}
+
+TEST_CASE("save payload: rejects trailing bytes after the seventh block") {
+    auto body = make_body("L93_4", make_vars());
+    body.push_back(0x00);
+    const auto file = make_save(body, make_default_tail("L93_4"));
+    CHECK_FALSE(gl::assets::parse_save_payload(file).has_value());
+}
