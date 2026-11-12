@@ -1,12 +1,20 @@
 # STATUS
 
 Обновлено: 2026-11-11
-## Phase 1b2b2f — Per-person pre-loot RNG (in progress)
+## Phase 1b2b2f — Per-person pre-loot RNG (done 2026-11-11)
 
 - **Задача:** потреблять weapon (`FUN_1401d99c`) + spawn
   (`FUN_14021bc8`) RNG-draw в SEF-порядке после loot каждого персонажа.
 - **Spec:** `docs/specs/2026-11-11-p3b2b2f-person-rng-design.md`.
 - **Plan:** `docs/plans/2026-11-11-p3b2b2f-person-rng.md`.
+- **Сделано (Tasks 1–6):** `parse_person_weapon_block` →
+  `PersonDef.weapons/weapon_level_offset/has_weapon`; `game::consume_person_init_rng`
+  (`coin(0.5)` по eligible `weapon`-строкам в файловом порядке с wrap, затем
+  `range(3000,10000)` spawn-init); `generate_npc_inventories` потребляет для
+  каждой не-Hero `level.persons` (пустой инвентарь и дубликаты включены);
+  live-гейт `test_special_gates.cpp` (first-wins дубликаты, RNG на каждый
+  SEF-entry); deterministic seed-1 оракулы пересчитаны независимым
+  Python-референсом, валидированным 0/N на live capture (Task 5).
 - **Критерии приёмки:** live l1_1 oracle
   `mismatched_items==0 && mismatched_mods==0`; deterministic seed-1 оракулы
   пересчитаны независимым reference; полный `ctest` с `GL_GAME_DIR`.
@@ -15,7 +23,23 @@
   `GL_SPECIALS_LIVE=<capture> build\bin\gl_game_tests.exe
   --test-case="*live NPC-mod oracle*" --success`;
   `ctest --test-dir build --output-on-failure`.
-- **Статус:** `in progress`.
+- **Проверка (2026-11-11):** live l1_1 gate — `items captured=22 port=22
+  matched=22 mismatched=0; mods captured=14 port=14 matched=14 mismatched=0`
+  (14/15 unique persons compared; reduced-scope evidence). `cmake --build
+  build` — up to date, exit 0. Full `ctest --test-dir build
+  --output-on-failure` (`GL_GAME_DIR=I:\Games\Златогорье-2`) —
+  `100% tests passed out of 19`, `Total Test time (real) = 1266.69 sec`,
+  exit 0.
+- **Residual limitations:** материализация оружия/экипировки, хранение
+  `spawn_roll` в состоянии, Hero spawn и пост-генерационный RNG — вне scope;
+  persons, пропущенные загрузчиком/без ресурсов, не потребляют RNG.
+- **Follow-up (minor, deferred):** детерминированный `run_level` оракул в
+  `tests/game/test_npc_loot_specials.cpp` — generator-scope: вызывает
+  `NpcLootGenerator::generate` напрямую и намеренно не потребляет
+  person-init draws. Production stream parity покрыт
+  `test_inventory_runtime_real.cpp` и live-гейтом; переписывать этот оракул
+  — отдельная задача.
+- **Статус:** `done`.
 ## Phase 1b2b2e — Specials live parity (regression/docs done 2026-11-11; live oracle partial)
 
 - **Задача:** закрыть live-гейты specials (`1b2b2d` был `partial`):

@@ -422,3 +422,13 @@ by 2–8 draws per person. The port does not model these systems
 parameter/equipment selection and spawn-init draws in the SEF order; without
 that, the `l1_1` loot oracle cannot reach 0/N. Merge/stacking and
 window/quantity are already correct (Part 2 Task 1).
+
+## 9. Per-person RNG model (2026-11-11)
+
+Weapon (`FUN_1401d99c`, caller RVA `0x1dd4e`) + spawn init
+(`FUN_14021bc8`, caller RVA `0x221c0`) are consumed after each person's
+loot: `coin(0.5)` over the person-script `weapon` block (file order,
+`min+offset <= level <= max+offset`, wrap) then one `range(3000,10000)`.
+Retail corpus: 782/782 person scripts have a weapon block with >=1 eligible
+row. Implemented in `game::consume_person_init_rng`; live l1_1 gate is
+`items 22/22, mods 14/14` (0 mismatched).

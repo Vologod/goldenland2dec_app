@@ -56,6 +56,8 @@
 
 **P4d (hero equipment/render) — accepted:** HAD/IAD/SEQ-парсеры, engine-композитор (`FUN_0042279C`), `HeroVisual`, hero-рендер в `LevelScreen`/`glview`/`glgame`; golden slot0 idle совпал, shadow draw-origin по live. Экипировка из save — P5a. Детали — `docs/research/p4d-hero-wear.md`, `STATUS.md`.
 
+**Phase 1b2b2f (per-person pre-loot RNG) — done 2026-11-11:** общий NPC RNG-поток теперь включает weapon + spawn init в SEF-порядке после loot каждой персоны (`game::consume_person_init_rng`): `FUN_1401d99c` (`coin(0.5)` по `weapon`-блоку) и `FUN_14021bc8` (`range(3000,10000)`); live `l1_1` oracle 0/N (items 22/22, mods 14/14), D-064.
+
 **A8 parity (cell masks) — implemented:** engine-модель `ApplyCellMask`; `Level::MaskCellGrid` из LVL (`flags=relief|sound<<16`, `mask=LvlTile.mask`), `select_cell_mask` (сканы вправо/вниз), `LevelScreen` выбирает mask id в строке персонажа и рисует клетки кадра с этим id; baseline удалён. `ctest` 17/17; manual gate PASSED 2026-11-04. Детали — `docs/specs/2026-11-03-a8-mask-parity-design.md`, research `a8-mask-parity.md`.
 
 **Parity matrix & decomp reference (Phase 0) — done 2026-11-05:**
