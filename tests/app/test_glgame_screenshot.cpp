@@ -2099,14 +2099,17 @@ TEST_CASE("glgame NPCs move between t=0 and t=20s") {
     const fs::path later_plain_png = temp.path / "move_later_plain.png";
 
     std::string log;
+    std::string later_log;
     const int first_code = run_glgame_capture(
         screenshot_arguments(game_dir, config, first_png,
                              {"--level", "l1_1", "--sim-ms", "0"}),
         log);
     // Loot now consumes the shared RNG before movement (research §15.3); at
     // seed 1 the 20 s window keeps the unchanged >1000 presence-diff threshold.
-    const int later_code = run_glgame(screenshot_arguments(
-        game_dir, config, later_png, {"--level", "l1_1", "--sim-ms", "20000"}));
+    const int later_code = run_glgame_capture(
+        screenshot_arguments(game_dir, config, later_png,
+                             {"--level", "l1_1", "--sim-ms", "20000"}),
+        later_log);
     const int first_plain_code = run_glgame(screenshot_arguments(
         game_dir, config, first_plain_png,
         {"--level", "l1_1", "--sim-ms", "0", "--no-persons"}));
@@ -2165,9 +2168,12 @@ TEST_CASE("glgame NPCs move between t=0 and t=20s") {
             }
         }
     }
+    CAPTURE(later_log);
     CAPTURE(differing);
-    // 16 ms host frames through the 28 ms gate: floor(20000 / 32) = 625
-    // simulation ticks (19968 ms), enough sprite displacement for >1000 px.
+    // 16 ms host frames through the 28 ms gate: ticks at 32..20000 ms,
+    // 625 ticks, final latch 20000 ms (not 19968).
+    CHECK(later_log.find("headless sim: frames=1250 ticks=625 simulation_ms=20000") !=
+          std::string::npos);
     CHECK(differing > 1000);
 }
 

@@ -470,6 +470,15 @@ Result<LevelScreen> LevelScreen::load(SDL_Renderer* renderer, gl::assets::GameVf
     return screen;
 }
 
+void LevelScreen::advance_simulation(std::uint64_t animation_ms) {
+    if (animation_ms > last_simulation_ms_) {
+        simulation_.advance(
+            static_cast<double>(animation_ms - last_simulation_ms_) / 1000.0);
+        last_simulation_ms_ = animation_ms;
+    }
+    simulated_ms_ = simulation_.time_ms();
+}
+
 void LevelScreen::render(SDL_Renderer* renderer, const LevelScreenOptions& options,
                          std::uint64_t elapsed_ms) {
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
@@ -493,13 +502,10 @@ void LevelScreen::render(SDL_Renderer* renderer, const LevelScreenOptions& optio
     }
 
     if (options.draw_persons && !persons_.empty()) {
-        const std::uint64_t target = elapsed_ms;
-        if (target > last_simulation_ms_) {
-            simulation_.advance(static_cast<double>(target - last_simulation_ms_) / 1000.0);
-            last_simulation_ms_ = target;
-        }
+        advance_simulation(elapsed_ms);
+    } else {
+        simulated_ms_ = simulation_.time_ms();
     }
-    simulated_ms_ = simulation_.time_ms();
 
     const bool draw_hero = options.draw_hero;
     if (draw_hero) ensure_hero();

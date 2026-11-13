@@ -352,20 +352,26 @@ int save_screenshot(SDL_Renderer* renderer, const std::filesystem::path& path, i
     std::vector<std::uint8_t> pixels(static_cast<std::size_t>(pixel_count) * 4);
 
     if (sim_ms_set) {
+        std::uint64_t frames = 0;
+        std::uint64_t ticks = 0;
         std::uint64_t elapsed_ms = 0;
         std::uint64_t last_tick_ms = 0;
         std::uint64_t simulation_ms = 0;
-        bool rendered = false;
         while (elapsed_ms < sim_ms) {
             elapsed_ms = std::min(elapsed_ms + kHeadlessFrameMs, sim_ms);
+            ++frames;
             if (elapsed_ms - last_tick_ms >= gl::core::kTickIntervalMs) {
                 last_tick_ms = elapsed_ms;
                 simulation_ms = elapsed_ms;
+                ++ticks;
             }
-            screen.render(renderer, screen_options, simulation_ms);
-            rendered = true;
+            screen.advance_simulation(simulation_ms);
         }
-        if (!rendered) screen.render(renderer, screen_options, 0);
+        screen.render(renderer, screen_options, simulation_ms);
+        gl::log(gl::LogLevel::info,
+                "glview sim: frames=" + std::to_string(frames) +
+                    " ticks=" + std::to_string(ticks) +
+                    " simulation_ms=" + std::to_string(simulation_ms));
     } else {
         for (int frame = 0; frame < frames; ++frame) {
             const std::uint64_t elapsed_ms = static_cast<std::uint64_t>(frame + 1) * 16;

@@ -99,6 +99,7 @@ public:
 
     void render(SDL_Renderer* renderer, const LevelScreenOptions& options,
                 std::uint64_t elapsed_ms);
+    void advance_simulation(std::uint64_t animation_ms);
 
     void pan(float world_dx, float world_dy);
     void pan_input(int x_axis, int y_axis, float delta_seconds);

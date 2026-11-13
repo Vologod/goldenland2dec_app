@@ -1597,18 +1597,25 @@ class Game {
     }
 
     void run_headless_simulation(std::uint64_t sim_ms) {
+        const std::uint64_t start_tick = server_.tick_index();
+        std::uint64_t frames = 0;
         std::uint64_t elapsed_ms = 0;
         std::uint64_t simulation_ms = client_.snapshot().simulation_time_ms;
         while (elapsed_ms + kHeadlessFrameMs <= sim_ms) {
             elapsed_ms += kHeadlessFrameMs;
+            ++frames;
             server_.tick(static_cast<double>(kHeadlessFrameMs) / 1000.0);
             client_.on_snapshot(server_.snapshot());
             process_server_events();
             simulation_ms = client_.snapshot().simulation_time_ms;
-            render(elapsed_ms, simulation_ms);
+            if (level_) level_->advance_simulation(simulation_ms);
             advance_hero_after_render(simulation_ms);
         }
-        if (elapsed_ms != sim_ms) render(sim_ms, simulation_ms);
+        render(sim_ms, simulation_ms);
+        gl::log(gl::LogLevel::info,
+                "headless sim: frames=" + std::to_string(frames) +
+                    " ticks=" + std::to_string(server_.tick_index() - start_tick) +
+                    " simulation_ms=" + std::to_string(simulation_ms));
     }
 
     void run_headless_click() {

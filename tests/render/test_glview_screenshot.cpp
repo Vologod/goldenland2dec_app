@@ -314,10 +314,11 @@ TEST_CASE("glview NPCs move between t=0 and t=10s") {
     const fs::path later_plain_png = dir.path / "move_later_plain.png";
 
     std::string log;
+    std::string later_log;
     const int first_code =
         run_glview_capture(glview_arguments(game_dir, first_png, {"--sim-ms", "0"}), log);
-    const int later_code =
-        run_glview(glview_arguments(game_dir, later_png, {"--sim-ms", "10000"}));
+    const int later_code = run_glview_capture(
+        glview_arguments(game_dir, later_png, {"--sim-ms", "10000"}), later_log);
     const int first_plain_code = run_glview(glview_arguments(
         game_dir, first_plain_png, {"--sim-ms", "0", "--no-persons"}));
     const int later_plain_code = run_glview(glview_arguments(
@@ -374,9 +375,12 @@ TEST_CASE("glview NPCs move between t=0 and t=10s") {
             }
         }
     }
+    CAPTURE(later_log);
     CAPTURE(differing);
     // 16 ms host frames through the 28 ms gate: floor(10000 / 32) = 312
-    // simulation ticks (9984 ms), enough sprite displacement for >1000 px.
+    // ticks, final latch 9984 ms (sim_ms 10000 is 16 ms past the last latch).
+    CHECK(later_log.find("glview sim: frames=625 ticks=312 simulation_ms=9984") !=
+          std::string::npos);
     CHECK(differing > 1000);
 }
 
