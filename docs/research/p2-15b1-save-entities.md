@@ -28,7 +28,10 @@ py -3 "$env:TEMP\p2_15b1_scan.py"
 
 The scan script is kept in `%TEMP%` and is not committed. It writes the full
 per-save/per-section log to `%TEMP%\p2_15b1_scan.out.txt`; the tables below are
-taken from that output.
+taken from that output. Script SHA-256:
+`399FB2E603068EC4614C4CE8EBE8C85252BFD4A680FE1D1AAFC2C5B771826F78`
+(`14896` bytes); the durable oracle is the `P2-15b1a` real-data test over the
+28-save corpus, not this ephemeral script.
 
 ### Framing used
 
@@ -162,7 +165,8 @@ bytes (572 distinct). Tail entries per save: 2 (slot6) .. 213 (slot0).
 - Every tail section is a complete per-level snapshot with the same three-block
   shape; no section omits `BT_PNAME`, `BT_RGINF` or `BT_ENTS ` (2599/2599).
 - `BT_RGINF` is always 36 bytes (2599/2599), consistent with the P2-15a
-  `u32 + 0x20` description. Its field semantics remain unverified.
+  `u32 + 0x20` description; semantics resolved in §RGINF (`u32` latch + `0x20`
+  datetime).
 - `BT_ENTS ` always ends the snapshot and its size field is a byte length, not
   an entity count (declared size == remaining bytes 2599/2599).
 - `BT_PNAME` has no leading count and is a zero-terminated sequence of
@@ -297,10 +301,10 @@ follows creates each type-2 object with the factory and reads it through vtable
 - Type 4 `EF_MAGIC` is factory-supported but has no `+0`/`+4` implementation.
   The `BT_ENTS` writer's `(entity+0x14 & 0x3a) != 0` filter (36097) excludes it
   before dispatch because `4 & 0x3a == 0`; a manually forged type-4 record
-  would not consume a body either. Whether any shipped save contains type 4 is
-  `unverified` (writer cannot emit it). Exact next check: parse `BT_ENTS` type
-  sequences once Task 3 has per-type body lengths, or scan all 2599 sections
-  for a type 4 that is not inside a body.
+  would not consume a body either. **Resolved:** the Task 3 parse of all 2599
+  sections found type 4 = 0; only a forged save could contain one, and its
+  `ret 8` `+4` stub consumes a zero-length body (and the explicit type map
+  rejects it).
 - Type **1** is confirmed as the `BT_ENTS` terminator; any other value not in
   `{2,4,8,0x10,0x20}` hits the null-write fall-through at `0x1405c940` (the
   factory returns `eax = 0` for the unknown case and the unconditional
@@ -516,7 +520,8 @@ pname_eq_person 2599 pname_ne_person 0
   `BT_PNAME` names belong to person entities; the exact lookup is left to
   Task 4.
 - `BT_ENTS ` body length range 67..138,768 bytes (570 distinct), consistent with
-  at least one entity per section (minimum type-2 body alone is 552).
+  at least one entity per section: minimum record sizes (type word + minimum
+  body) are type 8 = 16, `0x20` = 32, `0x10` = 40, type 2 = 556.
 
 No BLOCKED condition occurred: every type encountered is sized by an explicit
 formula and all 2599 bodies consume exactly.
@@ -536,6 +541,11 @@ decompiled 36040-36042 writes the tag, a dword, then raw `0x20` from
 `0x14032e7c-0x14032e8b` is `mov -0x14(%ebp),%eax; pushl 0x26c0(%eax);
 call FUN_1400126c`, so the dword is `+0x26c0`, and `0x14032e90-0x14032ea2`
 then pushes `$0x20`, `leal 0x26a0(%eax),%edx`, and calls `FUN_1400127c`.
+
+Field-order evidence: the datetime comparator `FUN_1405b490` (decompiled
+62070-62114) compares the eight dwords in turn but skips weekday index 3 (weekday
+is derived, not compared), which fixes the year/month/day/weekday/hour/minute/
+second/millisecond order used above.
 
 Reader `FUN_140325fc` (RVA `0x325fc`, decompiled 35812-35846):
 
@@ -665,7 +675,8 @@ exposes `payload.tail[].name` but does not parse `BT_PNAME` or entity records.
 
 The original load is a two-function sequence.
 
-`FUN_1403210c` (RVA `0x3210c`, .sav loader, decompiled 35327-35694):
+`FUN_1403210c` (RVA `0x3210c`, .sav loader, decompiled 35523-35695; comment
+header 35521):
 
 1. Read `0x68` header bytes with `FUN_14001324` (35602), then the two `u32`
    inflate lengths at `0x68`/`0x6c` through `FUN_14001668` (35603); the
@@ -767,6 +778,11 @@ field; **unverified** = save semantics not resolved yet.
 | `BT_ENTS` slot install | `LevelSimulation.persons_` from `Level.persons` only | missing (no restore entry point) |
 | `BT_HERO` + attached list | `HeroStats`, `HeroInventory`, `HeroEquipment` (`parse_hero_stats`, `parse_hero_inventory`, `parse_hero_equipment`) | partial (stats/equipment available; attached list missing) |
 
+Next check for the `unverified` group (one pass): map each unverified person
+field against the SDB prototype copy at `decompiled.c:18020-18105` and the
+consumers named in §Restore flow, then confirm the direction 0..7 vs 8-dir
+encoding with a read-only live capture.
+
 Port loaders relevant to a future restore: `load_level`/`load_persons`
 (SEF+script+PAD) produce `Level.persons`; `LevelSimulation::create` copies that
 to movement states; `generate_npc_inventories` builds NPC items;
@@ -866,6 +882,10 @@ changing restore behavior. Acceptance:
 5. Real-data tests over the 28-save corpus; the spec's §6 acceptance is met.
 6. Out of scope: mapping parsed fields onto simulation state, item-field
    semantics, magic type 4.
+
+`BT_RGINF` and `BT_PNAME` are part of `P2-15b1a`; there is no separate
+`P2-15b1c` (the earlier plan's optional split is folded in, so the decomposition
+is self-contained).
 
 ### P2-15b1b — person restore
 

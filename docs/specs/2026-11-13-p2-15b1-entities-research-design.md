@@ -1,6 +1,6 @@
 # P2-15b1 — Save entities/persons restore research (design)
 
-Status: draft for approval (2026-11-13)
+Status: implemented (research complete 2026-11-13)
 Phase: P2-15b1 research (docs-only; first increment of full P2-15b)
 Layers: research only
 

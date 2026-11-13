@@ -35,9 +35,15 @@
   exact consume 2599/2599, PNAME count, RGINF 36 B, real 28-save tests);
   `P2-15b1b` — person restore (порядок SEF→RGINF→ENTS, name/tile/direction +
   containers, честный RGINF latch, unverified поля не заявляются; inventory
-  parity ждёт entity-record offset + container-map oracle).
+  parity ждёт entity-record offset + container-map oracle). `BT_RGINF`/
+  `BT_PNAME` входят в `P2-15b1a`; отдельного `P2-15b1c` нет.
 - **Out of scope:** `BT_DIARY`/`BT_HSTRY`/`BT_VARS` values/`BT_TRIBE`/
   `BT_SCRN`, save write (P2-15c), type-4 restore.
+- **Next:** начать `P2-15b1a` (production entity/`BT_RGINF`/`BT_PNAME` parser +
+  real-data tests) по spec/plan `P2-15b1`.
+- **Проверка:** `docs/research/p2-15b1-save-entities.md` §Verdict/decomposition
+  (acceptance `P2-15b1a`/`P2-15b1b`); durable oracle — real-data тесты `b1a`
+  на 28 save (2599/2599 exact consume).
 - **Статус:** `done` (research-only; реализация — отдельные spec/plan).
 
 ## P2-9a/b — 35 Hz tick implementation (done 2026-11-13)
