@@ -99,8 +99,9 @@ parser `specials.scr`, `SpecialEngine` R4–R10, production `glgame` wiring
 (DB + `mod_count` from ITM effects; `--no-specials` mode), analytic regression oracle
 `l1_1` 174/287/0, full `ctest` 19/19, D-060. Historical note: live NPC-mod oracle and live
 FPU-CW were mandatory acceptance gates; NPC-mod oracle закрыт 1b2b2f/D-064 (`items 22/22, mods 14/14`); live price CW Stage 4 закрыт 2026-11-12/D-065 (`price=0x007F`, FPU-гейт PASS).
-Status: `done` (live gates closed). Дальше — save payload (`P2-15`),
-затем 35 Гц.
+Status: `done` (live gates closed). P2-15b save-load first increment done
+(2026-11-12, D-066); P2-9 35 Hz research done (2026-11-13; 28 ms gate,
+implementation pending). Дальше — P2-9a (core tick), затем P2-9b.
 
 ## Архитектура (кратко)
 

@@ -17,7 +17,7 @@
   no accumulator/catch-up, no max-frame clamp; QPC-derived absolute
   integer-ms clock (`0x46d800`/`0x408ff0`) latched в `DAT_14088e1c`;
   consumers table (movement/pause/spawn/script/AI) — ms deadlines; AI
-  think/see per-invocation только если подтвердится per-tick связь U-C5,
+  think/see — per invocation; per-tick только если подтвердится U-C5,
   restock cadence unresolved (U-C2); port inventory P1–P28 и impact matrix A–D;
   verdict/decomposition P2-9a/b (+ conditional P2-9c).
 - **Доказано:** эффективный период frame-quantized:
