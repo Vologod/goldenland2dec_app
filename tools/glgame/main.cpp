@@ -69,6 +69,7 @@ constexpr int kDefaultWidth = 1280;
 constexpr int kDefaultHeight = 720;
 constexpr int kMaxDimension = 16384;
 constexpr std::uint64_t kMaxSimMs = 86'400'000;
+constexpr std::uint64_t kHeadlessFrameMs = 16;
 constexpr std::string_view kNewGameLevel = "l1_1";
 constexpr std::string_view kTestDialogScript = "scripts/dialogs/demon.d1.age.cs";
 constexpr std::string_view kDialogGlobals = "scripts/dialogs_special/zlato_vars.scr";
@@ -766,8 +767,10 @@ class Game {
             run_headless_click();
             apply_cli_dialog_answer();
             render(0, 0);
+        } else if (options_.sim_ms > 0) {
+            run_headless_simulation(options_.sim_ms);
         } else {
-            render(0, options_.sim_ms);
+            render(0, 0);
         }
         if (SDL_RenderReadPixels(renderer, nullptr, SDL_PIXELFORMAT_RGBA32, pixels.data(),
                                  pitch) != 0) {
@@ -797,7 +800,6 @@ class Game {
             const std::uint64_t now = SDL_GetTicks64();
             std::uint64_t delta_ms = now - previous;
             previous = now;
-            if (delta_ms > 250) delta_ms = 250;
 
             const float delta_seconds = static_cast<float>(delta_ms) / 1000.0f;
             SDL_Event event;
@@ -1594,14 +1596,33 @@ class Game {
         maybe_open_pending_dialog();
     }
 
+    void run_headless_simulation(std::uint64_t sim_ms) {
+        std::uint64_t elapsed_ms = 0;
+        std::uint64_t simulation_ms = client_.snapshot().simulation_time_ms;
+        while (elapsed_ms + kHeadlessFrameMs <= sim_ms) {
+            elapsed_ms += kHeadlessFrameMs;
+            server_.tick(static_cast<double>(kHeadlessFrameMs) / 1000.0);
+            client_.on_snapshot(server_.snapshot());
+            process_server_events();
+            simulation_ms = client_.snapshot().simulation_time_ms;
+            render(elapsed_ms, simulation_ms);
+            advance_hero_after_render(simulation_ms);
+        }
+        if (elapsed_ms != sim_ms) render(sim_ms, simulation_ms);
+    }
+
     void run_headless_click() {
         if (!level_ || dialog_ || trade_overlay_.visible()) return;
-        constexpr double kStepSeconds = 0.05;
-        const double limit_seconds = options_.sim_ms > 0
-                                         ? static_cast<double>(options_.sim_ms) / 1000.0
-                                         : 60.0;
-        for (double elapsed = 0.0; elapsed < limit_seconds; elapsed += kStepSeconds) {
-            advance_scene(kStepSeconds);
+        const std::uint64_t limit_ms =
+            options_.sim_ms > 0 ? options_.sim_ms : 60'000;
+        std::uint64_t elapsed_ms = 0;
+        std::uint64_t last_tick_ms = 0;
+        while (elapsed_ms < limit_ms) {
+            elapsed_ms = std::min(elapsed_ms + kHeadlessFrameMs, limit_ms);
+            if (elapsed_ms - last_tick_ms < gl::core::kTickIntervalMs) continue;
+            const std::uint64_t delta_ms = elapsed_ms - last_tick_ms;
+            last_tick_ms = elapsed_ms;
+            advance_scene(static_cast<double>(delta_ms) / 1000.0);
             if (dialog_ || trade_overlay_.visible() || !level_->hero().hero().has_goal) break;
         }
     }

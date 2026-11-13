@@ -375,6 +375,8 @@ TEST_CASE("glview NPCs move between t=0 and t=10s") {
         }
     }
     CAPTURE(differing);
+    // 16 ms host frames through the 28 ms gate: floor(10000 / 32) = 312
+    // simulation ticks (9984 ms), enough sprite displacement for >1000 px.
     CHECK(differing > 1000);
 }
 

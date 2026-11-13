@@ -1,6 +1,7 @@
 #include <gl/app/level_screen.hpp>
 #include <gl/assets/log.hpp>
 #include <gl/assets/vfs.hpp>
+#include <gl/core/server.hpp>
 #include <gl/platform/sdl_context.hpp>
 
 #include <SDL.h>
@@ -329,6 +330,7 @@ void report_error(std::string_view context, const gl::Error& error) {
 }
 
 constexpr float kZoomStep = 1.1f;
+constexpr std::uint64_t kHeadlessFrameMs = 16;
 
 int save_screenshot(SDL_Renderer* renderer, const std::filesystem::path& path, int frames,
                     std::uint64_t sim_ms, bool sim_ms_set, gl::app::LevelScreen& screen,
@@ -349,19 +351,35 @@ int save_screenshot(SDL_Renderer* renderer, const std::filesystem::path& path, i
     const int pitch = width * 4;
     std::vector<std::uint8_t> pixels(static_cast<std::size_t>(pixel_count) * 4);
 
-    for (int frame = 0; frame < frames; ++frame) {
-        const std::uint64_t elapsed_ms =
-            sim_ms_set ? sim_ms : static_cast<std::uint64_t>(frame + 1) * 16;
-        screen.render(renderer, screen_options, elapsed_ms);
-        if (frame + 1 == frames) {
-            if (SDL_RenderReadPixels(renderer, nullptr, SDL_PIXELFORMAT_RGBA32, pixels.data(),
-                                     pitch) != 0) {
-                std::fprintf(stderr, "glview: SDL_RenderReadPixels failed: %s\n", SDL_GetError());
-                return 2;
+    if (sim_ms_set) {
+        std::uint64_t elapsed_ms = 0;
+        std::uint64_t last_tick_ms = 0;
+        std::uint64_t simulation_ms = 0;
+        bool rendered = false;
+        while (elapsed_ms < sim_ms) {
+            elapsed_ms = std::min(elapsed_ms + kHeadlessFrameMs, sim_ms);
+            if (elapsed_ms - last_tick_ms >= gl::core::kTickIntervalMs) {
+                last_tick_ms = elapsed_ms;
+                simulation_ms = elapsed_ms;
             }
+            screen.render(renderer, screen_options, simulation_ms);
+            rendered = true;
         }
-        SDL_RenderPresent(renderer);
+        if (!rendered) screen.render(renderer, screen_options, 0);
+    } else {
+        for (int frame = 0; frame < frames; ++frame) {
+            const std::uint64_t elapsed_ms = static_cast<std::uint64_t>(frame + 1) * 16;
+            screen.render(renderer, screen_options, elapsed_ms);
+            if (frame + 1 != frames) SDL_RenderPresent(renderer);
+        }
     }
+
+    if (SDL_RenderReadPixels(renderer, nullptr, SDL_PIXELFORMAT_RGBA32, pixels.data(),
+                             pitch) != 0) {
+        std::fprintf(stderr, "glview: SDL_RenderReadPixels failed: %s\n", SDL_GetError());
+        return 2;
+    }
+    SDL_RenderPresent(renderer);
 
     if (stbi_write_png(path.string().c_str(), width, height, 4, pixels.data(), pitch) == 0) {
         std::fprintf(stderr, "glview: cannot write screenshot: %s\n", path.string().c_str());

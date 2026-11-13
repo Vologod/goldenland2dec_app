@@ -2166,6 +2166,8 @@ TEST_CASE("glgame NPCs move between t=0 and t=20s") {
         }
     }
     CAPTURE(differing);
+    // 16 ms host frames through the 28 ms gate: floor(20000 / 32) = 625
+    // simulation ticks (19968 ms), enough sprite displacement for >1000 px.
     CHECK(differing > 1000);
 }
 
