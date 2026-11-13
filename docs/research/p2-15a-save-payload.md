@@ -1145,8 +1145,16 @@ line/corpus) and the exact next check; none is closed by a live diff (see
 - **Checked:** `FUN_1405c83c` (server RVA `0x5c83c`, 409 bytes, 7 callers);
   reader entity loop 35848-35914 (type `u32`, then `FUN_1405c83c(type)` and a
   vtable `+4` read); slot0 tail has per-level `BT_ENTS` sections.
-- **Next:** decompile the entity factory `FUN_1405c83c` and each class's
-  vtable `+0`/`+4`; diff entity-type sequences across the 28 saves.
+- **Resolution (P2-15b1, `p2-15b1-save-entities.md`):** `type 1` is the
+  `BT_ENTS` terminator, not a class; factory map is `2=EF_PERSON`,
+  `8=EF_INVCONTAINER`, `16=EF_TRIGGER`, `32=EF_DOOR`; type `4=EF_MAGIC` is
+  never serialized (`4 & 0x3a == 0` writer filter) and has no-op `+0`/`+4`
+  stubs. Reader formulas size every type; 2599/2599 tail sections parse exactly
+  to the terminator with 0 consumed-byte mismatches; `BT_PNAME` count equals the
+  type-2 count 2599/2599. Research verdict `scoped`: parser (`P2-15b1a`) and
+  person restore (`P2-15b1b`) still need implementation; per-field restore
+  semantics remain `unverified`.
+- **Next:** implement `P2-15b1a` parser, then `P2-15b1b` person restore.
 - **Impact:** high for P2-15b dynamic entity population.
 
 ### OQ-13 SEF `person.tribe` name → numeric `BT_TRIBE` id

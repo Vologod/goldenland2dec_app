@@ -2,15 +2,43 @@
 
 Обновлено: 2026-11-13
 
-## P2-15b1 — Save entities/persons research (in progress 2026-11-13)
+## P2-15b1 — Save entities/persons research (done 2026-11-13)
 
 - **Задача:** BT_ENTS class map/body layout, BT_RGINF/BT_PNAME, restore
   persons; docs-only.
 - **Spec:** `docs/specs/2026-11-13-p2-15b1-entities-research-design.md`.
 - **Plan:** `docs/plans/2026-11-13-p2-15b1-entities-research.md`.
-- **Критерии:** type map 28/28; body size/layout per type; restore mapping;
-  verdict/декомпозиция.
-- **Статус:** `in progress`.
+- **Результат (research `p2-15b1-save-entities.md`, verdict `scoped`):**
+  - Типы `BT_ENTS`: `{2: 14507, 8: 354, 16: 12090, 32: 2591}`, terminator
+    `type 1`; type 4 (`4 & 0x3a == 0`) никогда не сериализуется, `+0`/`+4` —
+    no-op stubs. Class map: `2=EF_PERSON`, `8=EF_INVCONTAINER`,
+    `16=EF_TRIGGER`, `32=EF_DOOR`; фабрика `FUN_1405c83c`, readers
+    `FUN_1401e758`/`0x24928`/`FUN_140233d4`/`FUN_140242f4`.
+  - Body sizes из readers (self-delimiting): type 2 = `540 + sum(n) + M1+M2+M3 +
+    0x14*c`; type 8 = `8 + M`; type 16 = `32 + sum(n) + M`; type 32 =
+    `28 + sum(n)`; `M = 4` при нулевом флаге, иначе `4 + 4 + sum(0xc0+4+0x14*m)`.
+  - Parse 2599/2599 секций (28/28 save): terminator последний,
+    consumed == declared, 0 mismatches. `BT_PNAME` count == type-2 count
+    2599/2599.
+  - `BT_RGINF` = `u32` latch + `0x20` game datetime (8×u32); latch
+    `+0x26c0`, datetime `+0x26a0`; решает только регенерацию NPC/trigger
+    инвентарей (`FUN_1404b1c0`/trigger-путь), не поля entity.
+  - Restore-порядок: dictionary → `BT_INFO`/clock → SEF (entrances/cell groups)
+    → `BT_RGINF` → `BT_ENTS` (slot alloc `FUN_14003718`, не `FUN_140368d4`) →
+    `BT_VARS` → `BT_TRIBE` → `BT_DIARY` → `BT_HERO` (+attached) → `BT_HSTRY`.
+- **Unknowns:** семантика ~15+ полей person-body (`+0x40`/`+0x44`, `+0x5f8`/
+  `+0x5fc`, `+0x654`/`+0x658`, `+0x151c`/`+0x1520`/`+0x1524`, `+0x2668`/
+  `+0x266c`, `+0x6cc`, `+0xff0`, `+0x1630`, `FUN_1401d8bc` tail); item-record
+  `0xC0` offsets доказаны только для `BT_HERO`; producer persisted RGINF
+  latch `1`; origin-level prefix `BT_PNAME`.
+- **Декомпозиция реализации:** `P2-15b1a` — parser+type map (приёмка:
+  exact consume 2599/2599, PNAME count, RGINF 36 B, real 28-save tests);
+  `P2-15b1b` — person restore (порядок SEF→RGINF→ENTS, name/tile/direction +
+  containers, честный RGINF latch, unverified поля не заявляются; inventory
+  parity ждёт entity-record offset + container-map oracle).
+- **Out of scope:** `BT_DIARY`/`BT_HSTRY`/`BT_VARS` values/`BT_TRIBE`/
+  `BT_SCRN`, save write (P2-15c), type-4 restore.
+- **Статус:** `done` (research-only; реализация — отдельные spec/plan).
 
 ## P2-9a/b — 35 Hz tick implementation (done 2026-11-13)
 
