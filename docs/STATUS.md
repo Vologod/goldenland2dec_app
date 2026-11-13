@@ -2,6 +2,16 @@
 
 Обновлено: 2026-11-13
 
+## P2-15b1 — Save entities/persons research (in progress 2026-11-13)
+
+- **Задача:** BT_ENTS class map/body layout, BT_RGINF/BT_PNAME, restore
+  persons; docs-only.
+- **Spec:** `docs/specs/2026-11-13-p2-15b1-entities-research-design.md`.
+- **Plan:** `docs/plans/2026-11-13-p2-15b1-entities-research.md`.
+- **Критерии:** type map 28/28; body size/layout per type; restore mapping;
+  verdict/декомпозиция.
+- **Статус:** `in progress`.
+
 ## P2-9a/b — 35 Hz tick implementation (done 2026-11-13)
 
 - **Задача:** ServerCore 28 ms gate без catch-up/clamp; LevelSimulation один
