@@ -2,6 +2,17 @@
 
 Обновлено: 2026-11-12
 
+## P2-9 — 35 Hz tick research (in progress 2026-11-12)
+
+- **Задача:** доказать точную сетку тика оригинала (`sv_fps=35`),
+  потребителей шага и scope перевода порта с 60 Гц; docs-only.
+- **Spec:** `docs/specs/2026-11-12-p2-9-35hz-research-design.md`.
+- **Plan:** `docs/plans/2026-11-12-p2-9-35hz-research.md`.
+- **Критерии:** период доказан (RVA/lines или live); полный список port-мест
+  60 Гц и тестов; impact matrix; verdict/декомпозиция.
+- **Команды:** Ghidra/decompiled xrefs; grep 60/1.0/60; encoding check.
+- **Статус:** `in progress`.
+
 ## P2-15b — Save load, first increment (done 2026-11-12)
 
 - **Задача:** декодировать `.sav` payload, загрузить уровень по `BT_INFO` +
