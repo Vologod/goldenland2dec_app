@@ -352,14 +352,14 @@ int save_screenshot(SDL_Renderer* renderer, const std::filesystem::path& path, i
     std::vector<std::uint8_t> pixels(static_cast<std::size_t>(pixel_count) * 4);
 
     if (sim_ms_set) {
-        std::uint64_t frames = 0;
+        std::uint64_t host_frames = 0;
         std::uint64_t ticks = 0;
         std::uint64_t elapsed_ms = 0;
         std::uint64_t last_tick_ms = 0;
         std::uint64_t simulation_ms = 0;
         while (elapsed_ms < sim_ms) {
             elapsed_ms = std::min(elapsed_ms + kHeadlessFrameMs, sim_ms);
-            ++frames;
+            ++host_frames;
             if (elapsed_ms - last_tick_ms >= gl::core::kTickIntervalMs) {
                 last_tick_ms = elapsed_ms;
                 simulation_ms = elapsed_ms;
@@ -367,9 +367,10 @@ int save_screenshot(SDL_Renderer* renderer, const std::filesystem::path& path, i
             }
             screen.advance_simulation(simulation_ms);
         }
+        // Headless animation_ms is the last tick latch, not elapsed wall time (10 s -> 9984 ms).
         screen.render(renderer, screen_options, simulation_ms);
         gl::log(gl::LogLevel::info,
-                "glview sim: frames=" + std::to_string(frames) +
+                "glview sim: frames=" + std::to_string(host_frames) +
                     " ticks=" + std::to_string(ticks) +
                     " simulation_ms=" + std::to_string(simulation_ms));
     } else {

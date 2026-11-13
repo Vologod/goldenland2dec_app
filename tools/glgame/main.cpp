@@ -1611,6 +1611,7 @@ class Game {
             if (level_) level_->advance_simulation(simulation_ms);
             advance_hero_after_render(simulation_ms);
         }
+        // Headless animation_ms is the last tick latch, not sim_ms (20 s -> 20000 ms).
         render(sim_ms, simulation_ms);
         gl::log(gl::LogLevel::info,
                 "headless sim: frames=" + std::to_string(frames) +

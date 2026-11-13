@@ -73,18 +73,21 @@ void ServerCore::tick(double dt) {
 
     if (!std::isfinite(dt) || dt <= 0.0)
         dt = 0.0;
-    clock_ms_ += static_cast<std::uint64_t>(std::llround(dt * 1000.0));
+    const auto advance_ms = static_cast<std::uint64_t>(std::llround(dt * 1000.0));
+    clock_ms_ += advance_ms;
 
     if (paused_) {
-        last_ms_ = clock_ms_;
+        last_ms_ = simulation_clock_ms_;
         return;
     }
 
+    simulation_clock_ms_ += advance_ms;
+
     const std::uint32_t interval = tick_interval_ms(kDefaultSvFps);
-    if (interval == 0 || clock_ms_ - last_ms_ >= interval) {
-        last_ms_ = clock_ms_;
+    if (interval == 0 || simulation_clock_ms_ - last_ms_ >= interval) {
+        last_ms_ = simulation_clock_ms_;
         ++tick_index_;
-        simulation_time_ms_ = clock_ms_;
+        simulation_time_ms_ = simulation_clock_ms_;
     }
 }
 

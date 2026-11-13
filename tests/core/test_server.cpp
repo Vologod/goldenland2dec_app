@@ -381,7 +381,7 @@ TEST_CASE("ServerCore: negative and non-finite dt do not advance the clock") {
     CHECK(server.clock_ms() == 250);
 }
 
-TEST_CASE("ServerCore: pause advances the clock without ticking or backlog") {
+TEST_CASE("ServerCore: pause advances the wall clock without advancing simulation time") {
     ServerCore server;
 
     server.submit("gv_pause 1");
@@ -405,8 +405,36 @@ TEST_CASE("ServerCore: pause advances the clock without ticking or backlog") {
 
     server.tick(0.016);
     CHECK(server.tick_index() == 1);
-    CHECK(server.simulation_time_ms() == 64);
+    CHECK(server.simulation_time_ms() == 32);
     CHECK(server.clock_ms() == 64);
+}
+
+TEST_CASE("ServerCore: paused wall time does not accumulate into the simulation clock") {
+    ServerCore server;
+
+    server.tick(0.250);
+    REQUIRE(server.tick_index() == 1);
+    REQUIRE(server.simulation_time_ms() == 250);
+
+    server.submit("gv_pause 1");
+    for (int frame = 0; frame < 10; ++frame)
+        server.tick(0.1);
+
+    CHECK(server.clock_ms() == 1250);
+    CHECK(server.simulation_time_ms() == 250);
+    CHECK(server.tick_index() == 1);
+
+    server.submit("gv_pause 0");
+    server.tick(0.016);
+    CHECK_FALSE(server.paused());
+    CHECK(server.tick_index() == 1);
+    CHECK(server.simulation_time_ms() == 250);
+
+    server.tick(0.016);
+    CHECK(server.tick_index() == 2);
+    CHECK(server.simulation_time_ms() == 282);
+    CHECK(server.simulation_time_ms() - 250 == 32);
+    CHECK(server.clock_ms() == 1282);
 }
 
 TEST_CASE("ServerCore: commands apply before the gate without a tick") {

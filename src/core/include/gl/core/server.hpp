@@ -61,6 +61,7 @@ class ServerCore {
     bool paused_ = false;
     bool free_camera_ = false;
     std::uint64_t clock_ms_ = 0;
+    std::uint64_t simulation_clock_ms_ = 0;
     std::uint64_t last_ms_ = 0;
     std::uint64_t tick_index_ = 0;
     std::uint64_t simulation_time_ms_ = 0;
