@@ -260,7 +260,7 @@ ID: `P4a-*`, `P4b-*`, `P4b2-*` — прежние A/B/C из аудита (пе�
 
 | ID | Подсистема | Пункт | Реализация | Evidence | Статус | Пробел/задача | Источник |
 |---|---|---|---|---|---|---|---|
-| P4b2-1 | grid | word `relief|sound<<16` | `walk_grid.cpp:17-28` | live `FUN_00426234` | verified | — | audit p4 |
+| P4b2-1 | grid | word `relief\|sound<<16` | `walk_grid.cpp:17-28` | live `FUN_00426234` | verified | — | audit p4 |
 | P4b2-2 | grid | column-major chunks | `lvl.cpp:224-243` | live reconstruction | verified | — | audit p4 |
 | P4b2-3 | grid | sub-tile bit | `walk_grid.cpp:21-29` | live + unit | verified | — | audit p4 |
 | P4b2-4 | grid | `l1_1` 18028/51520 | `walk_grid.cpp:10-33` | 0/51520 live | verified | — | audit p4 |

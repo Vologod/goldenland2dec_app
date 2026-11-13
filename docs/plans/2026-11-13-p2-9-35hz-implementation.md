@@ -2,6 +2,8 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+> **Completion (2026-11-13):** Tasks 0–4 complete. The final-review fix wave excluded paused wall time via a separate simulation clock (D-068) and recorded residuals U-C1/U-C4; full `ctest` green with `GL_GAME_DIR`.
+
 **Goal:** Перевести `ServerCore` и `LevelSimulation` на оригинальную модель: 28 ms gate, один тик за host-кадр, один шаг симуляции на тик; обновить оракулы.
 
 **Architecture:** `core::ServerCore` — integer-ms clock + 28 ms gate без catch-up/clamp; `game::LevelSimulation::advance` — ровно один шаг с фактическим delta; `glgame`/`glview` headless — declared 16 ms frame schedule; все ожидания пересчитываются аналитически.

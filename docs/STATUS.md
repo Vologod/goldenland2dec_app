@@ -9,14 +9,16 @@
 - **Spec:** `docs/specs/2026-11-13-p2-9-35hz-implementation-design.md` —
   `implemented (2026-11-13)`.
 - **Plan:** `docs/plans/2026-11-13-p2-9-35hz-implementation.md`.
-- **Сделано (Tasks 1–3, D-068):** `ServerCore` — integer-ms clock
-  (`clock_ms_`), `kDefaultSvFps=35`, `kDefaultSvGameSpeed=0`,
+- **Сделано (Tasks 1–3, D-068):** `ServerCore` — integer-ms wall clock
+  (`clock_ms_`) + отдельный simulation clock (`simulation_clock_ms_`),
+  `kDefaultSvFps=35`, `kDefaultSvGameSpeed=0`,
   `kTickIntervalMs=28`, `kNominalTickHz=35`, `tick_interval_ms()`
   (`35→28`, `0/<0/>1000→0` gate skipped, `1000→1`); gate
-  `clock_ms_-last_ms_>=28`, ровно один тик за `tick(dt)`,
-  `simulation_time_ms` = latch clock; удалены accumulator/`kFixedDt`/
-  `kMaxFrameDt`/`kMaxStepsPerTick`; pause «no backlog»
-  (`last_ms_=clock_ms_`). `LevelSimulation::advance` — ровно один шаг,
+  `simulation_clock_ms_-last_ms_>=28`, ровно один тик за `tick(dt)`,
+  `simulation_time_ms` = latch simulation clock; paused-кадры двигают только
+  wall `clock_ms_` (`simulation_clock_ms_` заморожен), поэтому паузное wall-время
+  не попадает в тики и resume delta = только новый кадр; удалены accumulator/
+  `kFixedDt`/`kMaxFrameDt`/`kMaxStepsPerTick`. `LevelSimulation::advance` — ровно один шаг,
   `time_ms_ += llround(dt*1000)`, движение `speed*delta_ms/1000`; удалены
   `kFixedStep`/accumulator/`time_ms_exact_`; STAY_ROTATE turn delay =
   `max(1, ((go_delay_ms-17)/3)*2)` (C2); `0.8` movement factor остаётся
@@ -28,12 +30,18 @@
 - **Проверка (2026-11-13, `GL_GAME_DIR=I:\Games\Златогорье-2`):**
   `cmake --build build` exit 0; полный
   `ctest --test-dir build --output-on-failure` — **19/19 passed**,
-  `Total Test time (real) = 1296.70 sec`, exit 0.
+  `Total Test time (real) = 1468.89 sec`, exit 0. Fix-wave focused:
+  `gl_core_tests` 70/70 (pause-регрессия: 1000 ms паузы -> +32 ms после
+  resume), `gl_game_tests` 1/1, `glgame_screenshot_tests` `*save*` 9/9 и
+  `*move*` 1/1, `glview_screenshot_tests` `*move*`/`*animation*` 5/5.
 - **Остаточные ограничения:** U1 — host frame time/эффективный период
   (`F*ceil(28/F)` при `F<28`, `F` при `F>=28`) не измерены; pause/gate
-  interaction — port choice (no backlog), оригинальная pause-семантика
-  unverified (OQ-T4-3); movement `0.8` vs additive `-17` (U-C1) не
-  менялся; config/console plumbing `sv_fps`/`sv_game_speed`/`gv_anim_speed`
+  interaction — paused wall time excluded (port choice), оригинальная
+  pause-семантика unverified (OQ-T4-3); U-C4 — per-frame animation
+  catch-up abstraction (одно animation-обновление на выполненный тик);
+  movement `0.8` vs additive `-17` (U-C1) не менялся; STAY_ROTATE turn
+  delay `max(1, ((go_delay_ms-17)/3)*2)` с 1 ms floor при отсутствии `_go`
+  данных; config/console plumbing `sv_fps`/`sv_game_speed`/`gv_anim_speed`
   отсутствует (fixed defaults); `sv_fps != 35` (U5) не покрыт; AI/restock
   per-tick cadence (U-C5/U-C2) — conditional. Parity P2-9 остаётся
   `partial` (gate implemented/verified, но U1/pause не закрыты).
@@ -1846,8 +1854,9 @@
   к spawn через существующий LOS/A*/occupancy, проверка — по тайлам. Для теста
   смещения добавлен `LevelSimulation::place_person`. `STAY_ROTATE` не двигается,
   меняет направление из `rng_.range(10,25)` и ставит паузу **500 мс**
-  (`kRotatePauseMs`); длительность действия/анимация `SET_DIRECTION` в
-  оригинале не извлечена — 500 мс это ограничитель порта. Код 26 от
+  (`kRotatePauseMs`; историческое значение, **superseded by D-068**: turn
+  delay = `max(1, ((go_delay_ms-17)/3)*2)`); длительность действия/анимация
+  `SET_DIRECTION` в оригинале не извлечена. Код 26 от
   `range` (`max+1`, A1) ограничивается до 25.
 - Real `l1_1`: `STAY` на spawn не двигаются; 6 route-movers теперь получают
   сдвинутую последовательность общего MSVC `rand`, потому что 10 `STAY` тоже
