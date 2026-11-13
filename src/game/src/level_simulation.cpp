@@ -12,7 +12,6 @@ namespace {
 constexpr float kTileW = 12.0f;
 constexpr float kTileH = 9.0f;
 constexpr float kArrive = 4.0f;
-constexpr double kFixedStep = 1.0 / 60.0;
 // Live l1_1 measurement at sv_game_speed 0: go delay 80 ms -> ~63 ms, 85 ms -> ~68 ms.
 constexpr float kMovementDelayFactor = 0.8f;
 
@@ -143,103 +142,91 @@ LevelSimulation LevelSimulation::create(const Level &level, MsvcRandom rng) {
 }
 
 void LevelSimulation::advance(double dt_seconds) {
-    if (!(dt_seconds > 0.0))
+    if (!std::isfinite(dt_seconds) || dt_seconds <= 0.0)
         return;
-    accumulator_ += dt_seconds;
-    while (accumulator_ + 1e-12 >= kFixedStep) {
-        accumulator_ -= kFixedStep;
-        time_ms_exact_ += kFixedStep * 1000.0;
-        time_ms_ = static_cast<std::uint64_t>(std::llround(time_ms_exact_));
-        rebuild_occupancy();
-        const auto pause = [&](State &state, std::int32_t delay) {
-            state.movement.waiting = true;
-            state.movement.wait_until_ms =
-                time_ms_ + static_cast<std::uint64_t>(std::max(0, delay));
-        };
-        const auto finish_target = [&](State &state, std::size_t index) {
-            const std::int32_t delay = rng_.range(state.delay_min, state.delay_max);
-            consume_goal(state);
-            state.movement.state_started_ms = time_ms_;
-            if (select_idle(index, delay))
-                return;
-            if (delay < 500 && plan_target(index))
-                return;
-            pause(state, delay < 500 ? kMinBackoffMs : delay);
-        };
-        for (std::size_t index = 0; index < states_.size(); ++index) {
-            State &state = states_[index];
-            if (!state.can_move)
-                continue;
-            PersonMovement &m = state.movement;
-            if (m.moving) {
-                if (m.path_index >= m.path.size()) {
-                    m.moving = false;
-                } else {
-                    const Tile waypoint = m.path[m.path_index];
-                    m.target_x = waypoint.x * kTileW + 6.0f;
-                    m.target_y = waypoint.y * kTileH + 4.0f;
-                    const float dx = m.target_x - m.x;
-                    const float dy = m.target_y - m.y;
-                    const float distance = std::sqrt(dx * dx + dy * dy);
-                    const float speed =
-                        iso_speed(dx, dy, state.move_x, state.move_y) * 1000.0f /
-                        (static_cast<float>(state.go_delay_ms) * kMovementDelayFactor);
-                    const float step = speed * static_cast<float>(kFixedStep);
-                    const bool arrives = distance <= step ||
-                                         (std::fabs(dx) < kArrive && std::fabs(dy) < kArrive);
-                    float next_x = m.x;
-                    float next_y = m.y;
-                    if (arrives) {
-                        next_x = m.target_x;
-                        next_y = m.target_y;
-                    } else if (distance > 0.0f) {
-                        next_x = m.x + dx / distance * step;
-                        next_y = m.y + dy / distance * step;
-                    }
-                    const Tile current = tile_of(m);
-                    const Tile next = tile_at(next_x, next_y);
-                    if (next != current && tile_occupied(index, next)) {
-                        m.moving = false;
-                        if (state.route_type == RouteType::random ||
-                            state.route_type == RouteType::random_radius) {
-                            state.has_goal = false;
-                            m.path.clear();
-                            m.path_index = 0;
-                            pause(state, std::max(kMinBackoffMs,
-                                                  rng_.range(state.delay_min, state.delay_max)));
-                        }
-                    } else if (arrives) {
-                        m.x = m.target_x;
-                        m.y = m.target_y;
-                        if (m.path_index + 1 < m.path.size()) {
-                            ++m.path_index;
-                        } else {
-                            m.moving = false;
-                            finish_target(state, index);
-                        }
-                    } else {
-                        m.x = next_x;
-                        m.y = next_y;
-                        m.direction16 = direction16_from_velocity(dx, dy);
-                        m.direction8 = direction16_to8(m.direction16);
-                    }
-                    mark_occupied(tile_of(m));
+    const std::uint64_t delta_ms =
+        static_cast<std::uint64_t>(std::llround(dt_seconds * 1000.0));
+    if (delta_ms == 0)
+        return;
+    time_ms_ += delta_ms;
+    rebuild_occupancy();
+    const auto pause = [&](State &state, std::int32_t delay) {
+        state.movement.waiting = true;
+        state.movement.wait_until_ms =
+            time_ms_ + static_cast<std::uint64_t>(std::max(0, delay));
+    };
+    const auto finish_target = [&](State &state, std::size_t index) {
+        const std::int32_t delay = rng_.range(state.delay_min, state.delay_max);
+        consume_goal(state);
+        state.movement.state_started_ms = time_ms_;
+        if (select_idle(index, delay))
+            return;
+        if (delay < 500 && plan_target(index))
+            return;
+        pause(state, delay < 500 ? kMinBackoffMs : delay);
+    };
+    for (std::size_t index = 0; index < states_.size(); ++index) {
+        State &state = states_[index];
+        if (!state.can_move)
+            continue;
+        PersonMovement &m = state.movement;
+        if (m.moving) {
+            if (m.path_index >= m.path.size()) {
+                m.moving = false;
+            } else {
+                const Tile waypoint = m.path[m.path_index];
+                m.target_x = waypoint.x * kTileW + 6.0f;
+                m.target_y = waypoint.y * kTileH + 4.0f;
+                const float dx = m.target_x - m.x;
+                const float dy = m.target_y - m.y;
+                const float distance = std::sqrt(dx * dx + dy * dy);
+                const float speed =
+                    iso_speed(dx, dy, state.move_x, state.move_y) * 1000.0f /
+                    (static_cast<float>(state.go_delay_ms) * kMovementDelayFactor);
+                const float step = speed * (static_cast<float>(delta_ms) / 1000.0f);
+                const bool arrives = distance <= step ||
+                                     (std::fabs(dx) < kArrive && std::fabs(dy) < kArrive);
+                float next_x = m.x;
+                float next_y = m.y;
+                if (arrives) {
+                    next_x = m.target_x;
+                    next_y = m.target_y;
+                } else if (distance > 0.0f) {
+                    next_x = m.x + dx / distance * step;
+                    next_y = m.y + dy / distance * step;
                 }
-            } else if (m.waiting) {
-                if (time_ms_ >= m.wait_until_ms) {
-                    m.waiting = false;
-                    if (state.route_type == RouteType::stay ||
-                        state.route_type == RouteType::stay_rotate) {
-                        const std::int32_t delay = rng_.range(state.delay_min, state.delay_max);
-                        if (!select_idle(index, delay) && !plan_target(index))
-                            pause(state, std::max(kMinBackoffMs,
-                                                  rng_.range(state.delay_min, state.delay_max)));
-                    } else if (!plan_target(index)) {
+                const Tile current = tile_of(m);
+                const Tile next = tile_at(next_x, next_y);
+                if (next != current && tile_occupied(index, next)) {
+                    m.moving = false;
+                    if (state.route_type == RouteType::random ||
+                        state.route_type == RouteType::random_radius) {
+                        state.has_goal = false;
+                        m.path.clear();
+                        m.path_index = 0;
                         pause(state, std::max(kMinBackoffMs,
                                               rng_.range(state.delay_min, state.delay_max)));
                     }
+                } else if (arrives) {
+                    m.x = m.target_x;
+                    m.y = m.target_y;
+                    if (m.path_index + 1 < m.path.size()) {
+                        ++m.path_index;
+                    } else {
+                        m.moving = false;
+                        finish_target(state, index);
+                    }
+                } else {
+                    m.x = next_x;
+                    m.y = next_y;
+                    m.direction16 = direction16_from_velocity(dx, dy);
+                    m.direction8 = direction16_to8(m.direction16);
                 }
-            } else {
+                mark_occupied(tile_of(m));
+            }
+        } else if (m.waiting) {
+            if (time_ms_ >= m.wait_until_ms) {
+                m.waiting = false;
                 if (state.route_type == RouteType::stay ||
                     state.route_type == RouteType::stay_rotate) {
                     const std::int32_t delay = rng_.range(state.delay_min, state.delay_max);
@@ -251,8 +238,19 @@ void LevelSimulation::advance(double dt_seconds) {
                                           rng_.range(state.delay_min, state.delay_max)));
                 }
             }
-            persons_[index] = m;
+        } else {
+            if (state.route_type == RouteType::stay ||
+                state.route_type == RouteType::stay_rotate) {
+                const std::int32_t delay = rng_.range(state.delay_min, state.delay_max);
+                if (!select_idle(index, delay) && !plan_target(index))
+                    pause(state, std::max(kMinBackoffMs,
+                                          rng_.range(state.delay_min, state.delay_max)));
+            } else if (!plan_target(index)) {
+                pause(state, std::max(kMinBackoffMs,
+                                      rng_.range(state.delay_min, state.delay_max)));
+            }
         }
+        persons_[index] = m;
     }
 }
 

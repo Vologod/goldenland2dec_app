@@ -132,17 +132,30 @@ TEST_CASE("MOVED follows route cells in order") {
     Level level = make_level("MOVED", {{10, 10}, {13, 10}, {13, 13}}, 0, 0);
     auto sim = LevelSimulation::create(level, 1);
     CHECK(sim.can_move(0));
-    for (int i = 0; i < 600; ++i)
-        sim.advance(1.0 / 60.0);
+    for (int i = 0; i < 357; ++i)
+        sim.advance(0.028);
     CHECK(sim.persons()[0].x > 10.0f * 12 + 6);
+}
+
+TEST_CASE("advance performs exactly one integer-ms step per call") {
+    Level level = make_level("MOVED", {{40, 10}}, 0, 0);
+    auto sim = LevelSimulation::create(level, 1);
+    CHECK(sim.time_ms() == 0u);
+    sim.advance(0.028);
+    CHECK(sim.time_ms() == 28u);
+    sim.advance(0.5);
+    CHECK(sim.time_ms() == 528u);
+    sim.advance(0.0);
+    sim.advance(-1.0);
+    CHECK(sim.time_ms() == 528u);
 }
 
 TEST_CASE("delay under 500 ms does not stop") {
     Level level = make_level("MOVED", {{10, 10}, {13, 10}}, 0, 400);
     auto sim = LevelSimulation::create(level, 1);
     float max_x = sim.persons()[0].x;
-    for (int i = 0; i < 180; ++i) {
-        sim.advance(1.0 / 60.0);
+    for (int i = 0; i < 107; ++i) {
+        sim.advance(0.028);
         max_x = std::max(max_x, sim.persons()[0].x);
     }
     CHECK(max_x == doctest::Approx(13.0f * 12 + 6).epsilon(0.01));
@@ -157,10 +170,11 @@ TEST_CASE("movement speed uses go step per 0.8-scaled delay (go 80, move 6x5)") 
     auto sim = LevelSimulation::create(level, 1);
     const float start_x = sim.persons()[0].x;
     for (int i = 0; i < 60; ++i)
-        sim.advance(1.0 / 60.0);
+        sim.advance(0.028);
     const float speed = level.persons[0].go_move_x * 1000.0f /
                         (static_cast<float>(level.persons[0].go_delay_ms) * 0.8f);
-    CHECK(sim.persons()[0].x == doctest::Approx(start_x + speed).epsilon(1e-4));
+    // A: 60 ticks x 28 ms = 1.68 s; non-arrival displacement = speed * 1.68.
+    CHECK(sim.persons()[0].x == doctest::Approx(start_x + speed * 1.68f).epsilon(1e-4));
 }
 
 TEST_CASE("movement speed uses go step per 0.8-scaled delay (go 85, move 4x3)") {
@@ -171,21 +185,26 @@ TEST_CASE("movement speed uses go step per 0.8-scaled delay (go 85, move 4x3)") 
     auto sim = LevelSimulation::create(level, 1);
     const float start_x = sim.persons()[0].x;
     for (int i = 0; i < 60; ++i)
-        sim.advance(1.0 / 60.0);
+        sim.advance(0.028);
     const float speed = level.persons[0].go_move_x * 1000.0f /
                         (static_cast<float>(level.persons[0].go_delay_ms) * 0.8f);
-    CHECK(sim.persons()[0].x == doctest::Approx(start_x + speed).epsilon(1e-4));
+    // A: 60 ticks x 28 ms = 1.68 s; non-arrival displacement = speed * 1.68.
+    CHECK(sim.persons()[0].x == doctest::Approx(start_x + speed * 1.68f).epsilon(1e-4));
 }
 
 TEST_CASE("4 px arrival snaps to target") {
     Level level = make_level("MOVED", {{10, 10}, {13, 10}}, 0, 0);
     auto sim = LevelSimulation::create(level, 1);
-    for (int i = 0; i < 26; ++i)
-        sim.advance(1.0 / 60.0);
+    // A: go 100/move 6 -> 75 px/s, step 75 * 0.028 = 2.1 px. After 16 ticks
+    // x = 126 + 33.6 = target - 2.4; the 4 px rule snaps on tick 17 (476 ms).
+    for (int i = 0; i < 16; ++i)
+        sim.advance(0.028);
     const auto &before = sim.persons()[0];
-    CHECK(before.x == doctest::Approx(13.0f * 12 + 6 - 3.5f));
+    CHECK(sim.time_ms() == 448u);
+    CHECK(before.x == doctest::Approx(13.0f * 12 + 6 - 2.4f).epsilon(1e-4));
     CHECK(before.x < 13.0f * 12 + 6);
-    sim.advance(1.0 / 60.0);
+    sim.advance(0.028);
+    CHECK(sim.time_ms() == 476u);
     CHECK(sim.persons()[0].x == doctest::Approx(13.0f * 12 + 6));
 }
 
@@ -194,8 +213,8 @@ TEST_CASE("STAY at its spawn tile does not move or wander") {
     auto sim = LevelSimulation::create(level, 1);
     const float spawn_x = 10.0f * 12 + 6;
     const float spawn_y = 10.0f * 9 + 4;
-    for (int i = 0; i < 60 * 10; ++i) {
-        sim.advance(1.0 / 60.0);
+    for (int i = 0; i < 357; ++i) {
+        sim.advance(0.028);
         const auto &p = sim.persons()[0];
         CHECK_FALSE(p.moving);
         CHECK(p.x == doctest::Approx(spawn_x));
@@ -217,8 +236,8 @@ TEST_CASE("displaced STAY walks back to its spawn tile and stops") {
     const float spawn_x = 10.0f * 12 + 6;
     const float spawn_y = 10.0f * 9 + 4;
     bool arrived = false;
-    for (int i = 0; i < 60 * 5 && !arrived; ++i) {
-        sim.advance(1.0 / 60.0);
+    for (int i = 0; i < 178 && !arrived; ++i) {
+        sim.advance(0.028);
         const auto &p = sim.persons()[0];
         arrived = std::fabs(p.x - spawn_x) < 1e-3f && std::fabs(p.y - spawn_y) < 1e-3f;
     }
@@ -227,8 +246,8 @@ TEST_CASE("displaced STAY walks back to its spawn tile and stops") {
     CHECK(sim.persons()[0].y == doctest::Approx(spawn_y));
     CHECK_FALSE(sim.persons()[0].moving);
 
-    for (int i = 0; i < 60 * 5; ++i) {
-        sim.advance(1.0 / 60.0);
+    for (int i = 0; i < 178; ++i) {
+        sim.advance(0.028);
         const auto &p = sim.persons()[0];
         CHECK_FALSE(p.moving);
         CHECK(p.x == doctest::Approx(spawn_x));
@@ -249,6 +268,8 @@ TEST_CASE("STAY_ROTATE changes direction on the rotation cadence without moving"
     CHECK_FALSE(sim.persons()[0].moving);
     for (int cycle = 0; cycle < 6; ++cycle) {
         CAPTURE(cycle);
+        // A: port 500 ms rotate pause on a 28 ms grid -> 18 ticks = 504 ms.
+        CHECK(sim.time_ms() == static_cast<std::uint64_t>(504 * cycle));
         const std::uint8_t index = code_to_index(expected.range(10, 25));
         const auto &p = sim.persons()[0];
         CHECK(p.direction16 == index);
@@ -257,8 +278,8 @@ TEST_CASE("STAY_ROTATE changes direction on the rotation cadence without moving"
         CHECK(p.y == doctest::Approx(spawn_y));
         if (cycle == 5)
             break;
-        for (int tick = 0; tick < 30; ++tick) {
-            sim.advance(1.0 / 60.0);
+        for (int tick = 0; tick < 18; ++tick) {
+            sim.advance(0.028);
             CHECK_FALSE(sim.persons()[0].moving);
             CHECK(sim.persons()[0].x == doctest::Approx(spawn_x));
             CHECK(sim.persons()[0].y == doctest::Approx(spawn_y));
@@ -275,8 +296,8 @@ TEST_CASE("STAY_ROTATE with a delay of 500 ms or more waits without rotating") {
     REQUIRE(start.waiting);
     CHECK_FALSE(start.moving);
     CHECK(start.wait_until_ms == 1000u);
-    for (int i = 0; i < 60 * 10; ++i) {
-        sim.advance(1.0 / 60.0);
+    for (int i = 0; i < 357; ++i) {
+        sim.advance(0.028);
         const auto &p = sim.persons()[0];
         CHECK_FALSE(p.moving);
         CHECK(p.direction16 == direction16);
@@ -338,9 +359,9 @@ TEST_CASE("at-spawn STAY with a long delay does not consume rand per tick") {
     const float second_x = (20 + dx1 + dx2) * 12.0f + 6.0f;
     const float second_y = (10 + dy1 + dy2) * 9.0f + 4.0f;
     bool saw_second = false;
-    for (int i = 0; i < 60 * 10 && !saw_second && sim.time_ms() < static_cast<std::uint64_t>(delay);
+    for (int i = 0; i < 357 && !saw_second && sim.time_ms() < static_cast<std::uint64_t>(delay);
          ++i) {
-        sim.advance(1.0 / 60.0);
+        sim.advance(0.028);
         const auto &p = sim.persons()[1];
         if (std::fabs(p.target_x - first_x) < 1e-3f &&
             std::fabs(p.target_y - first_y) < 1e-3f)
@@ -366,8 +387,8 @@ TEST_CASE("MOVED cycles route cells in order") {
     std::vector<std::pair<float, float>> targets;
     const auto &first = sim.persons()[0];
     targets.emplace_back(first.target_x, first.target_y);
-    for (int i = 0; i < 400 && targets.size() < 4; ++i) {
-        sim.advance(1.0 / 60.0);
+    for (int i = 0; i < 238 && targets.size() < 4; ++i) {
+        sim.advance(0.028);
         const auto &p = sim.persons()[0];
         if (p.target_x != targets.back().first || p.target_y != targets.back().second)
             targets.emplace_back(p.target_x, p.target_y);
@@ -388,8 +409,8 @@ TEST_CASE("MOVED_FLIP walks one route step with fixed seed") {
     auto plus = LevelSimulation::create(level, 1);
     auto minus = LevelSimulation::create(level, 5006);
     const auto advance_to_first_arrival = [](LevelSimulation &sim) {
-        for (int i = 0; i < 60; ++i) {
-            sim.advance(1.0 / 60.0);
+        for (int i = 0; i < 35; ++i) {
+            sim.advance(0.028);
             if (std::fabs(sim.persons()[0].x - (11.0f * 12 + 6)) < 1e-3f)
                 return;
         }
@@ -416,8 +437,8 @@ TEST_CASE("RANDOM samples around current tile") {
     float last_x = start.target_x;
     float last_y = start.target_y;
     int samples = 0;
-    for (int i = 0; i < 4000; ++i) {
-        sim.advance(1.0 / 60.0);
+    for (int i = 0; i < 2380; ++i) {
+        sim.advance(0.028);
         const auto &p = sim.persons()[0];
         if (p.target_x == last_x && p.target_y == last_y)
             continue;
@@ -433,9 +454,17 @@ TEST_CASE("RANDOM samples around current tile") {
 TEST_CASE("delay over 500 ms waits") {
     Level level = make_level("MOVED", {{10, 10}, {13, 10}}, 1000, 1000);
     auto sim = LevelSimulation::create(level, 1);
+    // A: advance(0.5) is one 500 ms step, not 30 sub-steps; still waiting at 500 ms.
     sim.advance(0.5);
+    CHECK(sim.time_ms() == 500u);
     CHECK(sim.persons()[0].x < 10.0f * 12 + 6 + 1.0f);
+    // One 2000 ms step is also a single pass: it un-waits and plans the first route cell.
     sim.advance(2.0);
+    CHECK(sim.time_ms() == 2500u);
+    CHECK(sim.persons()[0].moving);
+    // The spawn route cell and its 1000 ms delay are consumed on later ticks.
+    for (int i = 0; i < 100 && sim.persons()[0].x <= 10.0f * 12 + 6 + 4.0f; ++i)
+        sim.advance(0.028);
     CHECK(sim.persons()[0].x > 10.0f * 12 + 6 + 4.0f);
 }
 
@@ -443,8 +472,8 @@ TEST_CASE("RANDOM_RADIUS stays within radius plus one") {
     Level level = make_level("RANDOM_RADIUS", {}, 0, 0);
     auto sim = LevelSimulation::create(level, 1);
     const std::int32_t max_offset = level.persons[0].radius + 1;
-    for (int i = 0; i < 600; ++i) {
-        sim.advance(1.0 / 60.0);
+    for (int i = 0; i < 357; ++i) {
+        sim.advance(0.028);
         const auto &p = sim.persons()[0];
         CHECK(std::fabs(p.x - (10.0f * 12 + 6)) <= max_offset * 12);
         CHECK(std::fabs(p.y - (10.0f * 9 + 4)) <= max_offset * 9);
@@ -479,8 +508,8 @@ TEST_CASE("RANDOM_RADIUS only targets walkable in-bounds tiles") {
 
     auto sim = LevelSimulation::create(level, 1);
     std::vector<Tile> goals;
-    for (int i = 0; i < 60 * 120; ++i) {
-        sim.advance(1.0 / 60.0);
+    for (int i = 0; i < 4285; ++i) {
+        sim.advance(0.028);
         const auto &p = sim.persons()[0];
         if (p.path.size() < 2)
             continue;
@@ -525,8 +554,8 @@ TEST_CASE("RANDOM_RADIUS may select a tile occupied by another person") {
 
     auto sim = LevelSimulation::create(level, 1);
     bool saw_occupied_goal = false;
-    for (int i = 0; i < 60 * 120 && !saw_occupied_goal; ++i) {
-        sim.advance(1.0 / 60.0);
+    for (int i = 0; i < 4285 && !saw_occupied_goal; ++i) {
+        sim.advance(0.028);
         const auto &p = sim.persons()[0];
         if (p.path.size() >= 2 && p.path.back() == Tile{11, 10})
             saw_occupied_goal = true;
@@ -556,8 +585,8 @@ TEST_CASE("RANDOM_RADIUS can repeat the same candidate") {
 
     auto sim = LevelSimulation::create(level, 1);
     std::vector<Tile> goals;
-    for (int i = 0; i < 60 * 180; ++i) {
-        sim.advance(1.0 / 60.0);
+    for (int i = 0; i < 6428; ++i) {
+        sim.advance(0.028);
         const auto &p = sim.persons()[0];
         if (p.path.size() < 2)
             continue;
@@ -673,7 +702,7 @@ TEST_CASE("failed RANDOM plan resamples on the next attempt") {
     CHECK(wait_ms == 500u);
 
     while (sim.time_ms() < wait_ms)
-        sim.advance(1.0 / 60.0);
+        sim.advance(0.028);
 
     const auto &p = sim.persons()[0];
     CHECK(sim.time_ms() >= wait_ms);
@@ -731,9 +760,9 @@ TEST_CASE("occupancy abort clears a RANDOM goal and backs off before resampling"
     Tile aborted_goal{};
     std::uint64_t abort_time = 0;
     std::uint64_t wait_until = 0;
-    for (int tick = 0; tick < 60 * 5 && !aborted; ++tick) {
+    for (int tick = 0; tick < 178 && !aborted; ++tick) {
         const PersonMovement before = sim.persons()[0];
-        sim.advance(1.0 / 60.0);
+        sim.advance(0.028);
         const PersonMovement &p = sim.persons()[0];
         if (before.moving && !p.moving && p.waiting) {
             aborted = true;
@@ -751,13 +780,13 @@ TEST_CASE("occupancy abort clears a RANDOM goal and backs off before resampling"
     const float paused_x = sim.persons()[0].x;
     const float paused_y = sim.persons()[0].y;
     while (sim.time_ms() < wait_until) {
-        sim.advance(1.0 / 60.0);
+        sim.advance(0.028);
         CHECK(sim.persons()[0].x == paused_x);
         CHECK(sim.persons()[0].y == paused_y);
     }
 
-    for (int tick = 0; tick < 60 * 5 && !sim.persons()[0].moving; ++tick)
-        sim.advance(1.0 / 60.0);
+    for (int tick = 0; tick < 178 && !sim.persons()[0].moving; ++tick)
+        sim.advance(0.028);
     const PersonMovement &p = sim.persons()[0];
     REQUIRE(p.moving);
     REQUIRE(p.path.size() >= 2);
@@ -770,9 +799,9 @@ TEST_CASE("simulation is deterministic") {
     Level level = make_level("MOVED_FLIP", {{10, 10}, {13, 10}, {13, 13}, {10, 13}}, 0, 900);
     auto a = LevelSimulation::create(level, 1);
     auto b = LevelSimulation::create(level, 1);
-    for (int i = 0; i < 120; ++i) {
-        a.advance(1.0 / 60.0);
-        b.advance(1.0 / 60.0);
+    for (int i = 0; i < 71; ++i) {
+        a.advance(0.028);
+        b.advance(0.028);
     }
     CHECK(a.persons()[0].x == b.persons()[0].x);
     CHECK(a.persons()[0].y == b.persons()[0].y);
@@ -789,8 +818,8 @@ TEST_CASE("person without go cannot move") {
 
 TEST_CASE("walker goes around a wall and never enters blocked tiles") {
     auto sim = LevelSimulation::create(make_walled_level(), 1);
-    for (int i = 0; i < 60 * 60; ++i) {
-        sim.advance(1.0 / 60.0);
+    for (int i = 0; i < 2142; ++i) {
+        sim.advance(0.028);
         const auto &p = sim.persons()[0];
         const int tile_x = static_cast<int>((p.x - 6.0f) / 12.0f + 0.5f);
         const int tile_y = static_cast<int>((p.y - 4.0f) / 9.0f + 0.5f);
@@ -830,8 +859,8 @@ TEST_CASE("clear line of sight walks straight without cell-center stops") {
     const float line_length = std::sqrt(line_dx * line_dx + line_dy * line_dy);
     REQUIRE(line_length > 0.0f);
     int moving_ticks = 0;
-    for (int i = 0; i < 60 * 60; ++i) {
-        sim.advance(1.0 / 60.0);
+    for (int i = 0; i < 2142; ++i) {
+        sim.advance(0.028);
         const auto &p = sim.persons()[0];
         if (!p.moving)
             continue;
@@ -855,8 +884,8 @@ TEST_CASE("two walkers never occupy the same tile") {
     second.route_cells = {{2, 2}};
     level.persons.push_back(second);
     auto sim = LevelSimulation::create(level, 1);
-    for (int i = 0; i < 60 * 30; ++i) {
-        sim.advance(1.0 / 60.0);
+    for (int i = 0; i < 1071; ++i) {
+        sim.advance(0.028);
         const auto &a = sim.persons()[0];
         const auto &b = sim.persons()[1];
         const int ax = static_cast<int>((a.x - 6.0f) / 12.0f + 0.5f);
@@ -913,7 +942,7 @@ TEST_CASE("same-tick planning ignores another NPC's reserved goal cell") {
     REQUIRE(sim.persons()[0].waiting);
     REQUIRE(sim.persons()[1].waiting);
     while (sim.time_ms() < 500)
-        sim.advance(1.0 / 60.0);
+        sim.advance(0.028);
 
     const PersonMovement &first = sim.persons()[0];
     const PersonMovement &second = sim.persons()[1];
@@ -933,8 +962,8 @@ TEST_CASE("blocked MOVED route cell is skipped after failed planning") {
     CHECK(sim.persons()[0].waiting);
     bool saw_path = false;
     bool reached = false;
-    for (int i = 0; i < 60 * 10 && !reached; ++i) {
-        sim.advance(1.0 / 60.0);
+    for (int i = 0; i < 357 && !reached; ++i) {
+        sim.advance(0.028);
         const auto &p = sim.persons()[0];
         saw_path = saw_path || p.path.size() >= 2;
         reached =
@@ -970,8 +999,8 @@ TEST_CASE("two walkers crossing with clear LOS never share a tile") {
     vertical.route_cells = {{20, 42}};
     level.persons.push_back(vertical);
     auto sim = LevelSimulation::create(level, 1);
-    for (int i = 0; i < 60 * 12; ++i) {
-        sim.advance(1.0 / 60.0);
+    for (int i = 0; i < 428; ++i) {
+        sim.advance(0.028);
         const auto &a = sim.persons()[0];
         const auto &b = sim.persons()[1];
         const int ax = static_cast<int>((a.x - 6.0f) / 12.0f + 0.5f);
@@ -998,9 +1027,9 @@ TEST_CASE("real data: l1_1 movers stay walkable and apart" * doctest::skip(!game
     }
     std::vector<char> saw_path(level->persons.size(), 0);
     int walkable_movers = 0;
-    for (int tick = 0; tick < 60 * 60; ++tick) {
-        sim.advance(1.0 / 60.0);
-        twin.advance(1.0 / 60.0);
+    for (int tick = 0; tick < 2142; ++tick) {
+        sim.advance(0.028);
+        twin.advance(0.028);
         const auto &persons = sim.persons();
         for (std::size_t a = 0; a < persons.size(); ++a) {
             const int ax = static_cast<int>((persons[a].x - 6.0f) / 12.0f + 0.5f);
@@ -1053,8 +1082,8 @@ TEST_CASE("real data: l1_1 oficer1 is not stuck on its first route cell" *
     const int start_tile_y = static_cast<int>((sim.persons()[oficer].y - 4.0f) / 9.0f + 0.5f);
     bool saw_path = false;
     bool changed_tile = false;
-    for (int tick = 0; tick < 60 * 60; ++tick) {
-        sim.advance(1.0 / 60.0);
+    for (int tick = 0; tick < 2142; ++tick) {
+        sim.advance(0.028);
         const auto &p = sim.persons()[oficer];
         saw_path = saw_path || p.path.size() >= 2;
         const int tile_x = static_cast<int>((p.x - 6.0f) / 12.0f + 0.5f);
@@ -1099,8 +1128,8 @@ TEST_CASE("RANDOM resamples after repeated unreachable goals") {
     auto sim = LevelSimulation::create(level, seed);
     bool saw_moving = false;
     float start_x = sim.persons()[0].x;
-    for (int i = 0; i < 60 * 60; ++i) {
-        sim.advance(1.0 / 60.0);
+    for (int i = 0; i < 2142; ++i) {
+        sim.advance(0.028);
         saw_moving = saw_moving || sim.persons()[0].moving;
     }
     CHECK(saw_moving);

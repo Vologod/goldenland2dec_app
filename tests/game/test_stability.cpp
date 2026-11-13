@@ -45,8 +45,8 @@ TEST_CASE("real data: l1_1 simulation has no jittering NPCs" *
         prev_moving[i] = sim.persons()[i].moving;
     }
 
-    for (int tick = 0; tick < 60 * 180; ++tick) {
-        sim.advance(1.0 / 60.0);
+    for (int tick = 0; tick < 6428; ++tick) {
+        sim.advance(0.028);
         for (std::size_t i = 0; i < count; ++i) {
             const auto &p = sim.persons()[i];
             MoveStats &s = stats[i];
@@ -87,7 +87,7 @@ TEST_CASE("real data: l1_1 simulation has no jittering NPCs" *
             prev_x[i] = p.x;
             prev_y[i] = p.y;
         }
-        if ((tick + 1) % 300 == 0) {
+        if ((tick + 1) % 178 == 0) {
             for (std::size_t i = 0; i < count; ++i) {
                 stats[i].max_5s_window =
                     std::max(stats[i].max_5s_window, stats[i].window_reversals);

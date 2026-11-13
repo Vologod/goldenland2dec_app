@@ -180,9 +180,9 @@ TEST_CASE("real data: l1_1 60 s simulation is bounded and deterministic" *
 
     bool bounded = true;
     bool identical = true;
-    for (int step = 0; step < 60 * 60; ++step) {
-        first.advance(1.0 / 60.0);
-        second.advance(1.0 / 60.0);
+    for (int step = 0; step < 2142; ++step) {
+        first.advance(0.028);
+        second.advance(0.028);
         const auto &a = first.persons();
         const auto &b = second.persons();
         if (a.size() != b.size()) {
