@@ -268,8 +268,9 @@ TEST_CASE("STAY_ROTATE changes direction on the rotation cadence without moving"
     CHECK_FALSE(sim.persons()[0].moving);
     for (int cycle = 0; cycle < 6; ++cycle) {
         CAPTURE(cycle);
-        // A: port 500 ms rotate pause on a 28 ms grid -> 18 ticks = 504 ms.
-        CHECK(sim.time_ms() == static_cast<std::uint64_t>(504 * cycle));
+        // C2: go 100 -> frame delay 83 -> turn delay (83/3)*2 = 54 ms; due at 54
+        // lands on the next 28 ms tick (56) and then every 56 ms (2 ticks).
+        CHECK(sim.time_ms() == static_cast<std::uint64_t>(56 * cycle));
         const std::uint8_t index = code_to_index(expected.range(10, 25));
         const auto &p = sim.persons()[0];
         CHECK(p.direction16 == index);
@@ -278,7 +279,7 @@ TEST_CASE("STAY_ROTATE changes direction on the rotation cadence without moving"
         CHECK(p.y == doctest::Approx(spawn_y));
         if (cycle == 5)
             break;
-        for (int tick = 0; tick < 18; ++tick) {
+        for (int tick = 0; tick < 2; ++tick) {
             sim.advance(0.028);
             CHECK_FALSE(sim.persons()[0].moving);
             CHECK(sim.persons()[0].x == doctest::Approx(spawn_x));
@@ -315,7 +316,43 @@ TEST_CASE("STAY_ROTATE clamps an out-of-range code 26 to direction index 15") {
     CHECK(p.direction8 == direction16_to8(15));
     CHECK_FALSE(p.moving);
     CHECK(p.waiting);
-    CHECK(p.wait_until_ms == 500u);
+    // C2: go 100 -> (100 - 17) / 3 * 2 = 54 ms turn delay.
+    CHECK(p.wait_until_ms == 54u);
+}
+
+TEST_CASE("STAY_ROTATE turn delay uses the go word (80 -> 42 ms)") {
+    Level level = make_level("STAY_ROTATE", {}, 0, 0);
+    level.persons[0].go_delay_ms = 80;
+    auto sim = LevelSimulation::create(level, 1);
+    const auto &p = sim.persons()[0];
+    REQUIRE(p.waiting);
+    // C2: (80 - 17) / 3 * 2 = 42 ms; it is due on the first 28 ms-grid tick at 56.
+    CHECK(p.wait_until_ms == 42u);
+    MsvcRandom expected(1);
+    const std::uint8_t first =
+        static_cast<std::uint8_t>(std::min(expected.range(10, 25), 25) - 10);
+    CHECK(p.direction16 == first);
+    sim.advance(0.028);
+    CHECK(sim.time_ms() == 28u);
+    CHECK(sim.persons()[0].direction16 == first);
+    sim.advance(0.028);
+    const std::uint8_t second =
+        static_cast<std::uint8_t>(std::min(expected.range(10, 25), 25) - 10);
+    CHECK(sim.time_ms() == 56u);
+    CHECK(sim.persons()[0].direction16 == second);
+}
+
+TEST_CASE("STAY_ROTATE guards a non-positive effective frame delay") {
+    Level level = make_level("STAY_ROTATE", {}, 0, 0);
+    level.persons[0].go_delay_ms = 10;
+    auto sim = LevelSimulation::create(level, 1);
+    const auto &p = sim.persons()[0];
+    REQUIRE(p.waiting);
+    // Port guard: 10 - 17 = -7 -> (-7 / 3) * 2 = -4 -> clamped to 1 ms.
+    CHECK(p.wait_until_ms == 1u);
+    sim.advance(0.028);
+    CHECK(sim.time_ms() == 28u);
+    CHECK(sim.persons()[0].waiting);
 }
 
 TEST_CASE("at-spawn STAY with a long delay does not consume rand per tick") {

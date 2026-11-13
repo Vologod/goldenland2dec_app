@@ -18,10 +18,15 @@ constexpr float kMovementDelayFactor = 0.8f;
 Tile tile_of(const PersonMovement &movement) { return tile_at(movement.x, movement.y); }
 
 constexpr std::int32_t kMinBackoffMs = 500;
-// The original schedules a SET_DIRECTION action for STAY_ROTATE; its action duration is not
-// extracted yet, so the port uses a bounded 500 ms pause to avoid rotating on every tick.
-constexpr std::int32_t kRotatePauseMs = 500;
 constexpr std::int32_t kRandomSampleSafetyLimit = 1'000'000;
+
+// C2/U-C1: with gv_anim_speed = 0 the animation frame delay is go_delay_ms - 17 and
+// SET_DIRECTION runs for (frame_delay / 3) * 2 ms (signed truncation). A non-positive
+// result is a port guard so corrupt _go data still yields a forward wait.
+std::int32_t rotate_turn_delay_ms(std::int32_t go_delay_ms) {
+    const std::int32_t frame_delay = go_delay_ms - 17;
+    return std::max(1, (frame_delay / 3) * 2);
+}
 
 bool is_route_requiring(RouteType type) {
     return type == RouteType::moved || type == RouteType::moved_flip ||
@@ -304,7 +309,8 @@ bool LevelSimulation::select_idle(std::size_t index, std::int32_t delay) {
     m.state_started_ms = time_ms_;
     m.moving = false;
     m.waiting = true;
-    m.wait_until_ms = time_ms_ + static_cast<std::uint64_t>(kRotatePauseMs);
+    m.wait_until_ms =
+        time_ms_ + static_cast<std::uint64_t>(rotate_turn_delay_ms(state.go_delay_ms));
     return true;
 }
 
