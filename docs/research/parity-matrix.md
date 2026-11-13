@@ -27,9 +27,11 @@ D-064) закрыла live NPC-loot oracle на `l1_1` (0/N): weapon + spawn-ini
 draws в SEF-порядке после loot каждой персоны. P2-15a (save payload
 research, 2026-11-12) разобрала контейнер, reader/writer и domains и выдала
 verdict `implementable`; write/load остаются `missing` до P2-15b/c.
-P2-9 (35 Hz research, 2026-11-13) доказала оригинальный host-гейт:
-`trunc(1000/sv_fps)` = 28 ms at 35, один тик на кадр, без
-accumulator/catch-up/clamp; реализация порта pending P2-9a (сейчас 60 Гц).
+P2-9 (35 Hz research + implementation, 2026-11-13) доказала оригинальный
+host-гейт: `trunc(1000/sv_fps)` = 28 ms at 35, один тик на кадр, без
+accumulator/catch-up/clamp; порт реализован (P2-9a/b, D-068): 28 ms gate,
+один sim step на тик, headless 16 ms frame schedule. Остаются U1 (host
+frame time), pause/gate (port choice) и config plumbing — parity `partial`.
 
 Матрица — единый источник истины о покрытии паритета. Строка без evidence не
 считается подтверждённой. Источники: `parity-audit-p0-p1.md`,
@@ -75,9 +77,9 @@ ID: `P4a-*`, `P4b-*`, `P4b2-*` — прежние A/B/C из аудита (пе�
    `0x5000006`/`0x5000007` остаются unsupported.
 3. **B3 save/load** — формат разобран (P2-15a, `implementable`), но payload
    не читается и не пишется (`P2-15`; P2-15b/c).
-4. **B4 тайминг** — порт 60 Гц; оригинал — 28 ms gate
-   (`trunc(1000/sv_fps)`, один тик на кадр), research `P2-9`, реализация
-   pending `P2-9a` (`P4b-16`).
+4. **B4 тайминг** — порт 28 ms gate (`trunc(1000/35)`, один тик на
+   кадр, без catch-up/clamp), research + implementation `P2-9`/D-068;
+   residual U1 (host frame time) и pause/gate port-choice (`P4b-16`).
 5. **C1 ADSC** — `number/name` игнорируются, анимации ломаются на 4 уровнях
    (`P1-3`).
 6. **PAD crops/anchors** — crops отбрасываются, anchor не сверен с
@@ -140,7 +142,7 @@ ID: `P4a-*`, `P4b-*`, `P4b2-*` — прежние A/B/C из аудита (пе�
 | P2-6 | консоль | buffer/history/keys | `console.cpp:15-53` | unit | unverified | лимиты 256/64/10 — порт | audit p2-p3 |
 | P2-7 | команды | 9 команд из ~137 | `main.cpp:802-893` | string scan `Client.dll` | partial | `game_save/load` стабы | audit p2-p3 |
 | P2-8 | состояния | boot/menu/level | `state.cpp:6-27` | только порт | unverified | boot/logo/loading/save-menu | audit p2-p3 |
-| P2-9 | tick | 60 Гц (current port) | `server.hpp:8-11`; `server.cpp:68-95`; D-021 | research `p2-9-35hz.md`: host gate `trunc(1000/sv_fps)` = 28 ms at 35, one tick per host frame, no accumulator/catch-up/clamp; D-033 consistent | partial | research done; implementation pending P2-9a; port still 60 Hz | audit p2-p3; A5; P2-9 research |
+| P2-9 | tick | 28 ms gate, one tick per host frame (port) | `server.hpp:8-13`; `server.cpp:68-97`; `level_simulation.cpp:149-250`; D-021/D-068 | research `p2-9-35hz.md`: host gate `trunc(1000/sv_fps)` = 28 ms at 35, one tick per host frame, no accumulator/catch-up/clamp; D-033 consistent. **P2-9a/b (D-068):** integer-ms clock, 28 ms gate, one tick/`tick(dt)`, one sim step (`speed*delta_ms/1000`), STAY_ROTATE `((go_delay-17)/3)*2`, headless 16 ms schedule; full `ctest` 19/19 (1296.70 s) | partial | gate implemented and verified against asm; residual U1 host frame time/effective period, pause/gate port-choice (OQ-T4-3), config plumbing absent, movement `0.8` vs U-C1, `sv_fps != 35` | audit p2-p3; A5; P2-9 research/impl; D-068 |
 | P2-10 | pause | команды до pause | `server.cpp:68-148` | port tests | partial | порядок/семантика не извлечены | audit p2-p3 |
 | P2-11 | граница | ServerCore/ClientCore | `server.cpp:105-218` | design | partial | нет сериализации мира/событий | audit p2-p3 |
 | P2-12 | save header | 112 байт/версия/title | `save.cpp:12-50` | 28 слотов | verified | unknown 28/38/104/108 | audit p2-p3 |
@@ -347,12 +349,13 @@ ID: `P4a-*`, `P4b-*`, `P4b2-*` — прежние A/B/C из аудита (пе�
 
 ## Итог
 
-Всего строк: **174** (пересчёт 2026-11-13 после P2-9 research). По статусам
-(old -> new): `verified` 51 -> 51, `partial` 74 -> 75, `unverified` 22 -> 22,
-`missing` 15 -> 15, `contradicted` 2 -> 1, `superseded` 10 -> 10
-(P2-9 переведён `contradicted` -> `partial`; 174 строки). Примечание:
-базовая сводка содержала off-by-one (`73/16` вместо фактических `74/15`);
-здесь исправлено.
+Всего строк: **174** (пересчёт 2026-11-13 после P2-9a/b). По статусам
+(old -> new, P2-9a/b): `verified` 51 -> 51, `partial` 75 -> 75,
+`unverified` 22 -> 22, `missing` 15 -> 15, `contradicted` 1 -> 1,
+`superseded` 10 -> 10 (P2-9 остаётся `partial`: гейт реализован, U1/pause
+не закрыты; 174 строки). Историческая запись research-этапа: `partial`
+74 -> 75, `contradicted` 2 -> 1. Примечание: базовая сводка содержала
+off-by-one (`73/16` вместо фактических `74/15`); здесь исправлено.
 
 Native dispatch infrastructure (Phase 1a): `NativeRegistry` 65/65 +
 `GameScriptHost`. Phase 1b1 добавляет три person-натива, Phase 1b2a — три
@@ -365,10 +368,11 @@ loot — Phase 1b2b2b; specials реализованы — Phase 1b2b2d/D-060; l
 NPC-loot oracle закрыт (0/N, Phase 1b2b2f/D-064); restock/box — blocked); 3
 vm_internal — внутренние ID VM.
 
-`contradicted`: `P1-3` (ADSC). `P2-9` (60 Гц vs 28 ms gate) переведён в
-`partial` — research доказан, реализация pending P2-9a. P2-9 остаётся
-`partial`, а не `contradicted`: research снял неопределённость модели тика
-(28 ms gate), но порт всё ещё 60 Гц до реализации P2-9a.
+`contradicted`: `P1-3` (ADSC). `P2-9` (60 Гц vs 28 ms gate) остаётся
+`partial`: research и P2-9a/b реализация (D-068) закрыли модель гейта
+(28 ms, один тик на кадр, без catch-up/clamp, один sim step), но U1 (host
+frame time/эффективный период) и pause/gate interaction (port choice)
+не закрыты, поэтому `verified` не заявляется.
 `missing` включает новые системы P5b2+ и отсутствующие P4d/P5a-состояния.
 
 Блокеры паритета, требующие отдельных spec/plan в порядке приоритета:
@@ -385,8 +389,8 @@ vm_internal — внутренние ID VM.
    (0/N, Phase 1b2b2f/D-064), live price CW закрыт 2026-11-12/D-065; restock/box —
    blocked, D-055).
 2. `P2-15`: save payload/write/load.
-3. `P2-9`/`P4b-16`: 28 ms gate vs 60 Гц (research done; P2-9a
-   implementation).
+3. `P2-9`/`P4b-16`: 28 ms gate implemented (P2-9a/b/D-068); residual U1
+   host frame time и pause/gate port-choice.
 4. `P1-3`: ADSC `number/name`.
 5. `P4a-6`/`P4a-12`/`P4a-13`: PAD crops/anchors/animation phase.
 6. `P4c-4`: 6-осевой `CanInteract`.

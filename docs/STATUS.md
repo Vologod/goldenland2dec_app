@@ -2,14 +2,43 @@
 
 Обновлено: 2026-11-13
 
-## P2-9a/b — 35 Hz tick implementation (in progress 2026-11-13)
+## P2-9a/b — 35 Hz tick implementation (done 2026-11-13)
 
 - **Задача:** ServerCore 28 ms gate без catch-up/clamp; LevelSimulation один
   шаг на тик; headless 16 ms schedule; oracle refresh.
-- **Spec:** `docs/specs/2026-11-13-p2-9-35hz-implementation-design.md`.
+- **Spec:** `docs/specs/2026-11-13-p2-9-35hz-implementation-design.md` —
+  `implemented (2026-11-13)`.
 - **Plan:** `docs/plans/2026-11-13-p2-9-35hz-implementation.md`.
-- **Критерии:** gate/step semantics; оракулы A/R/L; полный `ctest`.
-- **Статус:** `in progress`.
+- **Сделано (Tasks 1–3, D-068):** `ServerCore` — integer-ms clock
+  (`clock_ms_`), `kDefaultSvFps=35`, `kDefaultSvGameSpeed=0`,
+  `kTickIntervalMs=28`, `kNominalTickHz=35`, `tick_interval_ms()`
+  (`35→28`, `0/<0/>1000→0` gate skipped, `1000→1`); gate
+  `clock_ms_-last_ms_>=28`, ровно один тик за `tick(dt)`,
+  `simulation_time_ms` = latch clock; удалены accumulator/`kFixedDt`/
+  `kMaxFrameDt`/`kMaxStepsPerTick`; pause «no backlog»
+  (`last_ms_=clock_ms_`). `LevelSimulation::advance` — ровно один шаг,
+  `time_ms_ += llround(dt*1000)`, движение `speed*delta_ms/1000`; удалены
+  `kFixedStep`/accumulator/`time_ms_exact_`; STAY_ROTATE turn delay =
+  `max(1, ((go_delay_ms-17)/3)*2)` (C2); `0.8` movement factor остаётся
+  (U-C1 follow-up). Headless `glgame`/`glview` — declared 16 ms frame grid,
+  без per-frame draw (`LevelScreen::advance_simulation`); interactive
+  250 ms clamp удалён; логи `headless sim: frames=1250 ticks=625
+  simulation_ms=20000` (20 s) и `glview sim: frames=625 ticks=312
+  simulation_ms=9984` (10 s).
+- **Проверка (2026-11-13, `GL_GAME_DIR=I:\Games\Златогорье-2`):**
+  `cmake --build build` exit 0; полный
+  `ctest --test-dir build --output-on-failure` — **19/19 passed**,
+  `Total Test time (real) = 1296.70 sec`, exit 0.
+- **Остаточные ограничения:** U1 — host frame time/эффективный период
+  (`F*ceil(28/F)` при `F<28`, `F` при `F>=28`) не измерены; pause/gate
+  interaction — port choice (no backlog), оригинальная pause-семантика
+  unverified (OQ-T4-3); movement `0.8` vs additive `-17` (U-C1) не
+  менялся; config/console plumbing `sv_fps`/`sv_game_speed`/`gv_anim_speed`
+  отсутствует (fixed defaults); `sv_fps != 35` (U5) не покрыт; AI/restock
+  per-tick cadence (U-C5/U-C2) — conditional. Parity P2-9 остаётся
+  `partial` (gate implemented/verified, но U1/pause не закрыты).
+- **Дальше:** опционально U-C1 (`anim_word0` identity) и U1 live frame-time
+  capture; затем P5+ системы / P6 / P7.
 
 ## P2-9 — 35 Hz tick research (done 2026-11-13)
 
@@ -44,14 +73,12 @@
 - **Проверка:** docs-only; `src/`, `tests/`, `tools/` не менялись;
   encoding UTF-8 no BOM/NUL; `git diff --check`; spec/plan/research в
   одном docs-коммите.
-- **Статус:** `done` (research); реализация 35 Гц — **P2-9a** (core tick),
-  затем **P2-9b** (movement/fixtures/oracles). P2-9c не открыт
-  (animations/timers остаются ms-driven; AI/restock — conditional).
-- **Дальше:** P2-9a — `ServerCore::tick_frame(now_ms)` +
-  `LevelSimulation::advance` от executed-tick delta; удалить
-  `kFixedDt`/accumulator/`kMaxFrameDt`/`kMaxStepsPerTick`; тесты
-  impact matrix A; выбор frame abstraction (OQ-T4-1) и pause rule
-  (OQ-T4-3) зафиксировать в spec/plan до кода.
+- **Статус:** `done` (research); реализация — **P2-9a/P2-9b done
+  2026-11-13 (D-068)**. P2-9c не открыт (animations/timers остаются
+  ms-driven; AI/restock — conditional).
+- **Дальше:** residual U1 (host frame time), pause/gate (OQ-T4-3), U-C1
+  (`anim_word0`), config plumbing; затем P5+/P6/P7. Implementation evidence
+  — `docs/research/p2-9-35hz.md` §Implementation result.
 
 ## P2-15b — Save load, first increment (done 2026-11-12)
 
