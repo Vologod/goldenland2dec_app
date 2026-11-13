@@ -1,17 +1,45 @@
 # STATUS
 
-Обновлено: 2026-11-12
+Обновлено: 2026-11-13
 
-## P2-9 — 35 Hz tick research (in progress 2026-11-12)
+## P2-9 — 35 Hz tick research (done 2026-11-13)
 
 - **Задача:** доказать точную сетку тика оригинала (`sv_fps=35`),
   потребителей шага и scope перевода порта с 60 Гц; docs-only.
 - **Spec:** `docs/specs/2026-11-12-p2-9-35hz-research-design.md`.
 - **Plan:** `docs/plans/2026-11-12-p2-9-35hz-research.md`.
-- **Критерии:** период доказан (RVA/lines или live); полный список port-мест
-  60 Гц и тестов; impact matrix; verdict/декомпозиция.
-- **Команды:** Ghidra/decompiled xrefs; grep 60/1.0/60; encoding check.
-- **Статус:** `in progress`.
+- **Research:** `docs/research/p2-9-35hz.md` (verdict
+  `implementable` (scoped)).
+- **Сделано (Tasks 1–5):** evidence `sv_fps`/`sv_game_speed`
+  (registration/defaults, RVA/lines); tick model — host gate
+  `GoldenLand.exe` RVA `0x184ac`, `interval = trunc(1000/sv_fps)` =
+  **28 ms** at 35, one gate per host frame, `last_ms` = tick-start sample,
+  no accumulator/catch-up, no max-frame clamp; QPC-derived absolute
+  integer-ms clock (`0x46d800`/`0x408ff0`) latched в `DAT_14088e1c`;
+  consumers table (movement/pause/spawn/script/AI) — ms deadlines, не
+  tick counts; port inventory P1–P28 и impact matrix A–D;
+  verdict/decomposition P2-9a/b (+ conditional P2-9c).
+- **Доказано:** эффективный период frame-quantized:
+  `F*ceil(28/F)` при `F < 28 ms`, `F` при `F >= 28 ms`; ровно 28 ms —
+  только если сетка кадров попадает на 28; непрерывных 35.0 Гц нет.
+  `sv_game_speed` — additive ms к animation delay, live 0. D-033
+  consistent, но не независимое доказательство; решает asm truncation.
+- **Unknowns:** U1 — host frame time/блокировки (vsync) не измерены;
+  U-C1 — identity `anim_word0`; U-C5 — per-tick связь entity `vtable+0xc`
+  → AI think/see; U-C2 — restock cadence; OQ-T4-3 — pause/gate interaction;
+  command dispatch per frame vs per tick; U2/U3 (wrap/float) и
+  `sv_fps != 35` — out of scope.
+- **Проверка:** docs-only; `src/`, `tests/`, `tools/` не менялись;
+  encoding UTF-8 no BOM/NUL; `git diff --check`; spec/plan/research в
+  одном docs-коммите.
+- **Статус:** `done` (research); реализация 35 Гц — **P2-9a** (core tick),
+  затем **P2-9b** (movement/fixtures/oracles). P2-9c не открыт
+  (animations/timers остаются ms-driven; AI/restock — conditional).
+- **Дальше:** P2-9a — `ServerCore::tick_frame(now_ms)` +
+  `LevelSimulation::advance` от executed-tick delta; удалить
+  `kFixedDt`/accumulator/`kMaxFrameDt`/`kMaxStepsPerTick`; тесты
+  impact matrix A; выбор frame abstraction (OQ-T4-1) и pause rule
+  (OQ-T4-3) зафиксировать в spec/plan до кода.
 
 ## P2-15b — Save load, first increment (done 2026-11-12)
 
