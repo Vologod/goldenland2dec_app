@@ -10,9 +10,12 @@ using gl::core::ClientCore;
 using gl::core::Command;
 using gl::core::Event;
 using gl::core::EventType;
-using gl::core::kFixedDt;
-using gl::core::kTickHz;
+using gl::core::kDefaultSvFps;
+using gl::core::kDefaultSvGameSpeed;
+using gl::core::kNominalTickHz;
+using gl::core::kTickIntervalMs;
 using gl::core::ServerCore;
+using gl::core::tick_interval_ms;
 using gl::core::ServerSnapshot;
 
 namespace {
@@ -38,7 +41,7 @@ TEST_CASE("ServerCore: gv_pause toggles only on tick") {
     CHECK_FALSE(server.paused());
     CHECK(server.drain_events().empty());
 
-    server.tick(1.0 / 60.0);
+    server.tick(0.016);
     CHECK(server.paused());
 
     const std::vector<Event> events = server.drain_events();
@@ -49,7 +52,7 @@ TEST_CASE("ServerCore: gv_pause toggles only on tick") {
     CHECK(events[0].value.empty());
 
     server.submit("gv_pause");
-    server.tick(1.0 / 60.0);
+    server.tick(0.016);
     CHECK_FALSE(server.paused());
 
     const std::vector<Event> resumed = server.drain_events();
@@ -297,128 +300,116 @@ TEST_CASE("ServerCore: empty input is a no-op") {
     CHECK_FALSE(server.paused());
 }
 
-TEST_CASE("ServerCore: fixed clock advances 60 ticks in four quarter-second frames") {
+TEST_CASE("ServerCore: tick interval truncates 1000/sv_fps to whole ms") {
+    CHECK(kDefaultSvFps == 35);
+    CHECK(kDefaultSvGameSpeed == 0);
+    CHECK(kTickIntervalMs == 28);
+    CHECK(kNominalTickHz == 35);
+    CHECK(tick_interval_ms(35) == 28);
+    CHECK(tick_interval_ms(0) == 0);
+    CHECK(tick_interval_ms(-1) == 0);
+    CHECK(tick_interval_ms(1000) == 1);
+    CHECK(tick_interval_ms(1001) == 0);
+    CHECK(tick_interval_ms(60) == 16);
+}
+
+TEST_CASE("ServerCore: two 16 ms frames cross the 28 ms gate once") {
     ServerCore server;
+    CHECK(server.clock_ms() == 0);
+
+    server.tick(0.016);
     CHECK(server.tick_index() == 0);
     CHECK(server.simulation_time_ms() == 0);
+    CHECK(server.clock_ms() == 16);
 
-    for (int i = 0; i < 4; ++i)
-        server.tick(0.25);
-
-    CHECK(server.tick_index() == 60);
-    CHECK(server.simulation_time_ms() == 1000);
+    server.tick(0.016);
+    CHECK(server.tick_index() == 1);
+    CHECK(server.simulation_time_ms() == 32);
+    CHECK(server.clock_ms() == 32);
 }
 
-TEST_CASE("ServerCore: two quarter-second frames advance 30 ticks") {
+TEST_CASE("ServerCore: a 28 ms frame ticks immediately") {
     ServerCore server;
 
-    server.tick(0.25);
-    CHECK(server.tick_index() == 15);
+    server.tick(0.028);
+    CHECK(server.tick_index() == 1);
+    CHECK(server.simulation_time_ms() == 28);
+    CHECK(server.clock_ms() == 28);
+}
+
+TEST_CASE("ServerCore: a long frame advances only one tick") {
+    ServerCore server;
+
+    server.tick(0.250);
+    CHECK(server.tick_index() == 1);
     CHECK(server.simulation_time_ms() == 250);
-
-    server.tick(0.25);
-    CHECK(server.tick_index() == 30);
-    CHECK(server.simulation_time_ms() == 500);
+    CHECK(server.clock_ms() == 250);
 }
 
-TEST_CASE("ServerCore: 60 frames of 0.01 accumulate to 36 ticks") {
+TEST_CASE("ServerCore: two 28 ms frames advance two ticks") {
     ServerCore server;
 
-    for (int i = 0; i < 60; ++i)
-        server.tick(0.01);
-
-    CHECK(server.tick_index() == 36);
-    CHECK(server.simulation_time_ms() == 600);
+    server.tick(0.028);
+    server.tick(0.028);
+    CHECK(server.tick_index() == 2);
+    CHECK(server.simulation_time_ms() == 56);
 }
 
-TEST_CASE("ServerCore: 100 frames of 0.01 accumulate to 60 ticks") {
-    ServerCore server;
-
-    for (int i = 0; i < 100; ++i)
-        server.tick(0.01);
-
-    CHECK(server.tick_index() == 60);
-    CHECK(server.simulation_time_ms() == 1000);
-}
-
-TEST_CASE("ServerCore: 60 frames of one fixed step advance 60 ticks") {
-    ServerCore server;
-
-    for (int i = 0; i < kTickHz; ++i)
-        server.tick(kFixedDt);
-
-    CHECK(server.tick_index() == 60);
-    CHECK(server.simulation_time_ms() == 1000);
-}
-
-TEST_CASE("ServerCore: frame dt is clamped to kMaxFrameDt") {
+TEST_CASE("ServerCore: a one second frame ticks once and latches the clock") {
     ServerCore server;
 
     server.tick(1.0);
-    CHECK(server.tick_index() == 15);
-    CHECK(server.simulation_time_ms() == 250);
-
-    server.tick(0.5);
-    CHECK(server.tick_index() == 30);
-    CHECK(server.simulation_time_ms() == 500);
+    CHECK(server.tick_index() == 1);
+    CHECK(server.simulation_time_ms() == 1000);
+    CHECK(server.clock_ms() == 1000);
 }
 
-TEST_CASE("ServerCore: negative dt does not rewind the clock") {
+TEST_CASE("ServerCore: negative and non-finite dt do not advance the clock") {
     ServerCore server;
 
     server.tick(0.25);
-    server.tick(-1.0);
-
-    CHECK(server.tick_index() == 15);
-    CHECK(server.simulation_time_ms() == 250);
-}
-
-TEST_CASE("ServerCore: non-finite dt cannot poison the accumulator") {
-    ServerCore server;
-
-    server.tick(0.25);
-    server.tick(std::numeric_limits<double>::quiet_NaN());
-    server.tick(std::numeric_limits<double>::infinity());
-    CHECK(server.tick_index() == 15);
-    CHECK(server.simulation_time_ms() == 250);
-
-    server.tick(0.0);
-    CHECK(server.tick_index() == 15);
-    CHECK(server.simulation_time_ms() == 250);
-}
-
-TEST_CASE("ServerCore: pause freezes the clock and gv_pause 0 resumes") {
-    ServerCore server;
-
-    server.tick(1.0);
-    REQUIRE(server.tick_index() == 15);
+    REQUIRE(server.tick_index() == 1);
     REQUIRE(server.simulation_time_ms() == 250);
 
-    server.submit("gv_pause 1");
-    server.tick(1.0);
-    CHECK(server.paused());
-    CHECK(server.tick_index() == 15);
-    CHECK(server.simulation_time_ms() == 250);
+    server.tick(-1.0);
+    server.tick(std::numeric_limits<double>::quiet_NaN());
+    server.tick(std::numeric_limits<double>::infinity());
+    server.tick(0.0);
 
-    server.submit("gv_pause 0");
-    server.tick(0.1);
-    CHECK_FALSE(server.paused());
-    CHECK(server.tick_index() == 21);
-    CHECK(server.simulation_time_ms() == 350);
+    CHECK(server.tick_index() == 1);
+    CHECK(server.simulation_time_ms() == 250);
+    CHECK(server.clock_ms() == 250);
 }
 
-TEST_CASE("ServerCore: long frame hits the step cap and resets the accumulator") {
+TEST_CASE("ServerCore: pause advances the clock without ticking or backlog") {
     ServerCore server;
 
-    server.tick(10.0);
-    CHECK(server.tick_index() == 15);
+    server.submit("gv_pause 1");
+    server.tick(0.016);
+    CHECK(server.paused());
+    CHECK(server.tick_index() == 0);
+    CHECK(server.simulation_time_ms() == 0);
+    CHECK(server.clock_ms() == 16);
 
-    server.tick(0.0);
-    CHECK(server.tick_index() == 15);
-    CHECK(server.simulation_time_ms() == 250);
+    server.tick(0.016);
+    CHECK(server.tick_index() == 0);
+    CHECK(server.simulation_time_ms() == 0);
+    CHECK(server.clock_ms() == 32);
+
+    server.submit("gv_pause 0");
+    server.tick(0.016);
+    CHECK_FALSE(server.paused());
+    CHECK(server.tick_index() == 0);
+    CHECK(server.simulation_time_ms() == 0);
+    CHECK(server.clock_ms() == 48);
+
+    server.tick(0.016);
+    CHECK(server.tick_index() == 1);
+    CHECK(server.simulation_time_ms() == 64);
+    CHECK(server.clock_ms() == 64);
 }
 
-TEST_CASE("ServerCore: commands wait for tick and events fire once") {
+TEST_CASE("ServerCore: commands apply before the gate without a tick") {
     ServerCore server;
 
     server.submit("gv_pause 1");
@@ -448,8 +439,8 @@ TEST_CASE("ServerCore: identical dt sequences are deterministic") {
 
     const auto first = run();
     const auto second = run();
-    CHECK(first.first == 28);
-    CHECK(first.second == 466);
+    CHECK(first.first == 5);
+    CHECK(first.second == 467);
     CHECK(first.first == second.first);
     CHECK(first.second == second.second);
 }
@@ -471,7 +462,7 @@ TEST_CASE("ServerCore: snapshot mirrors pause, free camera, tick and time") {
     const ServerSnapshot snap = server.snapshot();
     CHECK(snap.paused);
     CHECK(snap.free_camera);
-    CHECK(snap.tick_index == 15);
+    CHECK(snap.tick_index == 1);
     CHECK(snap.simulation_time_ms == 250);
     CHECK(snap.tick_index == server.tick_index());
     CHECK(snap.simulation_time_ms == server.simulation_time_ms());
@@ -523,13 +514,14 @@ TEST_CASE("ClientCore: later server ticks leave the stored snapshot unchanged") 
     client.on_snapshot(server.snapshot());
 
     server.tick(0.25);
-    REQUIRE(server.tick_index() == 15);
+    REQUIRE(server.tick_index() == 1);
 
     const ServerSnapshot copy = client.snapshot();
     CHECK(copy.tick_index == 0);
     CHECK(copy.simulation_time_ms == 0);
 
     server.tick(0.25);
+    CHECK(server.tick_index() == 2);
     CHECK(client.snapshot().tick_index == 0);
     CHECK(client.snapshot().simulation_time_ms == 0);
 }

@@ -71,27 +71,27 @@ void ServerCore::tick(double dt) {
     for (const Command &command : pending)
         process(command);
 
+    if (!std::isfinite(dt) || dt <= 0.0)
+        dt = 0.0;
+    clock_ms_ += static_cast<std::uint64_t>(std::llround(dt * 1000.0));
+
     if (paused_) {
-        accumulator_ = 0.0;
+        last_ms_ = clock_ms_;
         return;
     }
 
-    if (!std::isfinite(dt) || dt <= 0.0)
-        dt = 0.0;
-    else if (dt > kMaxFrameDt)
-        dt = kMaxFrameDt;
-    accumulator_ += dt;
-
-    int steps = 0;
-    while (accumulator_ >= kFixedDt && steps < kMaxStepsPerTick) {
+    const std::uint32_t interval = tick_interval_ms(kDefaultSvFps);
+    if (interval == 0 || clock_ms_ - last_ms_ >= interval) {
+        last_ms_ = clock_ms_;
         ++tick_index_;
-        accumulator_ -= kFixedDt;
-        ++steps;
+        simulation_time_ms_ = clock_ms_;
     }
-    if (steps == kMaxStepsPerTick)
-        accumulator_ = 0.0;
+}
 
-    simulation_time_ms_ = tick_index_ * 1000 / static_cast<std::uint64_t>(kTickHz);
+std::uint32_t tick_interval_ms(std::int32_t sv_fps) {
+    if (sv_fps <= 0 || sv_fps > 1000)
+        return 0;
+    return static_cast<std::uint32_t>(1000 / sv_fps);
 }
 
 bool ServerCore::paused() const { return paused_; }
@@ -101,6 +101,8 @@ bool ServerCore::free_camera() const { return free_camera_; }
 std::uint64_t ServerCore::tick_index() const { return tick_index_; }
 
 std::uint64_t ServerCore::simulation_time_ms() const { return simulation_time_ms_; }
+
+std::uint64_t ServerCore::clock_ms() const { return clock_ms_; }
 
 ServerSnapshot ServerCore::snapshot() const {
     ServerSnapshot snap;

@@ -5,10 +5,12 @@
 #include <vector>
 
 namespace gl::core {
-inline constexpr int kTickHz = 60;
-inline constexpr double kFixedDt = 1.0 / kTickHz;
-inline constexpr double kMaxFrameDt = 0.25;
-inline constexpr int kMaxStepsPerTick = 15;
+inline constexpr std::int32_t kDefaultSvFps = 35;
+inline constexpr std::int32_t kDefaultSvGameSpeed = 0;
+inline constexpr std::uint32_t kTickIntervalMs = 28;
+inline constexpr std::int32_t kNominalTickHz = 35;
+
+std::uint32_t tick_interval_ms(std::int32_t sv_fps);
 
 enum class EventType { paused_changed, config_changed, log };
 
@@ -47,6 +49,7 @@ class ServerCore {
     bool free_camera() const;
     std::uint64_t tick_index() const;
     std::uint64_t simulation_time_ms() const;
+    std::uint64_t clock_ms() const;
     ServerSnapshot snapshot() const;
     std::vector<Event> drain_events();
 
@@ -57,7 +60,8 @@ class ServerCore {
     std::vector<Event> events_;
     bool paused_ = false;
     bool free_camera_ = false;
-    double accumulator_ = 0.0;
+    std::uint64_t clock_ms_ = 0;
+    std::uint64_t last_ms_ = 0;
     std::uint64_t tick_index_ = 0;
     std::uint64_t simulation_time_ms_ = 0;
 };
