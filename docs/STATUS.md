@@ -2,6 +2,15 @@
 
 Обновлено: 2026-11-13
 
+## P2-9a/b — 35 Hz tick implementation (in progress 2026-11-13)
+
+- **Задача:** ServerCore 28 ms gate без catch-up/clamp; LevelSimulation один
+  шаг на тик; headless 16 ms schedule; oracle refresh.
+- **Spec:** `docs/specs/2026-11-13-p2-9-35hz-implementation-design.md`.
+- **Plan:** `docs/plans/2026-11-13-p2-9-35hz-implementation.md`.
+- **Критерии:** gate/step semantics; оракулы A/R/L; полный `ctest`.
+- **Статус:** `in progress`.
+
 ## P2-9 — 35 Hz tick research (done 2026-11-13)
 
 - **Задача:** доказать точную сетку тика оригинала (`sv_fps=35`),
