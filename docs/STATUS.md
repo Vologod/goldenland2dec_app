@@ -16,8 +16,9 @@
   **28 ms** at 35, one gate per host frame, `last_ms` = tick-start sample,
   no accumulator/catch-up, no max-frame clamp; QPC-derived absolute
   integer-ms clock (`0x46d800`/`0x408ff0`) latched в `DAT_14088e1c`;
-  consumers table (movement/pause/spawn/script/AI) — ms deadlines, не
-  tick counts; port inventory P1–P28 и impact matrix A–D;
+  consumers table (movement/pause/spawn/script/AI) — ms deadlines; AI
+  think/see per-invocation только если подтвердится per-tick связь U-C5,
+  restock cadence unresolved (U-C2); port inventory P1–P28 и impact matrix A–D;
   verdict/decomposition P2-9a/b (+ conditional P2-9c).
 - **Доказано:** эффективный период frame-quantized:
   `F*ceil(28/F)` при `F < 28 ms`, `F` при `F >= 28 ms`; ровно 28 ms —
@@ -25,8 +26,10 @@
   `sv_game_speed` — additive ms к animation delay, live 0. D-033
   consistent, но не независимое доказательство; решает asm truncation.
 - **Unknowns:** U1 — host frame time/блокировки (vsync) не измерены;
-  U-C1 — identity `anim_word0`; U-C5 — per-tick связь entity `vtable+0xc`
-  → AI think/see; U-C2 — restock cadence; OQ-T4-3 — pause/gate interaction;
+  U-C1 — identity `anim_word0`; U-C3 — client animation interpolation;
+  U-C4 — multi-frame catch-up (влияет на one-pass choice в P2-9a);
+  U-C5 — per-tick связь entity `vtable+0xc` → AI think/see;
+  U-C2 — restock cadence; OQ-T4-3 — pause/gate interaction;
   command dispatch per frame vs per tick; U2/U3 (wrap/float) и
   `sv_fps != 35` — out of scope.
 - **Проверка:** docs-only; `src/`, `tests/`, `tools/` не менялись;

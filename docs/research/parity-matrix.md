@@ -348,8 +348,8 @@ ID: `P4a-*`, `P4b-*`, `P4b2-*` — прежние A/B/C из аудита (пе�
 ## Итог
 
 Всего строк: **174** (пересчёт 2026-11-13 после P2-9 research). По статусам
-(old -> new): `verified` 51 -> 51, `partial` 73 -> 74, `unverified` 22 -> 22,
-`missing` 16 -> 16, `contradicted` 2 -> 1, `superseded` 10 -> 10
+(old -> new): `verified` 51 -> 51, `partial` 74 -> 75, `unverified` 22 -> 22,
+`missing` 15 -> 15, `contradicted` 2 -> 1, `superseded` 10 -> 10
 (P2-9 переведён `contradicted` -> `partial`; 174 строки).
 
 Native dispatch infrastructure (Phase 1a): `NativeRegistry` 65/65 +
@@ -364,7 +364,9 @@ NPC-loot oracle закрыт (0/N, Phase 1b2b2f/D-064); restock/box — blocked)
 vm_internal — внутренние ID VM.
 
 `contradicted`: `P1-3` (ADSC). `P2-9` (60 Гц vs 28 ms gate) переведён в
-`partial` — research доказан, реализация pending P2-9a.
+`partial` — research доказан, реализация pending P2-9a. P2-9 остаётся
+`partial`, а не `contradicted`: research снял неопределённость модели тика
+(28 ms gate), но порт всё ещё 60 Гц до реализации P2-9a.
 `missing` включает новые системы P5b2+ и отсутствующие P4d/P5a-состояния.
 
 Блокеры паритета, требующие отдельных spec/plan в порядке приоритета:
