@@ -98,7 +98,7 @@ void apply_record(PersonInstance &person, const SavePersonRecord &record,
 }
 } // namespace
 
-RestoreCounts restore_save_persons(Level &level, const gl::assets::SaveTailEntry &tail,
+RestoreResult restore_save_persons(Level &level, const gl::assets::SaveTailEntry &tail,
                                    const gl::assets::SaveTribeTable *tribes, bool drop_sef_only) {
     std::map<std::string, std::deque<std::size_t>, std::less<>> occurrences;
     for (std::size_t index = 0; index < level.persons.size(); ++index)
@@ -109,22 +109,22 @@ RestoreCounts restore_save_persons(Level &level, const gl::assets::SaveTailEntry
     matched_order.reserve(level.persons.size());
     bool warned_missing_table = false;
 
-    RestoreCounts counts;
+    RestoreResult result;
     for (const gl::assets::SaveEntity &entity : tail.entities) {
         if (entity.type != 2) {
-            ++counts.skipped;
+            ++result.counts.skipped;
             continue;
         }
         const auto decoded = decode_save_person(entity);
         if (!decoded) {
-            ++counts.skipped;
+            ++result.counts.skipped;
             gl::log(gl::LogLevel::warning,
                     "save restore: cannot decode saved person: " + decoded.error().message);
             continue;
         }
         auto &queue = occurrences[decoded->name];
         if (queue.empty()) {
-            ++counts.type2_only;
+            ++result.counts.type2_only;
             gl::log(gl::LogLevel::warning, "save restore: no SEF person for saved '" +
                                                decoded->name + "' (type-2-only, skipped)");
             continue;
@@ -132,9 +132,15 @@ RestoreCounts restore_save_persons(Level &level, const gl::assets::SaveTailEntry
         const std::size_t index = queue.front();
         queue.pop_front();
         apply_record(level.persons[index], decoded.value(), tribes, warned_missing_table);
+        result.persons.push_back(RestoredPerson{
+            matched_order.size(),
+            Tile{decoded->current_tile_x, decoded->current_tile_y},
+            decoded->direction,
+            decoded->route_index,
+        });
         matched[index] = 1;
         matched_order.push_back(index);
-        ++counts.matched;
+        ++result.counts.matched;
     }
 
     std::vector<PersonInstance> restored;
@@ -145,11 +151,11 @@ RestoreCounts restore_save_persons(Level &level, const gl::assets::SaveTailEntry
     for (std::size_t index = 0; index < level.persons.size(); ++index) {
         if (matched[index])
             continue;
-        ++counts.sef_only;
+        ++result.counts.sef_only;
         if (!drop_sef_only)
             restored.push_back(std::move(level.persons[index]));
     }
     level.persons = std::move(restored);
-    return counts;
+    return result;
 }
 } // namespace gl::game

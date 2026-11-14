@@ -269,8 +269,19 @@ TEST_CASE("decode save person rejects a truncated body") {
 
 TEST_CASE("save restore matches names by occurrence and applies fields") {
     RestoreFixture fixture = make_restore_fixture();
-    const auto counts =
+    const auto result =
         gl::game::restore_save_persons(fixture.level, fixture.tail, &fixture.tribes);
+    const auto &counts = result.counts;
+
+    REQUIRE(result.persons.size() == 2);
+    CHECK(result.persons[0].level_index == 0);
+    CHECK(result.persons[0].current == (gl::game::Tile{100, 101}));
+    CHECK(result.persons[0].direction == 4);
+    CHECK(result.persons[0].route_index == 1);
+    CHECK(result.persons[1].level_index == 1);
+    CHECK(result.persons[1].current == (gl::game::Tile{200, 201}));
+    CHECK(result.persons[1].direction == 7);
+    CHECK(result.persons[1].route_index == 3);
 
     CHECK(counts.matched == 2);
     CHECK(counts.sef_only == 1);
@@ -326,6 +337,90 @@ TEST_CASE("save restore matches names by occurrence and applies fields") {
     CHECK_FALSE(solo.saved_energy.has_value());
 }
 
+TEST_CASE("save restore keeps BT_ENTS order when it differs from SEF order") {
+    gl::game::Level level;
+    level.name = "test";
+    level.persons.push_back(sef_person("dup", 1, 1, "r1"));
+    level.persons.push_back(sef_person("dup", 2, 2, "r2"));
+    level.persons.push_back(sef_person("solo", 3, 3, "r3"));
+
+    PersonValues solo;
+    solo.name = "solo";
+    solo.anchor_x = 30;
+    solo.anchor_y = 31;
+    solo.current_x = 40;
+    solo.current_y = 41;
+    solo.direction = 2;
+    solo.route_type = 4;
+    solo.route = "r3";
+    solo.radius = 8;
+    solo.delay_min = 10;
+    solo.delay_max = 20;
+    solo.tribe = 5;
+    solo.hp = 12;
+    solo.energy = 13;
+    solo.route_index = 2;
+
+    PersonValues dup;
+    dup.name = "dup";
+    dup.anchor_x = 10;
+    dup.anchor_y = 11;
+    dup.current_x = 50;
+    dup.current_y = 51;
+    dup.direction = 1;
+    dup.route_type = 0;
+    dup.route = "r1";
+    dup.tribe = 5;
+    dup.hp = 14;
+    dup.energy = 15;
+    dup.route_index = 0;
+
+    gl::assets::SaveTailEntry tail;
+    tail.entities.push_back(person_entity(person_body(solo)));
+    tail.entities.push_back(person_entity(person_body(dup)));
+    gl::assets::SaveTribeTable tribes;
+    tribes.entries.push_back(gl::assets::SaveTribeEntry{5, "TribeFive"});
+
+    const auto result = gl::game::restore_save_persons(level, tail, &tribes);
+
+    CHECK(result.counts.matched == 2);
+    CHECK(result.counts.sef_only == 1);
+    CHECK(result.counts.type2_only == 0);
+    REQUIRE(level.persons.size() == 3);
+    CHECK(level.persons[0].name == "solo");
+    CHECK(level.persons[1].name == "dup");
+    CHECK(level.persons[2].name == "dup");
+    REQUIRE(result.persons.size() == 2);
+    CHECK(result.persons[0].level_index == 0);
+    CHECK(result.persons[0].current == (gl::game::Tile{40, 41}));
+    CHECK(result.persons[0].direction == 2);
+    CHECK(result.persons[0].route_index == 2);
+    CHECK(result.persons[1].level_index == 1);
+    CHECK(result.persons[1].current == (gl::game::Tile{50, 51}));
+    CHECK(result.persons[1].direction == 1);
+    CHECK(result.persons[1].route_index == 0);
+}
+
+TEST_CASE("save restore maps an unknown route type to STAY") {
+    gl::game::Level level;
+    level.name = "test";
+    level.persons.push_back(sef_person("m", 4, 4, "r"));
+
+    PersonValues values;
+    values.name = "m";
+    values.route = "r";
+    values.route_type = 9;
+
+    gl::assets::SaveTailEntry tail;
+    tail.entities.push_back(person_entity(person_body(values)));
+
+    const auto result = gl::game::restore_save_persons(level, tail, nullptr);
+
+    CHECK(result.counts.matched == 1);
+    REQUIRE(level.persons.size() == 1);
+    CHECK(level.persons[0].route_type == "STAY");
+}
+
 TEST_CASE("save restore keeps SEF route cells and tribe on mismatch") {
     gl::game::Level level;
     level.name = "test";
@@ -343,7 +438,8 @@ TEST_CASE("save restore keeps SEF route cells and tribe on mismatch") {
     gl::assets::SaveTribeTable tribes;
     tribes.entries.push_back(gl::assets::SaveTribeEntry{5, "TribeFive"});
 
-    const auto counts = gl::game::restore_save_persons(level, tail, &tribes);
+    const auto result = gl::game::restore_save_persons(level, tail, &tribes);
+    const auto &counts = result.counts;
 
     CHECK(counts.matched == 1);
     CHECK(counts.sef_only == 0);
@@ -370,7 +466,8 @@ TEST_CASE("save restore keeps SEF tribe without a tribe table") {
     gl::assets::SaveTailEntry tail;
     tail.entities.push_back(person_entity(person_body(values)));
 
-    const auto counts = gl::game::restore_save_persons(level, tail, nullptr);
+    const auto result = gl::game::restore_save_persons(level, tail, nullptr);
+    const auto &counts = result.counts;
 
     CHECK(counts.matched == 1);
     REQUIRE(level.persons.size() == 1);
@@ -379,9 +476,13 @@ TEST_CASE("save restore keeps SEF tribe without a tribe table") {
 
 TEST_CASE("save restore drops SEF-only persons behind the gate") {
     RestoreFixture fixture = make_restore_fixture();
-    const auto counts =
+    const auto result =
         gl::game::restore_save_persons(fixture.level, fixture.tail, &fixture.tribes, true);
+    const auto &counts = result.counts;
 
+    REQUIRE(result.persons.size() == 2);
+    CHECK(result.persons[0].level_index == 0);
+    CHECK(result.persons[1].level_index == 1);
     CHECK(counts.matched == 2);
     CHECK(counts.sef_only == 1);
     CHECK(counts.type2_only == 1);
@@ -401,12 +502,14 @@ TEST_CASE("save restore skips non-person and malformed entities") {
     tail.entities.push_back(std::move(trigger));
     tail.entities.push_back(person_entity({}));
 
-    const auto counts = gl::game::restore_save_persons(level, tail, nullptr);
+    const auto result = gl::game::restore_save_persons(level, tail, nullptr);
+    const auto &counts = result.counts;
 
     CHECK(counts.matched == 0);
     CHECK(counts.sef_only == 1);
     CHECK(counts.type2_only == 0);
     CHECK(counts.skipped == 2);
+    CHECK(result.persons.empty());
     REQUIRE(level.persons.size() == 1);
     CHECK(level.persons[0].name == "solo");
 }
@@ -414,8 +517,9 @@ TEST_CASE("save restore skips non-person and malformed entities") {
 TEST_CASE("save restore runtime uses saved NPC life and energy") {
     gl::game::PersonInstance saved = runtime_person("saved", 30, 10);
     gl::game::PersonInstance untouched = runtime_person("untouched", std::nullopt, std::nullopt);
+    gl::game::PersonInstance over = runtime_person("over", 1000, 1000);
 
-    auto runtime = gl::game::PersonRuntime::create({saved, untouched}, std::nullopt);
+    auto runtime = gl::game::PersonRuntime::create({saved, untouched, over}, std::nullopt);
 
     CHECK(runtime.get_parameter("saved", gl::script::PersonParameter::life) ==
           doctest::Approx(30.0));
@@ -425,6 +529,10 @@ TEST_CASE("save restore runtime uses saved NPC life and energy") {
           doctest::Approx(5.0));
     CHECK(runtime.get_parameter("untouched", gl::script::PersonParameter::energy) ==
           doctest::Approx(2.0));
+    CHECK(runtime.get_parameter("over", gl::script::PersonParameter::life) ==
+          doctest::Approx(40.0));
+    CHECK(runtime.get_parameter("over", gl::script::PersonParameter::energy) ==
+          doctest::Approx(18.0));
 }
 
 TEST_CASE("save restore runtime applies current person state") {
@@ -445,7 +553,9 @@ TEST_CASE("save restore runtime applies current person state") {
 
     auto sim = gl::game::LevelSimulation::create(level, 1);
     sim.restore_person(0, gl::game::Tile{5, 6}, 3, 2);
+    sim.restore_person(7, gl::game::Tile{0, 0}, 0, 0);
 
+    REQUIRE(sim.persons().size() == 1);
     const gl::game::PersonMovement &restored = sim.persons()[0];
     CHECK(restored.x == doctest::Approx(5.0f * 12 + 6));
     CHECK(restored.y == doctest::Approx(6.0f * 9 + 4));

@@ -1,7 +1,10 @@
 #pragma once
 #include "gl/assets/save_payload.hpp"
 #include "gl/game/level.hpp"
+#include "gl/game/pathfinder.hpp"
 #include <cstddef>
+#include <cstdint>
+#include <vector>
 
 namespace gl::game {
 struct RestoreCounts {
@@ -11,7 +14,19 @@ struct RestoreCounts {
     std::size_t skipped = 0;
 };
 
-RestoreCounts restore_save_persons(Level &level, const gl::assets::SaveTailEntry &tail,
+struct RestoredPerson {
+    std::size_t level_index = 0;
+    Tile current;
+    std::uint8_t direction = 0;
+    std::int32_t route_index = 0;
+};
+
+struct RestoreResult {
+    RestoreCounts counts;
+    std::vector<RestoredPerson> persons;
+};
+
+RestoreResult restore_save_persons(Level &level, const gl::assets::SaveTailEntry &tail,
                                    const gl::assets::SaveTribeTable *tribes,
                                    bool drop_sef_only = false);
 } // namespace gl::game

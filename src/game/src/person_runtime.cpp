@@ -261,11 +261,25 @@ PersonRuntime PersonRuntime::create(const std::vector<PersonInstance> &persons,
         assign_value(state, PersonParameter::life, person.def.values, "life");
         assign_value(state, PersonParameter::energy, person.def.values, "energy");
         if (person.saved_life) {
+            const int maximum = static_cast<int>(maximum_life_value(state));
+            if (*person.saved_life > maximum) {
+                gl::log(gl::LogLevel::warning,
+                        "person runtime: person '" + person.name + "' saved life " +
+                            std::to_string(*person.saved_life) + " exceeds maximum " +
+                            std::to_string(maximum) + "; clamped on read");
+            }
             state.values[value_index(PersonParameter::life)] =
                 static_cast<double>(*person.saved_life);
             state.present[value_index(PersonParameter::life)] = true;
         }
         if (person.saved_energy) {
+            const int maximum = static_cast<int>(maximum_energy_value(state));
+            if (*person.saved_energy > maximum) {
+                gl::log(gl::LogLevel::warning,
+                        "person runtime: person '" + person.name + "' saved energy " +
+                            std::to_string(*person.saved_energy) + " exceeds maximum " +
+                            std::to_string(maximum) + "; clamped on read");
+            }
             state.values[value_index(PersonParameter::energy)] =
                 static_cast<double>(*person.saved_energy);
             state.present[value_index(PersonParameter::energy)] = true;
