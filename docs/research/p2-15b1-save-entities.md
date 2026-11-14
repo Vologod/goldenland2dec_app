@@ -326,6 +326,10 @@ vtable `+4` reader (which continues on the same stream), then reads the next
 type (`FUN_140325fc`, decompiled 35847-35914). All readers consume the save
 stream only through the primitives below, so every body is self-delimiting.
 
+Port note: `SaveEntity.body` stores only the type-specific body bytes (starting
+after the type word); the leading 4-byte `u32 type` is stored separately in
+`SaveEntity.type` and is not part of `body`.
+
 ### Stream primitives
 
 | helper | RVA | decompiled / disasm | consumption |
@@ -760,7 +764,7 @@ field; **unverified** = save semantics not resolved yet.
 | save field | port struct/field | status |
 |---|---|---|
 | `BT_INFO.time[0x20]` | `assets::SaveInfo.time` (`save_payload.hpp:20`) | available (parsed) |
-| `BT_INFO.+0x26c4` | `SaveInfo.party_level` (`save_payload.cpp:106`) | partial: parsed but unused; glgame loot level is `hero_level_from_experience(EXP)+1` (`tools/glgame/main.cpp:1009-1012`) and omits the original Scout/Identify bonuses (`p3b2b2` §15.1) |
+| `BT_INFO.+0x26c4` | `SaveInfo.party_level` (`save_payload.cpp:275`) | partial: parsed but unused; glgame loot level is `hero_level_from_experience(EXP)+1` (`tools/glgame/main.cpp:1012-1015`) and omits the original Scout/Identify bonuses (`p3b2b2` §15.1) |
 | `BT_INFO.+0x26c8[8]` | `SaveInfo.field_26c8` (`:23`) | available (opaque) |
 | `BT_PNAME` names | `SaveTailEntry.person_names` (`save_payload.hpp:48`) | parsed (cp1251→UTF-8); not wired to `PersonInstance` — `P2-15b1b` |
 | `BT_RGINF` u32 latch | `SaveTailEntry.rginf.latch` (`:47`), raw `SavePayload.rginf` | parsed; not applied to runtime `+0x26c0` — `P2-15b1b` |
@@ -965,7 +969,8 @@ Pinned behavior:
   `{2,8,16,32}` advance by the §Body layout readers; any other type, including
   the never-serialized `4`, is a `format` error. Strings use
   `u32 n + min(n,0x104)` (`skip_string`); `M = 4` for a zero flag, otherwise
-  `8 + sum(0xc0 + 4 + 0x14*m_i)` (`skip_container`).
+  `8 + sum(0xc0 + 4 + 0x14*m_i)` (`skip_container`). `SaveEntity.body` holds
+  only the type-specific body and excludes the 4-byte type word.
 - Tail tags are visited in stream order; duplicate/missing `BT_RGINF`/
   `BT_PNAME`/`BT_ENTS ` fail the whole payload. `PNAME == type-2 count` is a
   test/acceptance invariant only (the original does not enforce it), matching

@@ -57,6 +57,10 @@ struct SaveTailEntry {
 `SavePayload` retains `rginf`/`ents` raw (b1b), and `level_tail_index`.
 Accessors are the existing fields (`tail`, `level_tail_index`).
 
+`SaveEntity.body` contains only the type-specific body bytes; the leading
+4-byte `u32 type` word is stored separately in `SaveEntity.type` and is not
+part of `body`.
+
 Parser behavior:
 
 - At `parse_save_payload`, after decompressing each tail section, parse:
