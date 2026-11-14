@@ -587,7 +587,10 @@ int dump_save_payload(const fs::path& game_dir, int slot) {
         " rginf=" + std::to_string(payload->rginf.size()) +
         " ents=" + std::to_string(payload->ents.size()) +
         " hero_items=" + std::to_string(inventory->items.size()) +
-        " hero_equipped=" + std::to_string(inventory->equipped.size());
+        " hero_equipped=" + std::to_string(inventory->equipped.size()) +
+        " entities=" + std::to_string(selected.entities.size()) +
+        " pnames=" + std::to_string(selected.person_names.size()) +
+        " rginf_latch=" + std::to_string(selected.rginf.latch);
     std::printf("%s\n", line.c_str());
     return 0;
 }

@@ -336,12 +336,15 @@ std::vector<std::uint8_t> synthetic_save(std::string_view level) {
     put_block_le(body, "BT_HERO ", {});
 
     std::vector<std::uint8_t> section_blocks;
+    std::vector<std::uint8_t> pname;
+    put_u32_le(pname, 0);
+    put_block_le(section_blocks, "BT_PNAME", pname);
     std::vector<std::uint8_t> rginf(36);
     for (std::size_t i = 0; i < rginf.size(); ++i)
         rginf[i] = static_cast<std::uint8_t>(0x40 + i);
     put_block_le(section_blocks, "BT_RGINF", rginf);
     std::vector<std::uint8_t> ents;
-    put_u32_le(ents, 0);
+    put_u32_le(ents, 1);
     put_block_le(section_blocks, "BT_ENTS ", ents);
 
     const std::vector<std::uint8_t> section_compressed = compress_zlib(section_blocks);
@@ -666,7 +669,8 @@ TEST_CASE("glgame --dump-save prints the decoded save payload and exits") {
     CAPTURE(output);
     CHECK(code == 0);
     CHECK(output.find("save: slot=0 level=L93_4 vars=1002 tail=213 section=8551 rginf=36 "
-                      "ents=8381 hero_items=117 hero_equipped=11") != std::string::npos);
+                      "ents=8381 hero_items=117 hero_equipped=11 entities=4 pnames=3 "
+                      "rginf_latch=0") != std::string::npos);
 }
 
 TEST_CASE("glgame --load-save loads the level and hero from the save") {
