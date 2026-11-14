@@ -152,7 +152,7 @@ writer is the shared `FUN_1405c9d8` (hero writer `FUN_1401e690` 21892-21894).
 **115,405/115,405**.
 
 Decompiled line numbers below refer to `.local/decomp/server/decompiled.c`;
-disassembly addresses are RVAs of `Server.dll`.
+disassembly addresses are VAs of `Server.dll` (RVA = VA - `0x14000000`).
 
 ### Item record map
 
@@ -564,27 +564,37 @@ Port-side restore order to implement (once a spec is approved):
 
 ```
 records = decode selected BT_ENTS section          # b1a raw + b1b1 type-2 decoder
-pairs = []
+restore = []
 for record in records (BT_ENTS/slot order):
     person = match_by_name_occurrence(record.name) # k-th saved -> k-th SEF, same level
     if person == null:
         skip(record)                               # type-2-only synthesis GATED (3)
     else:
-        pairs.push(person, record)
+        restore.push(person, record)
 
-# SEF persons without a saved occurrence: removal GATED on load-game chain trace
-Level.persons = [p for p, r in pairs]
-LevelSimulation::create(...)                        # spawn state from anchor/params
-
-for person, record in pairs:
-    apply current tile pair -> PersonMovement.x/y
-    apply direction, numeric route type, route cells, radius, delays
-    apply dialog/inventory names, route index (MOVED/MOVED_FLIP), HP/EP
-
-if rginf.runtime_26c0 == 0:                         # b1b3 decision
-    apply serialized c0/c1 containers                # b1b2 decoder; c2 structured only
+# SEF-only persons: keep by default; removal only after the load-game gate passes
+if sef_only_drop_gate_passed:
+    Level.persons = [p for p, r in restore]        # remove unmatched SEF persons
 else:
-    for person in BT_ENTS order:                     # chance-gated override
+    Level.persons = SEF.persons                    # keep unmatched SEF persons
+
+# Before create: fields create copies from PersonInstance (level_simulation.cpp:48-106)
+for person, record in restore:
+    set person.name, anchor/tile, radius, delay_min/max,
+        route_type, route_cells, direction, dialog, inventory
+
+LevelSimulation::create(...)                       # State copies the fields above
+
+# After create: runtime state only
+for person, record in restore:
+    apply current tile pair -> PersonMovement.x/y
+    apply current direction, route index (MOVED/MOVED_FLIP)
+    apply HP/EP
+
+if rginf.runtime_26c0 == 0:                        # b1b3 decision
+    apply serialized c0/c1 containers               # b1b2 decoder; c2 structured only
+else:
+    for person in BT_ENTS order:                    # chance-gated override
         if c0/c1 valid and scr_inv non-empty:
             maybe_regenerate(c0/c1)                  # c2 never regenerated
         else:
@@ -675,13 +685,13 @@ L1.P620_Svet_3CircusWorker2	168	199	173	189	3	4		1:812*114	1:	1:1787*1
 | # | Check | Scope / pins | Stage | Criterion |
 |---:|---|---|---|---|
 | O1 | Raw selected-section bytes: `BT_ENTS `, `BT_PNAME`, `BT_RGINF` lengths and SHA-256 | pinned slot0/2/21; all-section 2,599 exact consume | research script now | 3/3 digests equal; 2,599/2,599 sections consume exactly |
-| O2 | Name/type sequence: decoded type-2 names == `BT_PNAME` names; type histogram | selected 499; pinned 19; all-section 14,507 | research script now; port assertion after b1b1 | 3/3, 0/0, 16/16; 499/499; 14,507/14,507; PNAME identity 2,599/2,599 |
-| O3 | Person tuple: position/direction/anchor + full person-tuple line diff | pinned 19; selected 499 | after b1b1 | 19/19 bytes/field diff; split person-tuple digest from the implementation oracle; legacy combined digest unchanged; direction 0..7 in 14,507/14,507; SEF anchor identity 496/496 |
+| O2 | Name/type sequence: decoded type-2 names == `BT_PNAME` names; type histogram | selected 499; pinned 19; all-section 14,507 | decoder: research script now; port restore assertion after b1b1 | decoder 499/499 (all-section 14,507/14,507); port restore 496/496 matched + 3 type-2-only gated; pinned 3/3, 0/0, 16/16; PNAME identity 2,599/2,599 |
+| O3 | Person tuple: position/direction/anchor + full person-tuple line diff | pinned 19; selected 499 | after b1b1 | 19/19 pinned matched; 496/496 selected matched full-line; 3 type-2-only records excluded by the synthesis gate, not counted as pass; split person-tuple digest from the implementation oracle; legacy combined digest unchanged; direction 0..7 in 14,507/14,507; SEF anchor identity 496/496 |
 | O4 | Container tuple: c0/c1/c2 counts/ids; each `def` resolves in `items.pak`/`tech_names.sdb`; totals | pinned 19 (94 records); all-section 115,405 records | after b1b2 | 19/19 tuples; 14/14 slot0, 0/0 slot2, 80/80 slot21 records; 115,405/115,405 ids resolve; any difference reported `d/N` and fails |
-| O5 | Duplicate policy: repeated names keep distinct ordered person tuples | selected 499; pinned 19 | after b1b1 | 2/2 (`Guardian2`), 2/2 (`oficer1`), no merge; 81 groups, max multiplicity 6 |
+| O5 | Duplicate policy: repeated names keep distinct ordered person tuples | selected 499; pinned 19 | after b1b1 | 2/2 (`Guardian2`), 2/2 (`oficer1`), no merge over the 496 matched records; 81 groups, max multiplicity 6; type-2-only records gated |
 | O6 | RGINF: saved latch/date decision | pinned slot0/2/21 | raw digests/latch: research script now; decision/application after b1b3; runtime deferred | raw digests 3/3; latch values 0/1/0; synthetic decision table (below) |
 | O7 | HP/EP restore (outside the person tuple) | pinned 19 | after b1b1 | saved pairs below; `PersonRuntime::get_parameter(life/energy)` equals saved: 3/3 slot0, 0/0 slot2, 16/16 slot21; saved values must be within computed maxima or the b1b1 plan records an explicit clamp waiver, otherwise fail |
-| O8 | Field-level person tuple: radius, delay min/max, tribe name, dialog, inventory, route index | pinned 19; selected 499 | after b1b1 | 19/19 fields equal the decoded save; slot21 includes MOVED `L0.P744_oficer1` (route_type 2, `track3`) and MOVED_FLIP `L0.P678_citizen4`/`L0.P640_children2` (route_type 3) with `route_index == +0x1630`; corpus range -1..15 (81 negative); no clamp/drop |
+| O8 | Field-level person tuple: radius, delay min/max, tribe name, dialog, inventory, route index | pinned 19; selected 496 matched | after b1b1 | 19/19 matched fields equal the decoded save; 3 type-2-only records excluded by the synthesis gate; slot21 includes MOVED `L0.P744_oficer1` (route_type 2, `track3`) and MOVED_FLIP `L0.P678_citizen4`/`L0.P640_children2` (route_type 3) with `route_index == +0x1630`; corpus range -1..15 (81 negative); no clamp/drop |
 
 RGINF decision unit test (synthetic clock; `interval = DAT_1407fbcc+0x8c`; the
 `/0x1e` and `%0x1e` conversion is at 35834-35835, and the
@@ -719,9 +729,10 @@ above deliberately exclude HP/EP):
   scripts are not committed.
 - **After b1b1 (port test):** build `LevelSimulation` from SEF, apply the
   person restore, then compare O2/O3/O5/O7/O8 against the person tuples and
-  HP/EP pairs. Duplicate names must be keyed by occurrence; a flat-name map is
-  a test failure. Type-2-only records are reported as a gated gap, not
-  synthesized.
+  HP/EP pairs. O2 decoder coverage is 499/499; port restore coverage is 496/496
+  matched; the 3 type-2-only records are a gated gap, not synthesized and not
+  counted as a pass. Duplicate names must be keyed by occurrence; a flat-name
+  map is a test failure.
 - **After b1b2 (port test):** compare O4 container tuples against the decoded
   c0/c1/c2 records and all 115,405 definition ids.
 - **After b1b3:** O6 synthetic decision table and gate/ordering tests.
@@ -877,20 +888,24 @@ chain trace that decides whether the 43 SEF-only persons are spawned.
 **Scope:**
 
 1. Add an ordered restore entry point over the selected `BT_ENTS` section:
-   create persons in record/slot order using name-occurrence matching; keep
-   duplicate names as distinct entities (occurrence-qualified keys, no flat name
-   map). Do **not** synthesize type-2-only records (gated) and do not
+   the decoder must parse all 499 records; restore applies the 496 matched
+   records in record/slot order using name-occurrence matching; keep duplicate
+   names as distinct entities (occurrence-qualified keys, no flat name map).
+   Do **not** synthesize type-2-only records (gated) and do not
    unconditionally drop SEF-only persons (gated): both require the trace /
    origin-level SEF evidence from Unknowns #13.
-2. Apply: name; current tile pair -> `PersonMovement.x/y` after
-   `LevelSimulation::create`; anchor `+0x5f8/+0x5fc` ->
-   `PersonInstance.tile_x/y`, `State.spawn_tile_x/y`, `spawn_x/y`; direction
-   `+0x28` -> `PersonInstance.direction`/`PersonMovement.direction8`; route
-   type `+0x151c` (0..5) and route `+0x1524`; radius `+0x1520`; delays
-   `+0x2668/+0x266c`; dialog `+0x267c`; inventory name `+0x2aac`; HP `+0x14fc`
-   and EP `+0x1500` via `PersonRuntime::set_parameter`; route index `+0x1630`
-   for MOVED/MOVED_FLIP before the first advance; tribe `+0x150c` -> name.
-3. Explicitly leave at prototype/SEF defaults, not claimed restored: `+0x40`
+2. **Before `LevelSimulation::create`**, set on `PersonInstance`: name; anchor
+   `+0x5f8/+0x5fc` -> `PersonInstance.tile_x/y` and spawn state; radius
+   `+0x1520`; delays `+0x2668/+0x266c`; numeric route type `+0x151c` and route
+   cells `+0x1524`; direction `+0x28`; dialog `+0x267c`; inventory `+0x2aac`;
+   tribe `+0x150c` -> name. `create` copies these into `State`
+   (`level_simulation.cpp:48-106`), so setting them after create would leave
+   `State` stale.
+3. **After `LevelSimulation::create`**, apply only runtime state: current tile
+   pair -> `PersonMovement.x/y`; current direction; route index `+0x1630` for
+   MOVED/MOVED_FLIP before the first advance; HP `+0x14fc` and EP `+0x1500`
+   via `PersonRuntime::set_parameter`.
+4. Explicitly leave at prototype/SEF defaults, not claimed restored: `+0x40`
    (no port field), AP, `+0x44`, `+0x654`, `+0x658`, `+0xff0`, `+0x6cc`, tail,
    attached list.
 
@@ -898,12 +913,14 @@ chain trace that decides whether the 43 SEF-only persons are spawned.
 
 - Scopes: selected 499, pinned 19 (slot0 3, slot2 0, slot21 16), all-section
   14,507.
-- O1 raw section digests (3/3; all 2,599 exact), O2 name/type sequence (3/3,
-  0/0, 16/16; 499/499; 14,507/14,507), O3 person tuple including split person
-  digest and full line diff, O5 duplicate tuples (2/2 + 2/2; 81 groups, max
-  multiplicity 6), O7 HP/EP pairs (3/3 slot0, 0/0 slot2, 16/16 slot21) with
-  the clamp waiver rule, O8 field-level tuple (radius, delays, tribe, dialog,
-  inventory, route index; MOVED/MOVED_FLIP route-index cases).
+- O1 raw section digests (3/3; all 2,599 exact). O2 decoder 499/499 and
+  14,507/14,507; port restore 496/496 matched, with the 3 type-2-only records
+  gated and not counted. O3 person tuple over the 496 matched (pinned 19/19)
+  with split digest and full line diff. O5 duplicate tuples (2/2 + 2/2; 81
+  groups, max multiplicity 6). O7 HP/EP pairs (3/3 slot0, 0/0 slot2, 16/16
+  slot21) with the clamp waiver rule. O8 field-level tuple over 496 matched
+  (pinned 19/19): radius, delays, tribe, dialog, inventory, route index,
+  including MOVED/MOVED_FLIP route-index cases.
 - New unit tests: numeric route mapping, occurrence matching, duplicate
   ordering, O8 fields. SEF-only removal and type-2-only synthesis are explicit
   gates, not acceptance items.
