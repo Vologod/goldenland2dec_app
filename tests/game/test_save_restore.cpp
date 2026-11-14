@@ -1,13 +1,20 @@
 #include "gl/assets/cp1251.hpp"
 #include "gl/assets/save_payload.hpp"
+#include "gl/game/level.hpp"
+#include "gl/game/level_simulation.hpp"
+#include "gl/game/person_movement.hpp"
+#include "gl/game/person_runtime.hpp"
 #include "gl/game/save_person.hpp"
+#include "gl/game/save_restore.hpp"
 
 #include <array>
 #include <bit>
 #include <cstdint>
 #include <doctest/doctest.h>
+#include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -99,6 +106,108 @@ gl::assets::SaveEntity person_entity(std::vector<std::uint8_t> body) {
     entity.body = std::move(body);
     return entity;
 }
+
+gl::game::PersonInstance sef_person(std::string name, std::int32_t tile_x, std::int32_t tile_y,
+                                    std::string route) {
+    gl::game::PersonInstance person;
+    person.name = std::move(name);
+    person.tile_x = tile_x;
+    person.tile_y = tile_y;
+    person.direction = 0;
+    person.route_type = "MOVED";
+    person.route = std::move(route);
+    person.route_cells = {{tile_x, tile_y}, {tile_x + 1, tile_y}};
+    person.radius = 1;
+    person.delay_min = 1;
+    person.delay_max = 2;
+    person.tribe = "SEF_" + person.name;
+    person.dialog = "sef_dialog";
+    person.inventory = "sef_inventory";
+    return person;
+}
+
+struct RestoreFixture {
+    gl::game::Level level;
+    gl::assets::SaveTailEntry tail;
+    gl::assets::SaveTribeTable tribes;
+};
+
+RestoreFixture make_restore_fixture() {
+    RestoreFixture fixture;
+    fixture.level.name = "test";
+    fixture.level.persons.push_back(sef_person("dup", 1, 1, "r1"));
+    fixture.level.persons.push_back(sef_person("dup", 2, 2, "r2"));
+    fixture.level.persons.push_back(sef_person("solo", 3, 3, "r3"));
+
+    PersonValues first;
+    first.name = "dup";
+    first.anchor_x = 10;
+    first.anchor_y = 11;
+    first.current_x = 100;
+    first.current_y = 101;
+    first.direction = 4;
+    first.route_type = 2;
+    first.route = "r1";
+    first.radius = 7;
+    first.delay_min = 100;
+    first.delay_max = 200;
+    first.tribe = 5;
+    first.dialog = "dialog_one";
+    first.inventory = "inventory_one";
+    first.hp = 33;
+    first.energy = 22;
+    first.route_index = 1;
+
+    PersonValues second;
+    second.name = "dup";
+    second.anchor_x = 20;
+    second.anchor_y = 21;
+    second.current_x = 200;
+    second.current_y = 201;
+    second.direction = 7;
+    second.route_type = 5;
+    second.route = "r2";
+    second.radius = 9;
+    second.delay_min = 300;
+    second.delay_max = 400;
+    second.tribe = 6;
+    second.dialog = "dialog_two";
+    second.inventory = "inventory_two";
+    second.hp = 44;
+    second.energy = 55;
+    second.route_index = 3;
+
+    PersonValues unmatched;
+    unmatched.name = "ghost";
+    unmatched.anchor_x = 30;
+    unmatched.anchor_y = 31;
+
+    fixture.tail.entities.push_back(person_entity(person_body(first)));
+    fixture.tail.entities.push_back(person_entity(person_body(second)));
+    fixture.tail.entities.push_back(person_entity(person_body(unmatched)));
+    fixture.tribes.entries.push_back(gl::assets::SaveTribeEntry{5, "TribeFive"});
+    fixture.tribes.entries.push_back(gl::assets::SaveTribeEntry{6, "TribeSix"});
+    return fixture;
+}
+
+const std::vector<std::pair<std::int32_t, std::int32_t>> kDupOneCells{{1, 1}, {2, 1}};
+const std::vector<std::pair<std::int32_t, std::int32_t>> kDupTwoCells{{2, 2}, {3, 2}};
+
+gl::game::PersonInstance runtime_person(std::string name, std::optional<std::int32_t> saved_life,
+                                        std::optional<std::int32_t> saved_energy) {
+    gl::game::PersonInstance person;
+    person.name = std::move(name);
+    person.def.values["strength"] = "10";
+    person.def.values["constitution"] = "8";
+    person.def.values["intelligence"] = "5";
+    person.def.values["wisdom"] = "4";
+    person.def.values["experience_value"] = "0";
+    person.def.values["life"] = "5";
+    person.def.values["energy"] = "2";
+    person.saved_life = saved_life;
+    person.saved_energy = saved_energy;
+    return person;
+}
 } // namespace
 
 TEST_CASE("decode save person maps type-2 fields") {
@@ -156,4 +265,202 @@ TEST_CASE("decode save person rejects a truncated body") {
         REQUIRE_FALSE(record.has_value());
         CHECK(record.error().code == gl::ErrorCode::format);
     }
+}
+
+TEST_CASE("save restore matches names by occurrence and applies fields") {
+    RestoreFixture fixture = make_restore_fixture();
+    const auto counts =
+        gl::game::restore_save_persons(fixture.level, fixture.tail, &fixture.tribes);
+
+    CHECK(counts.matched == 2);
+    CHECK(counts.sef_only == 1);
+    CHECK(counts.type2_only == 1);
+    CHECK(counts.skipped == 0);
+    REQUIRE(fixture.level.persons.size() == 3);
+    CHECK(fixture.level.persons[0].name == "dup");
+    CHECK(fixture.level.persons[1].name == "dup");
+    CHECK(fixture.level.persons[2].name == "solo");
+
+    const gl::game::PersonInstance &first = fixture.level.persons[0];
+    CHECK(first.tile_x == 10);
+    CHECK(first.tile_y == 11);
+    CHECK(first.direction == 4);
+    CHECK(first.route_type == "MOVED");
+    CHECK(first.route == "r1");
+    CHECK(first.route_cells == kDupOneCells);
+    CHECK(first.radius == 7);
+    CHECK(first.delay_min == 100);
+    CHECK(first.delay_max == 200);
+    CHECK(first.tribe == "TribeFive");
+    CHECK(first.dialog == "dialog_one");
+    CHECK(first.inventory == "inventory_one");
+    REQUIRE(first.saved_life.has_value());
+    REQUIRE(first.saved_energy.has_value());
+    CHECK(*first.saved_life == 33);
+    CHECK(*first.saved_energy == 22);
+
+    const gl::game::PersonInstance &second = fixture.level.persons[1];
+    CHECK(second.tile_x == 20);
+    CHECK(second.tile_y == 21);
+    CHECK(second.direction == 7);
+    CHECK(second.route_type == "RANDOM");
+    CHECK(second.route == "r2");
+    CHECK(second.route_cells == kDupTwoCells);
+    CHECK(second.radius == 9);
+    CHECK(second.delay_min == 300);
+    CHECK(second.delay_max == 400);
+    CHECK(second.tribe == "TribeSix");
+    CHECK(second.dialog == "dialog_two");
+    CHECK(second.inventory == "inventory_two");
+    REQUIRE(second.saved_life.has_value());
+    REQUIRE(second.saved_energy.has_value());
+    CHECK(*second.saved_life == 44);
+    CHECK(*second.saved_energy == 55);
+
+    const gl::game::PersonInstance &solo = fixture.level.persons[2];
+    CHECK(solo.tile_x == 3);
+    CHECK(solo.tile_y == 3);
+    CHECK(solo.route == "r3");
+    CHECK(solo.tribe == "SEF_solo");
+    CHECK_FALSE(solo.saved_life.has_value());
+    CHECK_FALSE(solo.saved_energy.has_value());
+}
+
+TEST_CASE("save restore keeps SEF route cells and tribe on mismatch") {
+    gl::game::Level level;
+    level.name = "test";
+    level.persons.push_back(sef_person("m", 4, 4, "sef_route"));
+
+    PersonValues values;
+    values.name = "m";
+    values.anchor_x = 12;
+    values.anchor_y = 13;
+    values.route = "saved_route";
+    values.tribe = 99;
+
+    gl::assets::SaveTailEntry tail;
+    tail.entities.push_back(person_entity(person_body(values)));
+    gl::assets::SaveTribeTable tribes;
+    tribes.entries.push_back(gl::assets::SaveTribeEntry{5, "TribeFive"});
+
+    const auto counts = gl::game::restore_save_persons(level, tail, &tribes);
+
+    CHECK(counts.matched == 1);
+    CHECK(counts.sef_only == 0);
+    CHECK(counts.type2_only == 0);
+    REQUIRE(level.persons.size() == 1);
+    CHECK(level.persons[0].tile_x == 12);
+    CHECK(level.persons[0].tile_y == 13);
+    CHECK(level.persons[0].route == "saved_route");
+    CHECK(level.persons[0].route_cells ==
+          (std::vector<std::pair<std::int32_t, std::int32_t>>{{4, 4}, {5, 4}}));
+    CHECK(level.persons[0].tribe == "SEF_m");
+}
+
+TEST_CASE("save restore keeps SEF tribe without a tribe table") {
+    gl::game::Level level;
+    level.name = "test";
+    level.persons.push_back(sef_person("m", 4, 4, "r"));
+
+    PersonValues values;
+    values.name = "m";
+    values.route = "r";
+    values.tribe = 7;
+
+    gl::assets::SaveTailEntry tail;
+    tail.entities.push_back(person_entity(person_body(values)));
+
+    const auto counts = gl::game::restore_save_persons(level, tail, nullptr);
+
+    CHECK(counts.matched == 1);
+    REQUIRE(level.persons.size() == 1);
+    CHECK(level.persons[0].tribe == "SEF_m");
+}
+
+TEST_CASE("save restore drops SEF-only persons behind the gate") {
+    RestoreFixture fixture = make_restore_fixture();
+    const auto counts =
+        gl::game::restore_save_persons(fixture.level, fixture.tail, &fixture.tribes, true);
+
+    CHECK(counts.matched == 2);
+    CHECK(counts.sef_only == 1);
+    CHECK(counts.type2_only == 1);
+    REQUIRE(fixture.level.persons.size() == 2);
+    CHECK(fixture.level.persons[0].name == "dup");
+    CHECK(fixture.level.persons[1].name == "dup");
+}
+
+TEST_CASE("save restore skips non-person and malformed entities") {
+    gl::game::Level level;
+    level.name = "test";
+    level.persons.push_back(sef_person("solo", 3, 3, "r"));
+
+    gl::assets::SaveTailEntry tail;
+    gl::assets::SaveEntity trigger;
+    trigger.type = 16;
+    tail.entities.push_back(std::move(trigger));
+    tail.entities.push_back(person_entity({}));
+
+    const auto counts = gl::game::restore_save_persons(level, tail, nullptr);
+
+    CHECK(counts.matched == 0);
+    CHECK(counts.sef_only == 1);
+    CHECK(counts.type2_only == 0);
+    CHECK(counts.skipped == 2);
+    REQUIRE(level.persons.size() == 1);
+    CHECK(level.persons[0].name == "solo");
+}
+
+TEST_CASE("save restore runtime uses saved NPC life and energy") {
+    gl::game::PersonInstance saved = runtime_person("saved", 30, 10);
+    gl::game::PersonInstance untouched = runtime_person("untouched", std::nullopt, std::nullopt);
+
+    auto runtime = gl::game::PersonRuntime::create({saved, untouched}, std::nullopt);
+
+    CHECK(runtime.get_parameter("saved", gl::script::PersonParameter::life) ==
+          doctest::Approx(30.0));
+    CHECK(runtime.get_parameter("saved", gl::script::PersonParameter::energy) ==
+          doctest::Approx(10.0));
+    CHECK(runtime.get_parameter("untouched", gl::script::PersonParameter::life) ==
+          doctest::Approx(5.0));
+    CHECK(runtime.get_parameter("untouched", gl::script::PersonParameter::energy) ==
+          doctest::Approx(2.0));
+}
+
+TEST_CASE("save restore runtime applies current person state") {
+    gl::game::Level level;
+    level.name = "test";
+    level.width = 240 * 12;
+    level.height = 240 * 9;
+    gl::game::PersonInstance walker = sef_person("walker", 10, 10, "r");
+    walker.route_type = "MOVED";
+    walker.route_cells = {{11, 10}, {14, 10}, {14, 13}};
+    walker.delay_min = 0;
+    walker.delay_max = 0;
+    walker.go_type = gl::assets::PadAnimationType::rt_go;
+    walker.go_move_x = 6.0f;
+    walker.go_move_y = 5.0f;
+    walker.go_delay_ms = 100;
+    level.persons.push_back(std::move(walker));
+
+    auto sim = gl::game::LevelSimulation::create(level, 1);
+    sim.restore_person(0, gl::game::Tile{5, 6}, 3, 2);
+
+    const gl::game::PersonMovement &restored = sim.persons()[0];
+    CHECK(restored.x == doctest::Approx(5.0f * 12 + 6));
+    CHECK(restored.y == doctest::Approx(6.0f * 9 + 4));
+    CHECK(restored.target_x == doctest::Approx(5.0f * 12 + 6));
+    CHECK(restored.target_y == doctest::Approx(6.0f * 9 + 4));
+    CHECK(restored.direction8 == 3);
+    CHECK(restored.direction16 == gl::game::direction8_to16(3));
+    CHECK_FALSE(restored.moving);
+    CHECK_FALSE(restored.waiting);
+    CHECK(restored.path.empty());
+
+    sim.advance(0.028);
+    const gl::game::PersonMovement &planned = sim.persons()[0];
+    REQUIRE_FALSE(planned.path.empty());
+    CHECK(planned.path.back() == gl::game::Tile{14, 13});
+    CHECK(planned.target_x == doctest::Approx(14.0f * 12 + 6));
+    CHECK(planned.target_y == doctest::Approx(13.0f * 9 + 4));
 }

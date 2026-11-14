@@ -260,6 +260,16 @@ PersonRuntime PersonRuntime::create(const std::vector<PersonInstance> &persons,
         assign_value(state, PersonParameter::perception, person.def.values, "perception");
         assign_value(state, PersonParameter::life, person.def.values, "life");
         assign_value(state, PersonParameter::energy, person.def.values, "energy");
+        if (person.saved_life) {
+            state.values[value_index(PersonParameter::life)] =
+                static_cast<double>(*person.saved_life);
+            state.present[value_index(PersonParameter::life)] = true;
+        }
+        if (person.saved_energy) {
+            state.values[value_index(PersonParameter::energy)] =
+                static_cast<double>(*person.saved_energy);
+            state.present[value_index(PersonParameter::energy)] = true;
+        }
         state.present[value_index(PersonParameter::maximum_life)] = true;
         for (const auto &[key, text] : person.def.values) {
             if (key.starts_with("skills."))

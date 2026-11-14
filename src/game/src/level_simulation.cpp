@@ -283,6 +283,30 @@ void LevelSimulation::place_person(std::size_t index, Tile tile) {
     rebuild_occupancy();
 }
 
+void LevelSimulation::restore_person(std::size_t index, Tile current, std::uint8_t direction,
+                                     std::int32_t route_index) {
+    if (index >= states_.size())
+        return;
+    State &state = states_[index];
+    PersonMovement &m = state.movement;
+    m.x = current.x * kTileW + 6.0f;
+    m.y = current.y * kTileH + 4.0f;
+    m.target_x = m.x;
+    m.target_y = m.y;
+    m.direction8 = direction;
+    m.direction16 = direction8_to16(direction);
+    m.moving = false;
+    m.waiting = false;
+    m.wait_until_ms = 0;
+    m.state_started_ms = 0;
+    m.path.clear();
+    m.path_index = 0;
+    state.route_index = route_index;
+    state.has_goal = false;
+    persons_[index] = m;
+    rebuild_occupancy();
+}
+
 bool LevelSimulation::select_idle(std::size_t index, std::int32_t delay) {
     State &state = states_[index];
     PersonMovement &m = state.movement;

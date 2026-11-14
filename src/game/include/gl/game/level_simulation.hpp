@@ -34,6 +34,8 @@ class LevelSimulation {
     const std::vector<PersonMovement> &persons() const { return persons_; }
     // Test/utility seam: teleports the person and resets movement/goal only.
     void place_person(std::size_t index, Tile tile);
+    void restore_person(std::size_t index, Tile current, std::uint8_t direction,
+                        std::int32_t route_index);
     bool can_move(std::size_t index) const;
     std::uint64_t time_ms() const { return time_ms_; }
 

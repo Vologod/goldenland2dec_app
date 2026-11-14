@@ -17,6 +17,8 @@ struct PersonInstance {
     std::int32_t tile_x = 0;
     std::int32_t tile_y = 0;
     std::uint8_t direction = 0;
+    std::optional<std::int32_t> saved_life;
+    std::optional<std::int32_t> saved_energy;
     std::string route_type;
     std::string route;
     std::vector<std::pair<std::int32_t, std::int32_t>> route_cells;
