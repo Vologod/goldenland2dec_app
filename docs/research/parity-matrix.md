@@ -1,6 +1,6 @@
 # Parity matrix
 
-Обновлено: 2026-11-13. Исходно (2026-11-05) — read-only аудит существующего
+Обновлено: 2026-11-14. Исходно (2026-11-05) — read-only аудит существующего
 состояния; Phase 1a добавила evidence VM-паритета и native dispatch (код
 порта менялся, см. D-049); Phase 1b1 добавила evidence person-параметров
 и Hero stat-блока (D-050); Phase 1b2a добавила inventory-запросы Hero
@@ -75,8 +75,10 @@ ID: `P4a-*`, `P4b-*`, `P4b2-*` — прежние A/B/C из аудита (пе�
    встречается 51 раз (`P3-3`). Phase 1b2b4b добавила runtime/overlay
    trade (`TradePrice`, buy/sell/Exchange), не новые нативы;
    `0x5000006`/`0x5000007` остаются unsupported.
-3. **B3 save/load** — формат разобран (P2-15a, `implementable`), но payload
-   не читается и не пишется (`P2-15`; P2-15b/c).
+3. **B3 save/load** — формат разобран (P2-15a, `implementable`); payload
+   читается и грузится в first increment/entities parser (P2-15b/b1a), restore
+   persons исследован (P2-15b1b, `scoped`), но не реализован, и запись
+   отсутствует (`P2-15b1b1–b3`/P2-15c).
 4. **B4 тайминг** — порт 28 ms gate (`trunc(1000/35)`, один тик на
    кадр, без catch-up/clamp), research + implementation `P2-9`/D-068;
    residual U1 (host frame time) и pause/gate port-choice (`P4b-16`).
@@ -148,7 +150,7 @@ ID: `P4a-*`, `P4b-*`, `P4b2-*` — прежние A/B/C из аудита (пе�
 | P2-12 | save header | 112 байт/версия/title | `save.cpp:12-50` | 28 слотов | verified | unknown 28/38/104/108 | audit p2-p3 |
 | P2-13 | save scan | `slot<N>.sav` | `save_manager.cpp:34-123` | 28 файлов | partial | лимит слотов/чужие файлы | audit p2-p3 |
 | P2-14 | save UI | список/скролл/сообщение | `main.cpp:1300-1406` | screenshot tests | partial | оригинальный `save_load_menu.scr` | audit p2-p3 |
-| P2-15 | save payload | чтение/запись мира | first increment: decode + load; entities parser | research `p2-15a-save-payload.md`: 7 блоков 28/28; reader `FUN_1403210c` `0x3210c`, writer `FUN_14031b64` `0x31b64`; `BT_SCRN ` = client preview; OQ-1…OQ-13. **P2-15b (D-066):** `SavePayload` decode 28/28, `--dump-save`, `--load-save`/Continue грузят уровень (SEF) + P5a hero, atomic rollback. **P2-15b1 (research, D-069):** `BT_ENTS` type map `{2,8,16,32}`, terminator 1; readers/body sizes proven; parse 2599/2599 sections 0 mismatches; `BT_PNAME` count == type-2 2599/2599; `BT_RGINF` 36 B; verdict `scoped`. **P2-15b1a (D-070):** production parser `SaveTailEntry.rginf`/`person_names`/`entities` (type `{2,8,16,32}`, terminator 1, type 4 rejected); corpus 2599/2599 exact, histogram `{2:14507,8:354,16:12090,32:2591}`, PNAME==type2 2599/2599, RGINF latch 1920/679; `--dump-save` `entities/pnames/rginf_latch`; full `ctest` 19/19 (1206.72 s). OQ-12 note: entity **type map resolved**, named per-person fields still open | partial | read/load first increment + entities parser done; write отсутствует; restore/person-контейнеры — `P2-15b1b`; семантика person-полей/entity item-record/живой inventory oracle — `unverified`; type 4 never serialized; вне scope `BT_DIARY`/`BT_HSTRY`/`BT_VARS` values/`BT_TRIBE` | audit p2-p3; p2-15a; p2-15b1; D-066; D-069; D-070 |
+| P2-15 | save payload | чтение/запись мира | first increment: decode + load; entities parser | research `p2-15a-save-payload.md`: 7 блоков 28/28; reader `FUN_1403210c` `0x3210c`, writer `FUN_14031b64` `0x31b64`; `BT_SCRN ` = client preview; OQ-1…OQ-13. **P2-15b (D-066):** `SavePayload` decode 28/28, `--dump-save`, `--load-save`/Continue грузят уровень (SEF) + P5a hero, atomic rollback. **P2-15b1 (research, D-069):** `BT_ENTS` type map `{2,8,16,32}`, terminator 1; readers/body sizes proven; parse 2599/2599 sections 0 mismatches; `BT_PNAME` count == type-2 2599/2599; `BT_RGINF` 36 B; verdict `scoped`. **P2-15b1a (D-070):** production parser `SaveTailEntry.rginf`/`person_names`/`entities` (type `{2,8,16,32}`, terminator 1, type 4 rejected); corpus 2599/2599 exact, histogram `{2:14507,8:354,16:12090,32:2591}`, PNAME==type2 2599/2599, RGINF latch 1920/679; `--dump-save` `entities/pnames/rginf_latch`; full `ctest` 19/19 (1206.72 s). OQ-12 note: entity **type map resolved**, named per-person fields still open. **P2-15b1b (research, D-071):** type-2 field map (verified/inferred/unverified с RVA), item/container layout identical to `BT_HERO` (marker 115405/115405), SEF persons not a restore input, duplicate policy, chance-gated c0/c1 override/c2 preserved; verdict `scoped` → `P2-15b1b1` position/direction/params, `P2-15b1b2` inventory/containers (entity-container decoder + O4 gate), `P2-15b1b3` `+0x26c0` loot gate/ordering; O1–O7 pins. Restore not implemented; runtime override/RNG/live oracle deferred | partial | read/load first increment + entities parser done; write отсутствует; restore/person-контейнеры не реализованы — `P2-15b1b1/b2/b3`; семантика person-полей/entity item-record/живой inventory oracle — `unverified`; type 4 never serialized; вне scope `BT_DIARY`/`BT_HSTRY`/`BT_VARS` values/`BT_TRIBE` | audit p2-p3; p2-15a; p2-15b1; p2-15b1b; D-066; D-069; D-070; D-071 |
 | P2-16 | provenance | RVA/live для P2 | — | research без RVA | unverified | нужен reverse `GoldenLand.exe` | audit p2-p3 |
 
 ## P3 — CS/VM/диалоги/шрифты
