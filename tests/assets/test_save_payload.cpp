@@ -71,6 +71,17 @@ std::vector<std::uint8_t> make_type8_body() {
     put_u32(body, 0);
     return body;
 }
+std::vector<std::uint8_t> make_type8_container_body() {
+    std::vector<std::uint8_t> body;
+    put_u32(body, 0x11223344);
+    put_u32(body, 0x55667788);
+    put_u32(body, 1);
+    put_u32(body, 1);
+    body.insert(body.end(), 0xc0, 0xaa);
+    put_u32(body, 1);
+    body.insert(body.end(), 0x14, 0xbb);
+    return body;
+}
 std::vector<std::uint8_t> make_type20_body() {
     std::vector<std::uint8_t> body;
     put_u32(body, 0);
@@ -338,6 +349,50 @@ TEST_CASE("save payload: parses minimal typed entity bodies") {
     CHECK(entry.person_names.size() == 2u);
 }
 
+TEST_CASE("save payload: parses a non-zero container body") {
+    std::vector<std::uint8_t> ents;
+    put_u32(ents, 8);
+    const auto body = make_type8_container_body();
+    ents.insert(ents.end(), body.begin(), body.end());
+    put_u32(ents, 1);
+
+    const auto file =
+        make_save_with_blocks(make_blocks(make_pnames_body(), make_rginf_body(), ents));
+    auto payload = gl::assets::parse_save_payload(file);
+    REQUIRE(payload.has_value());
+    REQUIRE(payload->tail.size() == 1u);
+    REQUIRE(payload->tail[0].entities.size() == 1u);
+    CHECK(payload->tail[0].entities[0].type == 8u);
+    CHECK(payload->tail[0].entities[0].body == body);
+    CHECK(payload->tail[0].entities[0].body.size() == 232u);
+}
+
+TEST_CASE("save payload: PNAME clamps declared length to 0x104") {
+    std::vector<std::uint8_t> pnames;
+    put_u32(pnames, 0x200);
+    pnames.insert(pnames.end(), 0x104, static_cast<std::uint8_t>('A'));
+    put_u32(pnames, 0);
+    auto payload = gl::assets::parse_save_payload(
+        make_save_with_blocks(make_blocks(pnames, make_rginf_body(), make_ents_body())));
+    REQUIRE(payload.has_value());
+    REQUIRE(payload->tail.size() == 1u);
+    REQUIRE(payload->tail[0].person_names.size() == 1u);
+    CHECK(payload->tail[0].person_names[0].size() == 0x104u);
+}
+
+TEST_CASE("save payload: tail errors identify the failing entry and block") {
+    std::vector<std::uint8_t> ents;
+    put_u32(ents, 9);
+    put_u32(ents, 1);
+    auto payload = gl::assets::parse_save_payload(
+        make_save_with_blocks(make_blocks(make_pnames_body(), make_rginf_body(), ents)));
+    REQUIRE_FALSE(payload.has_value());
+    CHECK(payload.error().code == gl::ErrorCode::format);
+    CHECK(payload.error().message.find("L93_4") != std::string::npos);
+    CHECK(payload.error().message.find("BT_ENTS") != std::string::npos);
+    CHECK(payload.error().message.find("9") != std::string::npos);
+}
+
 TEST_CASE("save payload: rejects malformed entity snapshots") {
     const auto parse_blocks = [](const std::vector<std::uint8_t> &blocks) {
         return gl::assets::parse_save_payload(make_save_with_blocks(blocks));
@@ -349,6 +404,36 @@ TEST_CASE("save payload: rejects malformed entity snapshots") {
         put_u32(ents, 1);
         auto payload =
             parse_blocks(make_blocks(make_pnames_body(), make_rginf_body(), ents));
+        REQUIRE_FALSE(payload.has_value());
+        CHECK(payload.error().code == gl::ErrorCode::format);
+    }
+
+    SUBCASE("type 4 is rejected even with a zero body") {
+        std::vector<std::uint8_t> ents;
+        put_u32(ents, 4);
+        put_u32(ents, 1);
+        auto payload =
+            parse_blocks(make_blocks(make_pnames_body(), make_rginf_body(), ents));
+        REQUIRE_FALSE(payload.has_value());
+        CHECK(payload.error().code == gl::ErrorCode::format);
+    }
+
+    SUBCASE("terminator followed by trailing bytes") {
+        auto ents = make_ents_body();
+        put_u32(ents, 0);
+        auto payload =
+            parse_blocks(make_blocks(make_pnames_body(), make_rginf_body(), ents));
+        REQUIRE_FALSE(payload.has_value());
+        CHECK(payload.error().code == gl::ErrorCode::format);
+    }
+
+    SUBCASE("duplicate tag in a section") {
+        std::vector<std::uint8_t> blocks;
+        put_block(blocks, "BT_PNAME", make_pnames_body());
+        put_block(blocks, "BT_RGINF", make_rginf_body());
+        put_block(blocks, "BT_RGINF", make_rginf_body());
+        put_block(blocks, "BT_ENTS ", make_ents_body());
+        auto payload = parse_blocks(blocks);
         REQUIRE_FALSE(payload.has_value());
         CHECK(payload.error().code == gl::ErrorCode::format);
     }
