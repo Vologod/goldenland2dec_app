@@ -983,10 +983,10 @@ Evidence (`GL_GAME_DIR=I:\Games\Златогорье-2`, 2026-11-14):
   --output-on-failure` — **19/19 passed**, `Total Test time (real) =
   1206.72 sec`, exit 0.
 
-Divergences/notes vs spec: the spec phrased the type-2 tail as `0x84 + 0x14*c`
-(after the body #20 `u32`), while `skip_type2_tail` consumes
-`0x80 + 0x14*c`; both describe the same stream because body #20's `u32` is
-skipped separately. No other formula changed.
+Type-2 tail: `0x84 + 0x14*c` = `raw(4*0x20)` (0x80) + `u32 c` (4) + `raw(0x14*c)`.
+`skip_type2_tail` consumes exactly that stream (`0x80` bytes, then the `u32`
+count, then `c * 0x14`); there is no formula divergence. No other formula
+changed.
 
 Limitations / next: named person-body fields, entity item-record `0xC0`
 semantics, container restore and the runtime `+0x26c0` application remain
