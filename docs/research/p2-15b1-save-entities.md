@@ -764,7 +764,7 @@ field; **unverified** = save semantics not resolved yet.
 | save field | port struct/field | status |
 |---|---|---|
 | `BT_INFO.time[0x20]` | `assets::SaveInfo.time` (`save_payload.hpp:20`) | available (parsed) |
-| `BT_INFO.+0x26c4` | `SaveInfo.party_level` (`save_payload.cpp:275`) | partial: parsed but unused; glgame loot level is `hero_level_from_experience(EXP)+1` (`tools/glgame/main.cpp:1012-1015`) and omits the original Scout/Identify bonuses (`p3b2b2` §15.1) |
+| `BT_INFO.+0x26c4` | `SaveInfo.party_level` (`save_payload.cpp:345`) | partial: parsed but unused; glgame loot level is `hero_level_from_experience(EXP)+1` (`tools/glgame/main.cpp:1012-1015`) and omits the original Scout/Identify bonuses (`p3b2b2` §15.1) |
 | `BT_INFO.+0x26c8[8]` | `SaveInfo.field_26c8` (`:23`) | available (opaque) |
 | `BT_PNAME` names | `SaveTailEntry.person_names` (`save_payload.hpp:48`) | parsed (cp1251→UTF-8); not wired to `PersonInstance` — `P2-15b1b` |
 | `BT_RGINF` u32 latch | `SaveTailEntry.rginf.latch` (`:47`), raw `SavePayload.rginf` | parsed; not applied to runtime `+0x26c0` — `P2-15b1b` |
