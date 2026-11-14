@@ -16,6 +16,7 @@ add_library(gl_game STATIC
     src/person_movement.cpp
     src/person_runtime.cpp
     src/person_rng.cpp
+    src/save_person.cpp
     src/special_engine.cpp
     src/trade_price.cpp
     src/walk_grid.cpp
