@@ -57,21 +57,97 @@ std::vector<std::uint8_t> make_rginf_body() {
         body[i] = static_cast<std::uint8_t>(0x40 + i);
     return body;
 }
+std::vector<std::uint8_t> make_pnames_body() {
+    std::vector<std::uint8_t> body;
+    put_string(body, "L1_1.P1");
+    put_string(body, "L2_2.P2");
+    put_u32(body, 0);
+    return body;
+}
+std::vector<std::uint8_t> make_type8_body() {
+    std::vector<std::uint8_t> body;
+    put_u32(body, 0x11223344);
+    put_u32(body, 0x55667788);
+    put_u32(body, 0);
+    return body;
+}
+std::vector<std::uint8_t> make_type20_body() {
+    std::vector<std::uint8_t> body;
+    put_u32(body, 0);
+    put_u32(body, 0x20);
+    put_u32(body, 0x21);
+    put_u32(body, 0);
+    put_u32(body, 0);
+    put_u32(body, 0x22);
+    put_u32(body, 0x23);
+    return body;
+}
+std::vector<std::uint8_t> make_type10_body() {
+    std::vector<std::uint8_t> body;
+    put_u32(body, 0);
+    put_u32(body, 0x10);
+    put_u32(body, 0x11);
+    put_u32(body, 0);
+    put_u32(body, 0);
+    put_u32(body, 0x12);
+    put_u32(body, 0);
+    put_u32(body, 0x13);
+    put_u32(body, 0);
+    return body;
+}
+std::vector<std::uint8_t> make_type2_body() {
+    std::vector<std::uint8_t> body;
+    put_u32(body, 0);
+    put_u32(body, 1);
+    put_u32(body, 2);
+    put_u32(body, 3);
+    put_u32(body, 4);
+    put_u32(body, 5);
+    put_u32(body, 6);
+    put_u32(body, 7);
+    body.insert(body.end(), 0x20, 0x20);
+    put_u32(body, 8);
+    put_u32(body, 9);
+    put_u32(body, 0);
+    put_u32(body, 10);
+    put_u32(body, 11);
+    put_u32(body, 12);
+    put_u32(body, 13);
+    put_u32(body, 0);
+    put_u32(body, 0);
+    put_u32(body, 14);
+    body.insert(body.end(), 0x11c, 0x11);
+    put_u32(body, 15);
+    put_u32(body, 16);
+    put_u32(body, 17);
+    put_u32(body, 18);
+    put_u32(body, 19);
+    put_u32(body, 0);
+    put_u32(body, 0);
+    put_u32(body, 0);
+    body.insert(body.end(), 0x80, 0x80);
+    put_u32(body, 0);
+    return body;
+}
 std::vector<std::uint8_t> make_ents_body() {
     std::vector<std::uint8_t> body;
-    put_u32(body, 2);
-    body.push_back(0xaa);
-    body.push_back(0xbb);
-    body.push_back(0xcc);
-    body.push_back(0xdd);
+    put_u32(body, 8);
+    const auto entity = make_type8_body();
+    body.insert(body.end(), entity.begin(), entity.end());
     put_u32(body, 1);
     return body;
 }
-std::vector<std::uint8_t> make_section_blocks() {
+std::vector<std::uint8_t> make_blocks(const std::vector<std::uint8_t> &pnames,
+                                      const std::vector<std::uint8_t> &rginf,
+                                      const std::vector<std::uint8_t> &ents) {
     std::vector<std::uint8_t> d;
-    put_block(d, "BT_RGINF", make_rginf_body());
-    put_block(d, "BT_ENTS ", make_ents_body());
+    put_block(d, "BT_PNAME", pnames);
+    put_block(d, "BT_RGINF", rginf);
+    put_block(d, "BT_ENTS ", ents);
     return d;
+}
+std::vector<std::uint8_t> make_section_blocks() {
+    return make_blocks(make_pnames_body(), make_rginf_body(), make_ents_body());
 }
 std::vector<std::uint8_t> make_section(const std::vector<std::uint8_t> &raw_blocks) {
     std::vector<std::uint8_t> section;
@@ -132,6 +208,16 @@ std::vector<std::uint8_t> make_save(const std::vector<std::uint8_t> &body,
     file.insert(file.end(), compressed.begin(), compressed.end());
     file.insert(file.end(), tail.begin(), tail.end());
     return file;
+}
+std::vector<std::uint8_t> make_save_with_blocks(const std::vector<std::uint8_t> &blocks) {
+    return make_save(make_body("L93_4", make_vars()),
+                     make_tail({make_tail_entry("L93_4", make_section(blocks))}));
+}
+std::uint32_t le_u32(const std::vector<std::uint8_t> &data, std::size_t offset) {
+    std::uint32_t value = 0;
+    for (int i = 0; i < 4; ++i)
+        value |= static_cast<std::uint32_t>(data[offset + static_cast<std::size_t>(i)]) << (8 * i);
+    return value;
 }
 } // namespace
 
@@ -200,6 +286,111 @@ TEST_CASE("save payload: parses tail and selected BT_RGINF/BT_ENTS") {
     CHECK(payload->rginf == make_rginf_body());
     CHECK(payload->rginf.size() == 36u);
     CHECK(payload->ents == make_ents_body());
+
+    const auto &entry = payload->tail[0];
+    const auto rginf = make_rginf_body();
+    CHECK(entry.rginf.latch == le_u32(rginf, 0));
+    for (std::size_t i = 0; i < entry.rginf.datetime.size(); ++i)
+        CHECK(entry.rginf.datetime[i] == le_u32(rginf, 4 + 4 * i));
+    CHECK(entry.person_names == std::vector<std::string>{"L1_1.P1", "L2_2.P2"});
+    REQUIRE(entry.entities.size() == 1u);
+    CHECK(entry.entities[0].type == 8u);
+    CHECK(entry.entities[0].body == make_type8_body());
+    CHECK(entry.entities[0].body.size() == 12u);
+}
+
+TEST_CASE("save payload: parses minimal typed entity bodies") {
+    std::vector<std::uint8_t> ents;
+    const auto append = [&ents](std::uint32_t type, const std::vector<std::uint8_t> &body) {
+        put_u32(ents, type);
+        ents.insert(ents.end(), body.begin(), body.end());
+    };
+    append(0x20, make_type20_body());
+    append(0x10, make_type10_body());
+    append(2, make_type2_body());
+    append(8, make_type8_body());
+    put_u32(ents, 1);
+
+    const auto file =
+        make_save_with_blocks(make_blocks(make_pnames_body(), make_rginf_body(), ents));
+    auto payload = gl::assets::parse_save_payload(file);
+    REQUIRE(payload.has_value());
+    REQUIRE(payload->tail.size() == 1u);
+    const auto &entry = payload->tail[0];
+    REQUIRE(entry.entities.size() == 4u);
+
+    CHECK(entry.entities[0].type == 0x20u);
+    CHECK(entry.entities[0].body == make_type20_body());
+    CHECK(entry.entities[0].body.size() == 28u);
+
+    CHECK(entry.entities[1].type == 0x10u);
+    CHECK(entry.entities[1].body == make_type10_body());
+    CHECK(entry.entities[1].body.size() == 36u);
+
+    CHECK(entry.entities[2].type == 2u);
+    CHECK(entry.entities[2].body == make_type2_body());
+    CHECK(entry.entities[2].body.size() == 552u);
+
+    CHECK(entry.entities[3].type == 8u);
+    CHECK(entry.entities[3].body == make_type8_body());
+    CHECK(entry.entities[3].body.size() == 12u);
+
+    CHECK(entry.person_names.size() == 2u);
+}
+
+TEST_CASE("save payload: rejects malformed entity snapshots") {
+    const auto parse_blocks = [](const std::vector<std::uint8_t> &blocks) {
+        return gl::assets::parse_save_payload(make_save_with_blocks(blocks));
+    };
+
+    SUBCASE("unknown entity type") {
+        std::vector<std::uint8_t> ents;
+        put_u32(ents, 9);
+        put_u32(ents, 1);
+        auto payload =
+            parse_blocks(make_blocks(make_pnames_body(), make_rginf_body(), ents));
+        REQUIRE_FALSE(payload.has_value());
+        CHECK(payload.error().code == gl::ErrorCode::format);
+    }
+
+    SUBCASE("truncated entity body") {
+        std::vector<std::uint8_t> ents;
+        put_u32(ents, 8);
+        put_u32(ents, 0x11223344);
+        auto payload =
+            parse_blocks(make_blocks(make_pnames_body(), make_rginf_body(), ents));
+        REQUIRE_FALSE(payload.has_value());
+        CHECK(payload.error().code == gl::ErrorCode::format);
+    }
+
+    SUBCASE("missing entity terminator") {
+        std::vector<std::uint8_t> ents;
+        put_u32(ents, 8);
+        const auto entity = make_type8_body();
+        ents.insert(ents.end(), entity.begin(), entity.end());
+        auto payload =
+            parse_blocks(make_blocks(make_pnames_body(), make_rginf_body(), ents));
+        REQUIRE_FALSE(payload.has_value());
+        CHECK(payload.error().code == gl::ErrorCode::format);
+    }
+
+    SUBCASE("RGINF is not 36 bytes") {
+        auto rginf = make_rginf_body();
+        rginf.pop_back();
+        auto payload = parse_blocks(
+            make_blocks(make_pnames_body(), rginf, make_ents_body()));
+        REQUIRE_FALSE(payload.has_value());
+        CHECK(payload.error().code == gl::ErrorCode::format);
+    }
+
+    SUBCASE("PNAME is unterminated") {
+        std::vector<std::uint8_t> pnames;
+        put_string(pnames, "L1_1.P1");
+        auto payload =
+            parse_blocks(make_blocks(pnames, make_rginf_body(), make_ents_body()));
+        REQUIRE_FALSE(payload.has_value());
+        CHECK(payload.error().code == gl::ErrorCode::format);
+    }
 }
 
 TEST_CASE("save payload: selects the matching tail entry by level") {

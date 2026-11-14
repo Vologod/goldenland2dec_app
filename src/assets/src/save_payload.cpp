@@ -37,6 +37,175 @@ bool read_string(ByteReader &reader, std::string &out) {
     out = cp1251_to_utf8(bytes);
     return true;
 }
+
+bool skip_bytes(std::span<const std::uint8_t> data, std::size_t &cursor, std::size_t count) {
+    if (cursor > data.size() || count > data.size() - cursor)
+        return false;
+    cursor += count;
+    return true;
+}
+
+bool skip_u32(std::span<const std::uint8_t> data, std::size_t &cursor) {
+    return skip_bytes(data, cursor, 4);
+}
+
+bool skip_string(std::span<const std::uint8_t> data, std::size_t &cursor) {
+    if (cursor > data.size() || data.size() - cursor < 4)
+        return false;
+    const std::uint32_t length = u32_at(data, cursor);
+    cursor += 4;
+    const std::size_t count = length < 0x104 ? length : 0x104;
+    return skip_bytes(data, cursor, count);
+}
+
+bool skip_container(std::span<const std::uint8_t> data, std::size_t &cursor) {
+    if (cursor > data.size() || data.size() - cursor < 4)
+        return false;
+    const std::uint32_t flag = u32_at(data, cursor);
+    cursor += 4;
+    if (flag == 0)
+        return true;
+    if (cursor > data.size() || data.size() - cursor < 4)
+        return false;
+    const std::uint32_t count = u32_at(data, cursor);
+    cursor += 4;
+    for (std::uint32_t index = 0; index < count; ++index) {
+        if (!skip_bytes(data, cursor, 0xc0))
+            return false;
+        if (cursor > data.size() || data.size() - cursor < 4)
+            return false;
+        const std::uint32_t sub_count = u32_at(data, cursor);
+        cursor += 4;
+        if (!skip_bytes(data, cursor, static_cast<std::size_t>(sub_count) * 0x14))
+            return false;
+    }
+    return true;
+}
+
+bool parse_rginf(std::span<const std::uint8_t> body, SaveRginf &out) {
+    if (body.size() != 36)
+        return false;
+    out.latch = u32_at(body, 0);
+    for (std::size_t index = 0; index < out.datetime.size(); ++index)
+        out.datetime[index] = u32_at(body, 4 + 4 * index);
+    return true;
+}
+
+bool parse_pnames(std::span<const std::uint8_t> body, std::vector<std::string> &out) {
+    std::size_t cursor = 0;
+    while (true) {
+        if (cursor > body.size() || body.size() - cursor < 4)
+            return false;
+        const std::uint32_t length = u32_at(body, cursor);
+        cursor += 4;
+        if (length == 0)
+            return cursor == body.size();
+        if (length > body.size() - cursor)
+            return false;
+        out.push_back(cp1251_to_utf8(body.subspan(cursor, length)));
+        cursor += length;
+    }
+}
+
+bool skip_type2_tail(std::span<const std::uint8_t> data, std::size_t &cursor) {
+    if (!skip_bytes(data, cursor, 0x80))
+        return false;
+    if (cursor > data.size() || data.size() - cursor < 4)
+        return false;
+    const std::uint32_t count = u32_at(data, cursor);
+    cursor += 4;
+    return skip_bytes(data, cursor, static_cast<std::size_t>(count) * 0x14);
+}
+
+bool parse_entities(std::span<const std::uint8_t> body, std::vector<SaveEntity> &out) {
+    std::size_t cursor = 0;
+    while (true) {
+        if (cursor > body.size() || body.size() - cursor < 4)
+            return false;
+        const std::uint32_t type = u32_at(body, cursor);
+        cursor += 4;
+        if (type == 1)
+            return cursor == body.size();
+        const std::size_t start = cursor;
+        bool ok = false;
+        switch (type) {
+        case 8:
+            ok = skip_bytes(body, cursor, 8) && skip_container(body, cursor);
+            break;
+        case 0x10:
+            ok = skip_string(body, cursor) && skip_u32(body, cursor) && skip_u32(body, cursor) &&
+                 skip_string(body, cursor) && skip_string(body, cursor) && skip_u32(body, cursor) &&
+                 skip_string(body, cursor) && skip_u32(body, cursor) &&
+                 skip_container(body, cursor);
+            break;
+        case 0x20:
+            ok = skip_string(body, cursor) && skip_u32(body, cursor) && skip_u32(body, cursor) &&
+                 skip_string(body, cursor) && skip_string(body, cursor) && skip_u32(body, cursor) &&
+                 skip_u32(body, cursor);
+            break;
+        case 2:
+            ok = skip_string(body, cursor) && skip_u32(body, cursor) && skip_u32(body, cursor) &&
+                 skip_bytes(body, cursor, 8) && skip_u32(body, cursor) && skip_u32(body, cursor) &&
+                 skip_u32(body, cursor) && skip_bytes(body, cursor, 0x20) &&
+                 skip_u32(body, cursor) && skip_u32(body, cursor) && skip_string(body, cursor) &&
+                 skip_u32(body, cursor) && skip_u32(body, cursor) && skip_u32(body, cursor) &&
+                 skip_u32(body, cursor) && skip_string(body, cursor) && skip_string(body, cursor) &&
+                 skip_u32(body, cursor) && skip_bytes(body, cursor, 0x11c) &&
+                 skip_bytes(body, cursor, 4) && skip_u32(body, cursor) && skip_u32(body, cursor) &&
+                 skip_u32(body, cursor) && skip_u32(body, cursor) && skip_container(body, cursor) &&
+                 skip_container(body, cursor) && skip_container(body, cursor) &&
+                 skip_type2_tail(body, cursor);
+            break;
+        default:
+            return false;
+        }
+        if (!ok)
+            return false;
+        SaveEntity entity;
+        entity.type = type;
+        const auto bytes = body.subspan(start, cursor - start);
+        entity.body.assign(bytes.begin(), bytes.end());
+        out.push_back(std::move(entity));
+    }
+}
+
+bool parse_tail_section(SaveTailEntry &entry, std::vector<std::uint8_t> *rginf_raw,
+                        std::vector<std::uint8_t> *ents_raw) {
+    ByteReader snapshot(entry.section);
+    bool have_rginf = false;
+    bool have_pname = false;
+    bool have_ents = false;
+    while (!snapshot.at_end()) {
+        std::span<const std::uint8_t> tag;
+        if (!snapshot.read_bytes(8, tag))
+            return false;
+        std::uint32_t size = 0;
+        if (!snapshot.read_u32le(size))
+            return false;
+        std::span<const std::uint8_t> body;
+        if (!snapshot.read_bytes(size, body))
+            return false;
+        const std::string tag_text(reinterpret_cast<const char *>(tag.data()), tag.size());
+        if (tag_text == "BT_RGINF") {
+            if (have_rginf || !parse_rginf(body, entry.rginf))
+                return false;
+            if (rginf_raw)
+                rginf_raw->assign(body.begin(), body.end());
+            have_rginf = true;
+        } else if (tag_text == "BT_PNAME") {
+            if (have_pname || !parse_pnames(body, entry.person_names))
+                return false;
+            have_pname = true;
+        } else if (tag_text == "BT_ENTS ") {
+            if (have_ents || !parse_entities(body, entry.entities))
+                return false;
+            if (ents_raw)
+                ents_raw->assign(body.begin(), body.end());
+            have_ents = true;
+        }
+    }
+    return have_rginf && have_pname && have_ents;
+}
 } // namespace
 
 Result<SavePayload> parse_save_payload(std::span<const std::uint8_t> file) {
@@ -182,37 +351,12 @@ Result<SavePayload> parse_save_payload(std::span<const std::uint8_t> file) {
         if (!payload.level_tail_index)
             return format_error("save payload tail is missing the selected level");
 
-        ByteReader snapshot(payload.tail[*payload.level_tail_index].section);
-        bool have_rginf = false;
-        bool have_ents = false;
-        while (!snapshot.at_end()) {
-            std::span<const std::uint8_t> tag;
-            if (!snapshot.read_bytes(8, tag))
-                return format_error("save payload tail snapshot tag is truncated");
-            std::uint32_t block_size = 0;
-            if (!snapshot.read_u32le(block_size))
-                return format_error("save payload tail snapshot block size is truncated");
-            const std::string tag_text(reinterpret_cast<const char *>(tag.data()), tag.size());
-            if (tag_text == "BT_RGINF") {
-                if (block_size != 36)
-                    return format_error("save payload tail snapshot BT_RGINF size is invalid");
-                std::span<const std::uint8_t> body;
-                if (!snapshot.read_bytes(block_size, body))
-                    return format_error("save payload tail snapshot BT_RGINF is truncated");
-                payload.rginf.assign(body.begin(), body.end());
-                have_rginf = true;
-            } else if (tag_text == "BT_ENTS ") {
-                const std::span<const std::uint8_t> body = snapshot.remaining();
-                payload.ents.assign(body.begin(), body.end());
-                snapshot.skip(body.size());
-                have_ents = true;
-                break;
-            } else if (!snapshot.skip(block_size)) {
-                return format_error("save payload tail snapshot block is truncated");
-            }
+        for (std::size_t index = 0; index < payload.tail.size(); ++index) {
+            const bool selected = index == *payload.level_tail_index;
+            if (!parse_tail_section(payload.tail[index], selected ? &payload.rginf : nullptr,
+                                    selected ? &payload.ents : nullptr))
+                return format_error("save payload tail snapshot is malformed");
         }
-        if (!have_rginf || !have_ents)
-            return format_error("save payload tail snapshot is missing BT_RGINF or BT_ENTS");
         return payload;
     } catch (const std::bad_alloc &) {
         return format_error("save payload allocation failed");

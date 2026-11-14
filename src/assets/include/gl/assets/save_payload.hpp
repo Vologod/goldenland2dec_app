@@ -30,10 +30,23 @@ struct SaveVar {
     std::string text_value;
 };
 
+struct SaveEntity {
+    std::uint32_t type = 0;
+    std::vector<std::uint8_t> body;
+};
+
+struct SaveRginf {
+    std::uint32_t latch = 0;
+    std::array<std::uint32_t, 8> datetime{};
+};
+
 struct SaveTailEntry {
     std::string name;
     std::uint32_t raw_len = 0;
     std::vector<std::uint8_t> section;
+    SaveRginf rginf;
+    std::vector<std::string> person_names;
+    std::vector<SaveEntity> entities;
 };
 
 struct SavePayload {
