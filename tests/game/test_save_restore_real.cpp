@@ -153,12 +153,14 @@ SlotRestore restore_slot(gl::assets::GameVfs &vfs, int slot) {
     auto payload = gl::assets::parse_save_payload(read_save(slot));
     REQUIRE(payload.has_value());
     REQUIRE(payload->level_tail_index.has_value());
-    const gl::assets::SaveTailEntry &tail = payload->tail[*payload->level_tail_index];
+    const std::string level_id = payload->info.level_id;
 
-    auto level = gl::game::load_level(vfs, payload->info.level_id);
+    auto level = gl::game::load_level(vfs, level_id);
     REQUIRE(level.has_value());
 
     SlotRestore restored{std::move(payload.value()), std::move(level.value()), {}};
+    const gl::assets::SaveTailEntry &tail =
+        restored.payload.tail[*restored.payload.level_tail_index];
     restored.result =
         gl::game::restore_save_persons(restored.level, tail, &restored.payload.tribes);
     return restored;
