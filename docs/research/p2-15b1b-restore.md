@@ -742,9 +742,10 @@ above deliberately exclude HP/EP):
   the only path that proves the runtime container override and the load-game
   SEF spawn order; no live run was performed here.
 - **Deferred:** latch-1-with-persons regeneration pin. `slot2` exercises latch 1
-  but has zero persons. `slot3/L93_4` (section 6323, latch 1, 3 persons) is the
-  next pin once the entity-container decoder exists; until then the chance-gate
-  and override semantics are decompiled-only.
+  but has zero saved/type-2 persons (`L6_4.P199_Shurba_Hal` is SEF-only).
+  `slot3/L93_4` (section 6323, latch 1, 3 persons) is the next pin once the
+  entity-container decoder exists; until then the chance-gate and override
+  semantics are decompiled-only.
 
 ## Unknowns and exact next checks
 
@@ -823,10 +824,11 @@ above deliberately exclude HP/EP):
     source (`DAT_1407fbcc+0x8c`) and the datetime arithmetic are not wired.
     Next: decode the config interval and unit-test the O6 decision table against
     synthetic clocks before claiming runtime parity.
-17. **Latch-1 regeneration pin.** `slot2/L6_3` has latch 1 but zero persons;
-    `slot3/L93_4` (section 6323, latch 1, 3 persons) is the first real override
-    pin. Next after the entity-container decoder: run the slot3 combined pin
-    and verify c0/c1 chance-gate/replacement behavior; c2 must stay serialized.
+17. **Latch-1 regeneration pin.** `slot2/L6_3` has latch 1 but zero saved/type-2
+    persons (`L6_4.P199_Shurba_Hal` is SEF-only); `slot3/L93_4` (section 6323,
+    latch 1, 3 persons) is the first real override pin. Next after the
+    entity-container decoder: run the slot3 combined pin and verify c0/c1
+    chance-gate/replacement behavior; c2 must stay serialized.
 
 ## Open Questions
 
