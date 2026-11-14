@@ -2,6 +2,15 @@
 
 Обновлено: 2026-11-13
 
+## P2-15b1a — Save entities parser (in progress 2026-11-14)
+
+- **Задача:** parse BT_ENTS (types/bodies), BT_PNAME, BT_RGINF во всех
+  tail-секциях; `--dump-save` counts; без restore.
+- **Spec:** `docs/specs/2026-11-14-p2-15b1a-entities-parser-design.md`.
+- **Plan:** `docs/plans/2026-11-14-p2-15b1a-entities-parser.md`.
+- **Критерии:** 2599/2599 exact; histogram; PNAME==type2; malformed errors.
+- **Статус:** `in progress`.
+
 ## P2-15b1 — Save entities/persons research (done 2026-11-13)
 
 - **Задача:** BT_ENTS class map/body layout, BT_RGINF/BT_PNAME, restore
