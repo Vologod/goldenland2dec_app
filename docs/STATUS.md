@@ -1,15 +1,40 @@
 # STATUS
 
-Обновлено: 2026-11-13
+Обновлено: 2026-11-14
 
-## P2-15b1a — Save entities parser (in progress 2026-11-14)
+## P2-15b1a — Save entities parser (done 2026-11-14)
 
 - **Задача:** parse BT_ENTS (types/bodies), BT_PNAME, BT_RGINF во всех
   tail-секциях; `--dump-save` counts; без restore.
-- **Spec:** `docs/specs/2026-11-14-p2-15b1a-entities-parser-design.md`.
+- **Spec:** `docs/specs/2026-11-14-p2-15b1a-entities-parser-design.md` —
+  `implemented (2026-11-14)`.
 - **Plan:** `docs/plans/2026-11-14-p2-15b1a-entities-parser.md`.
-- **Критерии:** 2599/2599 exact; histogram; PNAME==type2; malformed errors.
-- **Статус:** `in progress`.
+- **Сделано (Tasks 1–4, D-070):** `SaveEntity`/`SaveRginf`/`SaveTailEntry`
+  (`rginf`, `person_names`, `entities`); каждая tail-секция декодируется:
+  RGINF ровно 36 B (`u32` latch + 8×u32 datetime), PNAME — zero-terminated
+  `u32 len + cp1251`, ENT-список — по формулам research (type 2/8/16/32,
+  terminator `type 1`, `strings u32 n + min(n,0x104)`, блок `M`); unknown type
+  (включая 4), truncation, missing terminator, duplicate tag, RGINF != 36,
+  PNAME без terminator/лишние байты → `ErrorCode::format` на весь payload.
+  `PNAME == type2` — test invariant, не parser failure. Raw `BT_RGINF`/
+  `BT_ENTS` выбранной секции сохранены в `SavePayload.rginf`/`.ents` для b1b;
+  restore/мутаций нет. `--dump-save` печатает
+  `entities=<n> pnames=<n> rginf_latch=<u32>`.
+- **Проверка (2026-11-14, `GL_GAME_DIR=I:\Games\Златогорье-2`):**
+  `cmake --build build` exit 0; полный `ctest --test-dir build
+  --output-on-failure` — **19/19 passed**, `Total Test time (real) =
+  1206.72 sec`, exit 0. Real corpus: 28/28 saves, 2599/2599 tail sections,
+  histogram `{2:14507, 8:354, 16:12090, 32:2591}`, type 4 = 0,
+  PNAME==type2 2599/2599, RGINF latch `0` 1920 / `1` 679; pinned slot0
+  `L93_4` section=8551 pnames=3 ents=8381 types `{3,1,0,0}`, slot2 `L6_3`
+  section=3110 pnames=0 ents=3034 types `{0,0,11,0}`; slot0
+  `rginf_latch=0` закреплён E2E (`test_glgame_screenshot.cpp:672-673`).
+- **Ограничения:** named person fields (15+) и entity item-record `0xC0`
+  offsets не интерпретируются; restore/containers — `P2-15b1b`;
+  `BT_DIARY`/`BT_HSTRY`/`BT_VARS` values/`BT_TRIBE`, save write (P2-15c),
+  type 4 — вне scope. PNAME/ENTS/RGINF parsed, но в симуляцию не применяются.
+- **Дальше:** `P2-15b1b` — person restore (SEF→RGINF→ENTS порядок,
+  name/tile/direction + containers, честный RGINF latch).
 
 ## P2-15b1 — Save entities/persons research (done 2026-11-13)
 
@@ -48,8 +73,8 @@
   `BT_PNAME` входят в `P2-15b1a`; отдельного `P2-15b1c` нет.
 - **Out of scope:** `BT_DIARY`/`BT_HSTRY`/`BT_VARS` values/`BT_TRIBE`/
   `BT_SCRN`, save write (P2-15c), type-4 restore.
-- **Next:** начать `P2-15b1a` (production entity/`BT_RGINF`/`BT_PNAME` parser +
-  real-data tests) по spec/plan `P2-15b1`.
+- **Next:** `P2-15b1a` parser+type map — **done 2026-11-14 (D-070, см.
+  выше)**; next — `P2-15b1b` person restore.
 - **Проверка:** `docs/research/p2-15b1-save-entities.md` §Verdict/decomposition
   (acceptance `P2-15b1a`/`P2-15b1b`); durable oracle — real-data тесты `b1a`
   на 28 save (2599/2599 exact consume).

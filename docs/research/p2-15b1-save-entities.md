@@ -598,6 +598,15 @@ decode as 691 distinct timestamps with year 1124-1126, month 1-12, day 1-31,
 weekday 0-6, hour 0-23, minute/second 0-59, millisecond 0-999. The block is a
 real per-section snapshot time, not opaque padding.
 
+Durable selected-section pin (`P2-15b1a`, 2026-11-14): slot0 selected level
+`L93_4` has `BT_RGINF` latch `0` (`rginf_latch=0`), locked end-to-end by
+`tests/app/test_glgame_screenshot.cpp:672-673`; the corpus-wide latch split
+`0`/`1` = 1920/679 and `latch <= 1` are asserted in
+`tests/assets/test_save_payload_real.cpp` ("save entities corpus"). The pinned
+selected-section entity counts (slot0 `L93_4`: section=8551, pnames=3,
+ents=8381, types `{3,1,0,0}`; slot2 `L6_3`: section=3110, pnames=0, ents=3034,
+types `{0,0,11,0}`) live in the same test file ("save entities selected pins").
+
 Restore relevance: `BT_RGINF` carries no entity field. It only decides whether
 NPC/trigger inventories are regenerated after load. Entity position/name/type
 restoration does not depend on it; NPC inventory parity does.
@@ -753,10 +762,10 @@ field; **unverified** = save semantics not resolved yet.
 | `BT_INFO.time[0x20]` | `assets::SaveInfo.time` (`save_payload.hpp:20`) | available (parsed) |
 | `BT_INFO.+0x26c4` | `SaveInfo.party_level` (`save_payload.cpp:106`) | partial: parsed but unused; glgame loot level is `hero_level_from_experience(EXP)+1` (`tools/glgame/main.cpp:1009-1012`) and omits the original Scout/Identify bonuses (`p3b2b2` §15.1) |
 | `BT_INFO.+0x26c8[8]` | `SaveInfo.field_26c8` (`:23`) | available (opaque) |
-| `BT_PNAME` names | `PersonInstance.name`, `PersonState.name` (`SaveTailEntry.name` is the tail/level key, not a person) | missing (no PNAME parser) |
-| `BT_RGINF` u32 latch | none; `SavePayload.rginf` raw 36 bytes (`save_payload.hpp:47`) | partial (raw only) |
-| `BT_RGINF` datetime | none; `LevelSimulation.time_ms_` is a monotonic sim clock, not a calendar | missing |
-| `BT_ENTS` type word | `Level.persons` / `LevelSimulation.persons`, built from SEF only | missing |
+| `BT_PNAME` names | `SaveTailEntry.person_names` (`save_payload.hpp:48`) | parsed (cp1251→UTF-8); not wired to `PersonInstance` — `P2-15b1b` |
+| `BT_RGINF` u32 latch | `SaveTailEntry.rginf.latch` (`:47`), raw `SavePayload.rginf` | parsed; not applied to runtime `+0x26c0` — `P2-15b1b` |
+| `BT_RGINF` datetime | `SaveRginf.datetime[8]` (`:40`); `LevelSimulation.time_ms_` is a monotonic sim clock, not a calendar | parsed; calendar restore missing |
+| `BT_ENTS` type word | `SaveTailEntry.entities[].type/body` (`:43-49`); `Level.persons`/`LevelSimulation.persons` still built from SEF only | parsed; not instantiated — `P2-15b1b` |
 | person name (body #1) | `PersonInstance.name`, `PersonState.name`, `LevelSimulation::State.name`, `InventoryRuntime.persons_` key | available |
 | tile x/y (body #4 pair) | `PersonInstance.tile_x/tile_y`; `State.spawn_tile_x/y`, `PersonMovement.x/y` | available (`FUN_140222d0` uses `x*12+6`, `y*9+4` = `level_simulation.cpp:64-66`) |
 | direction (body #9) | `PersonInstance.direction`; `PersonMovement.direction8` | available; 0..7 vs 8-dir encoding unverified |
@@ -927,3 +936,60 @@ Goal: rebuild persons/entities from the parsed records and wire them into
 - Live gameplay producer of a persisted `BT_RGINF` latch `1`.
 - Item-field semantic labels for entity containers beyond the byte-level layout
   proven for `BT_HERO`.
+
+## Implementation result (P2-15b1a, 2026-11-14)
+
+**Verdict: `implemented` (scoped).** The parser half of the decomposition is
+done in `gl::assets`; restore is untouched (`P2-15b1b`).
+
+Files:
+
+- `src/assets/include/gl/assets/save_payload.hpp` — `SaveEntity{type,body}`,
+  `SaveRginf{latch,datetime[8]}`, `SaveTailEntry{rginf,person_names,entities}`;
+  `SavePayload.rginf`/`.ents` keep the selected-section raw bytes for b1b.
+- `src/assets/src/save_payload.cpp` — `parse_rginf`, `parse_pnames`,
+  `parse_entities`, `parse_tail_section`; every tail entry is decoded while
+  iterating the dictionary, the selected entry also stores raw RGINF/ENTS.
+- `tests/assets/test_save_payload.cpp` — synthetic valid bodies and malformed
+  cases; `tests/assets/test_save_payload_real.cpp` — corpus/pins.
+- `tools/glgame/main.cpp` — `--dump-save` appends
+  `entities=<n> pnames=<n> rginf_latch=<u32>`;
+  `tests/app/test_glgame_screenshot.cpp:672-673` pins slot0.
+
+Pinned behavior:
+
+- `BT_RGINF`: exactly 36 B; `latch` + eight u32 datetime; any other size fails.
+- `BT_PNAME`: zero-terminated `u32 len + cp1251`, `len==0` must land on the body
+  end; names are decoded to UTF-8.
+- `BT_ENTS`: `u32 type` loop; `type 1` ends and requires exact consumption;
+  `{2,8,16,32}` advance by the §Body layout readers; any other type, including
+  the never-serialized `4`, is a `format` error. Strings use
+  `u32 n + min(n,0x104)` (`skip_string`); `M = 4` for a zero flag, otherwise
+  `8 + sum(0xc0 + 4 + 0x14*m_i)` (`skip_container`).
+- Tail tags are visited in stream order; duplicate/missing `BT_RGINF`/
+  `BT_PNAME`/`BT_ENTS ` fail the whole payload. `PNAME == type-2 count` is a
+  test/acceptance invariant only (the original does not enforce it), matching
+  the spec.
+
+Evidence (`GL_GAME_DIR=I:\Games\Златогорье-2`, 2026-11-14):
+
+- 28/28 saves, 2599/2599 tail sections, 0 consume mismatches; histogram
+  `{2:14507, 8:354, 16:12090, 32:2591}`; type 4 = 0; `BT_PNAME` names 14507,
+  equal to type-2 in 2599/2599 sections; RGINF latch `0` = 1920, `1` = 679.
+- selected pins: slot0 `L93_4` section=8551 pnames=3 ents=8381 types
+  `{3,1,0,0}` `rginf_latch=0`; slot2 `L6_3` section=3110 pnames=0 ents=3034
+  types `{0,0,11,0}`.
+- `cmake --build build` exit 0; full `ctest --test-dir build
+  --output-on-failure` — **19/19 passed**, `Total Test time (real) =
+  1206.72 sec`, exit 0.
+
+Divergences/notes vs spec: the spec phrased the type-2 tail as `0x84 + 0x14*c`
+(after the body #20 `u32`), while `skip_type2_tail` consumes
+`0x80 + 0x14*c`; both describe the same stream because body #20's `u32` is
+skipped separately. No other formula changed.
+
+Limitations / next: named person-body fields, entity item-record `0xC0`
+semantics, container restore and the runtime `+0x26c0` application remain
+`unverified`/out of scope; they are the acceptance surface of `P2-15b1b`
+(restore order SEF→RGINF→ENTS, name/tile/direction + containers). Save write
+stays `P2-15c`.
