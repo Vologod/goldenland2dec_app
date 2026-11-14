@@ -21,6 +21,7 @@ add_executable(gl_game_tests
     test_person_rng.cpp
     test_real_person_loader.cpp
     test_save_restore.cpp
+    test_save_restore_real.cpp
     test_special_engine.cpp
     test_special_gates.cpp
     test_stability.cpp
