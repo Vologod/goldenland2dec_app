@@ -993,3 +993,25 @@ verification is deferred.
   remapped; c2 NPC equipment.
 - SEF-only removal and type-2-only synthesis (gated by Unknowns #13).
 - Live container-manager oracle and any RNG-stream parity claim.
+
+## Implementation result (P2-15b1b1, 2026-11-14)
+
+`gl::game::decode_save_person`/`SavePersonRecord` implements the type-2 prefix
+(through `+0x1630`); `BT_TRIBE` names are parsed into `SavePayload.tribes`
+(matrix ignored); `restore_save_persons` occurrence-matches SEF persons and
+applies the verified fields in `BT_ENTS` order, appends SEF-only unless the
+gate is set, and skips the 3 type-2-only records. `PersonInstance.saved_life`/
+`saved_energy` feed `PersonRuntime` (raw values, over-max warning, clamp on
+read); `LevelSimulation::restore_person` applies current tile/direction/route
+index after create. glgame runs the hook after NPC loot and before simulation
+create.
+
+Real test `tests/game/test_save_restore_real.cpp`: slot0 `3/0/0`, slot2
+`0/1/0` (the single SEF-only person is `L6_4.P199_Shurba_Hal`; the task
+brief's `0/0/0` was corrected by the independent SEF/save check), slot21
+`16/0/0`; 19 pinned person tuples (position/anchor/direction/route/radius/
+delays/tribe/dialog/inventory/HP/EP/route index) are 0/N; the 28 selected
+sections aggregate `496 matched / 43 SEF-only / 3 type-2-only` using
+`BT_PNAME` names matched against SEF, independent of the restore output.
+Containers are not asserted (b1b2). Full `ctest` 19/19 passed
+(`Total Test time (real) = 1502.75 sec`, exit 0, 2026-11-14).

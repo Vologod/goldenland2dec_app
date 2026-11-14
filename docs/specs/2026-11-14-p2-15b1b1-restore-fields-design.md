@@ -1,6 +1,6 @@
 # P2-15b1b1 — Restore person fields from save Design
 
-Status: draft for approval (2026-11-14)
+Status: implemented (2026-11-14); see D-072
 Phase: P2-15b1b1 (first restore implementation; research-backed)
 Layers: `assets` (BT_TRIBE names) + `game` (decoder/restore) + `tools/glgame`
 

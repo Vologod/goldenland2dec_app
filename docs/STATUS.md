@@ -2,14 +2,40 @@
 
 Обновлено: 2026-11-14
 
-## P2-15b1b1 — Restore person fields (in progress 2026-11-14)
+## P2-15b1b1 — Restore person fields (done 2026-11-14)
 
 - **Задача:** type-2 decoder + restore match/order/fields/HP/EP; BT_TRIBE
   names; glgame load hook; без containers/loot gate.
-- **Spec:** `docs/specs/2026-11-14-p2-15b1b1-restore-fields-design.md`.
-- **Plan:** `docs/plans/2026-11-14-p2-15b1b1-restore-fields.md`.
-- **Критерии:** 496/43/3; person tuple 0/N; E2E; full ctest.
-- **Статус:** `in progress`.
+- **Spec:** `docs/specs/2026-11-14-p2-15b1b1-restore-fields-design.md`;
+  **Plan:** `docs/plans/2026-11-14-p2-15b1b1-restore-fields.md`.
+- **Сделано (D-072):** `SavePersonRecord`/`decode_save_person` (полный
+  type-2 prefix по research; AP consumed/discarded; containers/tail вне
+  scope); `SavePayload.tribes` (`BT_TRIBE` id/name, matrix ignored);
+  `restore_save_persons` — occurrence-match, BT_ENTS order, anchor/radius/
+  delays/route type+name/direction/dialog/inventory/tribe/saved HP/EP,
+  `RestoreResult.persons` current tile/direction/route index; SEF-only
+  append (drop gate default false), type-2-only skip; optional
+  `saved_life/energy` + `PersonRuntime` override (over-max warning,
+  clamp-on-read O7 waiver); `LevelSimulation::restore_person`; glgame hook
+  после NPC loot, до simulation create и runtime state после create; лог
+  `save restore: matched=... sef_only=... type2_only=...`.
+- **Проверка (2026-11-14, `GL_GAME_DIR=I:\Games\Златогорье-2`):**
+  `cmake --build build` exit 0; `gl_game_tests --test-case="*save restore*"`
+  **11/11 cases, 708/708 assertions**; real pins slot0 **3/0/0**, slot2
+  **0/1/0** (единственный SEF-only `L6_4.P199_Shurba_Hal`; brief `0/0/0`
+  исправлен по данным), slot21 **16/0/0**; 19 pinned person tuples
+  (position/anchor/direction/route/radius/delays/tribe/dialog/inventory/
+  HP/EP/route index) **0/N**; 28 selected sections aggregate **496 matched /
+  43 SEF-only / 3 type-2-only** (independent `BT_PNAME` vs SEF matching,
+  не port-copy); no containers. Полный
+  `ctest --test-dir build --output-on-failure` — **19/19 passed**,
+  `Total Test time (real) = 1502.75 sec`, exit 0.
+- **Коммиты:** `883fa7b test(game): cover real save restore`; docs —
+  отдельный коммит.
+- **Остаток:** containers/inventory — `P2-15b1b2`; `+0x26c0` gate/loot
+  ordering — `P2-15b1b3`; type-2-only synthesis, route_cells mismatch,
+  opaque `+0x40/+0x44/+0x654/+0x658/+0xff0/+0x6cc`, AP, save write.
+- **Статус:** `done`.
 
 ## P2-15b1b — Restore persons research (done 2026-11-14)
 

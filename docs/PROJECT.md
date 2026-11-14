@@ -102,7 +102,10 @@ FPU-CW were mandatory acceptance gates; NPC-mod oracle закрыт 1b2b2f/D-064
 Status: `done` (live gates closed). P2-15b save-load first increment done
 (2026-11-12, D-066); P2-15b1a save entities parser done (2026-11-14, D-070:
 2599/2599 tail sections exact, type histogram, PNAME invariant, 36-byte
-RGINF; no restore — P2-15b1b); P2-9 35 Hz research done and P2-9a/b implemented
+RGINF); P2-15b1b1 restore person fields done (2026-11-14, D-072: type-2
+decoder, BT_TRIBE names, occurrence-matched BT_ENTS restore, optional
+saved HP/EP, glgame hook; real 19 pinned 0/N, 28-save aggregate
+496/43/3; containers/loot gate remain b1b2/b1b3); P2-9 35 Hz research done and P2-9a/b implemented
 (2026-11-13, D-068; 28 ms gate, one tick per host frame, one simulation
 step per tick, headless 16 ms frame schedule; residuals U1/pause/config).
 Дальше — P5+/P6/P7.

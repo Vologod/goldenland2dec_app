@@ -145,11 +145,15 @@ $env:GL_GAME_DIR="I:\Games\Златогорье-2"
 **Files:** `tests/game/test_save_restore_real.cpp` (new; CMake),
 docs/spec/plan/STATUS/PROJECT/parity/DECISIONS.
 
-- [ ] **Step 1:** Real slot0/2/21: restore each selected section; assert the
+Completed 2026-11-14 (D-072): `883fa7b test(game): cover real save restore`;
+slot0 3/0/0, slot2 0/1/0 (one SEF-only), slot21 16/0/0; 19 pinned 0/N;
+28-save aggregate 496/43/3; full ctest 19/19 (1502.75 s).
+
+- [x] **Step 1:** Real slot0/2/21: restore each selected section; assert the
   28-save corpus aggregate 496/43/3 plus per-slot counts, pinned person fields
   from research; 0/N; no containers.
-- [ ] **Step 2:** full ctest with GL_GAME_DIR; D-072; docs; encoding.
-- [ ] **Step 3:** commit `test(game): cover real save restore` +
+- [x] **Step 2:** full ctest with GL_GAME_DIR; D-072; docs; encoding.
+- [x] **Step 3:** commit `test(game): cover real save restore` +
   `docs: record restore person fields`.
 
 ---
