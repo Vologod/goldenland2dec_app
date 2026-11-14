@@ -9,30 +9,32 @@
 - **Spec:** `docs/specs/2026-11-14-p2-15b1b-restore-research-design.md`.
 - **Plan:** `docs/plans/2026-11-14-p2-15b1b-restore-research.md`.
 - **Research:** `docs/research/p2-15b1b-restore.md` — verdict `scoped`.
-- **Сделано (Tasks 1–4, D-071):** type-2 field map (поле → runtime
-  destination → port field → verified/inferred/unverified с RVA/строками и
-  consumer'ами); item record map доказан тождественным `BT_HERO`
+- **Сделано (Tasks 1–4, D-071; review fix wave):** type-2 field map (поле →
+  runtime destination → port field → verified/inferred/unverified с RVA/
+  строками и consumer'ами); item record map доказан тождественным `BT_HERO`
   (`0xC0 + u32 sub + 0x14*sub`, marker `0x14092248` 115,405/115,405,
   in-record == trailing subcount 115,405/115,405); save-формат контейнеров
   (leading word — literal 0/1 presence flag, не runtime id) и runtime walk
-  `DAT_14088df8`; restore algorithm (SEF persons **не** читаются, BT_ENTS
-  authoritative, duplicate policy, chance-gated c0/c1 override, c2 preserved);
-  port gap table; O1–O7 oracle с pins slot0/slot2/slot21; декомпозиция
-  `P2-15b1b1`/`b1b2`/`b1b3`.
+  `DAT_14088df8`; restore algorithm (save reader не создаёт SEF persons,
+  BT_ENTS authoritative, duplicate policy, chance-gated c0/c1 override,
+  c2 preserved); oracle split на person tuple (b1b1/O3/O5/O8) и container
+  tuple (b1b2/O4) со scopes all/selected/pinned; port gap table;
+  декомпозиция `P2-15b1b1`/`b1b2`/`b1b3`.
 - **Доказано:** 28 save / 2599 секций / 14 507 type-2; `BT_PNAME` == type-2
   2599/2599; SEF anchor/route type/radius/delays/tribe/literary name 496/496,
   dialog 478/478, inventory 480/480, route 57/57; direction 0..7 (runtime
   facing 309/496); 43 521 контейнер / 115 405 item records, все definition id
   резолвятся в `items.pak`/`tech_names.sdb`; c2 14 156/14 156 `NPC_*`;
-  duplicate groups 81 (max 6); restore path не вызывает `FUN_14018990`.
+  duplicate groups 81 (max 6); save reader не вызывает `FUN_14018990`.
 - **Unknowns:** `+0x44`, `+0x654`, `+0x658[8]`, `+0xff0[0x11c]`, `+0x6cc`,
   skipped u32; AP `+0x1504` без `PersonParameter`; семантика item-modifier
-  5×u32; роли c0/c1/c2 inferred; `+0xA4` instance id; причина 43 SEF-only;
-  attached `BT_HERO` list; `BT_RGINF` interval runtime; live container
-  override. RNG-parity не заявляется.
+  5×u32; роли c0/c1/c2 inferred; `+0xA4` — diagnostic only, remap не нужен;
+  load-game spawn chain (38277/38435) и причина 43 SEF-only; type-2-only
+  synthesis (P656 нет в extracted SEF); attached `BT_HERO` list; `BT_RGINF`
+  interval runtime; live container override. RNG-parity не заявляется.
 - **Проверка (2026-11-14):** docs-only, `src/`/`tests/`/`tools/` не менялись;
-  UTF-8 no BOM/NUL; spec/plan/research/STATUS/parity/DECISIONS в одном
-  docs-коммите.
+  UTF-8 no BOM/NUL; spec/plan/research в `2954a90`, review fix wave —
+  отдельный docs-коммит.
 - **Статус:** `done` (research-only).
 - **Дальше:** approve spec/plan для `P2-15b1b1` (position/direction/params);
   затем `P2-15b1b2` (entity-container decoder + O4) и `P2-15b1b3`

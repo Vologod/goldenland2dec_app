@@ -99,7 +99,7 @@ decisive identity; **unverified** = needs the exact next check listed below.
 | 12 | `+0x1520` | u32 | `+0x1520` | wander radius in tiles; 0 means engine default 13 | reader 22007-22008; `FUN_1401c2a0` 20405-20416; `.sdb` `radius` 22311-22313; SEF 496/496; corpus 0..75, 122 zeros | `PersonInstance.radius`, `State.radius` | verified |
 | 13 | `+0x2668` | u32 | `+0x2668` | delay minimum, milliseconds | reader 22009-22010; `FUN_1401c378` 20448-20463 + `FUN_140061e4` 4347-4358; `.sdb` `delay_min` 22335-22337; SEF 496/496 | `PersonInstance.delay_min`, `State.delay_min` | verified |
 | 14 | `+0x266c` | u32 | `+0x266c` | delay maximum, milliseconds | reader 22011-22012; `FUN_1401c378` + `FUN_140061e4`; `.sdb` `delay_max` 22359-22361; SEF 496/496 | `PersonInstance.delay_max`, `State.delay_max` | verified |
-| 15 | `+0x150c` | u32 | `+0x150c` | numeric tribe id; index into `BT_TRIBE`; resolved to tribe name | reader 22013-22014; `FUN_14016998` 17038-17045; call sites 18551/18564/19275/19370/19669/38961; debug "Tribe" 27218-27220; `.sdb` `tribe` 22383-22386; `BT_TRIBE` reader 16996-17032 | `PersonInstance.tribe` (name); numeric id not modelled | verified semantics; port gap |
+| 15 | `+0x150c` | u32 | `+0x150c` | numeric tribe id; index into `BT_TRIBE`; id→name lookup is table-based (corpus/SEF identity) | reader 22013-22014; `FUN_14016998` 17038-17045 is the tribe-relation accessor, not the id→name resolver; call sites 18551/18564/19275/19370/19669/38961; debug "Tribe" 27218-27220; `.sdb` `tribe` 22383-22386; `BT_TRIBE` reader 16996-17032 | `PersonInstance.tribe` (name); numeric id not modelled | verified semantics; port gap |
 | 16 | `+0x267c` | string `4+n` | `+0x267c` len + buf | dialog script name (`scr_dialog`) | reader 22015-22032; `.sdb` `scr_dialog` 22408-22418; SEF 478/478 | `PersonInstance.dialog` | verified |
 | 17 | `+0x2aac` | string `4+n` | `+0x2aac` len + buf | inventory script name (`scr_inv`) | reader 22033-22057; `.sdb` `scr_inv` 22440-22455; SEF 480/480 | `PersonInstance.inventory` | verified |
 | 18 | `+0x6cc` | u32 | `+0x6cc` | unknown flag; always 1 in corpus; gates combat-state message | reader 22064-22065; `FUN_1401a24c` 18960-18974 | none | inferred |
@@ -125,10 +125,11 @@ Notes:
   names.
 - `FUN_1401d814` (21233-21234) copies the current tile into the anchor when a
   new route mode is assigned; it is a route-reset, not the normal save path.
-- `+0x150c` is the same `BT_TRIBE` index used by `FUN_14016998`; `BT_TRIBE` is a
-  234-entry `(id, name)` table plus a 234×234 relation matrix (reader
-  16996-17032). This resolves OQ-13 for matched persons: save id -> `BT_TRIBE`
-  name == SEF `tribe` 496/496.
+- `+0x150c` indexes `BT_TRIBE`; `FUN_14016998` is the tribe-relation accessor
+  (it does not resolve id→name). `BT_TRIBE` is a 234-entry `(id, name)` table
+  plus a 234×234 relation matrix (reader 16996-17032). The id→name mapping is
+  corpus/SEF-verified for matched persons: save id -> `BT_TRIBE` name == SEF
+  `tribe` 496/496, which resolves OQ-13 at the save boundary.
 - `+0xff0` was not decoded; the only static Server consumers are the opaque
   get/copy functions above. The first dwords are small integers (e.g.
   `0c 00 00 00 10 00 00 00 07 00 00 00`), but the block is not stable per name
@@ -168,7 +169,7 @@ disassembly addresses are RVAs of `Server.dll`.
 | `+0x30` | u32 | material = ITM `material` | loader 54562; ITM compare |
 | `+0x78` | u32 | subcount; duplicate of the trailing `+0xC0` u32 | reader zeroes then reloads 52434-52440; corpus 115405/115405 equal |
 | `+0x7C` | u32 | subrecord pointer (runtime); value is ignored on load | reader zeroes then reloads 52434-52440 |
-| `+0xA4` | u32 | item instance id (index into the world item table) | loader 54543 (`param_1`); accessor 54667 |
+| `+0xA4` | u32 | item instance id (world item-table index); raw save value discarded on load | loader 54543 (`param_1`); reader 52442-52444 allocates a fresh index; accessor 54667 |
 | `+0xA8` | u32 | item definition id (`items/data/<id>.itm`, `tech_names.sdb`) | reader 52442-52444; loader 54538; corpus 115405/115405 in both tables |
 | `+0xAC` | u32 | owning runtime container id | `FUN_1404ec2c` 54148; accessor 54666; corpus consecutive per entity |
 | `+0xB0` | u32 | stack count | `FUN_1404f4fc` default 1 (54644); `FUN_1404ec2c` 54149; reader 52480 |
@@ -225,10 +226,11 @@ item_record := 0xC0 raw ; u32 sub ; sub * 0x14
 ```
 
 - The leading u32 is a **presence flag written as a literal 1/0**, not the
-  runtime container id: writer `FUN_1405c9d8` pushes `1` (disasm RVA
-  `0x1405c9e7`) or `0` (`0x1405ca09`) into `FUN_1400126c`, which writes the
-  4-byte argument (`0x1400126c`). The reader `FUN_1405ca18` only tests it for
-  non-zero (`0x1405ca24`) and discards the value, then allocates a fresh
+  runtime container id: writer `FUN_1405c9d8` pushes `1` (disasm VA
+  `0x1405c9e7`, RVA `0x5c9e7`) or `0` (VA `0x1405ca09`, RVA `0x5ca09`) into
+  `FUN_1400126c` (VA `0x1400126c`, RVA `0x126c`), which writes the 4-byte
+  argument. The reader `FUN_1405ca18` only tests it for non-zero (VA
+  `0x1405ca24`, RVA `0x5ca24`) and discards the value, then allocates a fresh
   container id. This corrects the p5 "u32 id" wording for entity containers.
 - Corpus: 43,521 containers = 3 × 14,507 type-2 records; 42,192 present (`1`) +
   1,329 absent (`0`); 5,150 zero-count; item counts 0..116.
@@ -239,8 +241,8 @@ item_record := 0xC0 raw ; u32 sub ; sub * 0x14
 Container roles (inferred from item content; not yet proven by a consumer):
 c0 = general inventory (all 29 item types), c1 = trade/money (MON-dominated,
 plus QST/FOD/POT/armor), c2 = 0/1 generated `NPC_*` weapon/appearance item
-(types 0..7 and 28 only, **14,156/14,156** `NPC_*` tech names). Task 3 decides
-what is restorable.
+(types 0..7 and 28 only, **14,156/14,156** `NPC_*` tech names). b1b2 may
+restore the decoded records but must not claim the roles.
 
 ### Runtime manager walk (call-free)
 
@@ -264,13 +266,15 @@ Call-free walk: read `cid = *(u32*)(entity + 0xc/+0x10/+0x109c)`; binary-search
 the `{id,obj}` array at `world+0xc` (key at `+0`, value at `+4`, stride 8) to get
 the container; for each used bit `i` read `item_instance_ids[i]` and index the
 item table at `world+0x18` (bounds `world+0x1c`, used bitmap `world+0x20`).
-`FUN_1404dbec` (53283-53345) implements exactly this id search.
+`FUN_1404dbec` (53283-53345) is a linear container-id scan/index, not the map
+binary search.
 
 Evidence that the manager lookup returns the object: the decompiled
 `FUN_1404bf8c` (51910-51920) drops the value, but disassembly shows it returns
-the map value (`0x1404bf8c`: call `FUN_14004f14`, then `movl (%esp),%eax`), and
-`FUN_14004f14` returns `entries[index].value` (`0x14004f3e-0x14004f45`), with
-`FUN_14004a20` binary-searching an 8-byte-stride array (`0x14004a81`).
+the map value (VA `0x1404bf8c`, RVA `0x4bf8c`: call `FUN_14004f14`, then
+`movl (%esp),%eax`), and `FUN_14004f14` returns `entries[index].value` (VA
+`0x14004f3e-0x14004f45`, RVA `0x4f3e-0x4f45`), with `FUN_14004a20`
+binary-searching an 8-byte-stride array (VA `0x14004a81`, RVA `0x4a81`).
 
 An external oracle can use the save-file walk with no game code; the runtime
 walk needs only pointer reads and a binary search (no function calls), but the
@@ -462,7 +466,7 @@ restore semantics:
 | Source | Restore behavior | Evidence |
 |---|---|---|
 | SEF entrances/cell groups | merged into the level tables | 35779-35810 |
-| SEF persons | **not used on restore**; original has no SEF-person → save-entity match | restore path never calls `FUN_14018990` (17936) |
+| SEF persons | **not used by the save reader**; no SEF-person → save-entity match there; overall load-game spawn order unverified | save reader never calls `FUN_14018990` (17936); load-game spawn chain calls it at 38277/38435 |
 | `BT_ENTS` type-2 record | authoritative for the person's saved state; object is created fresh from the body | 35847-35915 |
 | `BT_PNAME` | parallel name list used by the port/test for order/name validation and as a fallback; the original restore does not read it and it is not a matching key | 2599/2599 identity; §Corpus evidence |
 | matched SEF/prototype data | supplies static appearance, PAD/sprite, cell-group route cells, tribe/dialog/inventory templates when the port reuses a `PersonInstance` | `load_persons` 106-271 |
@@ -480,14 +484,23 @@ The original does not match: it creates one object per `BT_ENTS` type-2 record i
 record order. The port cannot yet do that directly because `load_persons` builds
 `PersonInstance` from SEF only; the equivalent port transform is:
 
-1. Keep the saved type-2 record order (slot order). Drop SEF persons that have no
-   matching saved occurrence (the original would not create them).
+1. Keep the saved type-2 record order (slot order). **Do not unconditionally
+   drop SEF persons.** The save reader does not create them (`FUN_140325fc`
+   never calls `FUN_14018990`), but the overall load-game spawn order is
+   unverified: `FUN_14018990` is still called at 38277/38435 on level spawn.
+   SEF-only persons are candidates for removal behind a parity gate until the
+   load-game chain and the 43-entry SEF-only cause are traced; removal is not
+   claimed before that.
 2. Match by **name occurrence**: for the k-th saved record with a given name, use
    the k-th SEF person with that name (same level). Do not use a global
    name→person map. `BT_PNAME` is only a parallel validation list/fallback.
-3. Synthesize a `PersonInstance` for a type-2 record with no SEF occurrence by
-   loading the person script/PAD/animations from the saved name; route cells come
-   from the named SEF cell group. Corpus has three such records (Task 1 report).
+3. **Type-2-only synthesis is deferred out of b1b1 behind a gate.** The three
+   cross-level records are `L3_3.P335_Marvian_Capitan` (save section `L9_2_1`),
+   `L9_3.P415_Sotniks_Friend` (`L9_3`), and `L0.P656_travelwoman1` (`RL_2`);
+   `P656` is not present in the extracted SEFs. Synthesis requires an
+   origin-level SEF extraction (from the name prefix), route-cell lookup, and a
+   person-script/PAD/animations check; until all three are available, b1b1
+   restores matched records only and skips these 3 with a documented gap.
 4. Duplicate names are distinct entities: 81 duplicate-name groups, max
    multiplicity 6, over the 499 type-2 records of the 28 selected sections
    (`slot0` has two `L93_2.P292_Chernobogs_Guardian2` with different tiles and
@@ -547,38 +560,88 @@ field or entry point; **unverified** = save semantics unresolved.
 | attached `BT_HERO` list | none | missing | `BT_HERO` attached type-2 bodies are not parsed by b1a; no attached list in `Level`/`LevelSimulation` |
 | type 8/16/32 entities | none | missing | outside b1b person scope; raw bytes are parsed by b1a |
 
-Port-side restore order to implement (once a spec is approved): build the
-restored `Level.persons` in `BT_ENTS` order (drop SEF-only, synthesize
-type-2-only) → `LevelSimulation::create` → apply current tile/direction/route
-index/HP/EP → apply serialized containers (occurrence-keyed) when the `+0x26c0`
-decision is false → run/gate the loot override only when the decision is true.
+Port-side restore order to implement (once a spec is approved):
+
+```
+records = decode selected BT_ENTS section          # b1a raw + b1b1 type-2 decoder
+pairs = []
+for record in records (BT_ENTS/slot order):
+    person = match_by_name_occurrence(record.name) # k-th saved -> k-th SEF, same level
+    if person == null:
+        skip(record)                               # type-2-only synthesis GATED (3)
+    else:
+        pairs.push(person, record)
+
+# SEF persons without a saved occurrence: removal GATED on load-game chain trace
+Level.persons = [p for p, r in pairs]
+LevelSimulation::create(...)                        # spawn state from anchor/params
+
+for person, record in pairs:
+    apply current tile pair -> PersonMovement.x/y
+    apply direction, numeric route type, route cells, radius, delays
+    apply dialog/inventory names, route index (MOVED/MOVED_FLIP), HP/EP
+
+if rginf.runtime_26c0 == 0:                         # b1b3 decision
+    apply serialized c0/c1 containers                # b1b2 decoder; c2 structured only
+else:
+    for person in BT_ENTS order:                     # chance-gated override
+        if c0/c1 valid and scr_inv non-empty:
+            maybe_regenerate(c0/c1)                  # c2 never regenerated
+        else:
+            keep serialized c0/c1
+```
 
 ## §Oracle plan
 
-The oracle has three levels: static (executable now with the b1a parser plus a
-type-2 decoder), port-restore (executable after b1b as a C++ test), and live
-original (deferred; user-assisted read-only). No save write is used, so
-“round-trip” is not an oracle.
+The oracle has three **data scopes**:
 
-### Canonical tuple
+- **all-section static scan** — all 2,599 tail sections / 14,507 type-2 records
+  over the 28 saves (research scripts; decode/range/identity).
+- **selected-section restore** — the 499 type-2 records of the 28 selected
+  sections (the save's restart level); port restore comparison.
+- **pinned** — 19 records: slot0 3, slot2 0, slot21 16; byte/digest and
+  field-level pins.
 
-For each type-2 record, in `BT_ENTS` order, one TAB-separated line with fields
-`name, cur_x, cur_y, anchor_x, anchor_y, direction, route_type, route, c0, c1,
-c2`, where each container is `flag:def*count,def*count,...` (`flag` is the 0/1
-presence word; empty item list is the empty string). Lines are joined with LF;
-a non-empty list ends with LF. The digest is SHA-256 over the UTF-8 bytes. The
-empty person list has digest
+and five **execution stages**: **research script now** (b1a raw payload plus
+the Python scanner; the port has no type-2 decoder yet), **after b1b1** (port
+person decode/restore), **after b1b2** (entity-container decoder), **after
+b1b3** (`+0x26c0` decision), and **live deferred** (original process,
+user-assisted read-only). No save write is used, so "round-trip" is not an
+oracle.
+
+### Canonical tuples
+
+**Person tuple** (b1b1 / O3 / O5 / O8). For each type-2 record, in `BT_ENTS`
+order, one TAB-separated line with fields `name, cur_x, cur_y, anchor_x,
+anchor_y, direction, route_type, route, radius, delay_min, delay_max, tribe,
+dialog, inventory, route_index` (`route_index` is signed). Lines are joined
+with LF; a non-empty list ends with LF. The digest is SHA-256 over the UTF-8
+bytes. The empty person list has digest
 `E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855`.
+
+**Container tuple** (b1b2 / O4). For each type-2 record, in `BT_ENTS` order,
+one TAB-separated line with fields `name, occurrence, c0, c1, c2`, where
+`occurrence` is the 1-based index among records with the same name and each
+container is `flag:def*count,def*count,...` (`flag` is the 0/1 presence word;
+an empty item list is the empty string). Same LF/digest rules.
+
+**Legacy combined tuple.** The earlier single line `name, cur_x, cur_y,
+anchor_x, anchor_y, direction, route_type, route, c0, c1, c2` is retained only
+as the regression source for the canonical SHA-256 pins below; it is **not**
+the O3/O4 digest. Split person/container tuples must preserve record order.
+The research pin recorded only the combined line, so split-tuple digests are
+produced by the b1b1/b1b2 implementation oracle, while the pinned combined
+digest must remain unchanged.
 
 ### Pins (28-save corpus, 2026-11-14)
 
-| slot | level | section | raw `BT_ENTS ` len / SHA-256 | `BT_PNAME` len / SHA-256 | `BT_RGINF` SHA-256 | latch | types | canonical SHA-256 | item records |
+| slot | level | section | raw `BT_ENTS ` len / SHA-256 | `BT_PNAME` len / SHA-256 | `BT_RGINF` SHA-256 | latch | types | legacy combined SHA-256 (regression pin; not O3/O4) | item records |
 |---:|---|---:|---|---|---|---|---|---:|---:|
 | 0 | `L93_4` | 8551 | 8381 / `559BE5898BC60B4FB6591F56FF8D6E62FE55BF8A9795D1A3CC384718895D7650` | 98 / `F721F1098B7D9D42B59D440A95FCE20F8EDE4B9B54ECEA83948239FBA8ED0485` | `27431ACF6DD0CB71869CEDA164F2121A2933973AA0883FE66C2CCAF392989175` | 0 | `{2:3, 8:1}` | `9DDAFA6D0FE451AAB2B4D9476D2B8C918731A6E4902C8393B5017749FA9BC410` | 14 |
 | 2 | `L6_3` | 3110 | 3034 / `FD11E8359E6DCDCBC4B91371332F93516AE483171FF73368F3C31F59C5D7DA4D` | 4 / `DF3F619804A92FDB4057192DC43DD748EA778ADC52BC498CE80524C014B81119` | `D8074D7F89CF5A78B35290D68C99A755B71E19CF838BE95857E1AE63D12DDB0E` | 1 | `{16:11}` | `E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855` | 0 |
 | 21 | `L1_1` | 31525 | 31062 / `8593CBAFFD73885E0C470FA4BAE17DBCDE5C73E41C48CD56BED52B956A0571A0` | 391 / `38B9D85EBBF8CBAD851E47679D3A012603FDBDF46A99E93F65A1567BBBC3826A` | `8A53FFF313C82D33436510F88811AD7B3C54116FA50FC4AD0B64CD548C80C4E5` | 0 | `{2:16, 16:11}` | `72A83CF28C57FCDB4ACD3E96715D5E2C793F821C8EA0E9339CCC73CFB616ABA3` | 80 |
 
-`slot0` canonical lines:
+`slot0` legacy combined lines:
 
 ```
 L93_2.P292_Chernobogs_Guardian2	131	115	131	115	4	0		1:812*597,420*1	1:812*289,421*2	1:1784*1
@@ -586,7 +649,7 @@ L93_2.P292_Chernobogs_Guardian2	103	122	103	122	5	0		1:812*688,919*50,920*50,921
 L93_4.P284_Chernobog	120	127	120	127	5	0		0:	1:	1:1661*1
 ```
 
-`slot21/L1_1` canonical lines:
+`slot21/L1_1` legacy combined lines:
 
 ```
 L1_1.P387_Poison_Plotnik	133	12	133	12	5	0		1:975*1	1:975*1	1:1630*1
@@ -609,15 +672,16 @@ L1.P620_Svet_3CircusWorker2	168	199	173	189	3	4		1:812*114	1:	1:1787*1
 
 ### Checks and 0/N criteria
 
-| # | Check | Pins | Criterion |
-|---:|---|---|---|
-| O1 | Raw selected-section bytes: `BT_ENTS `, `BT_PNAME`, `BT_RGINF` lengths and SHA-256 | slot0/2/21 | 3/3 digests equal; corpus 2599/2599 sections already consume exactly |
-| O2 | Name/type sequence: decoded type-2 names == `BT_PNAME` names == canonical names; type histogram | slot0/2/21 | 3/3, 0/0, 16/16; corpus 2599/2599 identity |
-| O3 | Position/direction/anchor: canonical digest and full line diff | slot0/2/21 | 3/3 digests; 14,507/14,507 records have direction 0..7; SEF anchor identity 496/496 (Task 1) |
-| O4 | Inventory counts/ids: canonical container tuples; each `def` resolves in `items.pak`/`tech_names.sdb`; totals | slot0/2/21 | 14/14, 0/0, 80/80 item records; 115,405/115,405 ids resolve; any difference is reported as `d/N` and fails |
-| O5 | Duplicate policy: repeated names keep distinct ordered tuples | slot0/2/21 | 2/2 (`Guardian2`), 2/2 (`oficer1`), no merge; corpus selected sections 81 groups, max multiplicity 6 |
-| O6 | RGINF: saved latch/date decision | slot0/2/21 | raw digests 3/3; latch values 0/1/0; decision table unit test (below); runtime parity deferred |
-| O7 | HP/EP restore (outside the canonical tuple) | slot0/2/21 | saved pairs below; after create, `PersonRuntime::get_parameter(life/energy)` equals the saved values: 3/3 slot0, 0/0 slot2, 16/16 slot21; a clamp delta fails unless explicitly waived |
+| # | Check | Scope / pins | Stage | Criterion |
+|---:|---|---|---|---|
+| O1 | Raw selected-section bytes: `BT_ENTS `, `BT_PNAME`, `BT_RGINF` lengths and SHA-256 | pinned slot0/2/21; all-section 2,599 exact consume | research script now | 3/3 digests equal; 2,599/2,599 sections consume exactly |
+| O2 | Name/type sequence: decoded type-2 names == `BT_PNAME` names; type histogram | selected 499; pinned 19; all-section 14,507 | research script now; port assertion after b1b1 | 3/3, 0/0, 16/16; 499/499; 14,507/14,507; PNAME identity 2,599/2,599 |
+| O3 | Person tuple: position/direction/anchor + full person-tuple line diff | pinned 19; selected 499 | after b1b1 | 19/19 bytes/field diff; split person-tuple digest from the implementation oracle; legacy combined digest unchanged; direction 0..7 in 14,507/14,507; SEF anchor identity 496/496 |
+| O4 | Container tuple: c0/c1/c2 counts/ids; each `def` resolves in `items.pak`/`tech_names.sdb`; totals | pinned 19 (94 records); all-section 115,405 records | after b1b2 | 19/19 tuples; 14/14 slot0, 0/0 slot2, 80/80 slot21 records; 115,405/115,405 ids resolve; any difference reported `d/N` and fails |
+| O5 | Duplicate policy: repeated names keep distinct ordered person tuples | selected 499; pinned 19 | after b1b1 | 2/2 (`Guardian2`), 2/2 (`oficer1`), no merge; 81 groups, max multiplicity 6 |
+| O6 | RGINF: saved latch/date decision | pinned slot0/2/21 | raw digests/latch: research script now; decision/application after b1b3; runtime deferred | raw digests 3/3; latch values 0/1/0; synthetic decision table (below) |
+| O7 | HP/EP restore (outside the person tuple) | pinned 19 | after b1b1 | saved pairs below; `PersonRuntime::get_parameter(life/energy)` equals saved: 3/3 slot0, 0/0 slot2, 16/16 slot21; saved values must be within computed maxima or the b1b1 plan records an explicit clamp waiver, otherwise fail |
+| O8 | Field-level person tuple: radius, delay min/max, tribe name, dialog, inventory, route index | pinned 19; selected 499 | after b1b1 | 19/19 fields equal the decoded save; slot21 includes MOVED `L0.P744_oficer1` (route_type 2, `track3`) and MOVED_FLIP `L0.P678_citizen4`/`L0.P640_children2` (route_type 3) with `route_index == +0x1630`; corpus range -1..15 (81 negative); no clamp/drop |
 
 RGINF decision unit test (synthetic clock; `interval = DAT_1407fbcc+0x8c`; the
 `/0x1e` and `%0x1e` conversion is at 35834-35835, and the
@@ -630,7 +694,7 @@ RGINF decision unit test (synthetic clock; `interval = DAT_1407fbcc+0x8c`; the
 | 0 | false | 0 | saved |
 | 1 | any | 0 | saved |
 
-O7 saved HP/EP pairs, in `BT_ENTS` order (the canonical tuple and its digests
+O7 saved HP/EP pairs, in `BT_ENTS` order (the person tuple and its digests
 above deliberately exclude HP/EP):
 
 - `slot0/L93_4`: `(136,73)`, `(136,73)`, `(826,136)`.
@@ -641,26 +705,32 @@ above deliberately exclude HP/EP):
 
 ### Executability and deferrals
 
-- **Now (static):** O1-O6 are executable with `gl::assets::parse_save_payload`
-  (raw bodies/hashes) plus a type-2 decoder (O6's raw digests and synthetic
-  decision table; runtime parity remains deferred). The research numbers were
-  produced by `%TEMP%\opencode\p2_15b1b_pins.py`
+- **Research script now:** O1 raw digests and all-section exact consume; O2
+  name/type sequence on the 499 selected and 14,507 all-section records; O6
+  raw digests and latch values. These use the b1a payload plus the Python
+  scanners; `gl::assets::parse_save_payload` alone exposes raw bodies/hashes,
+  not type-2 fields, so no O2/O3/O4 port claim is made now. The research
+  numbers were produced by `%TEMP%\opencode\p2_15b1b_pins.py`
   (`D3E91BD2A0EE07A660D176F6A6BFB66D0D5309132DDDBA5335C060E310F5DEB2`),
   `p2_15b1b_dups.py`
   (`D194A686FEAFA4E2A3A548E432D58629E98606288702A02A6B5946D6C84032C7`) and
   `p2_15b1b_oracle.py`
   (`425463D776F92C256A58719DEB91C740259B810EF5593C69B20A9C5E04F73C72`);
   scripts are not committed.
-- **After b1b (port test):** build `LevelSimulation` from SEF, apply the restore
-  API, then compare its `persons()`/state/`PersonRuntime`/`InventoryRuntime` to
-  the canonical lines and O7 HP/EP pairs. Duplicate names must be keyed by
-  occurrence; a flat-name map is a test failure.
+- **After b1b1 (port test):** build `LevelSimulation` from SEF, apply the
+  person restore, then compare O2/O3/O5/O7/O8 against the person tuples and
+  HP/EP pairs. Duplicate names must be keyed by occurrence; a flat-name map is
+  a test failure. Type-2-only records are reported as a gated gap, not
+  synthesized.
+- **After b1b2 (port test):** compare O4 container tuples against the decoded
+  c0/c1/c2 records and all 115,405 definition ids.
+- **After b1b3:** O6 synthetic decision table and gate/ordering tests.
 - **Deferred (live original, user-assisted read-only):** load slot0, slot2,
   slot21; read `DAT_14088dc4+0x2564/+0x2568/+0x256c`, `+0x26c0`, `+0x26a0[8]`,
   and per type-2 person `+0x14/+0x4c/+0x604/+0x608/+0x28/+0xc/+0x10/+0x109c`;
   walk `DAT_14088df8` with the Task 2 map. Report `0/N` differing slots. This is
-  the only path that proves the runtime container override; no live run was
-  performed here.
+  the only path that proves the runtime container override and the load-game
+  SEF spawn order; no live run was performed here.
 - **Deferred:** latch-1-with-persons regeneration pin. `slot2` exercises latch 1
   but has zero persons. `slot3/L93_4` (section 6323, latch 1, 3 persons) is the
   next pin once the entity-container decoder exists; until then the chance-gate
@@ -714,12 +784,21 @@ above deliberately exclude HP/EP):
     `entity+0x109c` (natives/economy) and compare with the trade UI.
 12. **`+0xA4` instance id lifetime** — 0..3,128 per save section and not
     sequential inside one container; it is the world item-table index, not a
-    stable save id. Next: check whether restore must remap it or may drop it.
-13. **SEF persons are not an original restore input.** `FUN_140325fc` reads only
-    SEF entrances/cell groups; `FUN_14018990` is the level-spawn person
-    constructor. Next: refactor `load_persons` into a by-name person loader so a
-    type-2-only record can synthesize a `PersonInstance` from its saved name;
-    test the three corpus records from Task 1.
+    stable save id. The reader discards the raw value and allocates a fresh
+    world item-table index on load (`FUN_1404f4fc` 54543; reader 52442-52444).
+    Restore must **not** remap it; keep it decoded only as a diagnostic.
+13. **SEF persons / type-2-only synthesis.** `FUN_140325fc` (save reader) reads
+    only SEF entrances/cell groups and never calls `FUN_14018990`, so the save
+    reader does not create SEF persons. The overall load-game spawn chain still
+    calls `FUN_14018990` at 38277/38435; whether SEF-only persons are spawned
+    during a load and the cause of the 43 SEF-only entries are unverified. Next:
+    trace the load-game chain through those call sites; gate SEF-only removal
+    until that trace is 0/N. Type-2-only synthesis is separately gated: the
+    three cross-level records are `L3_3.P335_Marvian_Capitan` (section
+    `L9_2_1`), `L9_3.P415_Sotniks_Friend` (`L9_3`), `L0.P656_travelwoman1`
+    (`RL_2`); `P656` is not in the extracted SEFs. Next: origin-level SEF
+    extraction, route-cell lookup, and person-script/PAD checks for all three
+    before any synthesis.
 14. **Duplicate-name identity.** 81 duplicate-name groups (max multiplicity 6)
     over the 499 type-2 records of the selected sections; `PersonRuntime::create`
     drops the second duplicate (person_runtime.cpp:214-223) and
@@ -736,7 +815,7 @@ above deliberately exclude HP/EP):
     synthetic clocks before claiming runtime parity.
 17. **Latch-1 regeneration pin.** `slot2/L6_3` has latch 1 but zero persons;
     `slot3/L93_4` (section 6323, latch 1, 3 persons) is the first real override
-    pin. Next after the entity-container decoder: run the slot3 canonical pin
+    pin. Next after the entity-container decoder: run the slot3 combined pin
     and verify c0/c1 chance-gate/replacement behavior; c2 must stay serialized.
 
 ## Open Questions
@@ -746,6 +825,12 @@ above deliberately exclude HP/EP):
   `BT_TRIBE` `(id,name)` table, and use the name. The port still needs a
   `BT_TRIBE` parser and a name->id reverse map if it must write/compare ids;
   this is a port gap, not a save-format unknown.
+- OQ-12 (`BT_ENTS` named per-person fields) is **resolved at the research
+  level** for the fields in §Type-2 fields: position/anchor/direction/route/
+  radius/delays/tribe/dialog/inventory/HP/EP have consumer evidence and
+  corpus/SEF identity. It remains **partial** in the parity matrix until the
+  port restore is implemented and O2/O3/O7/O8 pass; `inferred`/`unverified`
+  fields in the table stay open.
 
 ## Verdict / decomposition
 
@@ -759,15 +844,18 @@ The save-side restore is implementable per part, not as one increment.
   route type/name, radius, delays, dialog/inventory names, HP/EP, and
   `BT_ENTS` installation order. 496/496 SEF matches for anchor, route type,
   radius, delays, tribe, literary name; 14,507/14,507 parsed type-2 bodies;
-  `BT_PNAME` == type-2 order 2599/2599. SEF persons are **not** an original
-  restore input (restore path never calls `FUN_14018990`).
+  `BT_PNAME` == type-2 order 2599/2599. The **save reader** does not create SEF
+  persons (`FUN_140325fc` never calls `FUN_14018990`); overall load-game spawn
+  order is unverified because `FUN_14018990` is still called at 38277/38435.
+  SEF-only removal and type-2-only synthesis are therefore gated, not claimed.
 - **Format proven, port entry point missing:** entity containers use the same
   `0xC0 + u32 sub + 0x14*sub` record as `BT_HERO` (writer/reader identity,
   marker `0x14092248` 115,405/115,405, in-record/trailing subcount equal
   115,405/115,405); all 115,405 definition ids resolve in `items.pak` and
   `tech_names.sdb`. The port still has no entity-container decoder
   (`parse_hero_inventory` covers `BT_HERO` only), so `b1b2` starts with that
-  decoder. Container roles c0/c1/c2 remain inferred.
+  decoder. Container roles c0/c1/c2 remain inferred; `+0xA4` is decoded only,
+  no remap.
 - **Decompiled, not live-verified:** the `+0x26c0` chance-gated c0/c1
   regeneration (`FUN_1404b1c0`, gate 51141-51142) and c2 preservation. The port
   currently regenerates NPC loot in SEF order with no `+0x26c0` gate and no
@@ -776,23 +864,24 @@ The save-side restore is implementable per part, not as one increment.
 - **Not restored in this scope:** `+0x44`, `+0x654`, `+0x658[8]`,
   `+0xff0[0x11c]`, `+0x6cc`, the skipped u32, AP (`+0x1504` has no
   `PersonParameter`), `+0x40` (no port field), item-modifier semantics,
-  `+0xA4` remap, attached `BT_HERO` list, tail entries, type 8/16/32, and the
-  live container-manager oracle. These are explicit gates, not guessed behavior.
+  attached `BT_HERO` list, tail entries, type 8/16/32, and the live
+  container-manager oracle. These are explicit gates, not guessed behavior.
 
 ### P2-15b1b1 — restore position/direction/params
 
-**Prerequisites:** `BT_TRIBE` parser and id->name map (b1a skips the block);
-numeric route-type mapping (port only has `parse_route_type(string)`);
-`State.route_index` setter; a by-name person loader so a type-2-only record can
-synthesize a `PersonInstance` (person script/PAD/animations) with route cells
-from the named SEF cell group.
+**Prerequisites:** `BT_TRIBE` parser and id->name map (b1a skips the block;
+`FUN_14016998` is only the relation accessor); numeric route-type mapping (port
+only has `parse_route_type(string)`); `State.route_index` setter; a load-game
+chain trace that decides whether the 43 SEF-only persons are spawned.
 
 **Scope:**
 
 1. Add an ordered restore entry point over the selected `BT_ENTS` section:
-   create persons in record/slot order; drop SEF persons with no saved
-   occurrence; synthesize the three corpus type-2-only records; keep duplicate
-   names as distinct entities (occurrence-qualified keys, no flat name map).
+   create persons in record/slot order using name-occurrence matching; keep
+   duplicate names as distinct entities (occurrence-qualified keys, no flat name
+   map). Do **not** synthesize type-2-only records (gated) and do not
+   unconditionally drop SEF-only persons (gated): both require the trace /
+   origin-level SEF evidence from Unknowns #13.
 2. Apply: name; current tile pair -> `PersonMovement.x/y` after
    `LevelSimulation::create`; anchor `+0x5f8/+0x5fc` ->
    `PersonInstance.tile_x/y`, `State.spawn_tile_x/y`, `spawn_x/y`; direction
@@ -807,12 +896,17 @@ from the named SEF cell group.
 
 **Acceptance:**
 
-- O1 raw section digests (3/3), O2 name/type sequence (3/3, 16/16, corpus
-  2599/2599), O3 canonical position/direction/anchor digest and full 14,507
-  line diff, O5 duplicate tuples (2/2 + 2/2; 81 groups, max multiplicity 6),
-  O7 HP/EP pairs (3/3 slot0, 0/0 slot2, 16/16 slot21).
-- New unit tests: numeric route mapping, occurrence matching, SEF-only drop,
-  type-2-only synthesis (3 records), duplicate ordering.
+- Scopes: selected 499, pinned 19 (slot0 3, slot2 0, slot21 16), all-section
+  14,507.
+- O1 raw section digests (3/3; all 2,599 exact), O2 name/type sequence (3/3,
+  0/0, 16/16; 499/499; 14,507/14,507), O3 person tuple including split person
+  digest and full line diff, O5 duplicate tuples (2/2 + 2/2; 81 groups, max
+  multiplicity 6), O7 HP/EP pairs (3/3 slot0, 0/0 slot2, 16/16 slot21) with
+  the clamp waiver rule, O8 field-level tuple (radius, delays, tribe, dialog,
+  inventory, route index; MOVED/MOVED_FLIP route-index cases).
+- New unit tests: numeric route mapping, occurrence matching, duplicate
+  ordering, O8 fields. SEF-only removal and type-2-only synthesis are explicit
+  gates, not acceptance items.
 - No RNG-parity claim in this part.
 
 ### P2-15b1b2 — inventory/containers
@@ -827,9 +921,10 @@ treat the leading word as the literal 0/1 presence flag, not a runtime id.
 1. Decode c0/c1/c2 for each selected-section type-2 record: presence word,
    count, and item records with the proven fields (`+0x00` marker, `+0x08`
    type, `+0x0C` flags, `+0x10` price, `+0x14` weight, `+0x18` unknown_a,
-   `+0x20` style, `+0x30` material, `+0xA4` instance id, `+0xA8` definition id,
-   `+0xAC` container id, `+0xB0` count, `+0xB4` durability, `+0xB8`, `+0xBC`,
-   `+0xC0`/`+0xC4` subcount and 5×u32 subrecords).
+   `+0x20` style, `+0x30` material, `+0xA4` instance id (diagnostic only),
+   `+0xA8` definition id, `+0xAC` container id, `+0xB0` count, `+0xB4`
+   durability, `+0xB8`, `+0xBC`, `+0xC0`/`+0xC4` subcount and 5×u32
+   subrecords).
 2. Apply serialized c0 items to the occurrence-qualified main inventory and c1
    items to the trade/money side, preserving stacks/counts and storing the
    modifier subcount plus subrecords (the port currently keeps count only,
@@ -837,9 +932,10 @@ treat the leading word as the literal 0/1 presence flag, not a runtime id.
 3. c2: keep decoded raw/structured; no port NPC equipment/outfit runtime, so no
    application claim.
 
-**Acceptance:** O4 container tuples 14/14 slot0, 0/0 slot2, 80/80 slot21; all
-115,405 definition ids resolve; any per-record difference reported `d/N` and
-fails. Container roles remain `inferred` until a consumer is decompiled.
+**Acceptance:** O4 container tuples 19/19 pinned (14+0+80 = 94 item records),
+selected 499, all-section 115,405 ids; every `def` resolves; any per-record
+difference reported `d/N` and fails. Container roles remain `inferred` until a
+consumer is decompiled; `+0xA4` is not remapped.
 
 **Deferred gate:** the live runtime override (`+0x26c0` true -> c0/c1
 chance-gated replacement) and the `DAT_14088df8` container-manager oracle need
@@ -876,5 +972,7 @@ verification is deferred.
   a `Level` attached list).
 - Unverified/inferred fields `+0x44`, `+0x654`, `+0x658`, `+0xff0`, `+0x6cc`;
   `+0x40` literary-name id and AP have no port target.
-- Item-modifier semantics, `+0xA4` instance-id remapping, c2 NPC equipment.
+- Item-modifier semantics; `+0xA4` is decoded as a diagnostic only and is not
+  remapped; c2 NPC equipment.
+- SEF-only removal and type-2-only synthesis (gated by Unknowns #13).
 - Live container-manager oracle and any RNG-stream parity claim.
