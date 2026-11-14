@@ -28,6 +28,7 @@
 #include <gl/game/inventory_runtime.hpp>
 #include <gl/game/npc_loot.hpp>
 #include <gl/game/person_runtime.hpp>
+#include <gl/game/save_restore.hpp>
 #include <gl/platform/sdl_context.hpp>
 #include <gl/render/font.hpp>
 #include <gl/render/text.hpp>
@@ -2059,7 +2060,32 @@ class Game {
         }
     }
 
+    void apply_restored_person_state() {
+        if (!level_) return;
+        const std::vector<gl::game::PersonInstance>& persons = level_->level().persons;
+        gl::game::LevelSimulation& sim = level_->simulation();
+        for (const gl::game::RestoredPerson& restored : restore_result_.persons) {
+            sim.restore_person(restored.level_index, restored.current, restored.direction,
+                               restored.route_index);
+            if (restored.level_index >= persons.size()) continue;
+            const std::string& name = persons[restored.level_index].name;
+            for (const std::string& wanted : options_.dump_npcs) {
+                if (name != wanted) continue;
+                const gl::game::PersonMovement* movement = nullptr;
+                if (restored.level_index < sim.persons().size())
+                    movement = &sim.persons()[restored.level_index];
+                gl::log(gl::LogLevel::info,
+                        "npc restore: person='" + name + "' tile=(" +
+                            std::to_string(restored.current.x) + "," +
+                            std::to_string(restored.current.y) + ") direction=" +
+                            std::to_string(movement ? movement->direction8
+                                                    : restored.direction));
+            }
+        }
+    }
+
     bool load_level(std::string_view name) {
+        restore_result_ = {};
         gl::game::HeroOutfit hero_outfit;
         if (options_.hero_outfit_none) {
             hero_outfit = make_naked_outfit();
@@ -2077,8 +2103,17 @@ class Game {
         }
         auto screen = gl::app::LevelScreen::load(
             window_.renderer(), vfs_, name, !options_.no_persons, &hero_outfit, options_.seed,
-            [this](const gl::game::Level& level, gl::game::MsvcRandom& rng) {
+            [this](gl::game::Level& level, gl::game::MsvcRandom& rng) {
                 generate_npc_inventories(level, rng);
+                if (pending_restore_ == nullptr) return;
+                restore_result_ = gl::game::restore_save_persons(level, *pending_restore_,
+                                                                 pending_tribes_);
+                gl::log(gl::LogLevel::info,
+                        "save restore: matched=" +
+                            std::to_string(restore_result_.counts.matched) + " sef_only=" +
+                            std::to_string(restore_result_.counts.sef_only) +
+                            " type2_only=" +
+                            std::to_string(restore_result_.counts.type2_only));
             });
         if (!screen) {
             gl::log(gl::LogLevel::error, screen.error().message);
@@ -2142,7 +2177,15 @@ class Game {
 
         apply_hero_from_body(hero_body, slot, true);
 
-        if (!load_level(payload->info.level_id)) {
+        if (payload->level_tail_index) {
+            pending_restore_ = &payload->tail[*payload->level_tail_index];
+            pending_tribes_ = &payload->tribes;
+        }
+        const bool level_loaded = load_level(payload->info.level_id);
+        pending_restore_ = nullptr;
+        pending_tribes_ = nullptr;
+
+        if (!level_loaded) {
             pending_equipment_ = std::move(equipment_before);
             pending_inventory_ = std::move(inventory_state_before);
             pending_hero_stats_ = std::move(hero_stats_before);
@@ -2159,6 +2202,7 @@ class Game {
             return false;
         }
 
+        apply_restored_person_state();
         apply_loaded_equip_save();
 
         const std::string line = "save: loaded slot=" + std::to_string(slot) +
@@ -2959,6 +3003,9 @@ class Game {
     std::optional<gl::assets::HeroInventory> pending_inventory_;
     std::optional<gl::assets::HeroStats> pending_hero_stats_;
     std::optional<gl::game::HeroOutfit> pending_outfit_;
+    const gl::assets::SaveTailEntry* pending_restore_ = nullptr;
+    const gl::assets::SaveTribeTable* pending_tribes_ = nullptr;
+    gl::game::RestoreResult restore_result_;
     gl::game::PersonRuntime person_runtime_;
     gl::game::InventoryRuntime inventory_runtime_;
     std::optional<gl::assets::ItemNameIndex> item_names_;

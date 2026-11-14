@@ -275,6 +275,11 @@ Result<LevelScreen> LevelScreen::load(SDL_Renderer* renderer, gl::assets::GameVf
             MaskOverlay{std::move(created.value()), mask.x, mask.y, mask.number});
     }
 
+    gl::game::MsvcRandom rng(static_cast<std::uint32_t>(rng_seed.value_or(
+        static_cast<std::uint64_t>(gl::game::MsvcRandom::production_seed()))));
+    if (on_level_loaded)
+        on_level_loaded(screen.level_, rng);
+
     if (load_persons) {
         screen.persons_.reserve(screen.level_.persons.size());
         for (std::size_t instance_index = 0; instance_index < screen.level_.persons.size();
@@ -449,10 +454,6 @@ Result<LevelScreen> LevelScreen::load(SDL_Renderer* renderer, gl::assets::GameVf
                                              instance_index, animation_index, go_animation});
         }
 
-        gl::game::MsvcRandom rng(static_cast<std::uint32_t>(rng_seed.value_or(
-            static_cast<std::uint64_t>(gl::game::MsvcRandom::production_seed()))));
-        if (on_level_loaded)
-            on_level_loaded(screen.level_, rng);
         screen.simulation_ = gl::game::LevelSimulation::create(screen.level_, std::move(rng));
     }
 

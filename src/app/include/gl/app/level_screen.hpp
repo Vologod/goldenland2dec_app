@@ -87,7 +87,7 @@ ClickTarget click_target(std::span<const PersonHitTarget> persons,
 class LevelScreen {
 public:
     using LevelLoadedHook =
-        std::function<void(const gl::game::Level&, gl::game::MsvcRandom&)>;
+        std::function<void(gl::game::Level&, gl::game::MsvcRandom&)>;
 
     static Result<LevelScreen> load(SDL_Renderer* renderer, gl::assets::GameVfs& vfs,
                                     std::string_view level_name, bool load_persons = true,
