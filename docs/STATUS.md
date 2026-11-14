@@ -2,6 +2,15 @@
 
 Обновлено: 2026-11-14
 
+## P2-15b1b — Restore persons research (in progress 2026-11-14)
+
+- **Задача:** type-2 field map, 0xC0 item/container layout, restore ordering,
+  oracle; docs-only.
+- **Spec:** `docs/specs/2026-11-14-p2-15b1b-restore-research-design.md`.
+- **Plan:** `docs/plans/2026-11-14-p2-15b1b-restore-research.md`.
+- **Критерии:** field map; item/container; restore order; verdict/декомпозиция.
+- **Статус:** `in progress`.
+
 ## P2-15b1a — Save entities parser (done 2026-11-14)
 
 - **Задача:** parse BT_ENTS (types/bodies), BT_PNAME, BT_RGINF во всех
