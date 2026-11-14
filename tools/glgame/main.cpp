@@ -2061,25 +2061,23 @@ class Game {
     }
 
     void apply_restored_person_state() {
-        if (!level_) return;
+        if (!level_ || restore_result_.persons.empty()) return;
         const std::vector<gl::game::PersonInstance>& persons = level_->level().persons;
         gl::game::LevelSimulation& sim = level_->simulation();
+        if (sim.persons().size() != persons.size()) return;
         for (const gl::game::RestoredPerson& restored : restore_result_.persons) {
+            if (restored.level_index >= persons.size()) continue;
             sim.restore_person(restored.level_index, restored.current, restored.direction,
                                restored.route_index);
-            if (restored.level_index >= persons.size()) continue;
             const std::string& name = persons[restored.level_index].name;
+            const gl::game::PersonMovement& movement = sim.persons()[restored.level_index];
             for (const std::string& wanted : options_.dump_npcs) {
                 if (name != wanted) continue;
-                const gl::game::PersonMovement* movement = nullptr;
-                if (restored.level_index < sim.persons().size())
-                    movement = &sim.persons()[restored.level_index];
                 gl::log(gl::LogLevel::info,
                         "npc restore: person='" + name + "' tile=(" +
                             std::to_string(restored.current.x) + "," +
                             std::to_string(restored.current.y) + ") direction=" +
-                            std::to_string(movement ? movement->direction8
-                                                    : restored.direction));
+                            std::to_string(movement.direction8));
             }
         }
     }

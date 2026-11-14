@@ -702,6 +702,8 @@ TEST_CASE("glgame --load-save loads the level and hero from the save") {
           std::string::npos);
     CHECK(output.find("npc restore: person='L93_2.P292_Chernobogs_Guardian2' "
                       "tile=(131,115) direction=4") != std::string::npos);
+    CHECK(output.find("npc restore: person='L93_2.P292_Chernobogs_Guardian2' "
+                      "tile=(103,122) direction=5") != std::string::npos);
     CHECK(output.find("npc dump: person='L93_2.P292_Chernobogs_Guardian2' "
                       "container='main' items=[]") != std::string::npos);
     CHECK(output.find("npc dump: person='L93_2.P292_Chernobogs_Guardian2' "
