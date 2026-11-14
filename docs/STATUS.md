@@ -16,10 +16,12 @@
   in-record == trailing subcount 115,405/115,405); save-формат контейнеров
   (leading word — literal 0/1 presence flag, не runtime id) и runtime walk
   `DAT_14088df8`; restore algorithm (save reader не создаёт SEF persons,
-  BT_ENTS authoritative, duplicate policy, chance-gated c0/c1 override,
-  c2 preserved); oracle split на person tuple (b1b1/O3/O5/O8) и container
-  tuple (b1b2/O4) со scopes all/selected/pinned; port gap table;
-  декомпозиция `P2-15b1b1`/`b1b2`/`b1b3`.
+  BT_ENTS authoritative, matched 496 в record order, SEF-only appended после
+  matched до gate, duplicate policy, chance-gated c0/c1 override, c2
+  preserved); oracle split на person tuple (b1b1/O3/O5/O8) и container
+  tuple (b1b2/O4) со scopes all/selected/pinned; decoder 499/499 vs port
+  restore 496/496 + 3 type-2-only gated; port gap table; декомпозиция
+  `P2-15b1b1`/`b1b2`/`b1b3`.
 - **Доказано:** 28 save / 2599 секций / 14 507 type-2; `BT_PNAME` == type-2
   2599/2599; SEF anchor/route type/radius/delays/tribe/literary name 496/496,
   dialog 478/478, inventory 480/480, route 57/57; direction 0..7 (runtime
