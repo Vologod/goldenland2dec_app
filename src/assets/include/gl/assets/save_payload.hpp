@@ -49,12 +49,22 @@ struct SaveTailEntry {
     std::vector<SaveEntity> entities;
 };
 
+struct SaveTribeEntry {
+    std::uint32_t id = 0;
+    std::string name;
+};
+
+struct SaveTribeTable {
+    std::vector<SaveTribeEntry> entries;
+};
+
 struct SavePayload {
     SaveHeader header;
     std::vector<std::uint8_t> decompressed;
     std::vector<SaveBlockView> blocks;
     SaveInfo info;
     std::vector<SaveVar> vars;
+    SaveTribeTable tribes;
     std::vector<SaveTailEntry> tail;
     std::optional<std::size_t> level_tail_index;
     std::vector<std::uint8_t> rginf;

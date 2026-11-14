@@ -51,6 +51,16 @@ std::vector<std::uint8_t> make_vars() {
     for (int i = 0; i < 8; ++i) body.push_back(static_cast<std::uint8_t>(0xf0 + i));
     return body;
 }
+std::vector<std::uint8_t> make_tribe_body() {
+    std::vector<std::uint8_t> body;
+    put_u32(body, 2);
+    put_u32(body, 5);
+    put_string(body, "forest");
+    put_u32(body, 9);
+    put_string(body, "hills");
+    for (int i = 0; i < 4; ++i) body.push_back(static_cast<std::uint8_t>(0x30 + i));
+    return body;
+}
 std::vector<std::uint8_t> make_rginf_body() {
     std::vector<std::uint8_t> body(36);
     for (std::size_t i = 0; i < body.size(); ++i)
@@ -189,12 +199,13 @@ std::vector<std::uint8_t> make_default_tail(std::string_view level) {
     return make_tail({make_tail_entry(level, make_section(make_section_blocks()))});
 }
 std::vector<std::uint8_t> make_body(std::string_view level,
-                                    const std::vector<std::uint8_t> &vars) {
+                                    const std::vector<std::uint8_t> &vars,
+                                    const std::vector<std::uint8_t> &tribe = make_tribe_body()) {
     std::vector<std::uint8_t> d;
     put_block(d, "BT_SCRN ", {});
     put_block(d, "BT_INFO ", make_info(level));
     put_block(d, "BT_VARS ", vars);
-    put_block(d, "BT_TRIBE", {});
+    put_block(d, "BT_TRIBE", tribe);
     put_block(d, "BT_DIARY", {});
     put_block(d, "BT_HSTRY", {});
     put_block(d, "BT_HERO ", {});
@@ -275,6 +286,87 @@ TEST_CASE("save payload: parses BT_VARS") {
     CHECK(payload->vars[2].name == "f");
     CHECK(payload->vars[2].value ==
           std::array<std::uint8_t, 8>{0xf0, 0xf1, 0xf2, 0xf3, 0xf4, 0xf5, 0xf6, 0xf7});
+}
+
+TEST_CASE("save payload: parses BT_TRIBE names") {
+    std::vector<std::uint8_t> tribe;
+    put_u32(tribe, 2);
+    put_u32(tribe, 5);
+    const std::array<std::uint8_t, 3> forest{0xCB, 0xE5, 0xF1};
+    put_u32(tribe, static_cast<std::uint32_t>(forest.size()));
+    tribe.insert(tribe.end(), forest.begin(), forest.end());
+    put_u32(tribe, 9);
+    put_string(tribe, "hills");
+    for (int i = 0; i < 4; ++i) tribe.push_back(static_cast<std::uint8_t>(0x30 + i));
+
+    auto payload = gl::assets::parse_save_payload(
+        make_save(make_body("L93_4", make_vars(), tribe), make_default_tail("L93_4")));
+    REQUIRE(payload.has_value());
+    REQUIRE(payload->tribes.entries.size() == 2u);
+    CHECK(payload->tribes.entries[0].id == 5u);
+    CHECK(payload->tribes.entries[0].name == "\xD0\x9B\xD0\xB5\xD1\x81");
+    CHECK(payload->tribes.entries[1].id == 9u);
+    CHECK(payload->tribes.entries[1].name == "hills");
+}
+
+TEST_CASE("save payload: parses an empty BT_TRIBE table") {
+    std::vector<std::uint8_t> tribe;
+    put_u32(tribe, 0);
+    auto payload = gl::assets::parse_save_payload(
+        make_save(make_body("L93_4", make_vars(), tribe), make_default_tail("L93_4")));
+    REQUIRE(payload.has_value());
+    CHECK(payload->tribes.entries.empty());
+}
+
+TEST_CASE("save payload: rejects malformed BT_TRIBE") {
+    const auto parse_tribe = [](const std::vector<std::uint8_t> &tribe) {
+        return gl::assets::parse_save_payload(
+            make_save(make_body("L93_4", make_vars(), tribe), make_default_tail("L93_4")));
+    };
+
+    SUBCASE("missing count") {
+        auto payload = parse_tribe({});
+        REQUIRE_FALSE(payload.has_value());
+        CHECK(payload.error().code == gl::ErrorCode::format);
+    }
+
+    SUBCASE("missing entry") {
+        std::vector<std::uint8_t> tribe;
+        put_u32(tribe, 1);
+        auto payload = parse_tribe(tribe);
+        REQUIRE_FALSE(payload.has_value());
+        CHECK(payload.error().code == gl::ErrorCode::format);
+    }
+
+    SUBCASE("string overruns the body") {
+        std::vector<std::uint8_t> tribe;
+        put_u32(tribe, 1);
+        put_u32(tribe, 3);
+        put_u32(tribe, 16);
+        tribe.insert(tribe.end(), 2, static_cast<std::uint8_t>('x'));
+        auto payload = parse_tribe(tribe);
+        REQUIRE_FALSE(payload.has_value());
+        CHECK(payload.error().code == gl::ErrorCode::format);
+    }
+
+    SUBCASE("matrix is truncated") {
+        std::vector<std::uint8_t> tribe;
+        put_u32(tribe, 1);
+        put_u32(tribe, 3);
+        put_string(tribe, "x");
+        tribe.insert(tribe.end(), 3, 0);
+        auto payload = parse_tribe(tribe);
+        REQUIRE_FALSE(payload.has_value());
+        CHECK(payload.error().code == gl::ErrorCode::format);
+    }
+
+    SUBCASE("matrix has trailing bytes") {
+        auto tribe = make_tribe_body();
+        tribe.push_back(0);
+        auto payload = parse_tribe(tribe);
+        REQUIRE_FALSE(payload.has_value());
+        CHECK(payload.error().code == gl::ErrorCode::format);
+    }
 }
 
 TEST_CASE("save payload: rejects unknown var type") {

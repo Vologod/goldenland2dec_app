@@ -133,6 +133,41 @@ bool parse_pnames(std::span<const std::uint8_t> body, std::vector<std::string> &
     }
 }
 
+bool parse_tribe(std::span<const std::uint8_t> body, SaveTribeTable &out, std::string &detail) {
+    ByteReader reader(body);
+    std::uint32_t count = 0;
+    if (!reader.read_u32le(count)) {
+        detail = "count is truncated";
+        return false;
+    }
+    for (std::uint32_t index = 0; index < count; ++index) {
+        SaveTribeEntry entry;
+        if (!reader.read_u32le(entry.id)) {
+            detail = "entry " + std::to_string(index) + " id is truncated";
+            return false;
+        }
+        if (!read_string(reader, entry.name)) {
+            detail = "entry " + std::to_string(index) + " name is truncated";
+            return false;
+        }
+        out.entries.push_back(std::move(entry));
+    }
+    const std::uint64_t matrix = static_cast<std::uint64_t>(count) * count;
+    if (matrix > reader.remaining().size()) {
+        detail = "relation matrix is truncated (" + std::to_string(matrix) + " bytes expected)";
+        return false;
+    }
+    if (!reader.skip(static_cast<std::size_t>(matrix))) {
+        detail = "relation matrix is truncated";
+        return false;
+    }
+    if (!reader.at_end()) {
+        detail = "has trailing bytes";
+        return false;
+    }
+    return true;
+}
+
 bool skip_type2_tail(std::span<const std::uint8_t> data, std::size_t &cursor) {
     if (!skip_bytes(data, cursor, 0x80))
         return false;
@@ -376,6 +411,13 @@ Result<SavePayload> parse_save_payload(std::span<const std::uint8_t> file) {
         }
         if (!vars.at_end())
             return format_error("BT_VARS has trailing bytes");
+
+        const SaveBlockView &tribe_view = payload.blocks[3];
+        std::string tribe_detail;
+        if (!parse_tribe(std::span<const std::uint8_t>(payload.decompressed)
+                             .subspan(tribe_view.offset, tribe_view.size),
+                         payload.tribes, tribe_detail))
+            return format_error("BT_TRIBE " + tribe_detail);
 
         const std::size_t tail_offset = 0x70 + static_cast<std::size_t>(compressed_len);
         ByteReader tail(file.subspan(tail_offset));

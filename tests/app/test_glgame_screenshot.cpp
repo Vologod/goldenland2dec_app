@@ -326,11 +326,14 @@ std::vector<std::uint8_t> synthetic_save(std::string_view level) {
     std::vector<std::uint8_t> vars;
     put_u32_le(vars, 0);
 
+    std::vector<std::uint8_t> tribe;
+    put_u32_le(tribe, 0);
+
     std::vector<std::uint8_t> body;
     put_block_le(body, "BT_SCRN ", {});
     put_block_le(body, "BT_INFO ", info);
     put_block_le(body, "BT_VARS ", vars);
-    put_block_le(body, "BT_TRIBE", {});
+    put_block_le(body, "BT_TRIBE", tribe);
     put_block_le(body, "BT_DIARY", {});
     put_block_le(body, "BT_HSTRY", {});
     put_block_le(body, "BT_HERO ", {});
