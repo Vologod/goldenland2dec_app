@@ -87,6 +87,63 @@ std::vector<std::uint8_t> person_prefix(const PersonValues &values) {
     return out;
 }
 
+void put_u32_at(std::vector<std::uint8_t> &out, std::size_t offset, std::uint32_t value) {
+    for (unsigned shift = 0; shift < 32; shift += 8)
+        out[offset + shift / 8] = static_cast<std::uint8_t>((value >> shift) & 0xFF);
+}
+
+struct ItemSpec {
+    std::uint32_t id = 0;
+    std::uint32_t count = 1;
+    std::uint32_t flags = 0;
+    std::uint32_t type = 0;
+    std::uint32_t style = 0;
+    std::uint32_t durability = 100;
+    std::uint32_t mods = 0;
+};
+
+void put_item_record(std::vector<std::uint8_t> &out, const ItemSpec &spec) {
+    const std::size_t start = out.size();
+    out.resize(start + 0xC4, 0);
+    put_u32_at(out, start + 0x00, 0x14092248u);
+    put_u32_at(out, start + 0x08, spec.type);
+    put_u32_at(out, start + 0x0C, spec.flags);
+    put_u32_at(out, start + 0x20, spec.style);
+    put_u32_at(out, start + 0xA8, spec.id);
+    put_u32_at(out, start + 0xB0, spec.count);
+    put_u32_at(out, start + 0xB4, spec.durability);
+    put_u32_at(out, start + 0xC0, spec.mods);
+    for (std::uint32_t index = 0; index < spec.mods; ++index)
+        for (std::uint32_t word = 0; word < 5; ++word)
+            put_u32(out, index * 10 + word);
+}
+
+void put_container(std::vector<std::uint8_t> &out,
+                   const std::optional<std::vector<ItemSpec>> &items) {
+    if (!items.has_value()) {
+        put_u32(out, 0);
+        return;
+    }
+    put_u32(out, 1);
+    put_u32(out, static_cast<std::uint32_t>(items->size()));
+    for (const ItemSpec &item : *items)
+        put_item_record(out, item);
+}
+
+std::vector<std::uint8_t>
+person_body_with_containers(const PersonValues &values,
+                            const std::optional<std::vector<ItemSpec>> &c0,
+                            const std::optional<std::vector<ItemSpec>> &c1,
+                            const std::optional<std::vector<ItemSpec>> &c2) {
+    std::vector<std::uint8_t> out = person_prefix(values);
+    put_container(out, c0);
+    put_container(out, c1);
+    put_container(out, c2);
+    out.insert(out.end(), 0x80, 0);
+    put_u32(out, 0);
+    return out;
+}
+
 void append_empty_containers_and_tail(std::vector<std::uint8_t> &out) {
     for (int index = 0; index < 3; ++index)
         put_u32(out, 0);
@@ -573,4 +630,93 @@ TEST_CASE("save restore runtime applies current person state") {
     CHECK(planned.path.back() == gl::game::Tile{14, 13});
     CHECK(planned.target_x == doctest::Approx(14.0f * 12 + 6));
     CHECK(planned.target_y == doctest::Approx(13.0f * 9 + 4));
+}
+
+TEST_CASE("decode save person reads containers and tail") {
+    PersonValues values;
+    values.name = "solo";
+    const std::vector<ItemSpec> c0{{812, 597, 0xC0000000u, 18, 0, 93, 1},
+                                   {812, 5, 0, 18, 0, 100, 0}};
+    const std::vector<ItemSpec> c1{{421, 2, 0x8000000Cu, 19, 0, 100, 0}};
+    const std::vector<ItemSpec> c2{{1784, 1, 0, 0, 0, 100, 0}};
+    const auto record = gl::game::decode_save_person(
+        person_entity(person_body_with_containers(values, c0, c1, c2)));
+    REQUIRE(record.has_value());
+    REQUIRE(record->containers[0].present);
+    REQUIRE(record->containers[0].items.size() == 2);
+    CHECK(record->containers[0].items[0].item_id == 812);
+    CHECK(record->containers[0].items[0].count == 597);
+    CHECK(record->containers[0].items[0].flags == 0xC0000000u);
+    CHECK(record->containers[0].items[0].type == 18);
+    CHECK(record->containers[0].items[0].durability == 93);
+    CHECK(record->containers[0].items[0].mod_count == 1);
+    REQUIRE(record->containers[0].items[0].modifiers.size() == 1);
+    CHECK(record->containers[0].items[0].modifiers[0].words[0] == 0u);
+    CHECK(record->containers[0].items[0].modifiers[0].words[4] == 4u);
+    CHECK(record->containers[0].items[1].item_id == 812);
+    CHECK(record->containers[0].items[1].count == 5);
+    REQUIRE(record->containers[1].present);
+    REQUIRE(record->containers[1].items.size() == 1);
+    CHECK(record->containers[1].items[0].item_id == 421);
+    REQUIRE(record->containers[2].present);
+    REQUIRE(record->containers[2].items.size() == 1);
+    CHECK(record->containers[2].items[0].item_id == 1784);
+    CHECK(record->tail_count == 0);
+}
+
+TEST_CASE("decode save person distinguishes absent and empty containers") {
+    PersonValues values;
+    const auto record = gl::game::decode_save_person(person_entity(
+        person_body_with_containers(values, std::nullopt, std::vector<ItemSpec>{}, std::nullopt)));
+    REQUIRE(record.has_value());
+    CHECK_FALSE(record->containers[0].present);
+    CHECK(record->containers[0].items.empty());
+    CHECK(record->containers[1].present);
+    CHECK(record->containers[1].items.empty());
+    CHECK_FALSE(record->containers[2].present);
+}
+
+TEST_CASE("decode save person rejects malformed containers and tail") {
+    SUBCASE("truncated container flag") {
+        auto body = person_prefix(PersonValues{});
+        body.resize(body.size() + 2);
+        const auto record = gl::game::decode_save_person(person_entity(std::move(body)));
+        REQUIRE_FALSE(record.has_value());
+        CHECK(record.error().code == gl::ErrorCode::format);
+    }
+    SUBCASE("container count without item records") {
+        std::vector<std::uint8_t> body = person_prefix(PersonValues{});
+        put_u32(body, 1);
+        put_u32(body, 3);
+        const auto record = gl::game::decode_save_person(person_entity(std::move(body)));
+        REQUIRE_FALSE(record.has_value());
+        CHECK(record.error().code == gl::ErrorCode::format);
+    }
+    SUBCASE("item subrecords overrun") {
+        std::vector<std::uint8_t> body = person_prefix(PersonValues{});
+        put_u32(body, 1);
+        put_u32(body, 1);
+        put_item_record(body, ItemSpec{812, 1, 0, 18, 0, 100, 2});
+        body.resize(body.size() - 1);
+        const auto record = gl::game::decode_save_person(person_entity(std::move(body)));
+        REQUIRE_FALSE(record.has_value());
+        CHECK(record.error().code == gl::ErrorCode::format);
+    }
+    SUBCASE("truncated tail prefix") {
+        std::vector<std::uint8_t> body = person_prefix(PersonValues{});
+        put_u32(body, 0);
+        put_u32(body, 0);
+        put_u32(body, 0);
+        body.insert(body.end(), 0x70, 0);
+        const auto record = gl::game::decode_save_person(person_entity(std::move(body)));
+        REQUIRE_FALSE(record.has_value());
+        CHECK(record.error().code == gl::ErrorCode::format);
+    }
+    SUBCASE("trailing bytes") {
+        auto body = person_body(PersonValues{});
+        body.push_back(0x7F);
+        const auto record = gl::game::decode_save_person(person_entity(std::move(body)));
+        REQUIRE_FALSE(record.has_value());
+        CHECK(record.error().code == gl::ErrorCode::format);
+    }
 }

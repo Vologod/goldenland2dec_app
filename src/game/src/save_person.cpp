@@ -99,6 +99,36 @@ Result<SavePersonRecord> decode_save_person(const assets::SaveEntity &entity) {
         return format_error("save person route index is truncated");
     record.route_index = std::bit_cast<std::int32_t>(value);
 
+    for (SaveContainer &container : record.containers) {
+        if (!reader.read_u32le(value))
+            return format_error("save person container flag is truncated");
+        if (value == 0)
+            continue;
+        container.present = true;
+        if (!reader.read_u32le(value))
+            return format_error("save person container count is truncated");
+        for (std::uint32_t index = 0; index < value; ++index) {
+            auto parsed = assets::parse_item_record(reader.remaining());
+            if (!parsed)
+                return format_error("save person item record is truncated");
+            container.items.push_back(std::move(parsed->record));
+            if (!reader.skip(parsed->size))
+                return format_error("save person item record is truncated");
+        }
+    }
+    if (!reader.skip(0x80))
+        return format_error("save person tail prefix is truncated");
+    if (!reader.read_u32le(record.tail_count))
+        return format_error("save person tail count is truncated");
+    const std::uint64_t tail_bytes =
+        static_cast<std::uint64_t>(record.tail_count) * 0x14;
+    if (tail_bytes > reader.remaining().size())
+        return format_error("save person tail entries are truncated");
+    if (!reader.skip(static_cast<std::size_t>(tail_bytes)))
+        return format_error("save person tail entries are truncated");
+    if (!reader.remaining().empty())
+        return format_error("save person body has trailing bytes");
+
     return record;
 }
 } // namespace gl::game
