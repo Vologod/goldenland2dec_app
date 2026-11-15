@@ -1,8 +1,10 @@
 #include "gl/game/save_restore.hpp"
 
 #include "gl/assets/log.hpp"
+#include "gl/game/inventory_runtime.hpp"
 #include "gl/game/save_person.hpp"
 
+#include <array>
 #include <cctype>
 #include <deque>
 #include <map>
@@ -54,6 +56,15 @@ const gl::assets::SaveTribeEntry *find_tribe(const gl::assets::SaveTribeTable &t
     return nullptr;
 }
 
+std::vector<gl::assets::InventoryItem> to_inventory_items(const SaveContainer &container) {
+    std::vector<gl::assets::InventoryItem> items;
+    items.reserve(container.items.size());
+    for (const gl::assets::SaveItemRecord &record : container.items)
+        items.emplace_back(record.item_id, record.count, record.flags, record.type, record.style,
+                           record.durability, record.mod_count);
+    return items;
+}
+
 void apply_record(PersonInstance &person, const SavePersonRecord &record,
                   const gl::assets::SaveTribeTable *tribes, bool &warned_missing_table) {
     person.tile_x = record.anchor_tile_x;
@@ -99,7 +110,8 @@ void apply_record(PersonInstance &person, const SavePersonRecord &record,
 } // namespace
 
 RestoreResult restore_save_persons(Level &level, const gl::assets::SaveTailEntry &tail,
-                                   const gl::assets::SaveTribeTable *tribes, bool drop_sef_only) {
+                                   const gl::assets::SaveTribeTable *tribes, bool drop_sef_only,
+                                   InventoryRuntime *inventory) {
     std::map<std::string, std::deque<std::size_t>, std::less<>> occurrences;
     for (std::size_t index = 0; index < level.persons.size(); ++index)
         occurrences[level.persons[index].name].push_back(index);
@@ -107,6 +119,7 @@ RestoreResult restore_save_persons(Level &level, const gl::assets::SaveTailEntry
     std::vector<char> matched(level.persons.size(), 0);
     std::vector<std::size_t> matched_order;
     matched_order.reserve(level.persons.size());
+    std::map<std::string, std::size_t, std::less<>> applied_names;
     bool warned_missing_table = false;
 
     RestoreResult result;
@@ -132,6 +145,20 @@ RestoreResult restore_save_persons(Level &level, const gl::assets::SaveTailEntry
         const std::size_t index = queue.front();
         queue.pop_front();
         apply_record(level.persons[index], decoded.value(), tribes, warned_missing_table);
+        if (inventory != nullptr) {
+            const std::string &name = level.persons[index].name;
+            const std::size_t occurrence = ++applied_names[name];
+            if (occurrence > 1) {
+                ++result.counts.duplicate_containers;
+                gl::log(gl::LogLevel::warning, "save restore: duplicate containers for '" + name +
+                                                   "' occurrence " + std::to_string(occurrence) +
+                                                   "; last record wins");
+            }
+            inventory->replace_person_items(name, to_inventory_items(decoded->containers[0]));
+            inventory->replace_person_trade_items(name, to_inventory_items(decoded->containers[1]));
+            ++result.counts.containers_applied;
+        }
+        result.counts.c2_items += decoded->containers[2].items.size();
         result.persons.push_back(RestoredPerson{
             matched_order.size(),
             Tile{decoded->current_tile_x, decoded->current_tile_y},

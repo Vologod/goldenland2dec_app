@@ -1,5 +1,6 @@
 #include "gl/assets/cp1251.hpp"
 #include "gl/assets/save_payload.hpp"
+#include "gl/game/inventory_runtime.hpp"
 #include "gl/game/level.hpp"
 #include "gl/game/level_simulation.hpp"
 #include "gl/game/person_movement.hpp"
@@ -719,4 +720,102 @@ TEST_CASE("decode save person rejects malformed containers and tail") {
         REQUIRE_FALSE(record.has_value());
         CHECK(record.error().code == gl::ErrorCode::format);
     }
+}
+
+TEST_CASE("save restore applies c0 main and c1 trade containers") {
+    gl::game::Level level;
+    level.name = "test";
+    level.persons.push_back(sef_person("solo", 3, 3, "r3"));
+
+    PersonValues values;
+    values.name = "solo";
+    const std::vector<ItemSpec> c0{{812, 597, 0xC0000000u, 18, 0, 93, 0}};
+    const std::vector<ItemSpec> c1{{421, 2, 0x8000000Cu, 19, 0, 100, 0}};
+    const std::vector<ItemSpec> c2{{1784, 1, 0, 0, 0, 100, 0}};
+    gl::assets::SaveTailEntry tail;
+    tail.entities.push_back(person_entity(person_body_with_containers(values, c0, c1, c2)));
+
+    auto runtime = gl::game::InventoryRuntime::create(gl::assets::HeroInventory{},
+                                                      gl::assets::ItemNameIndex{});
+    runtime.set_person_items("solo", {gl::assets::InventoryItem{999, 1, 0, 0, 0}});
+    runtime.set_person_trade_items("solo", {gl::assets::InventoryItem{998, 1, 0, 0, 0}});
+
+    const auto result = gl::game::restore_save_persons(level, tail, nullptr, false, &runtime);
+    CHECK(result.counts.matched == 1);
+    CHECK(result.counts.containers_applied == 1);
+    CHECK(result.counts.duplicate_containers == 0);
+    CHECK(result.counts.c2_items == 1);
+
+    REQUIRE(runtime.person_items("solo").size() == 1);
+    CHECK(runtime.person_items("solo")[0].item_id == 812);
+    CHECK(runtime.person_items("solo")[0].count == 597);
+    CHECK(runtime.person_items("solo")[0].flags == 0xC0000000u);
+    CHECK(runtime.person_items("solo")[0].type == 18);
+    CHECK(runtime.person_items("solo")[0].durability == 93);
+    CHECK(runtime.person_items("solo")[0].mods.empty());
+
+    REQUIRE(runtime.trade_items("solo").size() == 1);
+    CHECK(runtime.trade_items("solo")[0].item_id == 421);
+    CHECK(runtime.trade_items("solo")[0].count == 2);
+}
+
+TEST_CASE("save restore clears loot for absent saved containers") {
+    gl::game::Level level;
+    level.name = "test";
+    level.persons.push_back(sef_person("solo", 3, 3, "r3"));
+
+    PersonValues values;
+    values.name = "solo";
+    gl::assets::SaveTailEntry tail;
+    tail.entities.push_back(person_entity(
+        person_body_with_containers(values, std::nullopt, std::nullopt, std::nullopt)));
+
+    auto runtime = gl::game::InventoryRuntime::create(gl::assets::HeroInventory{},
+                                                      gl::assets::ItemNameIndex{});
+    runtime.set_person_items("solo", {gl::assets::InventoryItem{999, 1, 0, 0, 0}});
+    runtime.set_person_trade_items("solo", {gl::assets::InventoryItem{998, 1, 0, 0, 0}});
+
+    const auto result = gl::game::restore_save_persons(level, tail, nullptr, false, &runtime);
+    CHECK(result.counts.containers_applied == 1);
+    CHECK(runtime.person_items("solo").empty());
+    CHECK(runtime.trade_items("solo").empty());
+}
+
+TEST_CASE("save restore keeps the last containers for a duplicate name") {
+    gl::game::Level level;
+    level.name = "test";
+    level.persons.push_back(sef_person("dup", 1, 1, "r1"));
+    level.persons.push_back(sef_person("dup", 2, 2, "r2"));
+
+    PersonValues first;
+    first.name = "dup";
+    PersonValues second;
+    second.name = "dup";
+    gl::assets::SaveTailEntry tail;
+    tail.entities.push_back(person_entity(person_body_with_containers(
+        first, std::vector<ItemSpec>{{111, 1, 0, 0, 0, 100, 0}}, std::nullopt, std::nullopt)));
+    tail.entities.push_back(person_entity(person_body_with_containers(
+        second, std::vector<ItemSpec>{{222, 1, 0, 0, 0, 100, 0}}, std::nullopt, std::nullopt)));
+
+    auto runtime = gl::game::InventoryRuntime::create(gl::assets::HeroInventory{},
+                                                      gl::assets::ItemNameIndex{});
+    const auto result = gl::game::restore_save_persons(level, tail, nullptr, false, &runtime);
+    CHECK(result.counts.matched == 2);
+    CHECK(result.counts.containers_applied == 2);
+    CHECK(result.counts.duplicate_containers == 1);
+    REQUIRE(runtime.person_items("dup").size() == 1);
+    CHECK(runtime.person_items("dup")[0].item_id == 222);
+}
+
+TEST_CASE("save restore without a runtime does not touch inventories") {
+    RestoreFixture fixture = make_restore_fixture();
+    auto runtime = gl::game::InventoryRuntime::create(gl::assets::HeroInventory{},
+                                                      gl::assets::ItemNameIndex{});
+    runtime.set_person_items("dup", {gl::assets::InventoryItem{999, 1, 0, 0, 0}});
+    const auto result = gl::game::restore_save_persons(fixture.level, fixture.tail, &fixture.tribes,
+                                                       false, nullptr);
+    CHECK(result.counts.containers_applied == 0);
+    CHECK(result.counts.duplicate_containers == 0);
+    REQUIRE(runtime.person_items("dup").size() == 1);
+    CHECK(runtime.person_items("dup")[0].item_id == 999);
 }
