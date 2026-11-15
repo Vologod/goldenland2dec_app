@@ -1,6 +1,22 @@
 # STATUS
 
-Обновлено: 2026-11-14
+Обновлено: 2026-11-15
+
+## P2-15b1b2 — Restore person containers (design 2026-11-15)
+
+- **Задача:** entity-container decoder (c0/c1/c2 + tail) и restore в
+  `InventoryRuntime` (c0→main, c1→trade, c2 только структура); O4-оракул.
+- **Spec:** `docs/specs/2026-11-15-p2-15b1b2-containers-design.md`
+  (approved 2026-11-15).
+- **Критерии приёмки:** точный consume 2,599 секций/14,507 type-2;
+  O4 19/19 pinned + 14/0/80 item records + 115,405/115,405 defs;
+  legacy combined digest 3/3; c0/c1 в BT_ENTS-порядке (overwrite,
+  last-wins дубликатов имён), c2 decode-only, SEF-only нетронуты;
+  полный `ctest` с `GL_GAME_DIR`; docs (D-073).
+- **Команды проверки:** `cmake --build build`;
+  `build\bin\gl_game_tests.exe --test-case="*save*"`;
+  `ctest --test-dir build --output-on-failure`.
+- **Статус:** `design` (implementation не начата; план — следующий шаг).
 
 ## P2-15b1b1 — Restore person fields (done 2026-11-14)
 
