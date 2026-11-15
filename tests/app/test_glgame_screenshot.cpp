@@ -704,10 +704,13 @@ TEST_CASE("glgame --load-save loads the level and hero from the save") {
                       "tile=(131,115) direction=4") != std::string::npos);
     CHECK(output.find("npc restore: person='L93_2.P292_Chernobogs_Guardian2' "
                       "tile=(103,122) direction=5") != std::string::npos);
+    CHECK(output.find("save containers: applied=3 duplicates=1 c2=3") !=
+          std::string::npos);
     CHECK(output.find("npc dump: person='L93_2.P292_Chernobogs_Guardian2' "
-                      "container='main' items=[]") != std::string::npos);
+                      "container='main' items=[812:688:") != std::string::npos);
+    CHECK(output.find(",919:50:") != std::string::npos);
     CHECK(output.find("npc dump: person='L93_2.P292_Chernobogs_Guardian2' "
-                      "container='trade' items=[812:") != std::string::npos);
+                      "container='trade' items=[812:561:") != std::string::npos);
 }
 
 TEST_CASE("glgame --load-save leaves the inventory runtime untouched when the level fails") {

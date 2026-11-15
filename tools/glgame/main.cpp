@@ -2104,14 +2104,21 @@ class Game {
             [this](gl::game::Level& level, gl::game::MsvcRandom& rng) {
                 generate_npc_inventories(level, rng);
                 if (pending_restore_ == nullptr) return;
-                restore_result_ = gl::game::restore_save_persons(level, *pending_restore_,
-                                                                 pending_tribes_);
+                restore_result_ = gl::game::restore_save_persons(
+                    level, *pending_restore_, pending_tribes_, false, &inventory_runtime_);
                 gl::log(gl::LogLevel::info,
                         "save restore: matched=" +
                             std::to_string(restore_result_.counts.matched) + " sef_only=" +
                             std::to_string(restore_result_.counts.sef_only) +
                             " type2_only=" +
                             std::to_string(restore_result_.counts.type2_only));
+                gl::log(gl::LogLevel::info,
+                        "save containers: applied=" +
+                            std::to_string(restore_result_.counts.containers_applied) +
+                            " duplicates=" +
+                            std::to_string(restore_result_.counts.duplicate_containers) +
+                            " c2=" +
+                            std::to_string(restore_result_.counts.c2_items));
             });
         if (!screen) {
             gl::log(gl::LogLevel::error, screen.error().message);
