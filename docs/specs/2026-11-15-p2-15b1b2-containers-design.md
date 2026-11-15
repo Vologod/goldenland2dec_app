@@ -229,9 +229,9 @@ Real (`tests/game/test_save_restore_real.cpp`, + новый O4 test-case):
   (`Sdb::find`) и `items/data/<id>.itm` в VFS; любой mismatch → `d/N`;
 - независимая сверка: реконструированная legacy combined строка
   (`name, cur_x, cur_y, anchor_x, anchor_y, direction, route_type, route,
-  c0, c1, c2`) даёт research SHA-256 `9DDA…`/`E3B0…`/`72A8…` для
-  slot0/2/21; split container-tuple digest пинится как regression после
-  первого прогона.
+  c0, c1, c2`) для slot0/2/21 **побайтово** совпадает с research-строками
+  (эквивалент research SHA-256 пинов `9DDA…`/`E3B0…`/`72A8…`; SHA в порте
+  не пересчитывается); split container tuple пинится построчно (19/19).
 
 App (`tests/app/test_glgame_screenshot.cpp`):
 
@@ -245,7 +245,8 @@ App (`tests/app/test_glgame_screenshot.cpp`):
 1. `decode_save_person` дочитывает тело до конца: все 2,599 tail-секций /
    14,507 type-2 records consume exactly, 0 mismatches.
 2. O4: 19/19 pinned tuples; slot counts 14/0/80; 115,405/115,405 defs
-   резолвятся; legacy combined digest 3/3 равен research-пинам.
+   резолвятся; legacy combined text 3/3 побайтово равен research-строкам
+   (эквивалент research SHA-256 пинов).
 3. Runtime: c0/c1 применены в `BT_ENTS`-порядке с overwrite; absent →
    пустой контейнер; дубликаты имён last-wins + счётчик; c2 decode-only;
    SEF-only нетронуты.
