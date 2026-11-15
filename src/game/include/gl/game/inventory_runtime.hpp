@@ -77,6 +77,8 @@ class InventoryRuntime {
     // allowed here (unlike set_person_items) so an explicit trade list can be
     // supplied without touching Hero main; it stays empty unless set.
     void set_person_trade_items(std::string name, std::vector<gl::assets::InventoryItem> items);
+    void replace_person_items(std::string name, std::vector<gl::assets::InventoryItem> items);
+    void replace_person_trade_items(std::string name, std::vector<gl::assets::InventoryItem> items);
     std::int32_t trade_money(std::string_view person) const;
     void clear_persons();
     gl::script::InventoryAccess access();

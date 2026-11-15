@@ -514,6 +514,18 @@ void InventoryRuntime::set_person_trade_items(std::string name,
     }
 }
 
+void InventoryRuntime::replace_person_items(std::string name,
+                                            std::vector<gl::assets::InventoryItem> items) {
+    if (is_hero(name))
+        return;
+    persons_.insert_or_assign(std::move(name), std::move(items));
+}
+
+void InventoryRuntime::replace_person_trade_items(std::string name,
+                                                  std::vector<gl::assets::InventoryItem> items) {
+    trades_.insert_or_assign(std::move(name), std::move(items));
+}
+
 std::int32_t InventoryRuntime::trade_money(std::string_view person) const {
     std::int64_t total = 0;
     for (const gl::assets::InventoryItem &item : trade_items(person)) {

@@ -1745,3 +1745,30 @@ TEST_CASE("inventory_runtime exchange_trade moves only the first matching record
     CHECK(trade_item_count(runtime, 953) == 9);
     CHECK(runtime.count("Hero", "POT_1_00_27") == 65);
 }
+
+TEST_CASE("replace_person_items overwrites an existing container") {
+    InventoryRuntime runtime =
+        InventoryRuntime::create(make_inventory(), make_names(), template_for);
+    runtime.set_person_items("L0.P1", {InventoryItem{1101, 2, 0, 0, 0}});
+    runtime.replace_person_items("L0.P1", {InventoryItem{812, 7, 0, 18, 0}});
+    REQUIRE(runtime.person_items("L0.P1").size() == 1);
+    CHECK(runtime.person_items("L0.P1")[0].item_id == 812);
+    CHECK(runtime.person_items("L0.P1")[0].count == 7);
+}
+
+TEST_CASE("replace_person_items ignores Hero") {
+    InventoryRuntime runtime =
+        InventoryRuntime::create(make_inventory(), make_names(), template_for);
+    const std::size_t before = runtime.hero_inventory().items.size();
+    runtime.replace_person_items("Hero", {InventoryItem{1101, 1, 0, 0, 0}});
+    CHECK(runtime.hero_inventory().items.size() == before);
+}
+
+TEST_CASE("replace_person_trade_items overwrites an existing container") {
+    InventoryRuntime runtime =
+        InventoryRuntime::create(make_inventory(), make_names(), template_for);
+    runtime.set_person_trade_items(std::string(kTradeNpc), {InventoryItem{812, 10, 0, 18, 0}});
+    runtime.replace_person_trade_items(std::string(kTradeNpc), {InventoryItem{812, 25, 0, 18, 0}});
+    REQUIRE(runtime.trade_items(kTradeNpc).size() == 1);
+    CHECK(runtime.trade_items(kTradeNpc)[0].count == 25);
+}
