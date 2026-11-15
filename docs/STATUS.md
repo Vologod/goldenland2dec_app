@@ -62,7 +62,7 @@
   `Total Test time (real) = 1502.75 sec`, exit 0.
 - **Коммиты:** `883fa7b test(game): cover real save restore`; docs —
   отдельный коммит.
-- **Остаток:** containers/inventory — `P2-15b1b2`; `+0x26c0` gate/loot
+- **Остаток:** containers/inventory — `P2-15b1b2` (done 2026-11-15, D-073); `+0x26c0` gate/loot
   ordering — `P2-15b1b3`; type-2-only synthesis, route_cells mismatch,
   opaque `+0x40/+0x44/+0x654/+0x658/+0xff0/+0x6cc`, AP, save write.
 - **Статус:** `done`.
@@ -104,7 +104,7 @@
   отдельный docs-коммит.
 - **Статус:** `done` (research-only).
 - **Дальше:** approve spec/plan для `P2-15b1b1` (position/direction/params);
-  затем `P2-15b1b2` (entity-container decoder + O4) и `P2-15b1b3`
+  затем `P2-15b1b2` (done 2026-11-15, D-073) и `P2-15b1b3`
   (`+0x26c0` gate/ordering). Save write — `P2-15c`.
 
 ## P2-15b1a — Save entities parser (done 2026-11-14)

@@ -819,3 +819,48 @@ TEST_CASE("save restore without a runtime does not touch inventories") {
     REQUIRE(runtime.person_items("dup").size() == 1);
     CHECK(runtime.person_items("dup")[0].item_id == 999);
 }
+
+TEST_CASE("decode save person accepts non-zero container flags") {
+    std::vector<std::uint8_t> body = person_prefix(PersonValues{});
+    for (int index = 0; index < 3; ++index) {
+        put_u32(body, 2);
+        put_u32(body, 0);
+    }
+    body.insert(body.end(), 0x80, 0);
+    put_u32(body, 0);
+
+    const auto record = gl::game::decode_save_person(person_entity(std::move(body)));
+    REQUIRE(record.has_value());
+    CHECK(record->containers[0].present);
+    CHECK(record->containers[1].present);
+    CHECK(record->containers[2].present);
+    CHECK(record->containers[0].items.empty());
+}
+
+TEST_CASE("decode save person skips a positive tail") {
+    std::vector<std::uint8_t> body = person_prefix(PersonValues{});
+    put_u32(body, 0);
+    put_u32(body, 0);
+    put_u32(body, 0);
+    body.insert(body.end(), 0x80, 0xAB);
+    put_u32(body, 2);
+    body.insert(body.end(), 0x28, 0xCD);
+
+    const auto record = gl::game::decode_save_person(person_entity(std::move(body)));
+    REQUIRE(record.has_value());
+    CHECK(record->tail_count == 2);
+}
+
+TEST_CASE("decode save person rejects a tail overrun") {
+    std::vector<std::uint8_t> body = person_prefix(PersonValues{});
+    put_u32(body, 0);
+    put_u32(body, 0);
+    put_u32(body, 0);
+    body.insert(body.end(), 0x80, 0);
+    put_u32(body, 2);
+    body.insert(body.end(), 0x14, 0);
+
+    const auto record = gl::game::decode_save_person(person_entity(std::move(body)));
+    REQUIRE_FALSE(record.has_value());
+    CHECK(record.error().code == gl::ErrorCode::format);
+}
