@@ -2,21 +2,35 @@
 
 Обновлено: 2026-11-15
 
-## P2-15b1b2 — Restore person containers (design 2026-11-15)
+## P2-15b1b2 — Restore person containers (done 2026-11-15)
 
 - **Задача:** entity-container decoder (c0/c1/c2 + tail) и restore в
   `InventoryRuntime` (c0→main, c1→trade, c2 только структура); O4-оракул.
 - **Spec:** `docs/specs/2026-11-15-p2-15b1b2-containers-design.md`
   (approved 2026-11-15).
-- **Критерии приёмки:** точный consume 2,599 секций/14,507 type-2;
-  O4 19/19 pinned + 14/0/80 item records + 115,405/115,405 defs;
-  legacy combined digest 3/3; c0/c1 в BT_ENTS-порядке (overwrite,
-  last-wins дубликатов имён), c2 decode-only, SEF-only нетронуты;
-  полный `ctest` с `GL_GAME_DIR`; docs (D-073).
-- **Команды проверки:** `cmake --build build`;
-  `build\bin\gl_game_tests.exe --test-case="*save*"`;
-  `ctest --test-dir build --output-on-failure`.
-- **Статус:** `design` (implementation не начата; план — следующий шаг).
+- **Сделано (D-073):** shared `assets::parse_item_record` (hero-парсер
+  переиспользует его, `+0x78` сохранён); `SaveContainer`/`containers[3]`/
+  `tail_count` decode с точным consume тела (`decode_save_person`
+  требует exact body consume); `replace_person_items`/
+  `replace_person_trade_items` (`insert_or_assign`); `restore_save_persons(...,
+  InventoryRuntime*)` — c0→main, c1→trade, c2 count-only (`c2_items`),
+  отсутствующие контейнеры → пустые векторы, дубликаты имён last-wins +
+  warning (`duplicate_containers`); `glgame` pass-through + лог
+  `save containers:`.
+- **Проверка (2026-11-15, `GL_GAME_DIR=I:\Games\Златогорье-2`):**
+  `cmake --build build` exit 0;
+  `gl_game_tests --test-case="*save container*"` — **2/2 cases,
+  14,684/14,684 assertions**, exit 0;
+  `gl_game_tests --test-case="*save restore*"` — **15/15 cases,
+  734/734 assertions**, exit 0;
+  `glgame_screenshot_tests --test-case="*load-save*"` — **2/2 cases,
+  24/24 assertions**, exit 0;
+  `ctest --test-dir build --output-on-failure` — **19/19 passed**,
+  `Total Test time (real) = 2024.61 sec`, exit 0.
+- **Остаток:** `+0x26c0` gate/loot order — `P2-15b1b3`;
+  occurrence-qualified runtime keys; modifier semantics; c2 runtime
+  target; live container-manager oracle.
+- **Статус:** `done`.
 
 ## P2-15b1b1 — Restore person fields (done 2026-11-14)
 

@@ -1017,3 +1017,15 @@ sections aggregate `496 matched / 43 SEF-only / 3 type-2-only` using
 `BT_PNAME` names matched against SEF, independent of the restore output.
 Containers are not asserted (b1b2). Full `ctest` 19/19 passed
 (`Total Test time (real) = 1502.75 sec`, exit 0, 2026-11-14).
+
+## Implementation result (P2-15b1b2, 2026-11-15)
+
+`assets::parse_item_record` + `SavePersonRecord.containers[3]`/`tail_count`
+decode all three containers and the tail with exact body consume;
+`InventoryRuntime::replace_person_items/_trade_items` apply c0→main and
+c1→trade for matched persons in `BT_ENTS` order (c2 structured only).
+Duplicate person names are last-wins with a warning (occurrence keys
+deferred). O4 real oracle: pins 19/19 (14/0/80 item records), selected 499,
+all-section 14,507 type-2 / 115,405 item records / 43,521 containers;
+definition ids resolve 115,405/115,405; legacy combined text matches the
+research pins. `+0x26c0` gate/loot order remains `P2-15b1b3`.
