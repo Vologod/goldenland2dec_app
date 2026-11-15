@@ -1029,3 +1029,48 @@ deferred). O4 real oracle: pins 19/19 (14/0/80 item records), selected 499,
 all-section 14,507 type-2 / 115,405 item records / 43,521 containers;
 definition ids resolve 115,405/115,405; legacy combined text matches the
 research pins. `+0x26c0` gate/loot order remains `P2-15b1b3`.
+
+## b1b3 gate evidence (2026-11-15)
+
+Static evidence for the `+0x26c0` decision and the chance gate (Server.dll
+SHA-256 as in `p2-15b1-save-entities.md`):
+
+- Due-check `FUN_140325fc` (decompiled 35817-35846): `now` is the clock set
+  from `BT_INFO.time` (35628-35639); saved latch `0` compares
+  `saved_ts + interval` with `now`, sets `+0x26c0=1` and `+0x26a0=now`
+  when due; saved latch non-zero sets `+0x26c0=0` and keeps the datetime.
+- Comparator `FUN_1405b490` (RVA `0x5b490`, decompiled 62070-62114)
+  compares `year, month, day, hour, minute, second, millisecond`
+  lexicographically, ignores index 3 (`weekday`), and returns `1` for
+  `a <= b` (equality is due).
+- Duration add `FUN_1405b38c` (RVA `0x5b38c`, vtable `DAT_14088e14+0`,
+  not in `functions.csv`) normalizes ms/sec/min/hour and adjusts
+  months/days through `FUN_1405b140`; `FUN_1405b140`/`FUN_1405b0c0`
+  contain Gregorian `/4`, `/100`, `/400` logic. The due duration is
+  `interval / 0x1e` months + `interval % 0x1e` days (35828-35835);
+  single-player `7` days is `0` months + `7` days.
+- Interval `gv_items_regenerate_interval` = `DAT_1407fbcc+0x8c`, config
+  init decompiled 2765-2774: `7` single-player, `5` multiplayer.
+- Gate `FUN_1404b1c0`: R1 `coin(regenerate_chance)` at 51141; `R1=0 &&
+  param_4==0` returns without clearing the containers. Restore reader
+  passes `param_4=0` (22083-22086); initial spawn `FUN_14018990` (18090)
+  and trigger path (22454) pass `param_4=1`, where R1 is drawn but
+  ignored.
+
+Independent scan (temporary Python 3.9 script, not committed) parsed
+`raw[0x70:0x70+compressed_len]` with zlib, the 7 blocks, the tail
+dictionary and the selected `BT_RGINF`, then compared real Gregorian
+`datetime(saved) + 7 days <= datetime(BT_INFO.time)`. Script SHA-256:
+due script `17864BBA728C1A8315AB42D2482638B85A8F9FD73BC6FE459CF77134C3A09108`;
+type-2 counter `5C89595963A763EB19EEB51E84A08C55EA7FC2B24DC4EC5599D8913634094899`.
+
+Selected-section results: `{0: not due, 1: not due, 2: latch 1, 3: latch
+1, 4-19: not due, 20: due, 21: not due, 22: latch 1, 23: due, 24-27:
+not due}`; latch `1` in 11 of 28 selected sections, due set exactly
+`{20, 23}`. Pinned dates: slot0 `1126-05-30 16:17:25.120 ->
+20:29:25.120`; slot2 `1126-03-31 05:01:11.400 -> 05:48:09.300`; slot3
+`1126-03-31 06:29:30.780 -> 08:30:20.640`; slot20 `1124-12-16
+06:58:51.660 -> 1124-12-31 07:21:07.100`; slot21 `1124-05-11
+08:15:49.440 -> 17:05:55.380`; slot23 `1124-11-20 06:06:32.000 ->
+1125-01-15 15:37:50.080`. Type-2 records in the due sections: slot20
+`L18_2` 1, slot23 `L4_1` 24; slot3 `L93_4` 3 (latch 1, not due).

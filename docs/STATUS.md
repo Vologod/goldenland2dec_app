@@ -2,6 +2,28 @@
 
 Обновлено: 2026-11-15
 
+## P2-15b1b3 — RGINF gate/loot ordering (design 2026-11-15)
+
+- **Задача:** вычислить `+0x26c0` из `BT_RGINF` + `BT_INFO.time` +
+  интервал 7 дней; на load-save убрать ungated loot/person-init; при due —
+  chance-gated регенерация c0/c1 в `BT_ENTS`-порядке; SEF-only fallback.
+- **Spec:** `docs/specs/2026-11-15-p2-15b1b3-rginf-gate-design.md`
+  (approved 2026-11-15; plan/implementation — следующая сессия).
+- **Доказано (2026-11-15):** comparator `0x5b490` — лексикографический,
+  weekday игнорируется, равенство = due; add `0x5b38c`/`0x5b140` —
+  грегорианский; interval `7` single-player (`DAT_1407fbcc+0x8c`);
+  gate `FUN_1404b1c0` R1, restore `force=0`, spawn/trigger `force=1`.
+  Независимый scan 28 saves: due set `{20,23}`; slot0/2/21/3 not due;
+  latch 1 в 11 выбранных секциях; slot20 1 type-2, slot23 24 type-2.
+- **Критерии приёмки:** O6 synthetic + real `{0:0,2:0,3:0,20:1,21:0,23:1}`;
+  `force=false` fail -> `nullopt` после одного R1 draw; gate порядок =
+  `BT_ENTS`; slot0 E2E-пины b1b2 без изменений; slot23 `due=1` +
+  согласованные счётчики; полный `ctest` с `GL_GAME_DIR`.
+- **Команды проверки:** `cmake --build build`;
+  `build\bin\gl_game_tests.exe --test-case="*rginf*,*npc*loot*"`;
+  `ctest --test-dir build --output-on-failure`.
+- **Статус:** `design` (implementation не начата).
+
 ## P2-15b1b2 — Restore person containers (done 2026-11-15)
 
 - **Задача:** entity-container decoder (c0/c1/c2 + tail) и restore в
