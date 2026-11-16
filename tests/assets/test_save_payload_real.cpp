@@ -494,3 +494,20 @@ TEST_CASE("real data: save payload encode round-trips every slot" *
         CHECK(encoded->size() >= 0x70u);
     }
 }
+
+TEST_CASE("real data: BT_TRIBE re-encodes byte-identically" *
+          doctest::skip(!game_dir_available())) {
+    for (int slot = 0; slot < 28; ++slot) {
+        auto payload = gl::assets::parse_save_payload(read_save(slot));
+        REQUIRE(payload.has_value());
+        CAPTURE(slot);
+        const auto body = gl::assets::encode_tribe_body(payload->tribes);
+        REQUIRE(body.has_value());
+        const auto &block = payload->blocks[3];
+        const std::vector<std::uint8_t> expected(
+            payload->decompressed.begin() + static_cast<std::ptrdiff_t>(block.offset),
+            payload->decompressed.begin() +
+                static_cast<std::ptrdiff_t>(block.offset + block.size));
+        CHECK(body.value() == expected);
+    }
+}

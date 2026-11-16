@@ -1327,3 +1327,18 @@ history) and encode is byte-deterministic. This is the container layer
 only: no `Saves/` write or `game_save` (c4), and gameplay-mutated
 VARS/TRIBE/HERO still need typed encoders (c2/c3); no byte-identical
 claim.
+
+## Implementation result (P2-15c2, 2026-11-16)
+
+`assets::encode_vars_body` and `assets::encode_tribe_body` rebuild the two
+typed block bodies (`BT_VARS`: count + type/name/value or type-3 text;
+`BT_TRIBE`: count + `id`/name entries + `count²` matrix in entry order), with
+unknown type and matrix-size mismatches returning `format`.
+`script::update_vars_from_globals` copies the saved vector (order/type/name
+authoritative) and replaces values from the VM, without adding or removing
+names. Real 28-save oracle: `update_vars_from_globals` over
+`zlato_vars.scr` plus the saved overlay re-encodes the `BT_VARS` body and
+`encode_tribe_body` re-encodes the `BT_TRIBE` body byte-for-byte (28/28).
+Runtime-only/new globals are a c4 policy, type 3 is unit-only (absent from
+the corpus), HERO/tail/ENTITIES remain raw (c3), and no `Saves/` write or
+`game_save` exists yet (c4).

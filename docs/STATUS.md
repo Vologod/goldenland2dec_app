@@ -2,20 +2,32 @@
 
 Обновлено: 2026-11-16
 
-## P2-15c2 — Typed BT_VARS/BT_TRIBE encoders (design 2026-11-16)
+## P2-15c2 — Typed BT_VARS/BT_TRIBE encoders (done 2026-11-16)
 
 - **Задача:** `encode_vars_body`/`encode_tribe_body` + `script::
   update_vars_from_globals`; 28-save body byte-equality.
 - **Spec:** `docs/specs/2026-11-16-p2-15c2-typed-vars-tribe-design.md`
-  (approved 2026-11-16); **Plan:** `docs/plans/2026-11-16-p2-15c2-typed-vars-tribe.md`.
-- **Критерии приёмки:** BT_VARS body byte-equal 28/28 через VM-overlay;
-  BT_TRIBE body 28/28; unit adapter/encoders/invalid; полный `ctest`.
-- **Команды:** `cmake --build build`;
-  `gl_assets_tests --test-case="*encode_vars_body*,*encode_tribe_body*"`;
-  `gl_script_real_tests --test-case="*BT_VARS re-encodes*"`;
-  `gl_assets_real_tests --test-case="*BT_TRIBE re-encodes*"`;
-  `ctest --test-dir build --output-on-failure`.
-- **Статус:** `design` (implementation не начата).
+  (approved 2026-11-16); **Plan:** `docs/plans/2026-11-16-p2-15c2-typed-vars-tribe.md`;
+  **D-080.**
+- **Реализовано (D-080):** `assets::encode_vars_body` пишет `u32 count`,
+  per-entry `u32 type` (0..3), `u32 name_len+cp1251`, 8 raw f64 байт (типы
+  0/1/2) или `u32 text_len+cp1251` (тип 3); `assets::encode_tribe_body` —
+  `u32 count`, `u32 id+string` entries и `count²` matrix в entry-порядке;
+  неизвестный тип/несовпадение размера matrix → `format`.
+  `script::update_vars_from_globals` копирует saved-вектор (order/type/name
+  авторитетны), заменяет numeric-значения из VM `Value` (`static_cast<double>`,
+  LE f64) и type-3 text из string-значений, сохраняет raw при
+  missing/type-mismatch и не добавляет/не удаляет имена.
+- **Проверка (2026-11-16):** focused unit `*encode_vars_body*,*encode_tribe_body*`
+  — 2 cases / 10 assertions, 0 failed; `*update_vars*` — 1 case / 9
+  assertions, 0 failed; real `*BT_VARS re-encodes*` — 1 case / 87 assertions,
+  0 failed; real `*BT_TRIBE re-encodes*` — 1 case / 84 assertions, 0 failed
+  (28/28 body byte-equality для VARS и TRIBE); полный `ctest` — 19/19
+  passed, 1559.63 s (real), exit 0, build exit 0.
+- **Остаточное:** new/runtime-only globals требуют c4-политики; type 3 —
+  unit-only (в корпусе отсутствует); HERO/tail/ENTITIES остаются raw — c3;
+  запись `Saves/`/`game_save` и дата/имя заголовка — c4.
+- **Статус:** `done`.
 
 ## P2-15c1 — Save container writer (done 2026-11-16)
 
