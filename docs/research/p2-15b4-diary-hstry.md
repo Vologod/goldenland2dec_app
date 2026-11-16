@@ -112,3 +112,14 @@ Only structural facts are confirmed:
    `GoldenLand.exe`, marked `blocked`.
 4. Verdict `scoped` and decomposition above.
 5. Docs-only; UTF-8 no BOM/NUL; no `src/`/`tests/`/`tools/` changes.
+
+## Implementation result (P2-15b4b, 2026-11-16)
+
+`SavePayload` now stores DIARY entries (`key`, `declared_count`, raw 0x58
+header+record blocks), sparse 0x58 records, and HSTRY (`head`, 40
+`(text,id)` slots, `tail`). Parsers require exact body consume and reject
+truncated/trailing framing. Real 28 saves: 1,013 entries / 4,855 blocks /
+3,842 records / sparse 0 / header-count mismatches 0; HSTRY 40 slots,
+head 1..37, tail 1×26/2×2, all ids 0. Raw bytes are preserved for
+P2-15c; 0x58 field labels, sparse semantics and ring ordering remain
+unverified.

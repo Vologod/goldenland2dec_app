@@ -2,25 +2,30 @@
 
 Обновлено: 2026-11-16
 
-## P2-15b4b — BT_DIARY/BT_HSTRY framing parser (design 2026-11-16)
+## P2-15b4b — BT_DIARY/BT_HSTRY framing parser (done 2026-11-16)
 
 - **Задача:** структурно разобрать DIARY (entries key/count/0x58 blocks +
   sparse) и HSTRY (head/40 slots/tail), сохранить raw для P2-15c; без
   интерпретации 0x58/ring.
 - **Spec:** `docs/specs/2026-11-16-p2-15b4b-framing-parser-design.md`
-  (approved 2026-11-16); **Plan:** `docs/plans/2026-11-16-p2-15b4b-framing-parser.md`.
-- **Доказано (D-077):** DIARY 1,013 entries / 4,855 blocks / 3,842
-  records / sparse 0; slot0 76/371, slot2 75/377, slot21 1/2; HSTRY 40
-  slots 28/28, head 1..37, tail 1/2, ids all 0.
-- **Критерии приёмки:** exact consume 28/28; header-count 0 mismatches;
-  HSTRY ids/heads/tails; E2E
-  `diary=76 diary_blocks=371 sparse=0 hstry_slots=40`; malformed →
-  `format`; полный `ctest`.
-- **Команды проверки:** `cmake --build build`;
-  `build\bin\gl_assets_tests.exe --test-case="*diary*,*history*"`;
-  `build\bin\gl_assets_real_tests.exe --test-case="*diary*,*history*"`;
-  `ctest --test-dir build --output-on-failure`.
-- **Статус:** `design` (implementation не начата).
+  (approved 2026-11-16); **Plan:** `docs/plans/2026-11-16-p2-15b4b-framing-parser.md`;
+  **D-078.**
+- **Реализовано (D-078):** `SavePayload.diary` хранит entries (`key`,
+  `declared_count`, raw `blocks` = заголовок + record 0x58), `diary_sparse` —
+  raw sparse 0x58, `history` — `head`, 40 slots (`text` cp1251→UTF-8, `id`),
+  `tail`. `parse_diary`/`parse_history` требуют exact body consume и
+  отклоняют truncation/trailing с `format`; `--dump-save` печатает
+  `diary=76 diary_blocks=371 sparse=0 hstry_slots=40`.
+- **Проверка (2026-11-16):** focused `*diary*,*history*` — unit 3/3 cases
+  (67 assertions), real 2/2 cases (112 assertions); `*dump-save*` — 1/1
+  (5 assertions); full `ctest` — 19/19 passed, 1341.24 s, exit 0. E2E
+  synthetic-save fixture обновлён на валидные пустые DIARY (8 B) и HSTRY
+  (328 B), чтобы level-fail/rollback тест доходил до целевой ветки.
+- **Остаточное:** 0x58 field labels, sparse semantics и HSTRY ring ordering
+  `unverified` (D-077: 0x591b8/0x59f6c и host-методы `GoldenLand.exe`);
+  нет journal UI/runtime application; raw-only; save write (`P2-15c`) должен
+  писать blocks/slots verbatim.
+- **Статус:** `done`.
 
 ## P2-15b4a — BT_DIARY / BT_HSTRY research (done 2026-11-16)
 
