@@ -438,3 +438,59 @@ TEST_CASE("real data: history framing" * doctest::skip(!game_dir_available())) {
             ++non_empty;
     CHECK(non_empty == 40u);
 }
+
+TEST_CASE("real data: save payload encode round-trips every slot" *
+          doctest::skip(!game_dir_available())) {
+    for (int slot = 0; slot < 28; ++slot) {
+        auto payload = gl::assets::parse_save_payload(read_save(slot));
+        REQUIRE(payload.has_value());
+        CAPTURE(slot);
+
+        const auto encoded = gl::assets::encode_save_payload(payload.value());
+        REQUIRE(encoded.has_value());
+        const auto again = gl::assets::parse_save_payload(encoded.value());
+        REQUIRE(again.has_value());
+
+        CHECK(again->header_raw == payload->header_raw);
+        CHECK(again->decompressed == payload->decompressed);
+        REQUIRE(again->tail.size() == payload->tail.size());
+        for (std::size_t index = 0; index < payload->tail.size(); ++index) {
+            CHECK(again->tail[index].name == payload->tail[index].name);
+            CHECK(again->tail[index].raw_len == payload->tail[index].raw_len);
+            CHECK(again->tail[index].section == payload->tail[index].section);
+        }
+        CHECK(again->info.level_id == payload->info.level_id);
+        CHECK(again->info.party_level == payload->info.party_level);
+        CHECK(again->info.time == payload->info.time);
+        CHECK(again->info.field_218 == payload->info.field_218);
+        CHECK(again->info.field_26c8 == payload->info.field_26c8);
+        REQUIRE(again->vars.size() == payload->vars.size());
+        for (std::size_t index = 0; index < payload->vars.size(); ++index) {
+            CHECK(again->vars[index].type == payload->vars[index].type);
+            CHECK(again->vars[index].name == payload->vars[index].name);
+            CHECK(again->vars[index].value == payload->vars[index].value);
+            CHECK(again->vars[index].text_value == payload->vars[index].text_value);
+        }
+        REQUIRE(again->tribes.entries.size() == payload->tribes.entries.size());
+        for (std::size_t index = 0; index < payload->tribes.entries.size(); ++index) {
+            CHECK(again->tribes.entries[index].id == payload->tribes.entries[index].id);
+            CHECK(again->tribes.entries[index].name == payload->tribes.entries[index].name);
+        }
+        CHECK(again->tribes.matrix == payload->tribes.matrix);
+        CHECK(again->diary.size() == payload->diary.size());
+        CHECK(again->diary_sparse.size() == payload->diary_sparse.size());
+        CHECK(again->history.head == payload->history.head);
+        CHECK(again->history.tail == payload->history.tail);
+        REQUIRE(again->history.slots.size() == payload->history.slots.size());
+        for (std::size_t index = 0; index < payload->history.slots.size(); ++index) {
+            CHECK(again->history.slots[index].text == payload->history.slots[index].text);
+            CHECK(again->history.slots[index].id == payload->history.slots[index].id);
+        }
+        CHECK(again->level_tail_index == payload->level_tail_index);
+
+        const auto encoded_twice = gl::assets::encode_save_payload(payload.value());
+        REQUIRE(encoded_twice.has_value());
+        CHECK(encoded.value() == encoded_twice.value());
+        CHECK(encoded->size() >= 0x70u);
+    }
+}
