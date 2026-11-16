@@ -2,6 +2,21 @@
 
 Обновлено: 2026-11-16
 
+## P2-15c2 — Typed BT_VARS/BT_TRIBE encoders (design 2026-11-16)
+
+- **Задача:** `encode_vars_body`/`encode_tribe_body` + `script::
+  update_vars_from_globals`; 28-save body byte-equality.
+- **Spec:** `docs/specs/2026-11-16-p2-15c2-typed-vars-tribe-design.md`
+  (approved 2026-11-16); **Plan:** `docs/plans/2026-11-16-p2-15c2-typed-vars-tribe.md`.
+- **Критерии приёмки:** BT_VARS body byte-equal 28/28 через VM-overlay;
+  BT_TRIBE body 28/28; unit adapter/encoders/invalid; полный `ctest`.
+- **Команды:** `cmake --build build`;
+  `gl_assets_tests --test-case="*encode_vars_body*,*encode_tribe_body*"`;
+  `gl_script_real_tests --test-case="*BT_VARS re-encodes*"`;
+  `gl_assets_real_tests --test-case="*BT_TRIBE re-encodes*"`;
+  `ctest --test-dir build --output-on-failure`.
+- **Статус:** `design` (implementation не начата).
+
 ## P2-15c1 — Save container writer (done 2026-11-16)
 
 - **Задача:** `assets::encode_save_payload` — header `0x68` (`header_raw`),
