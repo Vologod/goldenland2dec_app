@@ -317,8 +317,10 @@ bool parse_tail_section(SaveTailEntry &entry, std::vector<std::uint8_t> *rginf_r
 std::optional<double> save_var_number(const SaveVar &var) {
     if (var.type >= 3)
         return std::nullopt;
+    ByteReader reader(var.value);
     std::uint64_t bits = 0;
-    std::memcpy(&bits, var.value.data(), sizeof(bits));
+    if (!reader.read_u64le(bits))
+        return std::nullopt;
     return std::bit_cast<double>(bits);
 }
 

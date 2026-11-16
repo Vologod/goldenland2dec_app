@@ -370,16 +370,21 @@ TEST_CASE("save payload: rejects malformed BT_TRIBE") {
     }
 }
 
-TEST_CASE("save_var_number decodes the little-endian f64 value") {
+TEST_CASE("save_var_number decodes little-endian f64 bytes") {
     gl::assets::SaveVar var;
-    const double value = 10.5;
-    std::memcpy(var.value.data(), &value, sizeof(value));
     var.type = 0;
+    var.value = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x25, 0x40};
     const auto number = gl::assets::save_var_number(var);
     REQUIRE(number.has_value());
-    CHECK(*number == value);
+    CHECK(*number == 10.5);
 
+    var.type = 1;
+    CHECK(gl::assets::save_var_number(var).has_value());
+    var.type = 2;
+    CHECK(gl::assets::save_var_number(var).has_value());
     var.type = 3;
+    CHECK_FALSE(gl::assets::save_var_number(var).has_value());
+    var.type = 4;
     CHECK_FALSE(gl::assets::save_var_number(var).has_value());
 }
 

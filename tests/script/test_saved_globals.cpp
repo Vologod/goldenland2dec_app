@@ -1,9 +1,12 @@
 #include "gl/assets/cs.hpp"
+#include "gl/assets/save_payload.hpp"
 #include "gl/script/globals.hpp"
 #include "gl/script/script_vm.hpp"
 
 #include <cstdint>
+#include <cstring>
 #include <doctest/doctest.h>
+#include <limits>
 #include <span>
 #include <string>
 #include <utility>
@@ -94,6 +97,62 @@ TEST_CASE("saved globals use the last duplicate value") {
     };
     vm.apply_saved_globals(overlay);
     CHECK(std::get<std::int32_t>(vm.globals().at("i")) == 3);
+}
+
+TEST_CASE("saved globals clamp numeric conversions") {
+    NullHost host;
+    gl::script::ScriptVm vm({}, host);
+    const std::vector<gl::script::ScriptGlobal> initial{
+        global("imax", std::int32_t{0}),
+        global("imin", std::int32_t{0}),
+        global("inan", std::int32_t{0}),
+        global("umax", std::uint32_t{0}),
+        global("uneg", std::uint32_t{0}),
+    };
+    vm.set_globals(initial);
+
+    const double nan = std::numeric_limits<double>::quiet_NaN();
+    const std::vector<gl::script::ScriptGlobal> overlay{
+        global("imax", static_cast<double>(std::numeric_limits<std::int32_t>::max()) + 1.0),
+        global("imin", static_cast<double>(std::numeric_limits<std::int32_t>::min()) - 1.0),
+        global("inan", nan),
+        global("umax", static_cast<double>(std::numeric_limits<std::uint32_t>::max()) + 1.0),
+        global("uneg", -1.0),
+    };
+    vm.apply_saved_globals(overlay);
+    CHECK(std::get<std::int32_t>(vm.globals().at("imax")) ==
+          std::numeric_limits<std::int32_t>::max());
+    CHECK(std::get<std::int32_t>(vm.globals().at("imin")) ==
+          std::numeric_limits<std::int32_t>::min());
+    CHECK(std::get<std::int32_t>(vm.globals().at("inan")) == 0);
+    CHECK(std::get<std::uint32_t>(vm.globals().at("umax")) ==
+          std::numeric_limits<std::uint32_t>::max());
+    CHECK(std::get<std::uint32_t>(vm.globals().at("uneg")) == 0u);
+}
+
+TEST_CASE("save_globals_from_vars maps numeric, string and drops unknown types") {
+    gl::assets::SaveVar number;
+    number.type = 0;
+    number.name = "n";
+    const double value = 2.5;
+    std::memcpy(number.value.data(), &value, sizeof(value));
+
+    gl::assets::SaveVar text;
+    text.type = 3;
+    text.name = "s";
+    text.text_value = "x";
+
+    gl::assets::SaveVar unknown;
+    unknown.type = 4;
+    unknown.name = "b";
+
+    const std::vector<gl::assets::SaveVar> vars{number, text, unknown};
+    const auto globals = gl::script::save_globals_from_vars(vars);
+    REQUIRE(globals.size() == 2);
+    CHECK(globals[0].name == "n");
+    CHECK(std::get<double>(globals[0].value) == 2.5);
+    CHECK(globals[1].name == "s");
+    CHECK(std::get<std::string>(globals[1].value) == "x");
 }
 
 TEST_CASE("saved globals rebuild node variables") {

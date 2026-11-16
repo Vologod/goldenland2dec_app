@@ -3,6 +3,7 @@
 #include "gl/script/globals.hpp"
 #include "gl/script/script_vm.hpp"
 
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
@@ -10,6 +11,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iterator>
+#include <limits>
 #include <map>
 #include <span>
 #include <string>
@@ -39,6 +41,26 @@ declared_globals(gl::assets::GameVfs &vfs) {
     auto parsed = gl::script::parse_globals(data.value());
     REQUIRE(parsed.has_value());
     return parsed.value();
+}
+} // namespace
+
+namespace {
+std::int32_t expected_int32(double value) {
+    if (!std::isfinite(value))
+        return 0;
+    if (value >= static_cast<double>(std::numeric_limits<std::int32_t>::max()))
+        return std::numeric_limits<std::int32_t>::max();
+    if (value <= static_cast<double>(std::numeric_limits<std::int32_t>::min()))
+        return std::numeric_limits<std::int32_t>::min();
+    return static_cast<std::int32_t>(value);
+}
+
+std::uint32_t expected_uint32(double value) {
+    if (!std::isfinite(value) || value <= 0.0)
+        return 0;
+    if (value >= static_cast<double>(std::numeric_limits<std::uint32_t>::max()))
+        return std::numeric_limits<std::uint32_t>::max();
+    return static_cast<std::uint32_t>(value);
 }
 } // namespace
 
@@ -87,10 +109,10 @@ TEST_CASE("real data: saved globals apply to the dialog vm" *
                 CHECK(std::get<double>(found->second) == *number);
             } else if (std::holds_alternative<std::int32_t>(declaration->second)) {
                 CHECK(std::get<std::int32_t>(found->second) ==
-                      static_cast<std::int32_t>(*number));
+                      expected_int32(*number));
             } else if (std::holds_alternative<std::uint32_t>(declaration->second)) {
                 CHECK(std::get<std::uint32_t>(found->second) ==
-                      static_cast<std::uint32_t>(*number));
+                      expected_uint32(*number));
             } else {
                 CHECK(std::get<double>(found->second) == *number);
             }
