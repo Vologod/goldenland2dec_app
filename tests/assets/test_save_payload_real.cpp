@@ -1,6 +1,7 @@
 #include "gl/assets/hero_equipment.hpp"
 #include "gl/assets/save_payload.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <cstdlib>
@@ -342,4 +343,93 @@ TEST_CASE("real data: tribe relation matrix" * doctest::skip(!game_dir_available
     CHECK(histogram[2] == 1519260u);
     CHECK(histogram[3] == 6552u);
     CHECK(histogram[4] == 3u);
+}
+
+TEST_CASE("real data: diary framing" * doctest::skip(!game_dir_available())) {
+    std::size_t entries = 0;
+    std::size_t blocks = 0;
+    std::size_t records = 0;
+    std::size_t sparse = 0;
+    std::size_t count_mismatches = 0;
+    std::array<std::size_t, 28> per_slot_blocks{};
+
+    for (int slot = 0; slot < 28; ++slot) {
+        auto payload = gl::assets::parse_save_payload(read_save(slot));
+        REQUIRE(payload.has_value());
+        CAPTURE(slot);
+        entries += payload->diary.size();
+        sparse += payload->diary_sparse.size();
+        for (const auto &entry : payload->diary) {
+            blocks += entry.blocks.size();
+            records += entry.blocks.size() - 1;
+            per_slot_blocks[slot] += entry.blocks.size();
+            if (entry.declared_count != entry.blocks.size() - 1)
+                ++count_mismatches;
+        }
+    }
+    CHECK(entries == 1013u);
+    CHECK(blocks == 4855u);
+    CHECK(records == 3842u);
+    CHECK(sparse == 0u);
+    CHECK(count_mismatches == 0u);
+    CHECK(per_slot_blocks[0] == 371u);
+    CHECK(per_slot_blocks[2] == 377u);
+    CHECK(per_slot_blocks[21] == 2u);
+
+    auto slot0 = gl::assets::parse_save_payload(read_save(0));
+    REQUIRE(slot0.has_value());
+    REQUIRE(slot0->diary.size() == 76u);
+    CHECK(slot0->diary[0].key == 0u);
+    CHECK(slot0->diary[0].declared_count == 4u);
+    CHECK(slot0->diary[0].blocks.size() == 5u);
+
+    auto slot21 = gl::assets::parse_save_payload(read_save(21));
+    REQUIRE(slot21.has_value());
+    REQUIRE(slot21->diary.size() == 1u);
+    CHECK(slot21->diary[0].key == 482u);
+    CHECK(slot21->diary[0].declared_count == 1u);
+    CHECK(slot21->diary[0].blocks.size() == 2u);
+}
+
+TEST_CASE("real data: history framing" * doctest::skip(!game_dir_available())) {
+    std::size_t ids_zero = 0;
+    std::size_t ids_total = 0;
+    std::size_t tail_one = 0;
+    std::size_t tail_two = 0;
+    std::uint32_t head_min = 1000;
+    std::uint32_t head_max = 0;
+
+    for (int slot = 0; slot < 28; ++slot) {
+        auto payload = gl::assets::parse_save_payload(read_save(slot));
+        REQUIRE(payload.has_value());
+        CAPTURE(slot);
+        CHECK(payload->history.slots.size() == 40u);
+        head_min = std::min(head_min, payload->history.head);
+        head_max = std::max(head_max, payload->history.head);
+        if (payload->history.tail == 1)
+            ++tail_one;
+        if (payload->history.tail == 2)
+            ++tail_two;
+        for (const auto &slot_value : payload->history.slots) {
+            ++ids_total;
+            if (slot_value.id == 0)
+                ++ids_zero;
+        }
+    }
+    CHECK(ids_total == 1120u);
+    CHECK(ids_zero == 1120u);
+    CHECK(tail_one == 26u);
+    CHECK(tail_two == 2u);
+    CHECK(head_min == 1u);
+    CHECK(head_max == 37u);
+
+    auto slot0 = gl::assets::parse_save_payload(read_save(0));
+    REQUIRE(slot0.has_value());
+    CHECK(slot0->history.head == 5u);
+    CHECK(slot0->history.tail == 1u);
+    std::size_t non_empty = 0;
+    for (const auto &slot_value : slot0->history.slots)
+        if (!slot_value.text.empty())
+            ++non_empty;
+    CHECK(non_empty == 40u);
 }

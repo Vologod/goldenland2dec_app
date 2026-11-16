@@ -581,6 +581,9 @@ int dump_save_payload(const fs::path& game_dir, int slot) {
     }
 
     const gl::assets::SaveTailEntry& selected = payload->tail[*payload->level_tail_index];
+    std::size_t diary_blocks = 0;
+    for (const auto& entry : payload->diary)
+        diary_blocks += entry.blocks.size();
     const std::string line =
         "save: slot=" + std::to_string(slot) + " level=" + payload->info.level_id +
         " vars=" + std::to_string(payload->vars.size()) +
@@ -593,7 +596,11 @@ int dump_save_payload(const fs::path& game_dir, int slot) {
         " entities=" + std::to_string(selected.entities.size()) +
         " pnames=" + std::to_string(selected.person_names.size()) +
         " rginf_latch=" + std::to_string(selected.rginf.latch) +
-        " tribe_matrix=" + std::to_string(payload->tribes.count());
+        " tribe_matrix=" + std::to_string(payload->tribes.count()) +
+        " diary=" + std::to_string(payload->diary.size()) +
+        " diary_blocks=" + std::to_string(diary_blocks) +
+        " sparse=" + std::to_string(payload->diary_sparse.size()) +
+        " hstry_slots=40";
     std::printf("%s\n", line.c_str());
     return 0;
 }

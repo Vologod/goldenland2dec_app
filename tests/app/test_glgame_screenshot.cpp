@@ -675,6 +675,8 @@ TEST_CASE("glgame --dump-save prints the decoded save payload and exits") {
                       "ents=8381 hero_items=117 hero_equipped=11 entities=4 pnames=3 "
                       "rginf_latch=0") != std::string::npos);
     CHECK(output.find("tribe_matrix=234") != std::string::npos);
+    CHECK(output.find("diary=76 diary_blocks=371 sparse=0 hstry_slots=40") !=
+          std::string::npos);
 }
 
 TEST_CASE("glgame --load-save loads the level and hero from the save") {
