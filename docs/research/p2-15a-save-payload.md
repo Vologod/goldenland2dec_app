@@ -1297,3 +1297,14 @@ saved names are last-wins. The real 28-save oracle
 type 3), 4,239 undeclared names added, 0 declared-type mismatches, 0/N value
 mismatches; pins slot0 `voevoda_povtor=10` / `ShurbaHal_guardian_povtor=3`,
 slot2 `L2_male1_povtor=1`, slot21 `voevoda_povtor=0`.
+
+## Implementation result (P2-15b3, 2026-11-16)
+
+`SaveTribeTable.matrix` stores the 234×234 row-major relation bytes in
+entry-list order; `parse_tribe` reads them exactly. `index_of`/`find`
+map sparse ids (name lookup is first-match), `relation` returns the byte
+or the original default `2`, and `row` exposes a span. Real 28-save
+oracle: 54,756 bytes per save, diagonal 3, relation/matrix mismatches 0,
+corpus histogram `{0:1257,1:6096,2:1519260,3:6552,4:3}`, ids unique,
+slot0/slot2/slot21 rows/histograms pinned. OQ-7 value labels remain
+unverified; no runtime faction/AI application is claimed.

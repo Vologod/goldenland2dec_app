@@ -2,26 +2,39 @@
 
 Обновлено: 2026-11-16
 
-## P2-15b3 — BT_TRIBE relation matrix (design 2026-11-16)
+## P2-15b3 — BT_TRIBE relation matrix (done 2026-11-16)
 
 - **Задача:** декодировать/хранить `BT_TRIBE` matrix (234×234, row-major
   в entry-порядке); API `relation(id,id)` default 2, `index_of`/`find`,
   `row`; 28/28 oracle; без runtime-AI.
 - **Spec:** `docs/specs/2026-11-16-p2-15b3-tribe-matrix-design.md`
   (approved 2026-11-16); **Plan:** `docs/plans/2026-11-16-p2-15b3-tribe-matrix.md`.
-- **Доказано (2026-11-16):** порядок строк = entry-список, не id (slot0
-  первый id 106, slot2 — 16); ids уникальны 28/28, имена дублируются
-  28/28; histograms slot0 `{103,232,54186,234,1}`, slot2
-  `{82,232,54207,234,1}`, slot21 `{22,3,54497,234}`; corpus
-  `{0:1257,1:6096,2:1519260,3:6552,4:3}`; диагональ 3.
-- **Критерии приёмки:** matrix exact size 28/28, relation 0 mismatches,
-  default 2, id→index (не id-index), duplicate-name first-match, E2E
-  `tribe_matrix=234`, полный `ctest` с `GL_GAME_DIR`.
+- **Реализовано (D-076):** `SaveTribeTable.matrix` хранит `count²`
+  row-major байты в entry-порядке (не в id-порядке); `parse_tribe`
+  читает matrix точно и отвергает truncation/trailing bytes;
+  `index_of(id)`/`find(id)` работают по sparse id, `find(name)` —
+  first-match (имена дублируются во всех 28 saves); `relation(id_a,id_b)`
+  маппит ids на entry-индексы и возвращает байт или оригинальный
+  default `2` (`FUN_14016998`) при отсутствующем id/несогласованном
+  размере matrix; `row(index)` отдаёт span; `glgame --dump-save`
+  печатает `tribe_matrix=234`.
+- **Реальный 28-save oracle:** count 234, matrix 54,756 B, диагональ 3,
+  1,533,168 values total, histogram `{0:1257,1:6096,2:1519260,3:6552,4:3}`,
+  ids уникальны 28/28, relation/matrix mismatches 0; slot0 entries
+  `(106,L12_3_citizen),(16,snake),(97,L11_3_citizen),(105,L12_2_citizen),(96,L11_2_citizen),(39,citizen)`,
+  row0 `3,2,2,2,2,2,2,0,2,0,0,2,0,0,2,0`; slot0/slot2/slot21
+  histograms pinned.
 - **Команды проверки:** `cmake --build build`;
-  `build\bin\gl_assets_tests.exe --test-case="*tribe*"`;
-  `build\bin\gl_assets_real_tests.exe --test-case="*tribe*"`;
-  `ctest --test-dir build --output-on-failure`.
-- **Статус:** `design` (implementation не начата).
+  `build\bin\gl_assets_real_tests.exe --test-case="*tribe*"` -> 1 case,
+  6736 assertions, SUCCESS; `build\bin\glgame_screenshot_tests.exe
+  --test-case="*dump-save*"` -> 1 case, 4 assertions, SUCCESS; полный
+  `ctest --test-dir build --output-on-failure` с `GL_GAME_DIR`:
+  19/19 passed, 1847.07 s, exit 0.
+- **Residuals:** OQ-7 labels 0–4 unverified; runtime faction/AI consumer
+  отсутствует (нет port consumer); уникальность ids по корпусу не
+  enforced; duplicate names first-match; `PersonInstance.tribe_id`, save
+  write (`P2-15c`) и live oracle вне scope.
+- **Статус:** `done`.
 
 ## P2-15b2 — BT_VARS script globals (done 2026-11-16)
 
