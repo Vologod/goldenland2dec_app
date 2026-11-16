@@ -1,5 +1,6 @@
 #include "gl/assets/hero_equipment.hpp"
 #include "gl/assets/save_payload.hpp"
+#include "gl/assets/vfs.hpp"
 
 #include <array>
 #include <cstdint>
@@ -9,8 +10,10 @@
 #include <fstream>
 #include <iostream>
 #include <iterator>
+#include <set>
 #include <span>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -250,4 +253,82 @@ TEST_CASE("save payload real: decode is deterministic" * doctest::skip(!game_dir
     CHECK(first->tail.size() == second->tail.size());
     CHECK(first->rginf == second->rginf);
     CHECK(first->ents == second->ents);
+}
+
+TEST_CASE("real data: tribe relation matrix" * doctest::skip(!game_dir_available())) {
+    auto vfs = gl::assets::GameVfs::mount(std::getenv("GL_GAME_DIR"));
+    REQUIRE(vfs.has_value());
+
+    std::size_t total_values = 0;
+    std::array<std::size_t, 5> histogram{};
+    std::size_t relation_mismatches = 0;
+    std::size_t duplicate_id_saves = 0;
+    const std::array<int, 5> histogram_slot0{103, 232, 54186, 234, 1};
+
+    for (int slot = 0; slot < 28; ++slot) {
+        auto payload = gl::assets::parse_save_payload(read_save(slot));
+        REQUIRE(payload.has_value());
+        CAPTURE(slot);
+        const auto &table = payload->tribes;
+        CHECK(table.count() == 234u);
+        REQUIRE(table.matrix.size() == 54756u);
+
+        std::set<std::uint32_t> ids;
+        for (const auto &entry : table.entries) {
+            if (!ids.insert(entry.id).second)
+                ++duplicate_id_saves;
+        }
+        for (std::size_t i = 0; i < table.count(); ++i) {
+            CHECK(table.relation(table.entries[i].id, table.entries[i].id) == 3);
+            for (std::size_t j = 0; j < table.count(); ++j) {
+                if (table.relation(table.entries[i].id, table.entries[j].id) !=
+                    table.matrix[i * table.count() + j])
+                    ++relation_mismatches;
+            }
+        }
+        CHECK(table.relation(0xFFFFFFFFu, table.entries[0].id) == 2);
+        CHECK(table.relation(table.entries[0].id, 0xFFFFFFFFu) == 2);
+        if (slot == 0) {
+            for (std::size_t value = 0; value < histogram_slot0.size(); ++value) {
+                std::size_t count = 0;
+                for (std::uint8_t byte : table.matrix)
+                    if (byte == value)
+                        ++count;
+                CHECK(count == static_cast<std::size_t>(histogram_slot0[value]));
+            }
+        }
+        for (std::uint8_t byte : table.matrix) {
+            if (byte < histogram.size())
+                ++histogram[byte];
+            ++total_values;
+        }
+        if (slot == 0) {
+            const std::vector<std::pair<std::uint32_t, std::string>> first{
+                {106, "L12_3_citizen"},
+                {16, "snake"},
+                {97, "L11_3_citizen"},
+                {105, "L12_2_citizen"},
+                {96, "L11_2_citizen"},
+                {39, "citizen"},
+            };
+            REQUIRE(table.entries.size() >= first.size());
+            for (std::size_t index = 0; index < first.size(); ++index) {
+                CHECK(table.entries[index].id == first[index].first);
+                CHECK(table.entries[index].name == first[index].second);
+            }
+            const std::array<std::uint8_t, 16> row{
+                3, 2, 2, 2, 2, 2, 2, 0, 2, 0, 0, 2, 0, 0, 2, 0};
+            REQUIRE(table.row(0).size() == 234u);
+            for (std::size_t index = 0; index < row.size(); ++index)
+                CHECK(table.row(0)[index] == row[index]);
+        }
+    }
+    CHECK(duplicate_id_saves == 0);
+    CHECK(relation_mismatches == 0);
+    CHECK(total_values == 1533168u);
+    CHECK(histogram[0] == 1257u);
+    CHECK(histogram[1] == 6096u);
+    CHECK(histogram[2] == 1519260u);
+    CHECK(histogram[3] == 6552u);
+    CHECK(histogram[4] == 3u);
 }
