@@ -7,6 +7,7 @@
 #include <miniz.h>
 
 #include <array>
+#include <bit>
 #include <cstring>
 #include <new>
 #include <stdexcept>
@@ -312,6 +313,14 @@ bool parse_tail_section(SaveTailEntry &entry, std::vector<std::uint8_t> *rginf_r
     return true;
 }
 } // namespace
+
+std::optional<double> save_var_number(const SaveVar &var) {
+    if (var.type >= 3)
+        return std::nullopt;
+    std::uint64_t bits = 0;
+    std::memcpy(&bits, var.value.data(), sizeof(bits));
+    return std::bit_cast<double>(bits);
+}
 
 Result<SavePayload> parse_save_payload(std::span<const std::uint8_t> file) {
     try {

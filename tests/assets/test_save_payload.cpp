@@ -3,6 +3,7 @@
 #include <miniz.h>
 #include <array>
 #include <cstdint>
+#include <cstring>
 #include <span>
 #include <string>
 #include <string_view>
@@ -367,6 +368,19 @@ TEST_CASE("save payload: rejects malformed BT_TRIBE") {
         REQUIRE_FALSE(payload.has_value());
         CHECK(payload.error().code == gl::ErrorCode::format);
     }
+}
+
+TEST_CASE("save_var_number decodes the little-endian f64 value") {
+    gl::assets::SaveVar var;
+    const double value = 10.5;
+    std::memcpy(var.value.data(), &value, sizeof(value));
+    var.type = 0;
+    const auto number = gl::assets::save_var_number(var);
+    REQUIRE(number.has_value());
+    CHECK(*number == value);
+
+    var.type = 3;
+    CHECK_FALSE(gl::assets::save_var_number(var).has_value());
 }
 
 TEST_CASE("save payload: rejects unknown var type") {

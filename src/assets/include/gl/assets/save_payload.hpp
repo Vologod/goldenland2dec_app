@@ -30,6 +30,8 @@ struct SaveVar {
     std::string text_value;
 };
 
+std::optional<double> save_var_number(const SaveVar &var);
+
 struct SaveEntity {
     std::uint32_t type = 0;
     std::vector<std::uint8_t> body;
