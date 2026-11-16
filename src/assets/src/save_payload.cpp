@@ -161,12 +161,7 @@ bool parse_tribe(std::span<const std::uint8_t> body, SaveTribeTable &out, std::s
                      : "relation matrix has trailing bytes";
         return false;
     }
-    std::span<const std::uint8_t> bytes;
-    if (!reader.read_bytes(static_cast<std::size_t>(matrix), bytes)) {
-        detail = "relation matrix is truncated";
-        return false;
-    }
-    out.matrix.assign(bytes.begin(), bytes.end());
+    out.matrix.assign(reader.remaining().begin(), reader.remaining().end());
     return true;
 }
 
@@ -345,7 +340,7 @@ std::int32_t SaveTribeTable::relation(std::uint32_t id_a, std::uint32_t id_b) co
 }
 
 std::span<const std::uint8_t> SaveTribeTable::row(std::size_t index) const {
-    if (index >= entries.size())
+    if (index >= entries.size() || matrix.size() != entries.size() * entries.size())
         return {};
     return std::span<const std::uint8_t>(matrix).subspan(index * entries.size(),
                                                          entries.size());

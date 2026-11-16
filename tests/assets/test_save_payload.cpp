@@ -338,6 +338,7 @@ TEST_CASE("save payload: parses an empty BT_TRIBE table") {
         make_save(make_body("L93_4", make_vars(), tribe), make_default_tail("L93_4")));
     REQUIRE(payload.has_value());
     CHECK(payload->tribes.entries.empty());
+    CHECK(payload->tribes.matrix.empty());
 }
 
 TEST_CASE("save payload: tribe relation uses entry order and defaults to two") {
@@ -365,6 +366,15 @@ TEST_CASE("save payload: tribe relation uses entry order and defaults to two") {
     CHECK(table.relation(4, 4) == 3);
     CHECK(table.relation(1, 1) == 3);
     CHECK(table.relation(9, 1) == 2);
+}
+
+TEST_CASE("save payload: inconsistent tribe table falls back to two") {
+    gl::assets::SaveTribeTable table;
+    table.entries.push_back(gl::assets::SaveTribeEntry{1, "a"});
+    table.entries.push_back(gl::assets::SaveTribeEntry{2, "b"});
+    table.matrix = {3};
+    CHECK(table.relation(1, 1) == 2);
+    CHECK(table.row(0).empty());
 }
 
 TEST_CASE("save payload: duplicate tribe names resolve to the first entry") {

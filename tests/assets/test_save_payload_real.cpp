@@ -1,6 +1,5 @@
 #include "gl/assets/hero_equipment.hpp"
 #include "gl/assets/save_payload.hpp"
-#include "gl/assets/vfs.hpp"
 
 #include <array>
 #include <cstdint>
@@ -53,6 +52,21 @@ struct Expected {
     std::size_t rginf;
     std::size_t ents;
 };
+
+struct SlotPin {
+    int slot;
+    std::array<std::size_t, 5> histogram;
+    std::array<std::uint8_t, 16> row;
+};
+
+constexpr std::array<SlotPin, 3> pins{{
+    {0, {103, 232, 54186, 234, 1},
+     {3, 2, 2, 2, 2, 2, 2, 0, 2, 0, 0, 2, 0, 0, 2, 0}},
+    {2, {82, 232, 54207, 234, 1},
+     {3, 2, 2, 2, 2, 2, 2, 0, 2, 0, 2, 2, 0, 0, 2, 0}},
+    {21, {22, 3, 54497, 234, 0},
+     {3, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2}},
+}};
 
 constexpr std::size_t entity_type_slot(std::uint32_t type) {
     switch (type) {
@@ -256,14 +270,10 @@ TEST_CASE("save payload real: decode is deterministic" * doctest::skip(!game_dir
 }
 
 TEST_CASE("real data: tribe relation matrix" * doctest::skip(!game_dir_available())) {
-    auto vfs = gl::assets::GameVfs::mount(std::getenv("GL_GAME_DIR"));
-    REQUIRE(vfs.has_value());
-
     std::size_t total_values = 0;
     std::array<std::size_t, 5> histogram{};
     std::size_t relation_mismatches = 0;
-    std::size_t duplicate_id_saves = 0;
-    const std::array<int, 5> histogram_slot0{103, 232, 54186, 234, 1};
+    std::size_t duplicate_ids = 0;
 
     for (int slot = 0; slot < 28; ++slot) {
         auto payload = gl::assets::parse_save_payload(read_save(slot));
@@ -276,7 +286,7 @@ TEST_CASE("real data: tribe relation matrix" * doctest::skip(!game_dir_available
         std::set<std::uint32_t> ids;
         for (const auto &entry : table.entries) {
             if (!ids.insert(entry.id).second)
-                ++duplicate_id_saves;
+                ++duplicate_ids;
         }
         for (std::size_t i = 0; i < table.count(); ++i) {
             CHECK(table.relation(table.entries[i].id, table.entries[i].id) == 3);
@@ -288,16 +298,22 @@ TEST_CASE("real data: tribe relation matrix" * doctest::skip(!game_dir_available
         }
         CHECK(table.relation(0xFFFFFFFFu, table.entries[0].id) == 2);
         CHECK(table.relation(table.entries[0].id, 0xFFFFFFFFu) == 2);
-        if (slot == 0) {
-            for (std::size_t value = 0; value < histogram_slot0.size(); ++value) {
+        for (const SlotPin &pin : pins) {
+            if (pin.slot != slot)
+                continue;
+            for (std::size_t value = 0; value < pin.histogram.size(); ++value) {
                 std::size_t count = 0;
                 for (std::uint8_t byte : table.matrix)
                     if (byte == value)
                         ++count;
-                CHECK(count == static_cast<std::size_t>(histogram_slot0[value]));
+                CHECK(count == pin.histogram[value]);
             }
+            REQUIRE(table.row(0).size() == 234u);
+            for (std::size_t index = 0; index < pin.row.size(); ++index)
+                CHECK(table.row(0)[index] == pin.row[index]);
         }
         for (std::uint8_t byte : table.matrix) {
+            CHECK(byte <= 4);
             if (byte < histogram.size())
                 ++histogram[byte];
             ++total_values;
@@ -316,14 +332,9 @@ TEST_CASE("real data: tribe relation matrix" * doctest::skip(!game_dir_available
                 CHECK(table.entries[index].id == first[index].first);
                 CHECK(table.entries[index].name == first[index].second);
             }
-            const std::array<std::uint8_t, 16> row{
-                3, 2, 2, 2, 2, 2, 2, 0, 2, 0, 0, 2, 0, 0, 2, 0};
-            REQUIRE(table.row(0).size() == 234u);
-            for (std::size_t index = 0; index < row.size(); ++index)
-                CHECK(table.row(0)[index] == row[index]);
         }
     }
-    CHECK(duplicate_id_saves == 0);
+    CHECK(duplicate_ids == 0);
     CHECK(relation_mismatches == 0);
     CHECK(total_values == 1533168u);
     CHECK(histogram[0] == 1257u);

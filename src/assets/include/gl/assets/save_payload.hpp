@@ -2,6 +2,7 @@
 #include "gl/assets/result.hpp"
 #include "gl/assets/save.hpp"
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <span>
