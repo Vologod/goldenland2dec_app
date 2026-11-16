@@ -31,10 +31,11 @@
   `glgame_screenshot_tests --test-case="*load-save*"` — **3/3 cases,
   37/37 assertions**, exit 0;
   `ctest --test-dir build --output-on-failure` — **19/19 passed**,
-  `Total Test time (real) = 1870.68 sec`, exit 0.
+  `Total Test time (real) = 2035.92 sec`, exit 0 (финальный прогон после
+  fix wave; до фиксов было 1870.68 sec).
 - **Остаток:** RNG-паритет не заявлен (slot23 E2E проверяет решения и
   счётчики, не предметы); multiplayer interval `5`; restock/top-up,
-  trigger path, spawn chain, live oracle; тест-гэп для кандидата без c1.
+  trigger path, spawn chain, live oracle.
 - **Статус:** `done`.
 
 ## P2-15b1b2 — Restore person containers (done 2026-11-15)
