@@ -8,7 +8,7 @@
   sparse) и HSTRY (head/40 slots/tail), сохранить raw для P2-15c; без
   интерпретации 0x58/ring.
 - **Spec:** `docs/specs/2026-11-16-p2-15b4b-framing-parser-design.md`
-  (approved 2026-11-16).
+  (approved 2026-11-16); **Plan:** `docs/plans/2026-11-16-p2-15b4b-framing-parser.md`.
 - **Доказано (D-077):** DIARY 1,013 entries / 4,855 blocks / 3,842
   records / sparse 0; slot0 76/371, slot2 75/377, slot21 1/2; HSTRY 40
   slots 28/28, head 1..37, tail 1/2, ids all 0.
