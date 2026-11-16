@@ -24,6 +24,7 @@ struct RestoredPerson {
     Tile current;
     std::uint8_t direction = 0;
     std::int32_t route_index = 0;
+    bool loot_regenerate = false;
 };
 
 struct RestoreResult {

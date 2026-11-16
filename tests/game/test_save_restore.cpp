@@ -864,3 +864,38 @@ TEST_CASE("decode save person rejects a tail overrun") {
     REQUIRE_FALSE(record.has_value());
     CHECK(record.error().code == gl::ErrorCode::format);
 }
+
+TEST_CASE("save restore marks only valid inventory candidates for regeneration") {
+    gl::game::Level level;
+    level.name = "test";
+    level.persons.push_back(sef_person("valid", 1, 1, "r1"));
+    level.persons.push_back(sef_person("absent", 2, 2, "r2"));
+    level.persons.push_back(sef_person("empty_inv", 3, 3, "r3"));
+
+    PersonValues valid;
+    valid.name = "valid";
+    valid.inventory = "inv012_civil";
+    PersonValues absent;
+    absent.name = "absent";
+    absent.inventory = "inv012_civil";
+    PersonValues empty_inv;
+    empty_inv.name = "empty_inv";
+    empty_inv.inventory = "";
+
+    gl::assets::SaveTailEntry tail;
+    tail.entities.push_back(person_entity(person_body_with_containers(
+        valid, std::vector<ItemSpec>{{111, 1, 0, 0, 0, 100, 0}},
+        std::vector<ItemSpec>{{222, 1, 0, 0, 0, 100, 0}}, std::nullopt)));
+    tail.entities.push_back(person_entity(person_body_with_containers(
+        absent, std::nullopt, std::vector<ItemSpec>{{222, 1, 0, 0, 0, 100, 0}},
+        std::nullopt)));
+    tail.entities.push_back(person_entity(person_body_with_containers(
+        empty_inv, std::vector<ItemSpec>{{111, 1, 0, 0, 0, 100, 0}},
+        std::vector<ItemSpec>{{222, 1, 0, 0, 0, 100, 0}}, std::nullopt)));
+
+    const auto result = gl::game::restore_save_persons(level, tail, nullptr);
+    REQUIRE(result.persons.size() == 3);
+    CHECK(result.persons[0].loot_regenerate);
+    CHECK_FALSE(result.persons[1].loot_regenerate);
+    CHECK_FALSE(result.persons[2].loot_regenerate);
+}

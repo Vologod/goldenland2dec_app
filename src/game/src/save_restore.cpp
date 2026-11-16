@@ -164,6 +164,8 @@ RestoreResult restore_save_persons(Level &level, const gl::assets::SaveTailEntry
             Tile{decoded->current_tile_x, decoded->current_tile_y},
             decoded->direction,
             decoded->route_index,
+            decoded->containers[0].present && decoded->containers[1].present &&
+                !decoded->inventory.empty(),
         });
         matched[index] = 1;
         matched_order.push_back(index);
