@@ -8,7 +8,7 @@
   в entry-порядке); API `relation(id,id)` default 2, `index_of`/`find`,
   `row`; 28/28 oracle; без runtime-AI.
 - **Spec:** `docs/specs/2026-11-16-p2-15b3-tribe-matrix-design.md`
-  (approved 2026-11-16).
+  (approved 2026-11-16); **Plan:** `docs/plans/2026-11-16-p2-15b3-tribe-matrix.md`.
 - **Доказано (2026-11-16):** порядок строк = entry-список, не id (slot0
   первый id 106, slot2 — 16); ids уникальны 28/28, имена дублируются
   28/28; histograms slot0 `{103,232,54186,234,1}`, slot2
