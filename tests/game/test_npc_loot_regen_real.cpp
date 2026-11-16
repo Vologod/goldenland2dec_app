@@ -6,6 +6,7 @@
 #include "gl/game/npc_loot.hpp"
 #include "gl/game/person.hpp"
 
+#include <algorithm>
 #include <cstdlib>
 #include <doctest/doctest.h>
 #include <optional>
@@ -42,7 +43,7 @@ TEST_CASE("real data: regenerate only the requested npc inventories" *
 
     auto single_runtime = gl::game::InventoryRuntime::create(
         gl::assets::HeroInventory{}, names.value(), generic_template);
-    single_runtime.set_person_items("B", {gl::assets::InventoryItem{111, 1, 0, 0, 0}});
+    single_runtime.set_person_items("B", {gl::assets::InventoryItem{0xFFFFFFF0u, 1, 0, 0, 0}});
     gl::game::MsvcRandom single_rng(1);
     const auto single = gl::game::regenerate_npc_inventories(
         single_runtime, persons, {std::size_t{1}}, vfs.value(), names.value(),
@@ -52,6 +53,10 @@ TEST_CASE("real data: regenerate only the requested npc inventories" *
     CHECK(single.populated == 1);
     CHECK(single.gate_failed == 0);
     CHECK(single_runtime.person_items("A").empty());
+    const auto single_items = single_runtime.person_items("B");
+    CHECK(std::none_of(single_items.begin(), single_items.end(), [](const auto &item) {
+        return item.item_id == 0xFFFFFFF0u;
+    }));
 
     auto combined_runtime = gl::game::InventoryRuntime::create(
         gl::assets::HeroInventory{}, names.value(), generic_template);

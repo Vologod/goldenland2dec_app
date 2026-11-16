@@ -164,7 +164,7 @@ NpcInventoryCounts generate_npc_indices(
     const gl::assets::ItemNameIndex &names,
     InventoryRuntime::ItemTemplateLookup item_template, std::int32_t loot_level,
     MsvcRandom &rng, const gl::assets::SpecialDatabase *specials, bool force,
-    bool consume_init_draws) {
+    bool consume_init_draws, bool overwrite) {
     NpcInventoryCounts counts;
     counts.requested = indices.size();
     std::map<std::string, std::optional<gl::assets::InvTable>, std::less<>> cache;
@@ -190,11 +190,17 @@ NpcInventoryCounts generate_npc_indices(
                     *cached->second, loot_level, names, item_template, rng, specials, force);
                 if (!generated) {
                     ++counts.gate_failed;
-                } else {
+                } else if (overwrite) {
                     runtime.replace_person_trade_items(person.name,
                                                        convert_loot(generated->hot));
                     runtime.replace_person_items(person.name,
                                                  convert_loot(generated->main));
+                    ++counts.populated;
+                } else {
+                    runtime.set_person_trade_items(person.name,
+                                                   convert_loot(generated->hot));
+                    runtime.set_person_items(person.name,
+                                             convert_loot(generated->main));
                     ++counts.populated;
                 }
             } else {
@@ -219,7 +225,7 @@ void generate_npc_inventories(InventoryRuntime &runtime,
     for (std::size_t index = 0; index < indices.size(); ++index)
         indices[index] = index;
     generate_npc_indices(runtime, persons, indices, vfs, names, item_template,
-                         loot_level, rng, specials, true, true);
+                         loot_level, rng, specials, true, true, false);
 }
 
 NpcInventoryCounts regenerate_npc_inventories(
@@ -229,6 +235,6 @@ NpcInventoryCounts regenerate_npc_inventories(
     InventoryRuntime::ItemTemplateLookup item_template, std::int32_t loot_level,
     MsvcRandom &rng, const gl::assets::SpecialDatabase *specials, bool force) {
     return generate_npc_indices(runtime, persons, indices, vfs, names,
-                                item_template, loot_level, rng, specials, force, false);
+                                item_template, loot_level, rng, specials, force, false, true);
 }
 } // namespace gl::game
