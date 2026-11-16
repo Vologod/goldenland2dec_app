@@ -1,6 +1,7 @@
 add_executable(gl_script_tests
     test_main.cpp
     test_globals.cpp
+    test_saved_globals.cpp
     test_vm.cpp
     test_dialogs.cpp
     test_dialog_session.cpp

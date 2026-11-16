@@ -217,6 +217,51 @@ void ScriptVm::set_globals(std::span<const ScriptGlobal> globals) {
     rebuild_variables();
 }
 
+ScriptVm::GlobalApplyCounts ScriptVm::apply_saved_globals(
+    std::span<const ScriptGlobal> saved) {
+    GlobalApplyCounts counts;
+    std::set<std::string> seen;
+    for (const ScriptGlobal &global : saved) {
+        if (!seen.insert(global.name).second) {
+            gl::log(gl::LogLevel::warning,
+                    "script vm: duplicate saved global '" + global.name +
+                        "'; last value wins");
+        }
+        auto found = globals_.find(global.name);
+        if (found == globals_.end()) {
+            globals_.emplace(global.name, global.value);
+            ++counts.added;
+            continue;
+        }
+        const Value &destination = found->second;
+        if (std::holds_alternative<std::string>(destination)) {
+            if (!std::holds_alternative<std::string>(global.value)) {
+                ++counts.kept;
+                gl::log(gl::LogLevel::warning,
+                        "script vm: saved numeric global '" + global.name +
+                            "' does not match a string declaration; keeping script value");
+                continue;
+            }
+            found->second = global.value;
+        } else if (std::holds_alternative<std::string>(global.value)) {
+            ++counts.kept;
+            gl::log(gl::LogLevel::warning,
+                    "script vm: saved string global '" + global.name +
+                        "' does not match a numeric declaration; keeping script value");
+            continue;
+        } else if (std::holds_alternative<std::int32_t>(destination)) {
+            found->second = std::int32_t{to_int32(global.value)};
+        } else if (std::holds_alternative<std::uint32_t>(destination)) {
+            found->second = std::uint32_t{to_uint32(global.value)};
+        } else {
+            found->second = to_double(global.value);
+        }
+        ++counts.matched;
+    }
+    rebuild_variables();
+    return counts;
+}
+
 void ScriptVm::restart(bool reset_all) {
     counter_ = 0;
     eval_ops_ = 0;

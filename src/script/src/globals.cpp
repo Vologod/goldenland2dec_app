@@ -180,4 +180,24 @@ gl::Result<std::vector<ScriptGlobal>> parse_globals(std::span<const std::uint8_t
         return gl::Error{gl::ErrorCode::format, "globals allocation failed"};
     }
 }
+
+std::vector<ScriptGlobal> save_globals_from_vars(
+    std::span<const gl::assets::SaveVar> vars) {
+    std::vector<ScriptGlobal> out;
+    out.reserve(vars.size());
+    for (const gl::assets::SaveVar &var : vars) {
+        ScriptGlobal global;
+        global.name = var.name;
+        if (var.type == 3) {
+            global.value = var.text_value;
+        } else {
+            const auto number = gl::assets::save_var_number(var);
+            if (!number)
+                continue;
+            global.value = *number;
+        }
+        out.push_back(std::move(global));
+    }
+    return out;
+}
 } // namespace gl::script

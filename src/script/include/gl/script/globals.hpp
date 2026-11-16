@@ -1,5 +1,6 @@
 #pragma once
 #include "gl/assets/result.hpp"
+#include "gl/assets/save_payload.hpp"
 #include "gl/script/value.hpp"
 #include <cstdint>
 #include <span>
@@ -14,4 +15,7 @@ struct ScriptGlobal {
 };
 
 gl::Result<std::vector<ScriptGlobal>> parse_globals(std::span<const std::uint8_t> data);
+
+std::vector<ScriptGlobal> save_globals_from_vars(
+    std::span<const gl::assets::SaveVar> vars);
 }

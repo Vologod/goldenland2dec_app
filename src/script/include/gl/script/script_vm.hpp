@@ -16,8 +16,16 @@ enum class VmStatus { start, restart, continue_, wait_user, end, infinity };
 
 class ScriptVm {
 public:
+    struct GlobalApplyCounts {
+        std::size_t matched = 0;
+        std::size_t added = 0;
+        std::size_t kept = 0;
+    };
+
     ScriptVm(std::vector<gl::assets::CsNode> nodes, ScriptHost& host);
     void set_globals(std::span<const ScriptGlobal> globals);
+    GlobalApplyCounts apply_saved_globals(std::span<const ScriptGlobal> saved);
+    const std::map<std::string, Value> &globals() const { return globals_; }
     void restart(bool reset_all);
     VmStatus status() const;
     bool step();
