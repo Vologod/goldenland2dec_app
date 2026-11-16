@@ -143,17 +143,35 @@ std::optional<NpcLoot> NpcLootGenerator::generate(const gl::assets::InvTable &ta
     return loot;
 }
 
-void generate_npc_inventories(InventoryRuntime &runtime, const std::vector<PersonInstance> &persons,
-                              gl::assets::GameVfs &vfs, const gl::assets::ItemNameIndex &names,
-                              InventoryRuntime::ItemTemplateLookup item_template,
-                              std::int32_t loot_level, MsvcRandom &rng,
-                              const gl::assets::SpecialDatabase *specials) {
-    runtime.clear_persons();
+namespace {
+std::vector<gl::assets::InventoryItem> convert_loot(const std::vector<LootItem> &items) {
+    std::vector<gl::assets::InventoryItem> converted;
+    converted.reserve(items.size());
+    for (const LootItem &item : items) {
+        gl::assets::InventoryItem entry{item.item_id,
+                                        static_cast<std::uint32_t>(item.count),
+                                        item.flags, item.type, item.style, 100,
+                                        item.mod_count};
+        entry.mods = item.mods;
+        converted.push_back(std::move(entry));
+    }
+    return converted;
+}
+
+NpcInventoryCounts generate_npc_indices(
+    InventoryRuntime &runtime, const std::vector<PersonInstance> &persons,
+    const std::vector<std::size_t> &indices, gl::assets::GameVfs &vfs,
+    const gl::assets::ItemNameIndex &names,
+    InventoryRuntime::ItemTemplateLookup item_template, std::int32_t loot_level,
+    MsvcRandom &rng, const gl::assets::SpecialDatabase *specials, bool force,
+    bool consume_init_draws) {
+    NpcInventoryCounts counts;
+    counts.requested = indices.size();
     std::map<std::string, std::optional<gl::assets::InvTable>, std::less<>> cache;
-    for (const PersonInstance &person : persons) {
+    for (std::size_t index : indices) {
+        const PersonInstance &person = persons[index];
         if (person.name == "Hero")
             continue;
-
         if (!person.inventory.empty()) {
             auto cached = cache.find(person.inventory);
             if (cached == cache.end()) {
@@ -168,43 +186,49 @@ void generate_npc_inventories(InventoryRuntime &runtime, const std::vector<Perso
                 }
             }
             if (cached->second) {
-                auto generated = NpcLootGenerator::generate(*cached->second, loot_level, names,
-                                                            item_template, rng, specials);
-                if (!generated)
-                    continue;
-                const NpcLoot &loot = *generated;
-                std::vector<gl::assets::InventoryItem> hot;
-                hot.reserve(loot.hot.size());
-                for (const LootItem &item : loot.hot) {
-                    gl::assets::InventoryItem converted{item.item_id,
-                                                        static_cast<std::uint32_t>(item.count),
-                                                        item.flags,
-                                                        item.type,
-                                                        item.style,
-                                                        100,
-                                                        item.mod_count};
-                    converted.mods = item.mods;
-                    hot.push_back(std::move(converted));
+                auto generated = NpcLootGenerator::generate(
+                    *cached->second, loot_level, names, item_template, rng, specials, force);
+                if (!generated) {
+                    ++counts.gate_failed;
+                } else {
+                    runtime.replace_person_trade_items(person.name,
+                                                       convert_loot(generated->hot));
+                    runtime.replace_person_items(person.name,
+                                                 convert_loot(generated->main));
+                    ++counts.populated;
                 }
-                std::vector<gl::assets::InventoryItem> main;
-                main.reserve(loot.main.size());
-                for (const LootItem &item : loot.main) {
-                    gl::assets::InventoryItem converted{item.item_id,
-                                                        static_cast<std::uint32_t>(item.count),
-                                                        item.flags,
-                                                        item.type,
-                                                        item.style,
-                                                        100,
-                                                        item.mod_count};
-                    converted.mods = item.mods;
-                    main.push_back(std::move(converted));
-                }
-                runtime.set_person_trade_items(person.name, std::move(hot));
-                runtime.set_person_items(person.name, std::move(main));
+            } else {
+                ++counts.missing_table;
             }
         }
-
-        consume_person_init_rng(person.def, rng);
+        if (consume_init_draws)
+            consume_person_init_rng(person.def, rng);
     }
+    return counts;
+}
+} // namespace
+
+void generate_npc_inventories(InventoryRuntime &runtime,
+                              const std::vector<PersonInstance> &persons,
+                              gl::assets::GameVfs &vfs, const gl::assets::ItemNameIndex &names,
+                              InventoryRuntime::ItemTemplateLookup item_template,
+                              std::int32_t loot_level, MsvcRandom &rng,
+                              const gl::assets::SpecialDatabase *specials) {
+    runtime.clear_persons();
+    std::vector<std::size_t> indices(persons.size());
+    for (std::size_t index = 0; index < indices.size(); ++index)
+        indices[index] = index;
+    generate_npc_indices(runtime, persons, indices, vfs, names, item_template,
+                         loot_level, rng, specials, true, true);
+}
+
+NpcInventoryCounts regenerate_npc_inventories(
+    InventoryRuntime &runtime, const std::vector<PersonInstance> &persons,
+    const std::vector<std::size_t> &indices, gl::assets::GameVfs &vfs,
+    const gl::assets::ItemNameIndex &names,
+    InventoryRuntime::ItemTemplateLookup item_template, std::int32_t loot_level,
+    MsvcRandom &rng, const gl::assets::SpecialDatabase *specials, bool force) {
+    return generate_npc_indices(runtime, persons, indices, vfs, names,
+                                item_template, loot_level, rng, specials, force, false);
 }
 } // namespace gl::game

@@ -7,6 +7,7 @@
 #include "gl/game/msvc_random.hpp"
 #include "gl/game/person.hpp"
 
+#include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <optional>
@@ -53,4 +54,18 @@ void generate_npc_inventories(InventoryRuntime &runtime, const std::vector<Perso
                               InventoryRuntime::ItemTemplateLookup item_template,
                               std::int32_t loot_level, MsvcRandom &rng,
                               const gl::assets::SpecialDatabase *specials = nullptr);
+
+struct NpcInventoryCounts {
+    std::size_t requested = 0;
+    std::size_t populated = 0;
+    std::size_t gate_failed = 0;
+    std::size_t missing_table = 0;
+};
+
+NpcInventoryCounts regenerate_npc_inventories(
+    InventoryRuntime &runtime, const std::vector<PersonInstance> &persons,
+    const std::vector<std::size_t> &indices, gl::assets::GameVfs &vfs,
+    const gl::assets::ItemNameIndex &names,
+    InventoryRuntime::ItemTemplateLookup item_template, std::int32_t loot_level,
+    MsvcRandom &rng, const gl::assets::SpecialDatabase *specials, bool force);
 } // namespace gl::game
