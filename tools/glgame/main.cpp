@@ -1294,6 +1294,7 @@ class Game {
         context->vm =
             std::make_unique<gl::script::ScriptVm>(std::move(nodes.value()), context->host);
         context->vm->set_globals(globals.value());
+        context->vm->apply_saved_globals(save_globals_);
         context->session = std::make_unique<gl::script::DialogSession>(*context->vm, context->sdb);
 
         dialog_ = std::move(context);
@@ -2099,6 +2100,8 @@ class Game {
     }
 
     bool load_level(std::string_view name) {
+        if (pending_restore_ == nullptr)
+            save_globals_.clear();
         restore_result_ = {};
         gl::game::HeroOutfit hero_outfit;
         if (options_.hero_outfit_none) {
@@ -2237,8 +2240,11 @@ class Game {
         auto hero_stats_before = pending_hero_stats_;
         auto outfit_before = pending_outfit_;
         const bool hero_stats_absent_before = hero_stats_absent_logged_;
+        auto save_globals_before = save_globals_;
 
         apply_hero_from_body(hero_body, slot, true);
+
+        save_globals_ = gl::script::save_globals_from_vars(payload->vars);
 
         if (payload->level_tail_index) {
             pending_restore_ = &payload->tail[*payload->level_tail_index];
@@ -2257,6 +2263,7 @@ class Game {
             pending_outfit_ = std::move(outfit_before);
             hero_stats_absent_logged_ = hero_stats_absent_before;
             inventory_runtime_ = std::move(inventory_before);
+            save_globals_ = std::move(save_globals_before);
             gl::log(gl::LogLevel::warning,
                     "save: rollback slot=" + std::to_string(slot));
             const std::string message =
@@ -2275,6 +2282,8 @@ class Game {
                                  " vars=" + std::to_string(payload->vars.size()) +
                                  " tail=" + std::to_string(payload->tail.size());
         gl::log(gl::LogLevel::info, line);
+        gl::log(gl::LogLevel::info,
+                "save globals: saved=" + std::to_string(save_globals_.size()));
         if (!state_.transition(gl::core::AppState::level)) return false;
         return true;
     }
@@ -3072,6 +3081,7 @@ class Game {
     const gl::assets::SaveTribeTable* pending_tribes_ = nullptr;
     std::optional<std::array<std::uint8_t, 0x20>> pending_save_time_;
     gl::game::RestoreResult restore_result_;
+    std::vector<gl::script::ScriptGlobal> save_globals_;
     gl::game::PersonRuntime person_runtime_;
     gl::game::InventoryRuntime inventory_runtime_;
     std::optional<gl::assets::ItemNameIndex> item_names_;

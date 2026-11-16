@@ -713,6 +713,7 @@ TEST_CASE("glgame --load-save loads the level and hero from the save") {
                       "container='trade' items=[812:561:") != std::string::npos);
     CHECK(output.find("rginf: saved_latch=0 due=0 runtime_latch=0") !=
           std::string::npos);
+    CHECK(output.find("save globals: saved=1002") != std::string::npos);
 }
 
 TEST_CASE("glgame --load-save 23 applies the due regeneration gate") {
