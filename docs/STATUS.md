@@ -34,7 +34,8 @@
   `glgame_screenshot_tests --test-case="*load-save*"` — **3/3 cases,
   39/39 assertions**, exit 0 (37 skipped; E2E `save globals: saved=1002`);
   `ctest --test-dir build --output-on-failure` — **19/19 passed**,
-  `Total Test time (real) = 2022.33 sec`, exit 0.
+  `Total Test time (real) = 1940.01 sec`, exit 0 (финальный прогон после
+  fix wave; до фиксов было 2022.33 sec).
 - **Остаток:** OQ-5 chosen policy (не original-parity claim); type 3 только
   синтетически (в корпусе нет); 4,239 undeclared имён добавлены; дубликаты
   last-wins; overlay только dialog VM; save write (`P2-15c`); live oracle,
