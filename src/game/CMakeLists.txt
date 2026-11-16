@@ -16,6 +16,7 @@ add_library(gl_game STATIC
     src/person_movement.cpp
     src/person_runtime.cpp
     src/person_rng.cpp
+    src/rginf.cpp
     src/save_person.cpp
     src/save_restore.cpp
     src/special_engine.cpp
