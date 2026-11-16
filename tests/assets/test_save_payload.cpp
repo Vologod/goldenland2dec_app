@@ -1008,6 +1008,13 @@ TEST_CASE("encode_vars_body writes typed variables") {
     std::memcpy(word.value.data(), &ten, 8);
     vars.push_back(word);
 
+    gl::assets::SaveVar flt;
+    flt.type = 2;
+    flt.name = "f";
+    const double two_and_a_half = 2.5;
+    std::memcpy(flt.value.data(), &two_and_a_half, 8);
+    vars.push_back(flt);
+
     gl::assets::SaveVar text;
     text.type = 3;
     text.name = "s";
@@ -1018,26 +1025,52 @@ TEST_CASE("encode_vars_body writes typed variables") {
     REQUIRE(body.has_value());
 
     std::vector<std::uint8_t> expected;
-    put_u32(expected, 3);
+    put_u32(expected, 4);
     put_u32(expected, 0);
     put_string(expected, "i");
     expected.insert(expected.end(), integer.value.begin(), integer.value.end());
     put_u32(expected, 1);
     put_string(expected, "d");
     expected.insert(expected.end(), word.value.begin(), word.value.end());
+    put_u32(expected, 2);
+    put_string(expected, "f");
+    expected.insert(expected.end(), flt.value.begin(), flt.value.end());
     put_u32(expected, 3);
     put_string(expected, "s");
     put_string(expected, "x");
     CHECK(body.value() == expected);
 
-    CHECK(gl::assets::encode_vars_body(std::span<const gl::assets::SaveVar>()).value() ==
-          std::vector<std::uint8_t>{0, 0, 0, 0});
+    const auto empty =
+        gl::assets::encode_vars_body(std::span<const gl::assets::SaveVar>());
+    REQUIRE(empty.has_value());
+    CHECK(empty.value() == std::vector<std::uint8_t>{0, 0, 0, 0});
 
     auto bad = vars;
     bad[0].type = 4;
     const auto error = gl::assets::encode_vars_body(bad);
     REQUIRE_FALSE(error.has_value());
     CHECK(error.error().code == gl::ErrorCode::format);
+}
+
+TEST_CASE("encode_vars_body round-trips a non-ASCII name and text") {
+    gl::assets::SaveVar text;
+    text.type = 3;
+    text.name = "Привет";
+    text.text_value = "Привет";
+
+    const std::vector<gl::assets::SaveVar> vars{text};
+    const auto body = gl::assets::encode_vars_body(vars);
+    REQUIRE(body.has_value());
+
+    const std::string encoded_name = gl::assets::utf8_to_cp1251("Привет");
+    std::vector<std::uint8_t> expected;
+    put_u32(expected, 1);
+    put_u32(expected, 3);
+    put_u32(expected, static_cast<std::uint32_t>(encoded_name.size()));
+    expected.insert(expected.end(), encoded_name.begin(), encoded_name.end());
+    put_u32(expected, static_cast<std::uint32_t>(encoded_name.size()));
+    expected.insert(expected.end(), encoded_name.begin(), encoded_name.end());
+    CHECK(body.value() == expected);
 }
 
 TEST_CASE("encode_tribe_body writes entries and the matrix") {
@@ -1061,8 +1094,9 @@ TEST_CASE("encode_tribe_body writes entries and the matrix") {
     REQUIRE(body.has_value());
     CHECK(body.value() == expected);
 
-    CHECK(gl::assets::encode_tribe_body({}).value() ==
-          std::vector<std::uint8_t>{0, 0, 0, 0});
+    const auto empty = gl::assets::encode_tribe_body({});
+    REQUIRE(empty.has_value());
+    CHECK(empty.value() == std::vector<std::uint8_t>{0, 0, 0, 0});
 
     table.matrix.pop_back();
     const auto error = gl::assets::encode_tribe_body(table);

@@ -15,7 +15,8 @@
   `u32 count`, `u32 id+string` entries и `count²` matrix в entry-порядке;
   неизвестный тип/несовпадение размера matrix → `format`.
   `script::update_vars_from_globals` копирует saved-вектор (order/type/name
-  авторитетны), заменяет numeric-значения из VM `Value` (`static_cast<double>`,
+  авторитетны), заменяет numeric-значения из живой VM-переменной (с fallback
+  на снимок globals) (`static_cast<double>`,
   LE f64) и type-3 text из string-значений, сохраняет raw при
   missing/type-mismatch и не добавляет/не удаляет имена.
 - **Проверка (2026-11-16):** focused unit `*encode_vars_body*,*encode_tribe_body*`

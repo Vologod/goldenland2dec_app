@@ -77,7 +77,9 @@ std::vector<gl::assets::SaveVar> update_vars_from_globals(
 `update_vars_from_globals`:
 
 1. Copy `saved` (order/name/type preserved).
-2. For each var, find `vm.globals()` by name; missing → keep raw.
+2. For each var, read the live `vm.variables()` value first and fall back to
+   `vm.globals()` for names not referenced by the current node set; missing
+   from both → keep raw.
 3. `type < 3`: numeric Value (`int32/uint32/double`) → write
    `static_cast<double>(value)` as 8 LE bytes into `var.value`; string
    Value → keep raw.

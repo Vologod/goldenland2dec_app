@@ -57,7 +57,10 @@ TEST_CASE("real data: BT_VARS re-encodes byte-identically" *
         NullHost host;
         gl::script::ScriptVm vm({}, host);
         vm.set_globals(parsed_globals.value());
-        vm.apply_saved_globals(gl::script::save_globals_from_vars(payload->vars));
+        const auto counts =
+            vm.apply_saved_globals(gl::script::save_globals_from_vars(payload->vars));
+        CHECK(counts.matched + counts.added == payload->vars.size());
+        CHECK(counts.matched + counts.added > 0);
 
         const auto updated =
             gl::script::update_vars_from_globals(payload->vars, vm);

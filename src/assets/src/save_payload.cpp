@@ -640,11 +640,6 @@ Result<std::vector<std::uint8_t>> encode_save_payload(const SavePayload &payload
         if (payload.blocks.size() != kBlockOrder.size())
             return format_error("save payload must contain seven blocks");
 
-        const auto write_u32 = [](std::vector<std::uint8_t> &out, std::uint32_t value) {
-            for (unsigned shift = 0; shift < 32; shift += 8)
-                out.push_back(static_cast<std::uint8_t>((value >> shift) & 0xFF));
-        };
-
         std::vector<std::uint8_t> raw;
         for (std::size_t index = 0; index < payload.blocks.size(); ++index) {
             const SaveBlockView &block = payload.blocks[index];
@@ -655,7 +650,7 @@ Result<std::vector<std::uint8_t>> encode_save_payload(const SavePayload &payload
             if (end > payload.decompressed.size())
                 return format_error("save payload block body is out of range");
             raw.insert(raw.end(), block.tag.begin(), block.tag.end());
-            write_u32(raw, block.size);
+            append_u32(raw, block.size);
             raw.insert(raw.end(),
                        payload.decompressed.begin() + static_cast<std::ptrdiff_t>(block.offset),
                        payload.decompressed.begin() + static_cast<std::ptrdiff_t>(end));
@@ -681,16 +676,16 @@ Result<std::vector<std::uint8_t>> encode_save_payload(const SavePayload &payload
             return format_error("save payload is too large");
 
         std::vector<std::uint8_t> file(payload.header_raw.begin(), payload.header_raw.end());
-        write_u32(file, static_cast<std::uint32_t>(raw.size()));
-        write_u32(file, static_cast<std::uint32_t>(compressed.size()));
+        append_u32(file, static_cast<std::uint32_t>(raw.size()));
+        append_u32(file, static_cast<std::uint32_t>(compressed.size()));
         file.insert(file.end(), compressed.begin(), compressed.end());
 
-        write_u32(file, static_cast<std::uint32_t>(payload.tail.size()));
+        append_u32(file, static_cast<std::uint32_t>(payload.tail.size()));
         for (const SaveTailEntry &entry : payload.tail) {
             if (entry.raw_len == 0 || entry.raw_len != entry.section.size())
                 return format_error("save tail section length mismatch");
             const std::string name = utf8_to_cp1251(entry.name);
-            write_u32(file, static_cast<std::uint32_t>(name.size()));
+            append_u32(file, static_cast<std::uint32_t>(name.size()));
             file.insert(file.end(), name.begin(), name.end());
 
             std::vector<std::uint8_t> section_compressed;
@@ -698,13 +693,15 @@ Result<std::vector<std::uint8_t>> encode_save_payload(const SavePayload &payload
                 return format_error("save tail section zlib compression failed");
             if (section_compressed.size() > std::numeric_limits<std::uint32_t>::max() - 8u)
                 return format_error("save tail section is too large");
-            write_u32(file, static_cast<std::uint32_t>(8 + section_compressed.size()));
-            write_u32(file, entry.raw_len);
-            write_u32(file, static_cast<std::uint32_t>(section_compressed.size()));
+            append_u32(file, static_cast<std::uint32_t>(8 + section_compressed.size()));
+            append_u32(file, entry.raw_len);
+            append_u32(file, static_cast<std::uint32_t>(section_compressed.size()));
             file.insert(file.end(), section_compressed.begin(), section_compressed.end());
         }
         return file;
     } catch (const std::bad_alloc &) {
+        return format_error("save payload allocation failed");
+    } catch (const std::length_error &) {
         return format_error("save payload allocation failed");
     }
 }
@@ -733,6 +730,8 @@ Result<std::vector<std::uint8_t>> encode_vars_body(std::span<const SaveVar> vars
         return out;
     } catch (const std::bad_alloc &) {
         return format_error("BT_VARS allocation failed");
+    } catch (const std::length_error &) {
+        return format_error("BT_VARS allocation failed");
     }
 }
 
@@ -755,6 +754,8 @@ Result<std::vector<std::uint8_t>> encode_tribe_body(const SaveTribeTable &table)
         out.insert(out.end(), table.matrix.begin(), table.matrix.end());
         return out;
     } catch (const std::bad_alloc &) {
+        return format_error("BT_TRIBE allocation failed");
+    } catch (const std::length_error &) {
         return format_error("BT_TRIBE allocation failed");
     }
 }

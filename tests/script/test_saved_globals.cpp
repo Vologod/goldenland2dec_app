@@ -195,15 +195,47 @@ TEST_CASE("update_vars_from_globals writes VM values back into SaveVar") {
     const double keep = 1.5;
     std::memcpy(missing.value.data(), &keep, 8);
 
+    gl::assets::SaveVar vs_number;
+    vs_number.type = 0;
+    vs_number.name = "s";
+    const double raw = 3.5;
+    std::memcpy(vs_number.value.data(), &raw, 8);
+    gl::assets::SaveVar vi_text;
+    vi_text.type = 3;
+    vi_text.name = "i";
+    vi_text.text_value = "keep";
+
     const auto updated = gl::script::update_vars_from_globals(
-        {vi, vd, vf, vs, missing}, vm);
-    REQUIRE(updated.size() == 5);
+        {vi, vd, vf, vs, missing, vs_number, vi_text}, vm);
+    REQUIRE(updated.size() == 7);
     CHECK(gl::assets::save_var_number(updated[0]).has_value());
     CHECK(*gl::assets::save_var_number(updated[0]) == 7.0);
     CHECK(*gl::assets::save_var_number(updated[1]) == 9.0);
     CHECK(*gl::assets::save_var_number(updated[2]) == 2.5);
     CHECK(updated[3].text_value == "x");
     CHECK(*gl::assets::save_var_number(updated[4]) == 1.5);
+    CHECK(gl::assets::save_var_number(updated[5]).has_value());
+    CHECK(*gl::assets::save_var_number(updated[5]) == 3.5);
+    CHECK(updated[6].text_value == "keep");
     CHECK(updated[0].type == 0);
     CHECK(updated[1].name == "d");
+}
+
+TEST_CASE("update_vars_from_globals reads live VM variables") {
+    NullHost host;
+    std::vector<gl::assets::CsNode> nodes{variable_node("i")};
+    gl::script::ScriptVm vm(std::move(nodes), host);
+    const std::vector<gl::script::ScriptGlobal> initial{
+        global("i", std::int32_t{1})};
+    vm.set_globals(initial);
+    REQUIRE(vm.variable("i") != nullptr);
+    *vm.variable("i") = std::int32_t{42};
+
+    gl::assets::SaveVar var;
+    var.type = 0;
+    var.name = "i";
+    const auto updated = gl::script::update_vars_from_globals({var}, vm);
+    REQUIRE(updated.size() == 1);
+    REQUIRE(gl::assets::save_var_number(updated[0]).has_value());
+    CHECK(*gl::assets::save_var_number(updated[0]) == 42.0);
 }

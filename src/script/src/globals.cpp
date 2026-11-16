@@ -5,6 +5,7 @@
 #include <bit>
 #include <charconv>
 #include <cstddef>
+#include <limits>
 #include <new>
 #include <optional>
 #include <string>
@@ -12,6 +13,8 @@
 #include <system_error>
 
 namespace gl::script {
+static_assert(sizeof(double) == 8 && std::numeric_limits<double>::is_iec559);
+
 namespace {
 bool is_space(char c) {
     return c == ' ' || c == '\t' || c == '\r' || c == '\n' || c == '\f' || c == '\v';
@@ -207,22 +210,27 @@ std::vector<gl::assets::SaveVar> update_vars_from_globals(
     const std::vector<gl::assets::SaveVar> &saved, const ScriptVm &vm) {
     std::vector<gl::assets::SaveVar> out = saved;
     for (gl::assets::SaveVar &var : out) {
-        const auto found = vm.globals().find(var.name);
-        if (found == vm.globals().end())
+        const auto live = vm.variables().find(var.name);
+        const auto snapshot = vm.globals().find(var.name);
+        const Value *value = nullptr;
+        if (live != vm.variables().end())
+            value = &live->second;
+        else if (snapshot != vm.globals().end())
+            value = &snapshot->second;
+        if (value == nullptr)
             continue;
-        const Value &value = found->second;
         if (var.type == 3) {
-            if (std::holds_alternative<std::string>(value))
-                var.text_value = std::get<std::string>(value);
+            if (std::holds_alternative<std::string>(*value))
+                var.text_value = std::get<std::string>(*value);
             continue;
         }
         double number = 0.0;
-        if (std::holds_alternative<std::int32_t>(value))
-            number = static_cast<double>(std::get<std::int32_t>(value));
-        else if (std::holds_alternative<std::uint32_t>(value))
-            number = static_cast<double>(std::get<std::uint32_t>(value));
-        else if (std::holds_alternative<double>(value))
-            number = std::get<double>(value);
+        if (std::holds_alternative<std::int32_t>(*value))
+            number = static_cast<double>(std::get<std::int32_t>(*value));
+        else if (std::holds_alternative<std::uint32_t>(*value))
+            number = static_cast<double>(std::get<std::uint32_t>(*value));
+        else if (std::holds_alternative<double>(*value))
+            number = std::get<double>(*value);
         else
             continue;
         const std::uint64_t bits = std::bit_cast<std::uint64_t>(number);
