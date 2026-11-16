@@ -13,7 +13,7 @@
   `FUN_1405b490`: лексикографический, weekday игнорируется, равенство = due;
   add `FUN_1405b38c`/`FUN_1405b140` — грегорианский; interval `7`),
   `NpcLootGenerator::generate` -> `std::optional<NpcLoot>` + `force`
-  (R1 draw по семантике `coin`: один для `0 < chance < 1`, нет для
+  (R1 draw по семантике `coin`: один для `0 < chance <= 1`, нет для
   `chance <= 0` или `> 1`; `force=false` fail -> `nullopt`),
   `regenerate_npc_inventories` по явным индексам в `BT_ENTS`-порядке,
   `RestoredPerson::loot_regenerate`; `glgame` на load-save пропускает
