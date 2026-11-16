@@ -899,3 +899,29 @@ TEST_CASE("save restore marks only valid inventory candidates for regeneration")
     CHECK_FALSE(result.persons[1].loot_regenerate);
     CHECK_FALSE(result.persons[2].loot_regenerate);
 }
+
+TEST_CASE("save restore keys the regeneration flag on container presence") {
+    gl::game::Level level;
+    level.name = "test";
+    level.persons.push_back(sef_person("c1_absent", 1, 1, "r1"));
+    level.persons.push_back(sef_person("empty_containers", 2, 2, "r2"));
+
+    PersonValues c1_absent;
+    c1_absent.name = "c1_absent";
+    c1_absent.inventory = "inv012_civil";
+    PersonValues empty_containers;
+    empty_containers.name = "empty_containers";
+    empty_containers.inventory = "inv012_civil";
+
+    gl::assets::SaveTailEntry tail;
+    tail.entities.push_back(person_entity(person_body_with_containers(
+        c1_absent, std::vector<ItemSpec>{{111, 1, 0, 0, 0, 100, 0}}, std::nullopt,
+        std::nullopt)));
+    tail.entities.push_back(person_entity(person_body_with_containers(
+        empty_containers, std::vector<ItemSpec>{}, std::vector<ItemSpec>{}, std::nullopt)));
+
+    const auto result = gl::game::restore_save_persons(level, tail, nullptr);
+    REQUIRE(result.persons.size() == 2);
+    CHECK_FALSE(result.persons[0].loot_regenerate);
+    CHECK(result.persons[1].loot_regenerate);
+}

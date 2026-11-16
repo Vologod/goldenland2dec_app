@@ -13,7 +13,8 @@
   `FUN_1405b490`: лексикографический, weekday игнорируется, равенство = due;
   add `FUN_1405b38c`/`FUN_1405b140` — грегорианский; interval `7`),
   `NpcLootGenerator::generate` -> `std::optional<NpcLoot>` + `force`
-  (R1 draw всегда; `force=false` fail -> `nullopt`),
+  (R1 draw по семантике `coin`: один для `0 < chance < 1`, нет для
+  `chance <= 0` или `> 1`; `force=false` fail -> `nullopt`),
   `regenerate_npc_inventories` по явным индексам в `BT_ENTS`-порядке,
   `RestoredPerson::loot_regenerate`; `glgame` на load-save пропускает
   ungated generate/person-init, восстанавливает b1b2-контейнеры, при due
@@ -983,7 +984,9 @@
     не превышены); точные BT_INFO-смещения — §15.1.
   - Prerequisites: ITM `type/flags/max_stack/style`
     (`proto+4/+8/+0x1c/+0x30` → runtime `+8/+0xc/+0x20/+0x34`).
-    R1 `coin(regenerate_chance)` всегда (`49510`/`51141`).
+    R1 `coin(regenerate_chance)` по семантике `coin`: один draw для
+    `0 < chance < 1`, нет для `chance <= 0` или `> 1`
+    (`49510`/`51141`).
   - **Реальный SEF-путь — `FUN_1404b1c0` (два прохода), не
     `FUN_140489ec`.** Pass 1 → hot `+0xc`:
     `FUN_1404e3a4(name,0,1)` (`this+4=1` только очищает item-флаг

@@ -169,6 +169,8 @@ NpcInventoryCounts generate_npc_indices(
     counts.requested = indices.size();
     std::map<std::string, std::optional<gl::assets::InvTable>, std::less<>> cache;
     for (std::size_t index : indices) {
+        if (index >= persons.size())
+            continue;
         const PersonInstance &person = persons[index];
         if (person.name == "Hero")
             continue;

@@ -2139,7 +2139,7 @@ class Game {
                             std::to_string(restore_result_.counts.c2_items));
 
                 const gl::game::GameDatetime now =
-                    gl::game::GameDatetime::from_time_bytes(*pending_save_time_);
+                    gl::game::GameDatetime::from_time_bytes(pending_save_time_.value());
                 const gl::game::RginfDecision decision = gl::game::decide_rginf(
                     pending_restore_->rginf, now,
                     gl::game::kSinglePlayerItemsRegenerateIntervalDays);

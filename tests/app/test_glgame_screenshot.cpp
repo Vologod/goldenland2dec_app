@@ -746,11 +746,13 @@ TEST_CASE("glgame --load-save 23 applies the due regeneration gate") {
     const auto candidates = number_after("candidates=");
     const auto regenerated = number_after("regenerated=");
     const auto gate_failed = number_after("gate_failed=");
+    const auto missing_table = number_after("missing_table=");
     REQUIRE(candidates.has_value());
     REQUIRE(regenerated.has_value());
     REQUIRE(gate_failed.has_value());
+    REQUIRE(missing_table.has_value());
     CHECK(*candidates > 0);
-    CHECK(*regenerated + *gate_failed == *candidates);
+    CHECK(*regenerated + *gate_failed + *missing_table == *candidates);
 }
 
 TEST_CASE("glgame --load-save leaves the inventory runtime untouched when the level fails") {
