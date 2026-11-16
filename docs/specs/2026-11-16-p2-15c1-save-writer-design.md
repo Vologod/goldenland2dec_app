@@ -15,9 +15,9 @@ decode-equality на 28 saves и детерминизм. Без записи ф�
 
 `docs/research/p2-15a-save-payload.md` §Writer/§Reader/§Container:
 
-- Файл: 112-байт header (`0x68`), затем `u32 raw_len` (`0x68`), `u32
-  compressed_len` (`0x6c`), zlib(main stream) с `0x70`, затем tail
-  dictionary.
+- Файл: `0x68` (104) байта header, затем `u32 raw_len` (`0x68`), `u32
+  compressed_len` (`0x6c`); header-регион `0x70` (112 байт), zlib(main
+  stream) с `0x70`, затем tail dictionary.
 - Main stream: 7 блоков в подтверждённом порядке `BT_SCRN `, `BT_INFO `,
   `BT_VARS `, `BT_TRIBE`, `BT_DIARY`, `BT_HSTRY`, `BT_HERO `; каждый
   `tag(8) + u32 size + body`, без padding, total = decompressed length;
@@ -36,7 +36,8 @@ decode-equality на 28 saves и детерминизм. Без записи ф�
 Входит:
 
 - `SavePayload.header_raw` (`std::array<std::uint8_t,0x68>`) — первые
-  112 байт файла, копируются парсером.
+  `0x68` (104) байта файла, за которыми идут два `u32` слова длин;
+  копируются парсером.
 - `assets::encode_save_payload(const SavePayload&)` ->
   `Result<std::vector<std::uint8_t>>`.
 - Unit: synthetic round-trip/determinism/invalid payload.
@@ -76,8 +77,9 @@ Result<std::vector<std::uint8_t>> encode_save_payload(const SavePayload &payload
    порядке блоков (raw bytes, no rewrite).
 3. `mz_compress` (default level); `compressed_len` from the call;
    `raw_len` = raw stream size (must fit `u32`).
-4. Output = `header_raw` (112 B) with `u32 raw_len` at `0x68`,
-   `u32 compressed_len` at `0x6c`, compressed stream, then
+4. Output = `header_raw` (`0x68`/104 B) followed by the two `u32` length
+   words: `u32 raw_len` at `0x68`, `u32 compressed_len` at `0x6c`,
+   compressed stream, then
    `u32 tail_count` and per entry:
    `u32 name_len + cp1251(name)`,
    `u32 8 + zlib_len`,
@@ -101,7 +103,7 @@ Unit (`tests/assets/test_save_payload.cpp`):
 Real (`tests/assets/test_save_payload_real.cpp`):
 
 - 28 saves: parse → encode → parse; 0/N compare `decompressed` bytes,
-  header_raw (112 B), tail names + section bytes + raw_len, info fields,
+  header_raw (`0x68`/104 B), tail names + section bytes + raw_len, info fields,
   vars count/names/raw values, diary/history/ents counts;
 - encode twice byte-identical;
 - output length >= `0x70 + compressed_len` and header lengths consistent

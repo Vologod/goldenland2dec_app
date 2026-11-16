@@ -1315,3 +1315,15 @@ Follow-up research is recorded in `p2-15b4-diary-hstry.md`: DIARY framing
 is implementable (raw 0x58 blocks + sparse + HSTRY slots), while 0x58
 record field labels and HSTRY ring ordering remain `unverified`/`blocked`
 (host methods in `GoldenLand.exe`).
+
+## Implementation result (P2-15c1, 2026-11-16)
+
+`encode_save_payload` rebuilds the decompressed stream from the parsed
+blocks (`tag+size+body`), zlib-compresses it, patches the two length words
+after the preserved `0x68`-byte header, and re-emits the tail dictionary
+with recompressed sections. Real 28 saves pass parse→encode→parse
+decode-equality (header, blocks, tail sections, info/vars/tribes/diary/
+history) and encode is byte-deterministic. This is the container layer
+only: no `Saves/` write or `game_save` (c4), and gameplay-mutated
+VARS/TRIBE/HERO still need typed encoders (c2/c3); no byte-identical
+claim.

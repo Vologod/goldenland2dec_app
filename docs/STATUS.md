@@ -2,21 +2,30 @@
 
 Обновлено: 2026-11-16
 
-## P2-15c1 — Save container writer (design 2026-11-16)
+## P2-15c1 — Save container writer (done 2026-11-16)
 
-- **Задача:** `assets::encode_save_payload` — header 0x68 (`header_raw`),
+- **Задача:** `assets::encode_save_payload` — header `0x68` (`header_raw`),
   zlib main stream из raw-блоков, tail-словарь; decode-equality и
   детерминизм 28/28; без записи файлов/CLI и без typed-перекодирования.
 - **Spec:** `docs/specs/2026-11-16-p2-15c1-save-writer-design.md`
-  (approved 2026-11-16); **Plan:** `docs/plans/2026-11-16-p2-15c1-save-writer.md`.
-- **Критерии приёмки:** encode(parse)→parse равен header_raw/decompressed/
-  tail/info/vars/tribes/diary/history 0/N; encode дважды byte-identical;
-  invalid payload → `format`; полный `ctest` с `GL_GAME_DIR`.
-- **Команды проверки:** `cmake --build build`;
-  `build\bin\gl_assets_tests.exe --test-case="*encode_save_payload*"`;
-  `build\bin\gl_assets_real_tests.exe --test-case="*encode round-trips*"`;
-  `ctest --test-dir build --output-on-failure`.
-- **Статус:** `design` (implementation не начата).
+  (approved 2026-11-16); **Plan:** `docs/plans/2026-11-16-p2-15c1-save-writer.md`;
+  **D-079.**
+- **Реализовано (D-079):** `SavePayload.header_raw` хранит первые `0x68`
+  (104) байта заголовка до двух слов длин; `encode_save_payload` проверяет
+  семь тегов/offsets, перестраивает decompressed stream как
+  `tag(8)+u32 size+body` на блок, делает `mz_compress`, пишет `u32 raw_len`
+  (`0x68`)/`u32 compressed_len` (`0x6c`) и заново формирует tail-словарь
+  (`u32 count`, cp1251 имя, `u32 8+zlib_len`, `u32 raw_len`, `u32 zlib_len`,
+  zlib(section)). Invalid payload (число/порядок блоков, выход за границы
+  тела, `raw_len != section.size()`) → `format`; файлового I/O нет.
+- **Проверка (2026-11-16):** focused unit `*encode_save_payload*` — 2 cases /
+  153 assertions, 0 failed; real `*encode round-trips*` — 1 case /
+  128,549 assertions, 0 failed, 46 skipped; full `ctest` — 19/19 passed,
+  1524.77 s, exit 0 (build exit 0).
+- **Остаточное:** только decode-equality (без byte-identical с оригиналом и
+  без записи `Saves/`/`game_save` — c4); typed-энкодеры VARS/TRIBE/HERO —
+  c2/c3; обновление даты/имени заголовка — c4.
+- **Статус:** `done`.
 
 ## P2-15b4b — BT_DIARY/BT_HSTRY framing parser (done 2026-11-16)
 
