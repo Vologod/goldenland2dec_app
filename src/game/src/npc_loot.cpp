@@ -86,12 +86,15 @@ resolve(const gl::assets::InvItem &item, const gl::assets::ItemNameIndex &names,
 }
 } // namespace
 
-NpcLoot NpcLootGenerator::generate(const gl::assets::InvTable &table, std::int32_t loot_level,
-                                   const gl::assets::ItemNameIndex &names,
-                                   ItemTemplateLookup item_template, MsvcRandom &rng,
-                                   const gl::assets::SpecialDatabase *specials) {
+std::optional<NpcLoot> NpcLootGenerator::generate(const gl::assets::InvTable &table,
+                                                  std::int32_t loot_level,
+                                                  const gl::assets::ItemNameIndex &names,
+                                                  ItemTemplateLookup item_template, MsvcRandom &rng,
+                                                  const gl::assets::SpecialDatabase *specials,
+                                                  bool force) {
     NpcLoot loot;
-    rng.coin(table.regenerate_chance);
+    if (!rng.coin(table.regenerate_chance) && !force)
+        return std::nullopt;
 
     for (const gl::assets::InvItem &item : table.items) {
         if (!in_window(item, loot_level, table.level_offset))
@@ -165,8 +168,11 @@ void generate_npc_inventories(InventoryRuntime &runtime, const std::vector<Perso
                 }
             }
             if (cached->second) {
-                const NpcLoot loot = NpcLootGenerator::generate(*cached->second, loot_level, names,
-                                                                item_template, rng, specials);
+                auto generated = NpcLootGenerator::generate(*cached->second, loot_level, names,
+                                                            item_template, rng, specials);
+                if (!generated)
+                    continue;
+                const NpcLoot &loot = *generated;
                 std::vector<gl::assets::InventoryItem> hot;
                 hot.reserve(loot.hot.size());
                 for (const LootItem &item : loot.hot) {

@@ -87,7 +87,9 @@ TEST_CASE("npc_loot: empty table consumes only R1") {
     table.regenerate_chance = 0.75;
 
     MsvcRandom rng(1);
-    const NpcLoot loot = NpcLootGenerator::generate(table, 11, names, lookup, rng);
+    const auto loot_result = NpcLootGenerator::generate(table, 11, names, lookup, rng);
+    REQUIRE(loot_result.has_value());
+    const NpcLoot &loot = *loot_result;
 
     CHECK(loot.hot.empty());
     CHECK(loot.main.empty());
@@ -102,7 +104,9 @@ TEST_CASE("npc_loot: records outside the level window consume no RNG") {
     table.items = {make_item("OUT", 100, 200, 100, 1, 1)};
 
     MsvcRandom rng(1);
-    const NpcLoot loot = NpcLootGenerator::generate(table, 11, names, lookup, rng);
+    const auto loot_result = NpcLootGenerator::generate(table, 11, names, lookup, rng);
+    REQUIRE(loot_result.has_value());
+    const NpcLoot &loot = *loot_result;
 
     CHECK(loot.hot.empty());
     CHECK(loot.main.empty());
@@ -124,7 +128,9 @@ TEST_CASE("npc_loot: two passes fill hot and main in RNG order") {
     };
 
     MsvcRandom rng(1);
-    const NpcLoot loot = NpcLootGenerator::generate(table, 11, names, lookup, rng);
+    const auto loot_result = NpcLootGenerator::generate(table, 11, names, lookup, rng);
+    REQUIRE(loot_result.has_value());
+    const NpcLoot &loot = *loot_result;
 
     check_items(loot.hot, {{100, 2, 1, 0x4u, 7}, {102, 3, 2, 0x0u, 3}, {102, 1, 2, 0x0u, 3}});
     check_items(loot.main, {{100, 4, 1, 0x4u, 7}});
@@ -140,7 +146,9 @@ TEST_CASE("npc_loot: pass 2 does not draw chance coin when chance_percent is zer
     table.items = {make_item("E", 0, 100, 0, 5, 7)};
 
     MsvcRandom rng(7);
-    const NpcLoot loot = NpcLootGenerator::generate(table, 11, names, lookup, rng);
+    const auto loot_result = NpcLootGenerator::generate(table, 11, names, lookup, rng);
+    REQUIRE(loot_result.has_value());
+    const NpcLoot &loot = *loot_result;
 
     CHECK(loot.hot.empty());
     check_items(loot.main,
@@ -157,7 +165,9 @@ TEST_CASE("npc_loot: pass 2 scales quantity by quantity_decrease") {
     table.items = {make_item("D", 0, 100, 100, 5, 5)};
 
     MsvcRandom rng(3);
-    const NpcLoot loot = NpcLootGenerator::generate(table, 11, names, lookup, rng);
+    const auto loot_result = NpcLootGenerator::generate(table, 11, names, lookup, rng);
+    REQUIRE(loot_result.has_value());
+    const NpcLoot &loot = *loot_result;
 
     check_items(loot.hot, {{104, 5, 4, 0, 1}});
     check_items(loot.main, {{104, 2, 4, 0, 1}});
@@ -173,7 +183,9 @@ TEST_CASE("npc_loot: pass 2 scales chance by chance_decrease") {
     table.items = {make_item("D", 0, 100, 100, 1, 1)};
 
     MsvcRandom rng(5);
-    const NpcLoot loot = NpcLootGenerator::generate(table, 11, names, lookup, rng);
+    const auto loot_result = NpcLootGenerator::generate(table, 11, names, lookup, rng);
+    REQUIRE(loot_result.has_value());
+    const NpcLoot &loot = *loot_result;
 
     check_items(loot.hot, {{104, 1, 4, 0, 1}});
     CHECK(loot.main.empty());
@@ -192,7 +204,9 @@ TEST_CASE("npc_loot: missing name or template still consumes chance and quantity
     };
 
     MsvcRandom rng(9);
-    const NpcLoot loot = NpcLootGenerator::generate(table, 11, names, lookup, rng);
+    const auto loot_result = NpcLootGenerator::generate(table, 11, names, lookup, rng);
+    REQUIRE(loot_result.has_value());
+    const NpcLoot &loot = *loot_result;
 
     CHECK(loot.hot.empty());
     CHECK(loot.main.empty());
@@ -208,7 +222,9 @@ TEST_CASE("npc_loot: no four-stack cap") {
     table.items = {make_item("E", 0, 100, 100, 10, 10)};
 
     MsvcRandom rng(1);
-    const NpcLoot loot = NpcLootGenerator::generate(table, 11, names, lookup, rng);
+    const auto loot_result = NpcLootGenerator::generate(table, 11, names, lookup, rng);
+    REQUIRE(loot_result.has_value());
+    const NpcLoot &loot = *loot_result;
 
     const std::vector<LootItem> ten_units(10, LootItem{105, 1, 5, 0, 2});
     check_items(loot.hot, ten_units);
@@ -225,7 +241,9 @@ TEST_CASE("npc_loot: same-prototype chunks merge with overwrite count") {
     table.items = {make_item("A", 0, 20, 100, 2, 2), make_item("A", 0, 20, 100, 3, 3)};
 
     MsvcRandom rng(1);
-    const NpcLoot loot = NpcLootGenerator::generate(table, 11, names, lookup, rng);
+    const auto loot_result = NpcLootGenerator::generate(table, 11, names, lookup, rng);
+    REQUIRE(loot_result.has_value());
+    const NpcLoot &loot = *loot_result;
     REQUIRE(loot.main.size() == 1);
     CHECK(loot.main[0].item_id == 100);
     CHECK(loot.main[0].count == 3); // overwrite, not 2+3
@@ -240,7 +258,9 @@ TEST_CASE("npc_loot: full stack does not merge into a new record") {
     table.items = {make_item("C", 0, 100, 100, 5, 5)};
 
     MsvcRandom rng(1);
-    const NpcLoot loot = NpcLootGenerator::generate(table, 11, names, lookup, rng);
+    const auto loot_result = NpcLootGenerator::generate(table, 11, names, lookup, rng);
+    REQUIRE(loot_result.has_value());
+    const NpcLoot &loot = *loot_result;
 
     check_items(loot.hot, {{103, 2, 3, 0x40u, 5}, {103, 2, 3, 0x40u, 5}, {103, 1, 3, 0x40u, 5}});
     check_items(loot.main, {{103, 2, 3, 0x40u, 5}, {103, 2, 3, 0x40u, 5}, {103, 1, 3, 0x40u, 5}});
@@ -255,7 +275,9 @@ TEST_CASE("npc_loot: max_stack below two never merges chunks") {
     table.items = {make_item("E", 0, 100, 100, 3, 3)};
 
     MsvcRandom rng(1);
-    const NpcLoot loot = NpcLootGenerator::generate(table, 11, names, lookup, rng);
+    const auto loot_result = NpcLootGenerator::generate(table, 11, names, lookup, rng);
+    REQUIRE(loot_result.has_value());
+    const NpcLoot &loot = *loot_result;
 
     check_items(loot.hot, {{105, 1, 5, 0, 2}, {105, 1, 5, 0, 2}, {105, 1, 5, 0, 2}});
     check_items(loot.main, {{105, 1, 5, 0, 2}, {105, 1, 5, 0, 2}, {105, 1, 5, 0, 2}});
@@ -270,7 +292,9 @@ TEST_CASE("npc_loot: hot and main merge independently") {
     table.items = {make_item("A", 0, 20, 100, 5, 5), make_item("A", 0, 20, 100, 5, 5)};
 
     MsvcRandom rng(1);
-    const NpcLoot loot = NpcLootGenerator::generate(table, 11, names, lookup, rng);
+    const auto loot_result = NpcLootGenerator::generate(table, 11, names, lookup, rng);
+    REQUIRE(loot_result.has_value());
+    const NpcLoot &loot = *loot_result;
 
     check_items(loot.hot, {{100, 4, 1, 0x4u, 7}, {100, 4, 1, 0x4u, 7}, {100, 1, 1, 0x4u, 7}});
     check_items(loot.main, {{100, 3, 1, 0x4u, 7}});
@@ -285,7 +309,9 @@ TEST_CASE("npc_loot: merge consumes no RNG") {
     table.items = {make_item("A", 0, 20, 100, 2, 2), make_item("A", 0, 20, 100, 3, 3)};
 
     MsvcRandom rng(1);
-    const NpcLoot loot = NpcLootGenerator::generate(table, 11, names, lookup, rng);
+    const auto loot_result = NpcLootGenerator::generate(table, 11, names, lookup, rng);
+    REQUIRE(loot_result.has_value());
+    const NpcLoot &loot = *loot_result;
     REQUIRE(loot.main.size() == 1);
 
     MsvcRandom expected(1);
@@ -319,7 +345,10 @@ TEST_CASE("npc_loot: merge into an already-specialed stack does not re-roll") {
     REQUIRE(gl::game::random_special_count(0x4u, probe) > 0);
 
     MsvcRandom rng(1);
-    const NpcLoot loot = NpcLootGenerator::generate(table, 1, names, lookup_stackable, rng, &db);
+    const auto loot_result =
+        NpcLootGenerator::generate(table, 1, names, lookup_stackable, rng, &db);
+    REQUIRE(loot_result.has_value());
+    const NpcLoot &loot = *loot_result;
     REQUIRE(loot.hot.size() == 1);
     CHECK(loot.hot[0].count == 1);
     REQUIRE(loot.hot[0].mods.size() == 1);
@@ -329,8 +358,10 @@ TEST_CASE("npc_loot: merge into an already-specialed stack does not re-roll") {
     gl::assets::InvTable single_table = table;
     single_table.items = {make_item("A", 0, 20, 101, 1, 1)};
     MsvcRandom single_rng(1);
-    const NpcLoot single =
+    const auto single_result =
         NpcLootGenerator::generate(single_table, 1, names, lookup_stackable, single_rng, &db);
+    REQUIRE(single_result.has_value());
+    const NpcLoot &single = *single_result;
     REQUIRE(single.hot.size() == 1);
     REQUIRE(single.hot[0].mods.size() == 1);
     CHECK(loot.hot[0].mods[0].id == single.hot[0].mods[0].id);
@@ -349,7 +380,9 @@ TEST_CASE("npc_loot: scaled bounds use trunc plus one when fractional") {
     table.items = {make_item("F", 0, 100, 100, 4, 7)};
 
     MsvcRandom rng(13);
-    const NpcLoot loot = NpcLootGenerator::generate(table, 11, names, lookup, rng);
+    const auto loot_result = NpcLootGenerator::generate(table, 11, names, lookup, rng);
+    REQUIRE(loot_result.has_value());
+    const NpcLoot &loot = *loot_result;
 
     check_items(loot.hot, {{106, 2, 6, 0x04u, 9}, {106, 2, 6, 0x04u, 9}, {106, 2, 6, 0x04u, 9}});
     check_items(loot.main, {{106, 2, 6, 0x84u, 9}});
@@ -365,7 +398,9 @@ TEST_CASE("npc_loot: pass 1 clears item flag 0x80 and pass 2 preserves it") {
     table.items = {make_item("F", 0, 100, 100, 1, 1)};
 
     MsvcRandom rng(1);
-    const NpcLoot loot = NpcLootGenerator::generate(table, 11, names, lookup, rng);
+    const auto loot_result = NpcLootGenerator::generate(table, 11, names, lookup, rng);
+    REQUIRE(loot_result.has_value());
+    const NpcLoot &loot = *loot_result;
 
     check_items(loot.hot, {{106, 1, 6, 0x04u, 9}});
     check_items(loot.main, {{106, 1, 6, 0x84u, 9}});
@@ -383,8 +418,10 @@ TEST_CASE("npc_loot: zero divisor guards skip pass 2") {
     zero_quantity.items = {item};
 
     MsvcRandom quantity_rng(1);
-    const NpcLoot quantity_loot =
+    const auto quantity_loot_result =
         NpcLootGenerator::generate(zero_quantity, 11, names, lookup, quantity_rng);
+    REQUIRE(quantity_loot_result.has_value());
+    const NpcLoot &quantity_loot = *quantity_loot_result;
     check_items(quantity_loot.hot, {{104, 1, 4, 0, 1}});
     CHECK(quantity_loot.main.empty());
     CHECK(quantity_rng.next() == 6334u);
@@ -396,8 +433,10 @@ TEST_CASE("npc_loot: zero divisor guards skip pass 2") {
     zero_chance.items = {item};
 
     MsvcRandom chance_rng(1);
-    const NpcLoot chance_loot =
+    const auto chance_loot_result =
         NpcLootGenerator::generate(zero_chance, 11, names, lookup, chance_rng);
+    REQUIRE(chance_loot_result.has_value());
+    const NpcLoot &chance_loot = *chance_loot_result;
     check_items(chance_loot.hot, {{104, 1, 4, 0, 1}});
     CHECK(chance_loot.main.empty());
     CHECK(chance_rng.next() == 6334u);
@@ -425,11 +464,15 @@ TEST_CASE("npc_loot: inherited ITM effects are copied without consuming RNG") {
     };
 
     MsvcRandom plain_rng(1);
-    const NpcLoot plain =
+    const auto plain_result =
         NpcLootGenerator::generate(table, 11, names, plain_lookup, plain_rng);
+    REQUIRE(plain_result.has_value());
+    const NpcLoot &plain = *plain_result;
     MsvcRandom effects_rng(1);
-    const NpcLoot effects =
+    const auto effects_result =
         NpcLootGenerator::generate(table, 11, names, effects_lookup, effects_rng);
+    REQUIRE(effects_result.has_value());
+    const NpcLoot &effects = *effects_result;
 
     CHECK(effects_rng.state() == plain_rng.state());
     REQUIRE(effects.main.size() == 1);
@@ -442,4 +485,33 @@ TEST_CASE("npc_loot: inherited ITM effects are copied without consuming RNG") {
     CHECK(effects.main[0].mods[1].value == -1);
     CHECK(effects.main[0].mods[1].flags == 0x50u);
     CHECK(effects.main[0].flags == plain.main[0].flags);
+}
+
+TEST_CASE("npc loot generation honours the restore gate only when forced") {
+    const auto names = make_names();
+    gl::assets::InvTable table;
+    table.regenerate_chance = 0.25;
+    table.items.push_back(gl::assets::InvItem{"MON_1_0_1", 0, 1, 100.0, 1, 1});
+
+    std::uint32_t seed = 0;
+    for (; seed < 10000; ++seed) {
+        gl::game::MsvcRandom probe(seed);
+        if (probe.fraction() > 0.25)
+            break;
+    }
+    REQUIRE(seed < 10000);
+
+    gl::game::MsvcRandom gated(seed);
+    const auto gated_result =
+        gl::game::NpcLootGenerator::generate(table, 1, names, lookup, gated, nullptr, false);
+    REQUIRE_FALSE(gated_result.has_value());
+    gl::game::MsvcRandom expected(seed);
+    expected.fraction();
+    CHECK(gated.state() == expected.state());
+
+    gl::game::MsvcRandom forced(seed);
+    const auto forced_result =
+        gl::game::NpcLootGenerator::generate(table, 1, names, lookup, forced, nullptr, true);
+    REQUIRE(forced_result.has_value());
+    CHECK(forced.state() != gated.state());
 }

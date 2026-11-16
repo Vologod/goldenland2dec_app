@@ -94,7 +94,9 @@ RunResult run_level(const Level &level, gl::assets::GameVfs &vfs,
         PersonLoot generated;
         generated.name = person.name;
         generated.state_before = rng.state();
-        generated.loot = NpcLootGenerator::generate(table, 1, names, lookup, rng, specials);
+        auto generated_loot = NpcLootGenerator::generate(table, 1, names, lookup, rng, specials);
+        REQUIRE(generated_loot.has_value());
+        generated.loot = *generated_loot;
         generated.state_after = rng.state();
         result.persons.push_back(std::move(generated));
     }
@@ -229,7 +231,9 @@ TEST_CASE("npc_loot specials: qualifying empty-pool item consumes R4 and marks 0
 
     SpecialDatabase db;
     MsvcRandom rng(1);
-    const NpcLoot loot = NpcLootGenerator::generate(table, 1, names.value(), lookup, rng, &db);
+    const auto loot_result = NpcLootGenerator::generate(table, 1, names.value(), lookup, rng, &db);
+    REQUIRE(loot_result.has_value());
+    const NpcLoot &loot = *loot_result;
 
     CHECK(loot.hot.empty());
     REQUIRE(loot.main.size() == 1);
@@ -240,8 +244,10 @@ TEST_CASE("npc_loot specials: qualifying empty-pool item consumes R4 and marks 0
     CHECK(rng.next() == 6334u);
 
     MsvcRandom null_rng(1);
-    const NpcLoot null_loot =
+    const auto null_loot_result =
         NpcLootGenerator::generate(table, 1, names.value(), lookup, null_rng, nullptr);
+    REQUIRE(null_loot_result.has_value());
+    const NpcLoot &null_loot = *null_loot_result;
     REQUIRE(null_loot.main.size() == 1);
     CHECK(null_loot.main[0].flags == 0x44u);
     CHECK(null_loot.main[0].mods.empty());
@@ -277,7 +283,9 @@ TEST_CASE("npc_loot specials: inherited ITM effects are copied into mods and ski
     SpecialDatabase db;
     db.item_classes[static_cast<gl::assets::ItemType>(20)] = {0};
     MsvcRandom rng(1);
-    const NpcLoot loot = NpcLootGenerator::generate(table, 1, names.value(), lookup, rng, &db);
+    const auto loot_result = NpcLootGenerator::generate(table, 1, names.value(), lookup, rng, &db);
+    REQUIRE(loot_result.has_value());
+    const NpcLoot &loot = *loot_result;
     REQUIRE(loot.main.size() == 1);
     CHECK(loot.main[0].mod_count == 2u);
     REQUIRE(loot.main[0].mods.size() == 2u);
@@ -290,8 +298,10 @@ TEST_CASE("npc_loot specials: inherited ITM effects are copied into mods and ski
     CHECK(loot.main[0].flags == 0x04u);
 
     MsvcRandom null_rng(1);
-    const NpcLoot null_loot =
+    const auto null_loot_result =
         NpcLootGenerator::generate(table, 1, names.value(), lookup, null_rng, nullptr);
+    REQUIRE(null_loot_result.has_value());
+    const NpcLoot &null_loot = *null_loot_result;
     REQUIRE(null_loot.main.size() == 1);
     CHECK(same_items(loot.main, null_loot.main));
     CHECK(rng.state() == null_rng.state());
@@ -337,7 +347,9 @@ TEST_CASE("npc_loot specials: chunk other than one does not roll random specials
     SpecialDatabase db;
     db.item_classes[static_cast<gl::assets::ItemType>(20)] = {0};
     MsvcRandom rng(1);
-    const NpcLoot loot = NpcLootGenerator::generate(table, 1, names.value(), lookup, rng, &db);
+    const auto loot_result = NpcLootGenerator::generate(table, 1, names.value(), lookup, rng, &db);
+    REQUIRE(loot_result.has_value());
+    const NpcLoot &loot = *loot_result;
     REQUIRE(loot.main.size() == 1);
     CHECK(loot.main[0].count == 5);
     CHECK(loot.main[0].mods.empty());
@@ -345,8 +357,10 @@ TEST_CASE("npc_loot specials: chunk other than one does not roll random specials
     CHECK(loot.main[0].flags == 0x04u);
 
     MsvcRandom null_rng(1);
-    const NpcLoot null_loot =
+    const auto null_loot_result =
         NpcLootGenerator::generate(table, 1, names.value(), lookup, null_rng, nullptr);
+    REQUIRE(null_loot_result.has_value());
+    const NpcLoot &null_loot = *null_loot_result;
     CHECK(same_items(loot.main, null_loot.main));
     CHECK(rng.state() == null_rng.state());
 }
@@ -577,11 +591,15 @@ TEST_CASE("npc_loot specials: l1_1 seed 1 loot level 1 deterministic oracle" *
     REQUIRE(crying_table.has_value());
     crying_table->chance_decrease = 0.0;
     MsvcRandom special_rng(crying->state_before);
-    const NpcLoot crying_specials = NpcLootGenerator::generate(
+    const auto crying_specials_result = NpcLootGenerator::generate(
         crying_table.value(), 1, names.value(), lookup, special_rng, &specials.value());
+    REQUIRE(crying_specials_result.has_value());
+    const NpcLoot &crying_specials = *crying_specials_result;
     MsvcRandom null_rng(crying->state_before);
-    const NpcLoot crying_none = NpcLootGenerator::generate(crying_table.value(), 1, names.value(),
-                                                           lookup, null_rng, nullptr);
+    const auto crying_none_result = NpcLootGenerator::generate(
+        crying_table.value(), 1, names.value(), lookup, null_rng, nullptr);
+    REQUIRE(crying_none_result.has_value());
+    const NpcLoot &crying_none = *crying_none_result;
     CHECK(same_items(crying_specials.hot, crying_none.hot));
     MsvcRandom extra(null_rng.state());
     extra.next();

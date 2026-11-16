@@ -612,9 +612,11 @@ bool build_port_records(LiveCapture &capture, bool filter_to_captured, PortRun &
                     cached = cache.emplace(person.inventory, std::move(table.value())).first;
             }
             if (cached->second) {
-                const gl::game::NpcLoot loot = gl::game::NpcLootGenerator::generate(
+                const auto loot_result = gl::game::NpcLootGenerator::generate(
                     *cached->second, capture.loot_level, names.value(), lookup, rng,
                     &specials.value());
+                REQUIRE(loot_result.has_value());
+                const gl::game::NpcLoot &loot = *loot_result;
                 if (first_instance &&
                     (!filter_to_captured || captured_persons.contains(person.name))) {
                     for (const gl::game::LootItem &item : loot.main) {

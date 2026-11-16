@@ -40,10 +40,12 @@ struct NpcLoot {
 struct NpcLootGenerator {
     using ItemTemplateLookup = std::function<std::optional<ItemTemplate>(std::uint32_t)>;
 
-    static NpcLoot generate(const gl::assets::InvTable &table, std::int32_t loot_level,
-                            const gl::assets::ItemNameIndex &names,
-                            ItemTemplateLookup item_template, MsvcRandom &rng,
-                            const gl::assets::SpecialDatabase *specials = nullptr);
+    static std::optional<NpcLoot> generate(const gl::assets::InvTable &table,
+                                           std::int32_t loot_level,
+                                           const gl::assets::ItemNameIndex &names,
+                                           ItemTemplateLookup item_template, MsvcRandom &rng,
+                                           const gl::assets::SpecialDatabase *specials = nullptr,
+                                           bool force = true);
 };
 
 void generate_npc_inventories(InventoryRuntime &runtime, const std::vector<PersonInstance> &persons,
