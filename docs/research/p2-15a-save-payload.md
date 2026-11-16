@@ -1308,3 +1308,10 @@ oracle: 54,756 bytes per save, diagonal 3, relation/matrix mismatches 0,
 corpus histogram `{0:1257,1:6096,2:1519260,3:6552,4:3}`, ids unique,
 slot0/slot2/slot21 rows/histograms pinned. OQ-7 value labels remain
 unverified; no runtime faction/AI application is claimed.
+
+## `BT_DIARY` / `BT_HSTRY` follow-up (P2-15b4a)
+
+Follow-up research is recorded in `p2-15b4-diary-hstry.md`: DIARY framing
+is implementable (raw 0x58 blocks + sparse + HSTRY slots), while 0x58
+record field labels and HSTRY ring ordering remain `unverified`/`blocked`
+(host methods in `GoldenLand.exe`).

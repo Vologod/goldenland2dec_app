@@ -2,6 +2,34 @@
 
 Обновлено: 2026-11-16
 
+## P2-15b4a — BT_DIARY / BT_HSTRY research (done 2026-11-16)
+
+- **Задача:** research-only разбор `BT_DIARY` (журнал/квесты) и
+  `BT_HSTRY` (лог): framing, 0x58-записи, sparse, ring/head/tail;
+  verdict и декомпозиция.
+- **Spec:** `docs/specs/2026-11-16-p2-15b4a-diary-hstry-research-design.md`;
+  **Plan:** `docs/plans/2026-11-16-p2-15b4a-diary-hstry-research.md`;
+  **Research:** `docs/research/p2-15b4-diary-hstry.md` — verdict `scoped`.
+- **Доказано (2026-11-16):** DIARY `u32 entry_count`, per-entry
+  `u32 block_count = records+1` + `block_count*0x58`, затем sparse
+  `u32 count + count*0x58`; corpus 1,013 entries / 4,855 blocks
+  (1,013 headers + 3,842 records) / sparse 0, exact consume; slot0
+  76/371, slot2 75/377, slot21 1/2. 0x58 = 22 dwords, копируются
+  verbatim; `+0x54` pointer-like в 4,088/4,855 (`0x14004F33`,
+  `0x0019E7AC`), поля (`+0x0c/+0x54/+0x5c/+0x60/+0x64`) используются
+  consumer'ами `FUN_140591b8`/`FUN_14059f6c`, но labels `unverified`.
+  HSTRY: `u32 head + 40*(len+cp1251+id) + u32 tail` exact 28/28;
+  head 1..37, tail 1/2, все 1,120 ids 0; host-методы в `GoldenLand.exe`
+  (`DAT_140891bc+0xcc`/`+0x28`) — ring ordering blocked.
+- **Декомпозиция:** `P2-15b4b` framing parser (raw 0x58/sparse/HSTRY
+  slots, exact consume; unblocks P2-15c raw round-trip) — implementable
+  now; `P2-15b4c` diary record semantics (0x591b8/0x59f6c/accessors);
+  `P2-15b4d` HSTRY host ring (GoldenLand.exe/live).
+- **Проверка (2026-11-16):** docs-only; `src/`/`tests/`/`tools/` не
+  менялись; UTF-8 no BOM/NUL; independent scans 28 saves (scripts
+  hashes в research).
+- **Статус:** `done` (research-only).
+
 ## P2-15b3 — BT_TRIBE relation matrix (done 2026-11-16)
 
 - **Задача:** декодировать/хранить `BT_TRIBE` matrix (234×234, row-major
