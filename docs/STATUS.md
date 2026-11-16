@@ -2,6 +2,22 @@
 
 Обновлено: 2026-11-16
 
+## P2-15c1 — Save container writer (design 2026-11-16)
+
+- **Задача:** `assets::encode_save_payload` — header 0x68 (`header_raw`),
+  zlib main stream из raw-блоков, tail-словарь; decode-equality и
+  детерминизм 28/28; без записи файлов/CLI и без typed-перекодирования.
+- **Spec:** `docs/specs/2026-11-16-p2-15c1-save-writer-design.md`
+  (approved 2026-11-16); **Plan:** `docs/plans/2026-11-16-p2-15c1-save-writer.md`.
+- **Критерии приёмки:** encode(parse)→parse равен header_raw/decompressed/
+  tail/info/vars/tribes/diary/history 0/N; encode дважды byte-identical;
+  invalid payload → `format`; полный `ctest` с `GL_GAME_DIR`.
+- **Команды проверки:** `cmake --build build`;
+  `build\bin\gl_assets_tests.exe --test-case="*encode_save_payload*"`;
+  `build\bin\gl_assets_real_tests.exe --test-case="*encode round-trips*"`;
+  `ctest --test-dir build --output-on-failure`.
+- **Статус:** `design` (implementation не начата).
+
 ## P2-15b4b — BT_DIARY/BT_HSTRY framing parser (done 2026-11-16)
 
 - **Задача:** структурно разобрать DIARY (entries key/count/0x58 blocks +
