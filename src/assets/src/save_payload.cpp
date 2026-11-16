@@ -9,6 +9,7 @@
 #include <array>
 #include <bit>
 #include <cstring>
+#include <limits>
 #include <new>
 #include <stdexcept>
 #include <string>
@@ -465,6 +466,7 @@ Result<SavePayload> parse_save_payload(std::span<const std::uint8_t> file) {
 
         SavePayload payload;
         payload.header = header.value();
+        std::memcpy(payload.header_raw.data(), file.data(), payload.header_raw.size());
         payload.decompressed.resize(raw_len);
         mz_ulong out_len = raw_len;
         if (mz_uncompress(payload.decompressed.data(), &out_len, file.data() + 0x70,
@@ -624,6 +626,80 @@ Result<SavePayload> parse_save_payload(std::span<const std::uint8_t> file) {
     } catch (const std::bad_alloc &) {
         return format_error("save payload allocation failed");
     } catch (const std::length_error &) {
+        return format_error("save payload allocation failed");
+    }
+}
+
+Result<std::vector<std::uint8_t>> encode_save_payload(const SavePayload &payload) {
+    try {
+        if (payload.blocks.size() != kBlockOrder.size())
+            return format_error("save payload must contain seven blocks");
+
+        const auto write_u32 = [](std::vector<std::uint8_t> &out, std::uint32_t value) {
+            for (unsigned shift = 0; shift < 32; shift += 8)
+                out.push_back(static_cast<std::uint8_t>((value >> shift) & 0xFF));
+        };
+
+        std::vector<std::uint8_t> raw;
+        for (std::size_t index = 0; index < payload.blocks.size(); ++index) {
+            const SaveBlockView &block = payload.blocks[index];
+            if (block.tag != kBlockOrder[index])
+                return format_error("save payload block order mismatch");
+            const std::uint64_t end =
+                static_cast<std::uint64_t>(block.offset) + block.size;
+            if (end > payload.decompressed.size())
+                return format_error("save payload block body is out of range");
+            raw.insert(raw.end(), block.tag.begin(), block.tag.end());
+            write_u32(raw, block.size);
+            raw.insert(raw.end(),
+                       payload.decompressed.begin() + static_cast<std::ptrdiff_t>(block.offset),
+                       payload.decompressed.begin() + static_cast<std::ptrdiff_t>(end));
+        }
+        if (raw.size() > std::numeric_limits<std::uint32_t>::max())
+            return format_error("save payload is too large");
+
+        const auto zlib_compress = [](const std::vector<std::uint8_t> &data,
+                                      std::vector<std::uint8_t> &out) {
+            out.resize(mz_compressBound(static_cast<mz_ulong>(data.size())));
+            mz_ulong length = static_cast<mz_ulong>(out.size());
+            if (mz_compress(out.data(), &length, data.data(),
+                            static_cast<mz_ulong>(data.size())) != MZ_OK)
+                return false;
+            out.resize(static_cast<std::size_t>(length));
+            return true;
+        };
+
+        std::vector<std::uint8_t> compressed;
+        if (!zlib_compress(raw, compressed))
+            return format_error("save payload zlib compression failed");
+        if (compressed.size() > std::numeric_limits<std::uint32_t>::max())
+            return format_error("save payload is too large");
+
+        std::vector<std::uint8_t> file(payload.header_raw.begin(), payload.header_raw.end());
+        write_u32(file, static_cast<std::uint32_t>(raw.size()));
+        write_u32(file, static_cast<std::uint32_t>(compressed.size()));
+        file.insert(file.end(), compressed.begin(), compressed.end());
+
+        write_u32(file, static_cast<std::uint32_t>(payload.tail.size()));
+        for (const SaveTailEntry &entry : payload.tail) {
+            if (entry.raw_len == 0 || entry.raw_len != entry.section.size())
+                return format_error("save tail section length mismatch");
+            const std::string name = utf8_to_cp1251(entry.name);
+            write_u32(file, static_cast<std::uint32_t>(name.size()));
+            file.insert(file.end(), name.begin(), name.end());
+
+            std::vector<std::uint8_t> section_compressed;
+            if (!zlib_compress(entry.section, section_compressed))
+                return format_error("save tail section zlib compression failed");
+            if (section_compressed.size() > std::numeric_limits<std::uint32_t>::max() - 8u)
+                return format_error("save tail section is too large");
+            write_u32(file, static_cast<std::uint32_t>(8 + section_compressed.size()));
+            write_u32(file, entry.raw_len);
+            write_u32(file, static_cast<std::uint32_t>(section_compressed.size()));
+            file.insert(file.end(), section_compressed.begin(), section_compressed.end());
+        }
+        return file;
+    } catch (const std::bad_alloc &) {
         return format_error("save payload allocation failed");
     }
 }

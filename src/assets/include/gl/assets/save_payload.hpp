@@ -91,6 +91,7 @@ struct SaveHistory {
 
 struct SavePayload {
     SaveHeader header;
+    std::array<std::uint8_t, 0x68> header_raw{};
     std::vector<std::uint8_t> decompressed;
     std::vector<SaveBlockView> blocks;
     SaveInfo info;
@@ -106,4 +107,5 @@ struct SavePayload {
 };
 
 Result<SavePayload> parse_save_payload(std::span<const std::uint8_t> file);
+Result<std::vector<std::uint8_t>> encode_save_payload(const SavePayload &payload);
 }

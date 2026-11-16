@@ -920,3 +920,75 @@ TEST_CASE("save payload: rejects malformed diary and history subcases") {
         CHECK(payload.error().code == gl::ErrorCode::format);
     }
 }
+
+TEST_CASE("encode_save_payload round-trips a parsed payload") {
+    const auto file = make_save(make_body("L93_4", make_vars()),
+                                make_default_tail("L93_4"));
+    const auto payload = gl::assets::parse_save_payload(file);
+    REQUIRE(payload.has_value());
+
+    const auto encoded = gl::assets::encode_save_payload(payload.value());
+    REQUIRE(encoded.has_value());
+    const auto again = gl::assets::parse_save_payload(encoded.value());
+    REQUIRE(again.has_value());
+
+    CHECK(again->header_raw == payload->header_raw);
+    CHECK(again->decompressed == payload->decompressed);
+    REQUIRE(again->blocks.size() == payload->blocks.size());
+    for (std::size_t index = 0; index < payload->blocks.size(); ++index) {
+        CHECK(again->blocks[index].tag == payload->blocks[index].tag);
+        CHECK(again->blocks[index].offset == payload->blocks[index].offset);
+        CHECK(again->blocks[index].size == payload->blocks[index].size);
+    }
+    REQUIRE(again->tail.size() == payload->tail.size());
+    for (std::size_t index = 0; index < payload->tail.size(); ++index) {
+        CHECK(again->tail[index].name == payload->tail[index].name);
+        CHECK(again->tail[index].raw_len == payload->tail[index].raw_len);
+        CHECK(again->tail[index].section == payload->tail[index].section);
+    }
+    CHECK(again->info.level_id == payload->info.level_id);
+    CHECK(again->info.party_level == payload->info.party_level);
+    CHECK(again->info.time == payload->info.time);
+    CHECK(again->vars.size() == payload->vars.size());
+    CHECK(again->diary.size() == payload->diary.size());
+    REQUIRE(again->history.slots.size() == payload->history.slots.size());
+    for (std::size_t index = 0; index < payload->history.slots.size(); ++index) {
+        CHECK(again->history.slots[index].text == payload->history.slots[index].text);
+        CHECK(again->history.slots[index].id == payload->history.slots[index].id);
+    }
+
+    const auto encoded_twice = gl::assets::encode_save_payload(payload.value());
+    REQUIRE(encoded_twice.has_value());
+    CHECK(encoded.value() == encoded_twice.value());
+}
+
+TEST_CASE("encode_save_payload rejects an invalid payload") {
+    auto payload = gl::assets::parse_save_payload(
+        make_save(make_body("L93_4", make_vars()), make_default_tail("L93_4")));
+    REQUIRE(payload.has_value());
+
+    auto missing_block = payload.value();
+    missing_block.blocks.pop_back();
+    auto missing = gl::assets::encode_save_payload(missing_block);
+    REQUIRE_FALSE(missing.has_value());
+    CHECK(missing.error().code == gl::ErrorCode::format);
+
+    auto wrong_tag = payload.value();
+    wrong_tag.blocks[1].tag = "BT_X";
+    auto tag_error = gl::assets::encode_save_payload(wrong_tag);
+    REQUIRE_FALSE(tag_error.has_value());
+    CHECK(tag_error.error().code == gl::ErrorCode::format);
+
+    auto bad_range = payload.value();
+    bad_range.blocks[0].size = static_cast<std::uint32_t>(bad_range.decompressed.size() + 1);
+    auto range_error = gl::assets::encode_save_payload(bad_range);
+    REQUIRE_FALSE(range_error.has_value());
+    CHECK(range_error.error().code == gl::ErrorCode::format);
+
+    auto bad_section = payload.value();
+    REQUIRE_FALSE(bad_section.tail.empty());
+    bad_section.tail[0].raw_len += 1;
+    auto section_error = gl::assets::encode_save_payload(bad_section);
+    REQUIRE_FALSE(section_error.has_value());
+    CHECK(section_error.error().code == gl::ErrorCode::format);
+}
