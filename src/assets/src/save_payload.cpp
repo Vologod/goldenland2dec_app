@@ -154,18 +154,19 @@ bool parse_tribe(std::span<const std::uint8_t> body, SaveTribeTable &out, std::s
         out.entries.push_back(std::move(entry));
     }
     const std::uint64_t matrix = static_cast<std::uint64_t>(count) * count;
-    if (matrix > reader.remaining().size()) {
-        detail = "relation matrix is truncated (" + std::to_string(matrix) + " bytes expected)";
+    if (matrix != reader.remaining().size()) {
+        detail = matrix > reader.remaining().size()
+                     ? "relation matrix is truncated (" + std::to_string(matrix) +
+                           " bytes expected)"
+                     : "relation matrix has trailing bytes";
         return false;
     }
-    if (!reader.skip(static_cast<std::size_t>(matrix))) {
+    std::span<const std::uint8_t> bytes;
+    if (!reader.read_bytes(static_cast<std::size_t>(matrix), bytes)) {
         detail = "relation matrix is truncated";
         return false;
     }
-    if (!reader.at_end()) {
-        detail = "has trailing bytes";
-        return false;
-    }
+    out.matrix.assign(bytes.begin(), bytes.end());
     return true;
 }
 
@@ -313,6 +314,42 @@ bool parse_tail_section(SaveTailEntry &entry, std::vector<std::uint8_t> *rginf_r
     return true;
 }
 } // namespace
+
+std::optional<std::size_t> SaveTribeTable::index_of(std::uint32_t id) const {
+    for (std::size_t index = 0; index < entries.size(); ++index) {
+        if (entries[index].id == id)
+            return index;
+    }
+    return std::nullopt;
+}
+
+const SaveTribeEntry *SaveTribeTable::find(std::uint32_t id) const {
+    const auto index = index_of(id);
+    return index ? &entries[*index] : nullptr;
+}
+
+const SaveTribeEntry *SaveTribeTable::find(std::string_view name) const {
+    for (const SaveTribeEntry &entry : entries) {
+        if (entry.name == name)
+            return &entry;
+    }
+    return nullptr;
+}
+
+std::int32_t SaveTribeTable::relation(std::uint32_t id_a, std::uint32_t id_b) const {
+    const auto a = index_of(id_a);
+    const auto b = index_of(id_b);
+    if (!a || !b || matrix.size() != entries.size() * entries.size())
+        return 2;
+    return matrix[*a * entries.size() + *b];
+}
+
+std::span<const std::uint8_t> SaveTribeTable::row(std::size_t index) const {
+    if (index >= entries.size())
+        return {};
+    return std::span<const std::uint8_t>(matrix).subspan(index * entries.size(),
+                                                         entries.size());
+}
 
 std::optional<double> save_var_number(const SaveVar &var) {
     if (var.type >= 3)

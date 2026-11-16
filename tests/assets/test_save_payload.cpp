@@ -308,6 +308,27 @@ TEST_CASE("save payload: parses BT_TRIBE names") {
     CHECK(payload->tribes.entries[0].name == "\xD0\x9B\xD0\xB5\xD1\x81");
     CHECK(payload->tribes.entries[1].id == 9u);
     CHECK(payload->tribes.entries[1].name == "hills");
+    REQUIRE(payload->tribes.matrix.size() == 4u);
+    CHECK(payload->tribes.matrix[0] == 0x30);
+    CHECK(payload->tribes.matrix[1] == 0x31);
+    CHECK(payload->tribes.matrix[2] == 0x32);
+    CHECK(payload->tribes.matrix[3] == 0x33);
+    CHECK(payload->tribes.count() == 2u);
+    CHECK(payload->tribes.index_of(5) == 0u);
+    CHECK(payload->tribes.index_of(9) == 1u);
+    CHECK_FALSE(payload->tribes.index_of(7).has_value());
+    REQUIRE(payload->tribes.find(9) != nullptr);
+    CHECK(payload->tribes.find(9)->name == "hills");
+    REQUIRE(payload->tribes.find("hills") != nullptr);
+    CHECK(payload->tribes.find("hills")->id == 9u);
+    CHECK(payload->tribes.relation(5, 5) == 0x30);
+    CHECK(payload->tribes.relation(5, 9) == 0x31);
+    CHECK(payload->tribes.relation(9, 5) == 0x32);
+    CHECK(payload->tribes.relation(9, 9) == 0x33);
+    CHECK(payload->tribes.relation(5, 7) == 2);
+    CHECK(payload->tribes.row(1).size() == 2u);
+    CHECK(payload->tribes.row(1)[0] == 0x32);
+    CHECK(payload->tribes.row(2).empty());
 }
 
 TEST_CASE("save payload: parses an empty BT_TRIBE table") {
@@ -317,6 +338,73 @@ TEST_CASE("save payload: parses an empty BT_TRIBE table") {
         make_save(make_body("L93_4", make_vars(), tribe), make_default_tail("L93_4")));
     REQUIRE(payload.has_value());
     CHECK(payload->tribes.entries.empty());
+}
+
+TEST_CASE("save payload: tribe relation uses entry order and defaults to two") {
+    std::vector<std::uint8_t> tribe;
+    put_u32(tribe, 3);
+    put_u32(tribe, 7);
+    put_string(tribe, "a");
+    put_u32(tribe, 1);
+    put_string(tribe, "b");
+    put_u32(tribe, 4);
+    put_string(tribe, "c");
+    for (std::uint8_t value : std::array<std::uint8_t, 9>{3, 5, 6, 7, 3, 8, 9, 10, 3})
+        tribe.push_back(value);
+
+    auto payload = gl::assets::parse_save_payload(
+        make_save(make_body("L93_4", make_vars(), tribe), make_default_tail("L93_4")));
+    REQUIRE(payload.has_value());
+    const auto &table = payload->tribes;
+    CHECK(table.count() == 3u);
+    CHECK(table.index_of(7) == 0u);
+    CHECK(table.index_of(1) == 1u);
+    CHECK(table.index_of(4) == 2u);
+    CHECK(table.relation(7, 1) == 5);
+    CHECK(table.relation(1, 7) == 7);
+    CHECK(table.relation(4, 4) == 3);
+    CHECK(table.relation(1, 1) == 3);
+    CHECK(table.relation(9, 1) == 2);
+}
+
+TEST_CASE("save payload: duplicate tribe names resolve to the first entry") {
+    std::vector<std::uint8_t> tribe;
+    put_u32(tribe, 2);
+    put_u32(tribe, 1);
+    put_string(tribe, "dup");
+    put_u32(tribe, 2);
+    put_string(tribe, "dup");
+    for (std::uint8_t value : std::array<std::uint8_t, 4>{3, 0, 1, 3})
+        tribe.push_back(value);
+
+    auto payload = gl::assets::parse_save_payload(
+        make_save(make_body("L93_4", make_vars(), tribe), make_default_tail("L93_4")));
+    REQUIRE(payload.has_value());
+    REQUIRE(payload->tribes.find("dup") != nullptr);
+    CHECK(payload->tribes.find("dup")->id == 1u);
+    CHECK(payload->tribes.find(2)->name == "dup");
+}
+
+TEST_CASE("save payload: rejects a truncated or oversized tribe matrix") {
+    std::vector<std::uint8_t> truncated;
+    put_u32(truncated, 2);
+    put_u32(truncated, 5);
+    put_string(truncated, "forest");
+    put_u32(truncated, 9);
+    put_string(truncated, "hills");
+    truncated.push_back(0x30);
+
+    auto short_payload = gl::assets::parse_save_payload(
+        make_save(make_body("L93_4", make_vars(), truncated), make_default_tail("L93_4")));
+    REQUIRE_FALSE(short_payload.has_value());
+    CHECK(short_payload.error().code == gl::ErrorCode::format);
+
+    auto long_tribe = make_tribe_body();
+    long_tribe.push_back(0x7F);
+    auto long_payload = gl::assets::parse_save_payload(
+        make_save(make_body("L93_4", make_vars(), long_tribe), make_default_tail("L93_4")));
+    REQUIRE_FALSE(long_payload.has_value());
+    CHECK(long_payload.error().code == gl::ErrorCode::format);
 }
 
 TEST_CASE("save payload: rejects malformed BT_TRIBE") {

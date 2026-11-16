@@ -6,6 +6,7 @@
 #include <optional>
 #include <span>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace gl::assets {
@@ -58,6 +59,14 @@ struct SaveTribeEntry {
 
 struct SaveTribeTable {
     std::vector<SaveTribeEntry> entries;
+    std::vector<std::uint8_t> matrix;
+
+    std::size_t count() const { return entries.size(); }
+    std::optional<std::size_t> index_of(std::uint32_t id) const;
+    const SaveTribeEntry *find(std::uint32_t id) const;
+    const SaveTribeEntry *find(std::string_view name) const;
+    std::int32_t relation(std::uint32_t id_a, std::uint32_t id_b) const;
+    std::span<const std::uint8_t> row(std::size_t index) const;
 };
 
 struct SavePayload {
