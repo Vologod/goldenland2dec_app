@@ -8,7 +8,7 @@
   интервал 7 дней; на load-save убрать ungated loot/person-init; при due —
   chance-gated регенерация c0/c1 в `BT_ENTS`-порядке; SEF-only fallback.
 - **Spec:** `docs/specs/2026-11-15-p2-15b1b3-rginf-gate-design.md`
-  (approved 2026-11-15; plan/implementation — следующая сессия).
+  (approved 2026-11-15); **Plan:** `docs/plans/2026-11-15-p2-15b1b3-rginf-gate.md`.
 - **Доказано (2026-11-15):** comparator `0x5b490` — лексикографический,
   weekday игнорируется, равенство = due; add `0x5b38c`/`0x5b140` —
   грегорианский; interval `7` single-player (`DAT_1407fbcc+0x8c`);
