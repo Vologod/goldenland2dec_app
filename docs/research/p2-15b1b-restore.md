@@ -1074,3 +1074,15 @@ not due}`; latch `1` in 11 of 28 selected sections, due set exactly
 08:15:49.440 -> 17:05:55.380`; slot23 `1124-11-20 06:06:32.000 ->
 1125-01-15 15:37:50.080`. Type-2 records in the due sections: slot20
 `L18_2` 1, slot23 `L4_1` 24; slot3 `L93_4` 3 (latch 1, not due).
+
+## Implementation result (P2-15b1b3, 2026-11-16)
+
+`game::rginf` computes the `+0x26c0` decision with Gregorian arithmetic;
+`NpcLootGenerator::generate(..., force)` returns `nullopt` on a failed R1
+when not forced, and `regenerate_npc_inventories` applies it to explicit
+person indices in `BT_ENTS` order. On load-save glgame skips the ungated
+generate/person-init pass, restores serialized containers, regenerates
+matched candidates when due, and gives SEF-only persons a port-only
+fallback. New Game keeps first-wins duplicate handling and force=true.
+Real decisions: due `{20,23}`, latch 1 in 11/28 selected sections,
+slot0/2/21/3 not due. RNG parity is not claimed.

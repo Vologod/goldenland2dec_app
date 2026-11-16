@@ -105,7 +105,7 @@ Status: `done` (live gates closed). P2-15b save-load first increment done
 RGINF); P2-15b1b1 restore person fields done (2026-11-14, D-072: type-2
 decoder, BT_TRIBE names, occurrence-matched BT_ENTS restore, optional
 saved HP/EP, glgame hook; real 19 pinned 0/N, 28-save aggregate
-496/43/3; P2-15b1b2 containers done (2026-11-15, D-073: c0/c1 restored, c2 decoded, O4 19/19 + 115,405/115,405 defs, duplicates last-wins); loot gate remains b1b3); P2-9 35 Hz research done and P2-9a/b implemented
+496/43/3; P2-15b1b2 containers done (2026-11-15, D-073: c0/c1 restored, c2 decoded, O4 19/19 + 115,405/115,405 defs, duplicates last-wins); P2-15b1b3 RGINF gate done (2026-11-16, D-074: decision + force gate + BT_ENTS order; due {20,23}; slot0 pins unchanged)); P2-9 35 Hz research done and P2-9a/b implemented
 (2026-11-13, D-068; 28 ms gate, one tick per host frame, one simulation
 step per tick, headless 16 ms frame schedule; residuals U1/pause/config).
 Дальше — P5+/P6/P7.

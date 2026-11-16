@@ -1,28 +1,40 @@
 # STATUS
 
-Обновлено: 2026-11-15
+Обновлено: 2026-11-16
 
-## P2-15b1b3 — RGINF gate/loot ordering (design 2026-11-15)
+## P2-15b1b3 — RGINF gate/loot ordering (done 2026-11-16)
 
 - **Задача:** вычислить `+0x26c0` из `BT_RGINF` + `BT_INFO.time` +
   интервал 7 дней; на load-save убрать ungated loot/person-init; при due —
   chance-gated регенерация c0/c1 в `BT_ENTS`-порядке; SEF-only fallback.
 - **Spec:** `docs/specs/2026-11-15-p2-15b1b3-rginf-gate-design.md`
   (approved 2026-11-15); **Plan:** `docs/plans/2026-11-15-p2-15b1b3-rginf-gate.md`.
-- **Доказано (2026-11-15):** comparator `0x5b490` — лексикографический,
-  weekday игнорируется, равенство = due; add `0x5b38c`/`0x5b140` —
-  грегорианский; interval `7` single-player (`DAT_1407fbcc+0x8c`);
-  gate `FUN_1404b1c0` R1, restore `force=0`, spawn/trigger `force=1`.
-  Независимый scan 28 saves: due set `{20,23}`; slot0/2/21/3 not due;
-  latch 1 в 11 выбранных секциях; slot20 1 type-2, slot23 24 type-2.
-- **Критерии приёмки:** O6 synthetic + real `{0:0,2:0,3:0,20:1,21:0,23:1}`;
-  `force=false` fail -> `nullopt` после одного R1 draw; gate порядок =
-  `BT_ENTS`; slot0 E2E-пины b1b2 без изменений; slot23 `due=1` +
-  согласованные счётчики; полный `ctest` с `GL_GAME_DIR`.
-- **Команды проверки:** `cmake --build build`;
-  `build\bin\gl_game_tests.exe --test-case="*rginf*,*npc*loot*"`;
-  `ctest --test-dir build --output-on-failure`.
-- **Статус:** `design` (implementation не начата).
+- **Реализовано (D-074):** `game::rginf` — решение `+0x26c0` (comparator
+  `FUN_1405b490`: лексикографический, weekday игнорируется, равенство = due;
+  add `FUN_1405b38c`/`FUN_1405b140` — грегорианский; interval `7`),
+  `NpcLootGenerator::generate` -> `std::optional<NpcLoot>` + `force`
+  (R1 draw всегда; `force=false` fail -> `nullopt`),
+  `regenerate_npc_inventories` по явным индексам в `BT_ENTS`-порядке,
+  `RestoredPerson::loot_regenerate`; `glgame` на load-save пропускает
+  ungated generate/person-init, восстанавливает b1b2-контейнеры, при due
+  регенерирует matched кандидатов с `force=false` и делает port-only
+  SEF-only fallback (`force=true`); New Game не изменён (`set_*` first-wins,
+  `force=true`).
+- **Проверка (2026-11-16, `GL_GAME_DIR=I:\Games\Златогорье-2`):**
+  `cmake --build build` exit 0;
+  `gl_game_tests --test-case="*rginf*"` — **6/6 cases, 102/102 assertions**,
+  exit 0; `--test-case="*rginf*,*npc*loot*"` — **31/31 cases,
+  744/744 assertions**, exit 0; `--test-case="*save restore*"` — **16/16
+  cases, 738/738 assertions**, exit 0; `--test-case="*save container*"` —
+  **2/2 cases, 14,684/14,684 assertions**, exit 0;
+  `glgame_screenshot_tests --test-case="*load-save*"` — **3/3 cases,
+  37/37 assertions**, exit 0;
+  `ctest --test-dir build --output-on-failure` — **19/19 passed**,
+  `Total Test time (real) = 1870.68 sec`, exit 0.
+- **Остаток:** RNG-паритет не заявлен (slot23 E2E проверяет решения и
+  счётчики, не предметы); multiplayer interval `5`; restock/top-up,
+  trigger path, spawn chain, live oracle; тест-гэп для кандидата без c1.
+- **Статус:** `done`.
 
 ## P2-15b1b2 — Restore person containers (done 2026-11-15)
 
