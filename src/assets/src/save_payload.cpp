@@ -184,8 +184,12 @@ bool parse_diary(std::span<const std::uint8_t> body,
             detail = "entry " + std::to_string(index) + " has no header";
             return false;
         }
-        std::span<const std::uint8_t> bytes;
         const std::uint64_t size = static_cast<std::uint64_t>(blocks) * 0x58;
+        if (size > reader.remaining().size()) {
+            detail = "entry " + std::to_string(index) + " is truncated";
+            return false;
+        }
+        std::span<const std::uint8_t> bytes;
         if (!reader.read_bytes(static_cast<std::size_t>(size), bytes)) {
             detail = "entry " + std::to_string(index) + " is truncated";
             return false;
@@ -204,8 +208,12 @@ bool parse_diary(std::span<const std::uint8_t> body,
         detail = "sparse count is truncated";
         return false;
     }
-    std::span<const std::uint8_t> bytes;
     const std::uint64_t size = static_cast<std::uint64_t>(sparse_count) * 0x58;
+    if (size > reader.remaining().size()) {
+        detail = "sparse records are truncated";
+        return false;
+    }
+    std::span<const std::uint8_t> bytes;
     if (!reader.read_bytes(static_cast<std::size_t>(size), bytes)) {
         detail = "sparse records are truncated";
         return false;

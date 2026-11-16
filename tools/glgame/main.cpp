@@ -600,7 +600,7 @@ int dump_save_payload(const fs::path& game_dir, int slot) {
         " diary=" + std::to_string(payload->diary.size()) +
         " diary_blocks=" + std::to_string(diary_blocks) +
         " sparse=" + std::to_string(payload->diary_sparse.size()) +
-        " hstry_slots=40";
+        " hstry_slots=" + std::to_string(payload->history.slots.size());
     std::printf("%s\n", line.c_str());
     return 0;
 }

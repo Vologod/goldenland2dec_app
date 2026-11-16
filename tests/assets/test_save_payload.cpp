@@ -1,4 +1,5 @@
 #include "gl/assets/save_payload.hpp"
+#include "gl/assets/cp1251.hpp"
 #include <doctest/doctest.h>
 #include <miniz.h>
 #include <array>
@@ -24,8 +25,9 @@ void put_block(std::vector<std::uint8_t> &out, std::string_view tag,
     out.insert(out.end(), body.begin(), body.end());
 }
 void put_string(std::vector<std::uint8_t> &out, std::string_view text) {
-    put_u32(out, static_cast<std::uint32_t>(text.size()));
-    out.insert(out.end(), text.begin(), text.end());
+    const std::string encoded = gl::assets::utf8_to_cp1251(text);
+    put_u32(out, static_cast<std::uint32_t>(encoded.size()));
+    out.insert(out.end(), encoded.begin(), encoded.end());
 }
 std::vector<std::uint8_t> make_info(std::string_view level) {
     std::vector<std::uint8_t> body;
@@ -793,7 +795,7 @@ TEST_CASE("save payload: parses history slots") {
     put_u32(history, 7);
     for (int slot = 0; slot < 40; ++slot) {
         if (slot == 0)
-            put_string(history, "first");
+            put_string(history, "Привет");
         else if (slot == 1)
             put_string(history, "");
         else
@@ -809,7 +811,7 @@ TEST_CASE("save payload: parses history slots") {
     REQUIRE(payload.has_value());
     CHECK(payload->history.head == 7u);
     CHECK(payload->history.tail == 2u);
-    CHECK(payload->history.slots[0].text == "first");
+    CHECK(payload->history.slots[0].text == "Привет");
     CHECK(payload->history.slots[0].id == 0u);
     CHECK(payload->history.slots[1].text.empty());
     CHECK(payload->history.slots[39].id == 39u);
@@ -839,4 +841,82 @@ TEST_CASE("save payload: rejects malformed diary and history framing") {
                   make_default_tail("L93_4")));
     REQUIRE_FALSE(history_error.has_value());
     CHECK(history_error.error().code == gl::ErrorCode::format);
+}
+
+TEST_CASE("save payload: rejects malformed diary and history subcases") {
+    const auto parse = [](const std::vector<std::uint8_t> &diary,
+                          const std::vector<std::uint8_t> &history) {
+        return gl::assets::parse_save_payload(
+            make_save(make_body("L93_4", make_vars(), make_tribe_body(), diary, history),
+                      make_default_tail("L93_4")));
+    };
+
+    SUBCASE("diary truncated multi-block body") {
+        std::vector<std::uint8_t> diary;
+        put_u32(diary, 1);
+        put_u32(diary, 2);
+        diary.insert(diary.end(), 0x58, 0x11);
+        auto payload = parse(diary, make_empty_history());
+        REQUIRE_FALSE(payload.has_value());
+        CHECK(payload.error().code == gl::ErrorCode::format);
+    }
+
+    SUBCASE("diary truncated sparse records") {
+        std::vector<std::uint8_t> diary;
+        put_u32(diary, 0);
+        put_u32(diary, 1);
+        diary.push_back(0x22);
+        auto payload = parse(diary, make_empty_history());
+        REQUIRE_FALSE(payload.has_value());
+        CHECK(payload.error().code == gl::ErrorCode::format);
+    }
+
+    SUBCASE("diary trailing byte") {
+        auto diary = make_empty_diary();
+        diary.push_back(0x00);
+        auto payload = parse(diary, make_empty_history());
+        REQUIRE_FALSE(payload.has_value());
+        CHECK(payload.error().code == gl::ErrorCode::format);
+    }
+
+    SUBCASE("history truncated head") {
+        auto payload = parse(make_empty_diary(), {});
+        REQUIRE_FALSE(payload.has_value());
+        CHECK(payload.error().code == gl::ErrorCode::format);
+    }
+
+    SUBCASE("history truncated slot text") {
+        std::vector<std::uint8_t> history;
+        put_u32(history, 0);
+        put_u32(history, 5);
+        history.insert(history.end(), 2, static_cast<std::uint8_t>('x'));
+        auto payload = parse(make_empty_diary(), history);
+        REQUIRE_FALSE(payload.has_value());
+        CHECK(payload.error().code == gl::ErrorCode::format);
+    }
+
+    SUBCASE("history truncated slot id") {
+        std::vector<std::uint8_t> history;
+        put_u32(history, 0);
+        put_u32(history, 0);
+        auto payload = parse(make_empty_diary(), history);
+        REQUIRE_FALSE(payload.has_value());
+        CHECK(payload.error().code == gl::ErrorCode::format);
+    }
+
+    SUBCASE("history truncated tail") {
+        auto history = make_empty_history();
+        history.resize(history.size() - 4);
+        auto payload = parse(make_empty_diary(), history);
+        REQUIRE_FALSE(payload.has_value());
+        CHECK(payload.error().code == gl::ErrorCode::format);
+    }
+
+    SUBCASE("history trailing byte") {
+        auto history = make_empty_history();
+        history.push_back(0x00);
+        auto payload = parse(make_empty_diary(), history);
+        REQUIRE_FALSE(payload.has_value());
+        CHECK(payload.error().code == gl::ErrorCode::format);
+    }
 }

@@ -352,6 +352,7 @@ TEST_CASE("real data: diary framing" * doctest::skip(!game_dir_available())) {
     std::size_t sparse = 0;
     std::size_t count_mismatches = 0;
     std::array<std::size_t, 28> per_slot_blocks{};
+    std::array<std::size_t, 28> per_slot_entries{};
 
     for (int slot = 0; slot < 28; ++slot) {
         auto payload = gl::assets::parse_save_payload(read_save(slot));
@@ -361,8 +362,9 @@ TEST_CASE("real data: diary framing" * doctest::skip(!game_dir_available())) {
         sparse += payload->diary_sparse.size();
         for (const auto &entry : payload->diary) {
             blocks += entry.blocks.size();
-            records += entry.blocks.size() - 1;
+            records += entry.blocks.empty() ? 0 : entry.blocks.size() - 1;
             per_slot_blocks[slot] += entry.blocks.size();
+            ++per_slot_entries[slot];
             if (entry.declared_count != entry.blocks.size() - 1)
                 ++count_mismatches;
         }
@@ -375,6 +377,9 @@ TEST_CASE("real data: diary framing" * doctest::skip(!game_dir_available())) {
     CHECK(per_slot_blocks[0] == 371u);
     CHECK(per_slot_blocks[2] == 377u);
     CHECK(per_slot_blocks[21] == 2u);
+    CHECK(per_slot_entries[0] == 76u);
+    CHECK(per_slot_entries[2] == 75u);
+    CHECK(per_slot_entries[21] == 1u);
 
     auto slot0 = gl::assets::parse_save_payload(read_save(0));
     REQUIRE(slot0.has_value());
