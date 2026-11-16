@@ -24,7 +24,8 @@
   assertions, 0 failed; real `*BT_VARS re-encodes*` — 1 case / 87 assertions,
   0 failed; real `*BT_TRIBE re-encodes*` — 1 case / 84 assertions, 0 failed
   (28/28 body byte-equality для VARS и TRIBE); полный `ctest` — 19/19
-  passed, 1559.63 s (real), exit 0, build exit 0.
+  passed, 1802.42 s (real), exit 0, build exit 0 (финальный прогон после
+  fix wave; до фиксов было 1559.63 s).
 - **Остаточное:** new/runtime-only globals требуют c4-политики; type 3 —
   unit-only (в корпусе отсутствует); HERO/tail/ENTITIES остаются raw — c3;
   запись `Saves/`/`game_save` и дата/имя заголовка — c4.
