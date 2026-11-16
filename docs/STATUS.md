@@ -25,13 +25,17 @@
   row0 `3,2,2,2,2,2,2,0,2,0,0,2,0,0,2,0`; slot0/slot2/slot21
   histograms pinned.
 - **Команды проверки:** `cmake --build build`;
-  `build\bin\gl_assets_real_tests.exe --test-case="*tribe*"` -> 1 case,
-  6736 assertions, SUCCESS; `build\bin\glgame_screenshot_tests.exe
-  --test-case="*dump-save*"` -> 1 case, 4 assertions, SUCCESS; полный
+  `build\bin\gl_assets_tests.exe --test-case="*tribe*"` -> 7/7 cases,
+  SUCCESS; `build\bin\gl_assets_real_tests.exe --test-case="*tribe*"` ->
+  1 case, 1,539,947 assertions, SUCCESS;
+  `build\bin\glgame_screenshot_tests.exe --test-case="*dump-save*"` ->
+  1 case, 4 assertions, SUCCESS; полный
   `ctest --test-dir build --output-on-failure` с `GL_GAME_DIR`:
-  19/19 passed, 1847.07 s, exit 0.
-- **Residuals:** OQ-7 labels 0–4 unverified; runtime faction/AI consumer
-  отсутствует (нет port consumer); уникальность ids по корпусу не
+  19/19 passed, 1959.47 s, exit 0 (финальный прогон после fix wave; до
+  фиксов было 1847.07 s).
+- **Residuals:** OQ-7 labels 0–4 unverified; matrix consumer отсутствует
+  (entries уже используются save restore для tribe id→name);
+  уникальность ids по корпусу не
   enforced; duplicate names first-match; `PersonInstance.tribe_id`, save
   write (`P2-15c`) и live oracle вне scope.
 - **Статус:** `done`.
