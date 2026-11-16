@@ -8,7 +8,7 @@
   load-save: overlay поверх `zlato_vars.scr`, конверсия к объявленному
   типу, unknown-имена добавляются, применение на каждый `open_dialog`.
 - **Spec:** `docs/specs/2026-11-16-p2-15b2-bt-vars-globals-design.md`
-  (approved 2026-11-16).
+  (approved 2026-11-16); **Plan:** `docs/plans/2026-11-16-p2-15b2-bt-vars-globals.md`.
 - **Доказано (2026-11-16):** slot0 1002 `{0:905,1:94,2:3}`, slot2 1004
   `{0:907,1:94,2:3}`, slot21 879 `{0:783,1:94,2:2}`; corpus 26,191 vars,
   4,239 names отсутствуют в `zlato_vars.scr`, declared type mismatches
