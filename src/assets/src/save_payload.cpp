@@ -165,6 +165,90 @@ bool parse_tribe(std::span<const std::uint8_t> body, SaveTribeTable &out, std::s
     return true;
 }
 
+bool parse_diary(std::span<const std::uint8_t> body,
+                 std::vector<SaveDiaryEntry> &entries,
+                 std::vector<SaveBlock58> &sparse, std::string &detail) {
+    ByteReader reader(body);
+    std::uint32_t count = 0;
+    if (!reader.read_u32le(count)) {
+        detail = "entry count is truncated";
+        return false;
+    }
+    for (std::uint32_t index = 0; index < count; ++index) {
+        std::uint32_t blocks = 0;
+        if (!reader.read_u32le(blocks)) {
+            detail = "entry " + std::to_string(index) + " block count is truncated";
+            return false;
+        }
+        if (blocks == 0) {
+            detail = "entry " + std::to_string(index) + " has no header";
+            return false;
+        }
+        std::span<const std::uint8_t> bytes;
+        const std::uint64_t size = static_cast<std::uint64_t>(blocks) * 0x58;
+        if (!reader.read_bytes(static_cast<std::size_t>(size), bytes)) {
+            detail = "entry " + std::to_string(index) + " is truncated";
+            return false;
+        }
+        SaveDiaryEntry entry;
+        entry.key = u32_at(bytes, 0);
+        entry.declared_count = u32_at(bytes, 4);
+        entry.blocks.resize(blocks);
+        for (std::uint32_t block = 0; block < blocks; ++block)
+            std::memcpy(entry.blocks[block].data(),
+                        bytes.data() + static_cast<std::size_t>(block) * 0x58, 0x58);
+        entries.push_back(std::move(entry));
+    }
+    std::uint32_t sparse_count = 0;
+    if (!reader.read_u32le(sparse_count)) {
+        detail = "sparse count is truncated";
+        return false;
+    }
+    std::span<const std::uint8_t> bytes;
+    const std::uint64_t size = static_cast<std::uint64_t>(sparse_count) * 0x58;
+    if (!reader.read_bytes(static_cast<std::size_t>(size), bytes)) {
+        detail = "sparse records are truncated";
+        return false;
+    }
+    sparse.resize(sparse_count);
+    for (std::uint32_t block = 0; block < sparse_count; ++block)
+        std::memcpy(sparse[block].data(),
+                    bytes.data() + static_cast<std::size_t>(block) * 0x58, 0x58);
+    if (!reader.at_end()) {
+        detail = "has trailing bytes";
+        return false;
+    }
+    return true;
+}
+
+bool parse_history(std::span<const std::uint8_t> body, SaveHistory &history,
+                   std::string &detail) {
+    ByteReader reader(body);
+    if (!reader.read_u32le(history.head)) {
+        detail = "head is truncated";
+        return false;
+    }
+    for (auto &slot : history.slots) {
+        if (!read_string(reader, slot.text)) {
+            detail = "slot text is truncated";
+            return false;
+        }
+        if (!reader.read_u32le(slot.id)) {
+            detail = "slot id is truncated";
+            return false;
+        }
+    }
+    if (!reader.read_u32le(history.tail)) {
+        detail = "tail is truncated";
+        return false;
+    }
+    if (!reader.at_end()) {
+        detail = "has trailing bytes";
+        return false;
+    }
+    return true;
+}
+
 bool skip_type2_tail(std::span<const std::uint8_t> data, std::size_t &cursor) {
     if (!skip_bytes(data, cursor, 0x80))
         return false;
@@ -461,6 +545,20 @@ Result<SavePayload> parse_save_payload(std::span<const std::uint8_t> file) {
                              .subspan(tribe_view.offset, tribe_view.size),
                          payload.tribes, tribe_detail))
             return format_error("BT_TRIBE " + tribe_detail);
+
+        const SaveBlockView &diary_view = payload.blocks[4];
+        std::string diary_detail;
+        if (!parse_diary(std::span<const std::uint8_t>(payload.decompressed)
+                             .subspan(diary_view.offset, diary_view.size),
+                         payload.diary, payload.diary_sparse, diary_detail))
+            return format_error("BT_DIARY " + diary_detail);
+
+        const SaveBlockView &history_view = payload.blocks[5];
+        std::string history_detail;
+        if (!parse_history(std::span<const std::uint8_t>(payload.decompressed)
+                               .subspan(history_view.offset, history_view.size),
+                           payload.history, history_detail))
+            return format_error("BT_HSTRY " + history_detail);
 
         const std::size_t tail_offset = 0x70 + static_cast<std::size_t>(compressed_len);
         ByteReader tail(file.subspan(tail_offset));

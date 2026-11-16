@@ -70,6 +70,25 @@ struct SaveTribeTable {
     std::span<const std::uint8_t> row(std::size_t index) const;
 };
 
+using SaveBlock58 = std::array<std::uint8_t, 0x58>;
+
+struct SaveDiaryEntry {
+    std::uint32_t key = 0;
+    std::uint32_t declared_count = 0;
+    std::vector<SaveBlock58> blocks;
+};
+
+struct SaveHistorySlot {
+    std::string text;
+    std::uint32_t id = 0;
+};
+
+struct SaveHistory {
+    std::uint32_t head = 0;
+    std::array<SaveHistorySlot, 40> slots;
+    std::uint32_t tail = 0;
+};
+
 struct SavePayload {
     SaveHeader header;
     std::vector<std::uint8_t> decompressed;
@@ -77,6 +96,9 @@ struct SavePayload {
     SaveInfo info;
     std::vector<SaveVar> vars;
     SaveTribeTable tribes;
+    std::vector<SaveDiaryEntry> diary;
+    std::vector<SaveBlock58> diary_sparse;
+    SaveHistory history;
     std::vector<SaveTailEntry> tail;
     std::optional<std::size_t> level_tail_index;
     std::vector<std::uint8_t> rginf;

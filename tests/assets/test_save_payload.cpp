@@ -62,6 +62,22 @@ std::vector<std::uint8_t> make_tribe_body() {
     for (int i = 0; i < 4; ++i) body.push_back(static_cast<std::uint8_t>(0x30 + i));
     return body;
 }
+std::vector<std::uint8_t> make_empty_diary() {
+    std::vector<std::uint8_t> body;
+    put_u32(body, 0);
+    put_u32(body, 0);
+    return body;
+}
+std::vector<std::uint8_t> make_empty_history() {
+    std::vector<std::uint8_t> body;
+    put_u32(body, 0);
+    for (int slot = 0; slot < 40; ++slot) {
+        put_u32(body, 0);
+        put_u32(body, 0);
+    }
+    put_u32(body, 0);
+    return body;
+}
 std::vector<std::uint8_t> make_rginf_body() {
     std::vector<std::uint8_t> body(36);
     for (std::size_t i = 0; i < body.size(); ++i)
@@ -201,14 +217,16 @@ std::vector<std::uint8_t> make_default_tail(std::string_view level) {
 }
 std::vector<std::uint8_t> make_body(std::string_view level,
                                     const std::vector<std::uint8_t> &vars,
-                                    const std::vector<std::uint8_t> &tribe = make_tribe_body()) {
+                                    const std::vector<std::uint8_t> &tribe = make_tribe_body(),
+                                    const std::vector<std::uint8_t> &diary = make_empty_diary(),
+                                    const std::vector<std::uint8_t> &history = make_empty_history()) {
     std::vector<std::uint8_t> d;
     put_block(d, "BT_SCRN ", {});
     put_block(d, "BT_INFO ", make_info(level));
     put_block(d, "BT_VARS ", vars);
     put_block(d, "BT_TRIBE", tribe);
-    put_block(d, "BT_DIARY", {});
-    put_block(d, "BT_HSTRY", {});
+    put_block(d, "BT_DIARY", diary);
+    put_block(d, "BT_HSTRY", history);
     put_block(d, "BT_HERO ", {});
     return d;
 }
@@ -742,4 +760,83 @@ TEST_CASE("save payload: rejects trailing bytes after the seventh block") {
     body.push_back(0x00);
     const auto file = make_save(body, make_default_tail("L93_4"));
     CHECK_FALSE(gl::assets::parse_save_payload(file).has_value());
+}
+
+TEST_CASE("save payload: parses diary entries and sparse records") {
+    std::vector<std::uint8_t> diary;
+    put_u32(diary, 2);
+    put_u32(diary, 1);
+    diary.insert(diary.end(), 0x58, 0x11);
+    put_u32(diary, 3);
+    for (int block = 0; block < 3; ++block)
+        for (int byte = 0; byte < 0x58; ++byte)
+            diary.push_back(static_cast<std::uint8_t>(block * 0x10 + (byte & 0x0F)));
+    put_u32(diary, 1);
+    diary.insert(diary.end(), 0x58, 0x22);
+
+    auto payload = gl::assets::parse_save_payload(
+        make_save(make_body("L93_4", make_vars(), make_tribe_body(), diary,
+                            make_empty_history()),
+                  make_default_tail("L93_4")));
+    REQUIRE(payload.has_value());
+    REQUIRE(payload->diary.size() == 2u);
+    CHECK(payload->diary[0].blocks.size() == 1u);
+    CHECK(payload->diary[0].blocks[0][0] == 0x11);
+    CHECK(payload->diary[1].blocks.size() == 3u);
+    CHECK(payload->diary[1].blocks[2][0x10] == 0x20);
+    REQUIRE(payload->diary_sparse.size() == 1u);
+    CHECK(payload->diary_sparse[0][0] == 0x22);
+}
+
+TEST_CASE("save payload: parses history slots") {
+    std::vector<std::uint8_t> history;
+    put_u32(history, 7);
+    for (int slot = 0; slot < 40; ++slot) {
+        if (slot == 0)
+            put_string(history, "first");
+        else if (slot == 1)
+            put_string(history, "");
+        else
+            put_u32(history, 0);
+        put_u32(history, static_cast<std::uint32_t>(slot));
+    }
+    put_u32(history, 2);
+
+    auto payload = gl::assets::parse_save_payload(
+        make_save(make_body("L93_4", make_vars(), make_tribe_body(),
+                            make_empty_diary(), history),
+                  make_default_tail("L93_4")));
+    REQUIRE(payload.has_value());
+    CHECK(payload->history.head == 7u);
+    CHECK(payload->history.tail == 2u);
+    CHECK(payload->history.slots[0].text == "first");
+    CHECK(payload->history.slots[0].id == 0u);
+    CHECK(payload->history.slots[1].text.empty());
+    CHECK(payload->history.slots[39].id == 39u);
+}
+
+TEST_CASE("save payload: rejects malformed diary and history framing") {
+    std::vector<std::uint8_t> zero_blocks;
+    put_u32(zero_blocks, 1);
+    put_u32(zero_blocks, 0);
+    auto diary_error = gl::assets::parse_save_payload(
+        make_save(make_body("L93_4", make_vars(), make_tribe_body(), zero_blocks,
+                            make_empty_history()),
+                  make_default_tail("L93_4")));
+    REQUIRE_FALSE(diary_error.has_value());
+    CHECK(diary_error.error().code == gl::ErrorCode::format);
+
+    std::vector<std::uint8_t> short_history;
+    put_u32(short_history, 1);
+    for (int slot = 0; slot < 39; ++slot) {
+        put_u32(short_history, 0);
+        put_u32(short_history, 0);
+    }
+    put_u32(short_history, 1);
+    auto history_error = gl::assets::parse_save_payload(
+        make_save(make_body("L93_4", make_vars(), make_tribe_body(),
+                            make_empty_diary(), short_history),
+                  make_default_tail("L93_4")));
+    REQUIRE_FALSE(history_error.has_value());
+    CHECK(history_error.error().code == gl::ErrorCode::format);
 }
