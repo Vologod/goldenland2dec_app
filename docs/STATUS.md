@@ -15,9 +15,14 @@
   семь тегов/offsets, перестраивает decompressed stream как
   `tag(8)+u32 size+body` на блок, делает `mz_compress`, пишет `u32 raw_len`
   (`0x68`)/`u32 compressed_len` (`0x6c`) и заново формирует tail-словарь
-  (`u32 count`, cp1251 имя, `u32 8+zlib_len`, `u32 raw_len`, `u32 zlib_len`,
-  zlib(section)). Invalid payload (число/порядок блоков, выход за границы
-  тела, `raw_len != section.size()`) → `format`; файлового I/O нет.
+  (`u32 count`, per entry `u32 name_len + cp1251 имя`, `u32 8+zlib_len`,
+  `u32 raw_len`, `u32 zlib_len`, zlib(section)). Invalid payload (число/порядок
+  блоков, выход за границы тела, `raw_len != section.size()`) → `format`;
+  файлового I/O нет.
+- **Команды проверки:** `cmake --build build`;
+  `build\bin\gl_assets_tests.exe --test-case="*encode_save_payload*"`;
+  `GL_GAME_DIR=... build\bin\gl_assets_real_tests.exe --test-case="*encode round-trips*"`;
+  `ctest --test-dir build --output-on-failure`.
 - **Проверка (2026-11-16):** focused unit `*encode_save_payload*` — 2 cases /
   153 assertions, 0 failed; real `*encode round-trips*` — 1 case /
   128,549 assertions, 0 failed, 46 skipped; full `ctest` — 19/19 passed,
