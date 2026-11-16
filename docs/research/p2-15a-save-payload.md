@@ -1257,6 +1257,31 @@ Independent Python 3.9 scans (temporary scripts, not committed; read-only):
   or `string` (type 3). OQ-5 remains the chosen policy, not a
   live-proven original behavior.
 
+## `BT_TRIBE` matrix evidence (2026-11-16)
+
+Independent Python 3.9 scans (temporary scripts, not committed; read-only):
+
+- Matrix scan (`ECE2486B5678961B9293E9D331F79A955160B05973A984843226B9BAC711080B`):
+  all 28 saves have `count=234`, `count²=54756` matrix bytes and
+  `4 + 4128 + 54756 = 58884` body bytes. Row order is the **entry-list
+  order, not the id order**: slot0 first entry `(106, "L12_3_citizen")`,
+  slot2 first `(16, "snake")`, slot21 first `(106, "L12_3_citizen")`;
+  ids are sparse. Per-slot histograms: slot0 `{0:103, 1:232, 2:54186,
+  3:234, 4:1}`, slot2 `{0:82, 1:232, 2:54207, 3:234, 4:1}`, slot21
+  `{0:22, 1:3, 2:54497, 3:234}`; diagonal is `3` in all saves. First-row
+  bytes: slot0 `3,2,2,2,2,2,2,0,2,0,0,2,0,0,2,0`; slot2
+  `3,2,2,2,2,2,2,0,2,0,2,2,0,0,2,0`; slot21 first 16 bytes are `2` except
+  the `3` diagonal. Corpus aggregate is the OQ-7 histogram
+  `{0:1257, 1:6096, 2:1519260, 3:6552, 4:3}`.
+- Duplicate scan
+  (`FDA2F8256210B4F9F732DBBE70182B6F2310C8B42FCE241B50805468234039E9`):
+  all 28 saves have unique ids and duplicate names (e.g. `citizen`).
+- Consequence for the port: `relation(id_a, id_b)` must map ids to
+  entry indices (linear over 234) and index the row-major matrix by those
+  indices; unknown ids return the `FUN_14016998` default `2`. Name lookup
+  is first-match and is not an identity key. OQ-7 value labels remain
+  `unverified`; the port only stores/exposes the matrix.
+
 ## `BT_VARS ` implementation result (2026-11-16)
 
 P2-15b2 (`D-075`) applies the saved globals to the dialog CS VM. Chosen

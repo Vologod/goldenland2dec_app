@@ -2,6 +2,27 @@
 
 Обновлено: 2026-11-16
 
+## P2-15b3 — BT_TRIBE relation matrix (design 2026-11-16)
+
+- **Задача:** декодировать/хранить `BT_TRIBE` matrix (234×234, row-major
+  в entry-порядке); API `relation(id,id)` default 2, `index_of`/`find`,
+  `row`; 28/28 oracle; без runtime-AI.
+- **Spec:** `docs/specs/2026-11-16-p2-15b3-tribe-matrix-design.md`
+  (approved 2026-11-16).
+- **Доказано (2026-11-16):** порядок строк = entry-список, не id (slot0
+  первый id 106, slot2 — 16); ids уникальны 28/28, имена дублируются
+  28/28; histograms slot0 `{103,232,54186,234,1}`, slot2
+  `{82,232,54207,234,1}`, slot21 `{22,3,54497,234}`; corpus
+  `{0:1257,1:6096,2:1519260,3:6552,4:3}`; диагональ 3.
+- **Критерии приёмки:** matrix exact size 28/28, relation 0 mismatches,
+  default 2, id→index (не id-index), duplicate-name first-match, E2E
+  `tribe_matrix=234`, полный `ctest` с `GL_GAME_DIR`.
+- **Команды проверки:** `cmake --build build`;
+  `build\bin\gl_assets_tests.exe --test-case="*tribe*"`;
+  `build\bin\gl_assets_real_tests.exe --test-case="*tribe*"`;
+  `ctest --test-dir build --output-on-failure`.
+- **Статус:** `design` (implementation не начата).
+
 ## P2-15b2 — BT_VARS script globals (done 2026-11-16)
 
 - **Задача:** применять `BT_VARS` (type/name/f64|string) к CS-VM на
