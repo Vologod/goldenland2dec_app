@@ -16,9 +16,10 @@
   `tail`. `parse_diary`/`parse_history` требуют exact body consume и
   отклоняют truncation/trailing с `format`; `--dump-save` печатает
   `diary=76 diary_blocks=371 sparse=0 hstry_slots=40`.
-- **Проверка (2026-11-16):** focused `*diary*,*history*` — unit 3/3 cases
-  (67 assertions), real 2/2 cases (112 assertions); `*dump-save*` — 1/1
-  (5 assertions); full `ctest` — 19/19 passed, 1341.24 s, exit 0. E2E
+- **Проверка (2026-11-16):** focused `*diary*,*history*` — unit 4/4 cases
+  (179 assertions), real 2/2 cases (115 assertions); `*dump-save*` — 1/1
+  (5 assertions); full `ctest` — 19/19 passed, 1459.35 s, exit 0
+  (финальный прогон после fix wave; до фиксов было 1341.24 s). E2E
   synthetic-save fixture обновлён на валидные пустые DIARY (8 B) и HSTRY
   (328 B), чтобы level-fail/rollback тест доходил до целевой ветки.
 - **Остаточное:** 0x58 field labels, sparse semantics и HSTRY ring ordering
