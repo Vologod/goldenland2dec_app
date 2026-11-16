@@ -1256,3 +1256,19 @@ Independent Python 3.9 scans (temporary scripts, not committed; read-only):
   declared `.scr` variant; add undeclared saved names as `double` (numeric)
   or `string` (type 3). OQ-5 remains the chosen policy, not a
   live-proven original behavior.
+
+## `BT_VARS ` implementation result (2026-11-16)
+
+P2-15b2 (`D-075`) applies the saved globals to the dialog CS VM. Chosen
+conversion policy (OQ-5 policy, not an original-parity claim): numeric
+`BT_VARS` values are read as 8-byte f64 via `assets::save_var_number`; declared
+`zlato_vars.scr` globals keep their declared variant (int32/DWORD/float) with
+clamp/trunc conversion, declared strings are only overwritten by saved type-3
+strings, numeric↔string mismatches keep the script value (`kept`), undeclared
+saved names are added as `double` (numeric) or `string` (type 3), and duplicate
+saved names are last-wins. The real 28-save oracle
+(`tests/script/test_real_save_globals.cpp`) applies every saved value after
+`set_globals(zlato_vars.scr)`: 26,191 vars, types `{0:23498,1:2632,2:61}` (no
+type 3), 4,239 undeclared names added, 0 declared-type mismatches, 0/N value
+mismatches; pins slot0 `voevoda_povtor=10` / `ShurbaHal_guardian_povtor=3`,
+slot2 `L2_male1_povtor=1`, slot21 `voevoda_povtor=0`.

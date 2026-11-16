@@ -2,26 +2,44 @@
 
 Обновлено: 2026-11-16
 
-## P2-15b2 — BT_VARS script globals (design 2026-11-16)
+## P2-15b2 — BT_VARS script globals (done 2026-11-16)
 
 - **Задача:** применять `BT_VARS` (type/name/f64|string) к CS-VM на
   load-save: overlay поверх `zlato_vars.scr`, конверсия к объявленному
   типу, unknown-имена добавляются, применение на каждый `open_dialog`.
 - **Spec:** `docs/specs/2026-11-16-p2-15b2-bt-vars-globals-design.md`
   (approved 2026-11-16); **Plan:** `docs/plans/2026-11-16-p2-15b2-bt-vars-globals.md`.
-- **Доказано (2026-11-16):** slot0 1002 `{0:905,1:94,2:3}`, slot2 1004
-  `{0:907,1:94,2:3}`, slot21 879 `{0:783,1:94,2:2}`; corpus 26,191 vars,
-  4,239 names отсутствуют в `zlato_vars.scr`, declared type mismatches
-  `0`; type 3 в корпусе нет.
-- **Критерии приёмки:** 0/N применение всех 26,191 значений (int32/uint32/
-  double/string), conversion unit (trunc/clamp/keep/unknown/duplicates),
-  rebuild_variables, glgame overlay/rollback/New Game очистка, E2E
-  `save globals: saved=1002`, полный `ctest` с `GL_GAME_DIR`.
-- **Команды проверки:** `cmake --build build`;
-  `build\bin\gl_script_tests.exe --test-case="*global*"`;
-  `build\bin\gl_script_real_tests.exe --test-case="*save global*"`;
-  `ctest --test-dir build --output-on-failure`.
-- **Статус:** `design` (implementation не начата).
+- **Реализовано (D-075):** `assets::save_var_number` (f64 из 8 байт);
+  `script::save_globals_from_vars` (`SaveVar` -> `ScriptGlobal`, type 3 ->
+  string); `ScriptVm::apply_saved_globals` overlay поверх
+  `set_globals(zlato_vars.scr)` с сохранением объявленного variant
+  (int32 `to_int32`/DWORD `to_uint32`/float `to_double`, string из saved
+  string), unknown -> `double`/`string`, mismatch -> `kept`, дубликаты
+  last-wins + warning, `rebuild_variables`; `glgame` строит overlay из
+  `payload.vars`, откатывает при ошибке уровня, очищает на New Game,
+  применяет в каждом `open_dialog` после `set_globals`, лог
+  `save globals: saved=<n>`.
+- **Реальный 0/N oracle:** `tests/script/test_real_save_globals.cpp`
+  (28 слотов). 26,191 vars, типы `{0:23498,1:2632,2:61}` (type 3 нет),
+  4,239 имён вне `zlato_vars.scr` добавлены, 0 declared-type mismatches,
+  0/N расхождений значений; пины slot0 `voevoda_povtor=10`,
+  `ShurbaHal_guardian_povtor=3`, slot2 `L2_male1_povtor=1`, slot21
+  `voevoda_povtor=0`; slot0 1002, slot2 1004, slot21 879 vars.
+- **Проверка (2026-11-16, `GL_GAME_DIR=I:\Games\Златогорье-2`):**
+  `cmake --build build` exit 0;
+  `gl_script_real_tests --test-case="*saved global*"` — **2/2 cases,
+  78,684/78,684 assertions**, exit 0;
+  `gl_script_tests --test-case="*global*"` — **11/11 cases,
+  69/69 assertions**, exit 0 (116 skipped);
+  `glgame_screenshot_tests --test-case="*load-save*"` — **3/3 cases,
+  39/39 assertions**, exit 0 (37 skipped; E2E `save globals: saved=1002`);
+  `ctest --test-dir build --output-on-failure` — **19/19 passed**,
+  `Total Test time (real) = 2022.33 sec`, exit 0.
+- **Остаток:** OQ-5 chosen policy (не original-parity claim); type 3 только
+  синтетически (в корпусе нет); 4,239 undeclared имён добавлены; дубликаты
+  last-wins; overlay только dialog VM; save write (`P2-15c`); live oracle,
+  `BT_TRIBE`/`BT_DIARY`/`BT_HSTRY` вне scope.
+- **Статус:** `done`.
 
 ## P2-15b1b3 — RGINF gate/loot ordering (done 2026-11-16)
 
