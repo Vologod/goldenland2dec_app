@@ -992,3 +992,80 @@ TEST_CASE("encode_save_payload rejects an invalid payload") {
     REQUIRE_FALSE(section_error.has_value());
     CHECK(section_error.error().code == gl::ErrorCode::format);
 }
+
+TEST_CASE("encode_vars_body writes typed variables") {
+    std::vector<gl::assets::SaveVar> vars;
+    gl::assets::SaveVar integer;
+    integer.type = 0;
+    integer.name = "i";
+    const double ten = 10.0;
+    std::memcpy(integer.value.data(), &ten, 8);
+    vars.push_back(integer);
+
+    gl::assets::SaveVar word;
+    word.type = 1;
+    word.name = "d";
+    std::memcpy(word.value.data(), &ten, 8);
+    vars.push_back(word);
+
+    gl::assets::SaveVar text;
+    text.type = 3;
+    text.name = "s";
+    text.text_value = "x";
+    vars.push_back(text);
+
+    const auto body = gl::assets::encode_vars_body(vars);
+    REQUIRE(body.has_value());
+
+    std::vector<std::uint8_t> expected;
+    put_u32(expected, 3);
+    put_u32(expected, 0);
+    put_string(expected, "i");
+    expected.insert(expected.end(), integer.value.begin(), integer.value.end());
+    put_u32(expected, 1);
+    put_string(expected, "d");
+    expected.insert(expected.end(), word.value.begin(), word.value.end());
+    put_u32(expected, 3);
+    put_string(expected, "s");
+    put_string(expected, "x");
+    CHECK(body.value() == expected);
+
+    CHECK(gl::assets::encode_vars_body(std::span<const gl::assets::SaveVar>()).value() ==
+          std::vector<std::uint8_t>{0, 0, 0, 0});
+
+    auto bad = vars;
+    bad[0].type = 4;
+    const auto error = gl::assets::encode_vars_body(bad);
+    REQUIRE_FALSE(error.has_value());
+    CHECK(error.error().code == gl::ErrorCode::format);
+}
+
+TEST_CASE("encode_tribe_body writes entries and the matrix") {
+    gl::assets::SaveTribeTable table;
+    table.entries.push_back(gl::assets::SaveTribeEntry{7, "a"});
+    table.entries.push_back(gl::assets::SaveTribeEntry{1, "b"});
+    table.entries.push_back(gl::assets::SaveTribeEntry{4, "c"});
+    table.matrix = {3, 5, 6, 7, 3, 8, 9, 10, 3};
+
+    std::vector<std::uint8_t> expected;
+    put_u32(expected, 3);
+    put_u32(expected, 7);
+    put_string(expected, "a");
+    put_u32(expected, 1);
+    put_string(expected, "b");
+    put_u32(expected, 4);
+    put_string(expected, "c");
+    expected.insert(expected.end(), table.matrix.begin(), table.matrix.end());
+
+    const auto body = gl::assets::encode_tribe_body(table);
+    REQUIRE(body.has_value());
+    CHECK(body.value() == expected);
+
+    CHECK(gl::assets::encode_tribe_body({}).value() ==
+          std::vector<std::uint8_t>{0, 0, 0, 0});
+
+    table.matrix.pop_back();
+    const auto error = gl::assets::encode_tribe_body(table);
+    REQUIRE_FALSE(error.has_value());
+    CHECK(error.error().code == gl::ErrorCode::format);
+}

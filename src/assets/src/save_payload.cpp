@@ -23,6 +23,11 @@ constexpr std::array<std::string_view, 7> kBlockOrder = {
 
 Error format_error(std::string message) { return Error{ErrorCode::format, std::move(message)}; }
 
+void append_u32(std::vector<std::uint8_t> &out, std::uint32_t value) {
+    for (unsigned shift = 0; shift < 32; shift += 8)
+        out.push_back(static_cast<std::uint8_t>((value >> shift) & 0xFF));
+}
+
 std::uint32_t u32_at(std::span<const std::uint8_t> data, std::size_t offset) {
     std::uint32_t value = 0;
     std::memcpy(&value, data.data() + offset, sizeof(value));
@@ -701,6 +706,56 @@ Result<std::vector<std::uint8_t>> encode_save_payload(const SavePayload &payload
         return file;
     } catch (const std::bad_alloc &) {
         return format_error("save payload allocation failed");
+    }
+}
+
+Result<std::vector<std::uint8_t>> encode_vars_body(std::span<const SaveVar> vars) {
+    try {
+        if (vars.size() > std::numeric_limits<std::uint32_t>::max())
+            return format_error("BT_VARS has too many entries");
+        std::vector<std::uint8_t> out;
+        append_u32(out, static_cast<std::uint32_t>(vars.size()));
+        for (const SaveVar &var : vars) {
+            if (var.type > 3)
+                return format_error("BT_VARS type is unknown");
+            append_u32(out, var.type);
+            const std::string name = utf8_to_cp1251(var.name);
+            append_u32(out, static_cast<std::uint32_t>(name.size()));
+            out.insert(out.end(), name.begin(), name.end());
+            if (var.type < 3) {
+                out.insert(out.end(), var.value.begin(), var.value.end());
+            } else {
+                const std::string text = utf8_to_cp1251(var.text_value);
+                append_u32(out, static_cast<std::uint32_t>(text.size()));
+                out.insert(out.end(), text.begin(), text.end());
+            }
+        }
+        return out;
+    } catch (const std::bad_alloc &) {
+        return format_error("BT_VARS allocation failed");
+    }
+}
+
+Result<std::vector<std::uint8_t>> encode_tribe_body(const SaveTribeTable &table) {
+    try {
+        if (table.entries.size() > std::numeric_limits<std::uint32_t>::max())
+            return format_error("BT_TRIBE has too many entries");
+        const std::uint64_t matrix_size =
+            static_cast<std::uint64_t>(table.entries.size()) * table.entries.size();
+        if (matrix_size != table.matrix.size())
+            return format_error("BT_TRIBE matrix size mismatch");
+        std::vector<std::uint8_t> out;
+        append_u32(out, static_cast<std::uint32_t>(table.entries.size()));
+        for (const SaveTribeEntry &entry : table.entries) {
+            append_u32(out, entry.id);
+            const std::string name = utf8_to_cp1251(entry.name);
+            append_u32(out, static_cast<std::uint32_t>(name.size()));
+            out.insert(out.end(), name.begin(), name.end());
+        }
+        out.insert(out.end(), table.matrix.begin(), table.matrix.end());
+        return out;
+    } catch (const std::bad_alloc &) {
+        return format_error("BT_TRIBE allocation failed");
     }
 }
 } // namespace gl::assets
