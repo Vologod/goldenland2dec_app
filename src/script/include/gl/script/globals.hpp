@@ -8,6 +8,8 @@
 #include <vector>
 
 namespace gl::script {
+class ScriptVm;
+
 struct ScriptGlobal {
     std::string type;
     std::string name;
@@ -18,4 +20,7 @@ gl::Result<std::vector<ScriptGlobal>> parse_globals(std::span<const std::uint8_t
 
 std::vector<ScriptGlobal> save_globals_from_vars(
     std::span<const gl::assets::SaveVar> vars);
+
+std::vector<gl::assets::SaveVar> update_vars_from_globals(
+    const std::vector<gl::assets::SaveVar> &saved, const ScriptVm &vm);
 }

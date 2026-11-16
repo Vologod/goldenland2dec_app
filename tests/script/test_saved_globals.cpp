@@ -166,3 +166,44 @@ TEST_CASE("saved globals rebuild node variables") {
     REQUIRE(vm.variable("g") != nullptr);
     CHECK(std::get<std::int32_t>(*vm.variable("g")) == 9);
 }
+
+TEST_CASE("update_vars_from_globals writes VM values back into SaveVar") {
+    gl::script::ScriptGlobal i{"int", "i", std::int32_t{7}};
+    gl::script::ScriptGlobal d{"DWORD", "d", std::uint32_t{9}};
+    gl::script::ScriptGlobal f{"float", "f", 2.5};
+    gl::script::ScriptGlobal s{"string", "s", std::string{"x"}};
+    const std::vector<gl::script::ScriptGlobal> initial{i, d, f, s};
+    NullHost host;
+    gl::script::ScriptVm vm({}, host);
+    vm.set_globals(initial);
+
+    gl::assets::SaveVar vi;
+    vi.type = 0;
+    vi.name = "i";
+    gl::assets::SaveVar vd = vi;
+    vd.type = 1;
+    vd.name = "d";
+    gl::assets::SaveVar vf = vi;
+    vf.type = 2;
+    vf.name = "f";
+    gl::assets::SaveVar vs;
+    vs.type = 3;
+    vs.name = "s";
+    gl::assets::SaveVar missing;
+    missing.type = 0;
+    missing.name = "missing";
+    const double keep = 1.5;
+    std::memcpy(missing.value.data(), &keep, 8);
+
+    const auto updated = gl::script::update_vars_from_globals(
+        {vi, vd, vf, vs, missing}, vm);
+    REQUIRE(updated.size() == 5);
+    CHECK(gl::assets::save_var_number(updated[0]).has_value());
+    CHECK(*gl::assets::save_var_number(updated[0]) == 7.0);
+    CHECK(*gl::assets::save_var_number(updated[1]) == 9.0);
+    CHECK(*gl::assets::save_var_number(updated[2]) == 2.5);
+    CHECK(updated[3].text_value == "x");
+    CHECK(*gl::assets::save_var_number(updated[4]) == 1.5);
+    CHECK(updated[0].type == 0);
+    CHECK(updated[1].name == "d");
+}

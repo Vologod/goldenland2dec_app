@@ -1,6 +1,8 @@
 #include "gl/script/globals.hpp"
 #include "gl/assets/cp1251.hpp"
 #include "gl/assets/log.hpp"
+#include "gl/script/script_vm.hpp"
+#include <bit>
 #include <charconv>
 #include <cstddef>
 #include <new>
@@ -197,6 +199,36 @@ std::vector<ScriptGlobal> save_globals_from_vars(
             global.value = *number;
         }
         out.push_back(std::move(global));
+    }
+    return out;
+}
+
+std::vector<gl::assets::SaveVar> update_vars_from_globals(
+    const std::vector<gl::assets::SaveVar> &saved, const ScriptVm &vm) {
+    std::vector<gl::assets::SaveVar> out = saved;
+    for (gl::assets::SaveVar &var : out) {
+        const auto found = vm.globals().find(var.name);
+        if (found == vm.globals().end())
+            continue;
+        const Value &value = found->second;
+        if (var.type == 3) {
+            if (std::holds_alternative<std::string>(value))
+                var.text_value = std::get<std::string>(value);
+            continue;
+        }
+        double number = 0.0;
+        if (std::holds_alternative<std::int32_t>(value))
+            number = static_cast<double>(std::get<std::int32_t>(value));
+        else if (std::holds_alternative<std::uint32_t>(value))
+            number = static_cast<double>(std::get<std::uint32_t>(value));
+        else if (std::holds_alternative<double>(value))
+            number = std::get<double>(value);
+        else
+            continue;
+        const std::uint64_t bits = std::bit_cast<std::uint64_t>(number);
+        for (std::size_t byte = 0; byte < var.value.size(); ++byte)
+            var.value[byte] =
+                static_cast<std::uint8_t>((bits >> (byte * 8)) & 0xFF);
     }
     return out;
 }
