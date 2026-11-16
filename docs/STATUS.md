@@ -2,6 +2,27 @@
 
 Обновлено: 2026-11-16
 
+## P2-15b2 — BT_VARS script globals (design 2026-11-16)
+
+- **Задача:** применять `BT_VARS` (type/name/f64|string) к CS-VM на
+  load-save: overlay поверх `zlato_vars.scr`, конверсия к объявленному
+  типу, unknown-имена добавляются, применение на каждый `open_dialog`.
+- **Spec:** `docs/specs/2026-11-16-p2-15b2-bt-vars-globals-design.md`
+  (approved 2026-11-16).
+- **Доказано (2026-11-16):** slot0 1002 `{0:905,1:94,2:3}`, slot2 1004
+  `{0:907,1:94,2:3}`, slot21 879 `{0:783,1:94,2:2}`; corpus 26,191 vars,
+  4,239 names отсутствуют в `zlato_vars.scr`, declared type mismatches
+  `0`; type 3 в корпусе нет.
+- **Критерии приёмки:** 0/N применение всех 26,191 значений (int32/uint32/
+  double/string), conversion unit (trunc/clamp/keep/unknown/duplicates),
+  rebuild_variables, glgame overlay/rollback/New Game очистка, E2E
+  `save globals: saved=1002`, полный `ctest` с `GL_GAME_DIR`.
+- **Команды проверки:** `cmake --build build`;
+  `build\bin\gl_script_tests.exe --test-case="*global*"`;
+  `build\bin\gl_script_real_tests.exe --test-case="*save global*"`;
+  `ctest --test-dir build --output-on-failure`.
+- **Статус:** `design` (implementation не начата).
+
 ## P2-15b1b3 — RGINF gate/loot ordering (done 2026-11-16)
 
 - **Задача:** вычислить `+0x26c0` из `BT_RGINF` + `BT_INFO.time` +

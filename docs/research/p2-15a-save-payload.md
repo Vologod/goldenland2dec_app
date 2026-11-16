@@ -1232,3 +1232,27 @@ inlined code, host methods absent). Exact procedure, if triggered:
      `0x7f9a0`) and inspect a variable's in-memory storage after load against
      the saved f64 bytes.
 5. Record the `0/N` result here; do not change game state or process memory.
+
+## `BT_VARS ` application evidence (2026-11-16)
+
+Independent Python 3.9 scans (temporary scripts, not committed; read-only):
+
+- `BT_VARS` value scan (`3BF1A769672B2AF8FC5F6BFC74CA3EF3A6B6701412E9B6BF8E18B25B9DF8BF52`):
+  slot0 1002 vars types `{0:905, 1:94, 2:3}`, slot2 1004
+  `{0:907, 1:94, 2:3}`, slot21 879 `{0:783, 1:94, 2:2}`; every body
+  consumed exactly. First values: slot0 `voevoda_povtor=10.0`,
+  `L2_male1_povtor=0.0`, `L1_plotnik_son_life=0.0`,
+  `soul_povtor=1.0`, `gmurknowstont_povtor=0.0`,
+  `ShurbaHal_guardian_povtor=3.0`; slot2 same names with `1.0/0.0/0.0/2.0`;
+  slot21 all first values `0.0`.
+- Declaration check (`9A9439FA28CE4C994FE1D1A1F6BA79A724E3F85745AA984060E643008AC405C2`):
+  extracted `scripts/dialogs_special/zlato_vars.scr` via `glpak extract`
+  and compared every saved name with the declared types using the mapping
+  `int->0`, `DWORD->1`, `float->2`, `string->3`. 28 saves contain 26,191
+  saved vars; 4,239 names are absent from `zlato_vars.scr` (mostly
+  `L*_state` level state), and declared names have **0** type mismatches.
+  The corpus contains no type-3 value.
+- Consequence for the port: apply saved values by coercion to the
+  declared `.scr` variant; add undeclared saved names as `double` (numeric)
+  or `string` (type 3). OQ-5 remains the chosen policy, not a
+  live-proven original behavior.
