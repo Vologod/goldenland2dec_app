@@ -28,6 +28,7 @@
 #include <gl/game/inventory_runtime.hpp>
 #include <gl/game/npc_loot.hpp>
 #include <gl/game/person_runtime.hpp>
+#include <gl/game/rginf.hpp>
 #include <gl/game/save_restore.hpp>
 #include <gl/platform/sdl_context.hpp>
 #include <gl/render/font.hpp>
@@ -1037,6 +1038,21 @@ class Game {
                     std::to_string(loot_level()) + ", populated " +
                     std::to_string(populated) + "/" +
                     std::to_string(level.persons.size()));
+    }
+
+    gl::game::NpcInventoryCounts regenerate_npc_inventory_indices(
+        const gl::game::Level& level, const std::vector<std::size_t>& indices,
+        gl::game::MsvcRandom& rng, bool force) {
+        const gl::assets::ItemNameIndex empty_names;
+        const gl::assets::ItemNameIndex& names = item_names_ ? *item_names_ : empty_names;
+        const auto item_template =
+            [this](std::uint32_t id) -> std::optional<gl::game::ItemTemplate> {
+            const gl::assets::ItemCatalogEntry* entry = item_catalog_.find(id);
+            return make_item_template(entry);
+        };
+        return gl::game::regenerate_npc_inventories(
+            inventory_runtime_, level.persons, indices, vfs_, names, item_template,
+            loot_level(), rng, specials_db(), force);
     }
 
     void open_inventory() {
@@ -2102,8 +2118,10 @@ class Game {
         auto screen = gl::app::LevelScreen::load(
             window_.renderer(), vfs_, name, !options_.no_persons, &hero_outfit, options_.seed,
             [this](gl::game::Level& level, gl::game::MsvcRandom& rng) {
-                generate_npc_inventories(level, rng);
-                if (pending_restore_ == nullptr) return;
+                if (pending_restore_ == nullptr) {
+                    generate_npc_inventories(level, rng);
+                    return;
+                }
                 restore_result_ = gl::game::restore_save_persons(
                     level, *pending_restore_, pending_tribes_, false, &inventory_runtime_);
                 gl::log(gl::LogLevel::info,
@@ -2119,6 +2137,46 @@ class Game {
                             std::to_string(restore_result_.counts.duplicate_containers) +
                             " c2=" +
                             std::to_string(restore_result_.counts.c2_items));
+
+                const gl::game::GameDatetime now =
+                    gl::game::GameDatetime::from_time_bytes(*pending_save_time_);
+                const gl::game::RginfDecision decision = gl::game::decide_rginf(
+                    pending_restore_->rginf, now,
+                    gl::game::kSinglePlayerItemsRegenerateIntervalDays);
+                gl::log(gl::LogLevel::info,
+                        "rginf: saved_latch=" +
+                            std::to_string(pending_restore_->rginf.latch) + " due=" +
+                            std::to_string(decision.due ? 1 : 0) + " runtime_latch=" +
+                            std::to_string(decision.runtime_latch));
+
+                if (decision.due) {
+                    std::vector<std::size_t> indices;
+                    for (const gl::game::RestoredPerson& restored :
+                         restore_result_.persons) {
+                        if (restored.loot_regenerate)
+                            indices.push_back(restored.level_index);
+                    }
+                    const auto counts =
+                        regenerate_npc_inventory_indices(level, indices, rng, false);
+                    gl::log(gl::LogLevel::info,
+                            "npc regen: due=1 candidates=" +
+                                std::to_string(counts.requested) + " regenerated=" +
+                                std::to_string(counts.populated) + " gate_failed=" +
+                                std::to_string(counts.gate_failed) + " missing_table=" +
+                                std::to_string(counts.missing_table));
+                }
+
+                std::vector<std::size_t> sef_only;
+                for (std::size_t index = restore_result_.counts.matched;
+                     index < level.persons.size(); ++index)
+                    sef_only.push_back(index);
+                if (!sef_only.empty()) {
+                    const auto counts =
+                        regenerate_npc_inventory_indices(level, sef_only, rng, true);
+                    gl::log(gl::LogLevel::info,
+                            "npc regen: sef_only=" + std::to_string(counts.requested) +
+                                " populated=" + std::to_string(counts.populated));
+                }
             });
         if (!screen) {
             gl::log(gl::LogLevel::error, screen.error().message);
@@ -2185,10 +2243,12 @@ class Game {
         if (payload->level_tail_index) {
             pending_restore_ = &payload->tail[*payload->level_tail_index];
             pending_tribes_ = &payload->tribes;
+            pending_save_time_ = payload->info.time;
         }
         const bool level_loaded = load_level(payload->info.level_id);
         pending_restore_ = nullptr;
         pending_tribes_ = nullptr;
+        pending_save_time_.reset();
 
         if (!level_loaded) {
             pending_equipment_ = std::move(equipment_before);
@@ -3010,6 +3070,7 @@ class Game {
     std::optional<gl::game::HeroOutfit> pending_outfit_;
     const gl::assets::SaveTailEntry* pending_restore_ = nullptr;
     const gl::assets::SaveTribeTable* pending_tribes_ = nullptr;
+    std::optional<std::array<std::uint8_t, 0x20>> pending_save_time_;
     gl::game::RestoreResult restore_result_;
     gl::game::PersonRuntime person_runtime_;
     gl::game::InventoryRuntime inventory_runtime_;

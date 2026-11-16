@@ -711,6 +711,46 @@ TEST_CASE("glgame --load-save loads the level and hero from the save") {
     CHECK(output.find(",919:50:") != std::string::npos);
     CHECK(output.find("npc dump: person='L93_2.P292_Chernobogs_Guardian2' "
                       "container='trade' items=[812:561:") != std::string::npos);
+    CHECK(output.find("rginf: saved_latch=0 due=0 runtime_latch=0") !=
+          std::string::npos);
+}
+
+TEST_CASE("glgame --load-save 23 applies the due regeneration gate") {
+    const char* game_dir = std::getenv("GL_GAME_DIR");
+    REQUIRE(game_dir != nullptr);
+
+    TempDir temp;
+    const fs::path config = write_test_config(temp.path);
+    const fs::path png = temp.path / "load_save_due.png";
+    std::string output;
+    const int code = run_glgame_capture(
+        screenshot_arguments(game_dir, config, png,
+                             {"--load-save", "23", "--width", "1024", "--height", "768",
+                              "--seed", "1"}),
+        output);
+    CAPTURE(code);
+    CAPTURE(output);
+    REQUIRE(fs::exists(png));
+    CHECK(code == 0);
+    CHECK(output.find("rginf: saved_latch=0 due=1 runtime_latch=1") !=
+          std::string::npos);
+    const std::size_t mark = output.find("npc regen: due=1 candidates=");
+    REQUIRE(mark != std::string::npos);
+    const std::string line = output.substr(mark, output.find('\n', mark) - mark);
+    const auto number_after = [&line](std::string_view key) -> std::optional<std::size_t> {
+        const std::size_t at = line.find(key);
+        if (at == std::string::npos)
+            return std::nullopt;
+        return static_cast<std::size_t>(std::stoul(line.substr(at + key.size())));
+    };
+    const auto candidates = number_after("candidates=");
+    const auto regenerated = number_after("regenerated=");
+    const auto gate_failed = number_after("gate_failed=");
+    REQUIRE(candidates.has_value());
+    REQUIRE(regenerated.has_value());
+    REQUIRE(gate_failed.has_value());
+    CHECK(*candidates > 0);
+    CHECK(*regenerated + *gate_failed == *candidates);
 }
 
 TEST_CASE("glgame --load-save leaves the inventory runtime untouched when the level fails") {
