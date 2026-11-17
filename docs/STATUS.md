@@ -2,6 +2,65 @@
 
 Обновлено: 2026-11-17
 
+## P2-15c3a — Save write-back research (done 2026-11-17)
+
+- **Задача:** для каждого домена save решить `raw` / `patch-in-raw` /
+  `full-inverse` / `blocked` при цели — полный live-сценарий кампании;
+  HERO layout за пределами P5a/OQ-10, opaque type-2 поля
+  `+0x40/+0x44/+0x654/+0x658/+0xff0/+0x6cc`, tail/`BT_ENTS` порядок,
+  baseline re-encode 28 save; verdict + декомпозиция.
+- **Spec:** `docs/specs/2026-11-17-p2-15c3a-write-back-research-design.md`
+  (approved 2026-11-17); **Plan:**
+  `docs/plans/2026-11-17-p2-15c3a-write-back-research.md`;
+  **Research:** `docs/research/p2-15c3a-write-back.md`; **D-083**.
+- **Результат (D-083):** verdict **hybrid**. Доказан writer/reader-контракт:
+  `FUN_14031b64`; HERO `FUN_1401e690`+`FUN_1401e340` (tile/direction
+  `+0x604/+0x608/+0x28`, raw `0x11c` `+0xff0`, HP/EP/AP
+  `+0x14fc/+0x1500/+0x1504`, raw `0x600` `+0x1510`, containers
+  `+0x0c/+0x10/+0x109c`, `+0x2bb4/+0x2bb8`, tail `+0xf5c..` + `+0x14f4`,
+  attached `+0xf44`); type-2 writer `FUN_1401ec40`/reader `FUN_1401e758`
+  field-by-field, включая ранее необъяснённый `+0xf50` (reader отбрасывает);
+  item `0xC0 + u32 sub + 0x14*sub`; presence word контейнера = литерал 1/0;
+  `FUN_14032c2c` пишет только текущий уровень в dictionary.
+  Baseline 28 save (rebuild→reparse): main stream, tail names/order, tail
+  sections, typed `BT_VARS` (decode f64→repack) и `BT_TRIBE` — 28/28;
+  header 0 diffs; main compressed +93,824 B (+1.38%), first diff `0x6c/0x6d`.
+  HERO scan: 28/28 exact consume, attached 0, extra 0/1 (slot16), 1,599
+  item records, 924 mods, `0x600` second half non-zero 26/28 (reader
+  zeroes it → raw не равен оригинальному поведению).
+  Решение: **raw** для не смоделированных доменов (opaque type-2, HERO
+  `0x600`/`0x80`/extra/attached, ENT 8/16/32, DIARY/HSTRY, `BT_SCRN`);
+  HERO `0x600` и DIARY/HSTRY — raw pass-through с parity `blocked` до
+  разрешения runtime-семантики;
+  **full-inverse** для HERO containers, selected `BT_ENTS`/`BT_PNAME`,
+  tail dictionary при смене уровня, `BT_INFO` level id.
+  Blocked prerequisites: календарь (`BT_INFO 0x20`, `BT_RGINF` datetime),
+  persisted `+0x26c0`, live `BT_VARS` wiring, DIARY/HSTRY runtime.
+- **Декомпозиция:** `P2-15c3b` HERO live write; `P2-15c3c` selected tail
+  (ENT/PNAME/containers/RGINF latch); `P2-15c3d` DIARY/HSTRY (blocked
+  b4c/b4d); `P2-15c3e` multi-level tails + level id; `P2-15c3f` live
+  integration (`write_loaded_save_to`/`game_save` + vars wiring);
+  `P2-15c3g` game calendar research. Порядок: c3b → c3c → c3f; c3e после c3c.
+- **Команды проверки:**
+  `py -3 .local\research\c3a\reencode.py --saves "I:\Games\Златогорье-2\Saves" --out .local\research\c3a\out`;
+  `py -3 .local\research\c3a\hero_scan.py`;
+  `Get-FileHash -Algorithm SHA256 .local\research\c3a\reencode.py`;
+  `git diff --check`.
+- **Проверка (2026-11-17):** `reencode.py` — 28/28 main/tail names/tail
+  sections/VARS/TRIBE, header 0 diffs, compressed delta +93,824 B;
+  `hero_scan.py` — 28/28 exact consume, 1,599 items, 924 mods, 80/80
+  non-empty containers, attached 0/28; independent reviewer — Critical
+  (tail-equality metric) и Important (typed VARS, BT_INFO source, blocked
+  next checks, PROJECT/STATUS, c3c containers, non-claims) исправлены;
+  повторное ревью закрыло остаток (`+0x6cc` setter, диапазон
+  `FUN_14032c2c`, raw/blocked-формулировки, `BT_INFO`/`BT_RGINF` next
+  checks);
+  docs UTF-8 no BOM/NUL; `git diff --check` clean; `src/`/`tests/`/`tools/`
+  не менялись.
+- **Дальше:** `P2-15c3b` — HERO live write (raw `0xC0` item carry, container
+  writer, patch tile/direction/HP/EP/AP), затем `P2-15c3c`.
+- **Статус:** `done`.
+
 ## P2-15c4b — Save slots and game_save (done 2026-11-16)
 
 - **Задача:** `--save-dir <dir>`, `--write-save-slot <n>`, console
