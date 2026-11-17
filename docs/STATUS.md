@@ -31,7 +31,8 @@
   16 assertions, 0 failed; focused E2E `*write-save*` — 2 cases / 23
   assertions, 0 failed (записанный файл парсится, decompressed bodies равны
   source payload, title/date/weekday patched); полный `ctest` — 19/19
-  passed, 2077.56 s (real), exit 0 (build exit 0).
+  passed, 2149.58 s (real), exit 0 (build exit 0; финальный прогон после
+  fix wave, до фиксов было 2077.56 s).
 - **Остаточное:** только snapshot: текущий HERO/tail/ENTS/world state не
   сериализуется из живой симуляции (c3); slot UI/`game_save` — c4b;
   overwrite atomicity best-effort (remove+rename fallback); SYSTEMTIME
