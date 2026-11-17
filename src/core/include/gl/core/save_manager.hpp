@@ -32,6 +32,8 @@ private:
 
 std::optional<int> slot_index_from_filename(std::string_view filename);
 
+std::filesystem::path save_slot_path(const std::filesystem::path& save_dir, int slot);
+
 gl::VoidResult write_save_file(const std::filesystem::path& path,
                                std::span<const std::uint8_t> bytes);
 }

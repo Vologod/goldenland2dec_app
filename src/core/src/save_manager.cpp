@@ -78,6 +78,10 @@ std::optional<int> slot_index_from_filename(std::string_view filename) {
     return slot;
 }
 
+std::filesystem::path save_slot_path(const std::filesystem::path& save_dir, int slot) {
+    return save_dir / ("slot" + std::to_string(slot) + ".sav");
+}
+
 gl::VoidResult write_save_file(const std::filesystem::path& path,
                                std::span<const std::uint8_t> bytes) {
     std::error_code ec;

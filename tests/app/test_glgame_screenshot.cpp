@@ -2501,3 +2501,68 @@ TEST_CASE("glgame --write-save without a loaded save fails") {
     CHECK(output.find("save write: no loaded save payload") != std::string::npos);
     CHECK_FALSE(fs::exists(out));
 }
+
+TEST_CASE("glgame --save-dir writes slots without touching real saves") {
+    const char* game_dir = std::getenv("GL_GAME_DIR");
+    REQUIRE(game_dir != nullptr);
+
+    TempDir temp;
+    const fs::path config = write_test_config(temp.path);
+    const fs::path save_dir = temp.path / "Saves";
+    fs::create_directories(save_dir);
+    const fs::path source = fs::path(game_dir) / "Saves" / "slot0.sav";
+    const fs::path copied = save_dir / "slot0.sav";
+    fs::copy_file(source, copied);
+    const std::string real_before = read_file(source);
+    const std::string copied_before = read_file(copied);
+
+    const fs::path png = temp.path / "slot_write.png";
+    std::string output;
+    const int code = run_glgame_capture(
+        screenshot_arguments(game_dir, config, png,
+                             {"--save-dir", save_dir.string(), "--load-save", "0",
+                              "--write-save-slot", "1", "--save-title", "SlotOne",
+                              "--seed", "1"}),
+        output);
+    CAPTURE(code);
+    CAPTURE(output);
+    CHECK(code == 0);
+    CHECK(output.find("save write: path=") != std::string::npos);
+    CHECK(read_file(source) == real_before);
+    CHECK(read_file(copied) == copied_before);
+    const fs::path written = save_dir / "slot1.sav";
+    REQUIRE(fs::exists(written));
+    const std::string bytes = read_file(written);
+    const auto payload = gl::assets::parse_save_payload(
+        std::span<const std::uint8_t>(
+            reinterpret_cast<const std::uint8_t *>(bytes.data()), bytes.size()));
+    REQUIRE(payload.has_value());
+    CHECK(payload->header.title == "SlotOne");
+    CHECK(payload->info.level_id == "L93_4");
+}
+
+TEST_CASE("glgame console game_save writes a slot") {
+    const char* game_dir = std::getenv("GL_GAME_DIR");
+    REQUIRE(game_dir != nullptr);
+
+    TempDir temp;
+    const fs::path config = write_test_config(temp.path);
+    const fs::path save_dir = temp.path / "Saves";
+    fs::create_directories(save_dir);
+    fs::copy_file(fs::path(game_dir) / "Saves" / "slot0.sav",
+                  save_dir / "slot0.sav");
+
+    const fs::path png = temp.path / "game_save.png";
+    std::string output;
+    const int code = run_glgame_capture(
+        screenshot_arguments(game_dir, config, png,
+                             {"--save-dir", save_dir.string(), "--load-save", "0",
+                              "--exec", "game_save 2", "--save-title", "ConsoleSave",
+                              "--seed", "1"}),
+        output);
+    CAPTURE(code);
+    CAPTURE(output);
+    CHECK(code == 0);
+    CHECK(output.find("game_save: slot 2 written") != std::string::npos);
+    REQUIRE(fs::exists(save_dir / "slot2.sav"));
+}

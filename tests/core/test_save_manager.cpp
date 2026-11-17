@@ -154,6 +154,12 @@ TEST_CASE("slot_index_from_filename: parses valid slot names and rejects others"
     CHECK_FALSE(gl::core::slot_index_from_filename("").has_value());
 }
 
+TEST_CASE("save_slot_path builds slot file names") {
+    const std::filesystem::path dir = "Saves";
+    CHECK(gl::core::save_slot_path(dir, 0) == dir / "slot0.sav");
+    CHECK(gl::core::save_slot_path(dir, 21) == dir / "slot21.sav");
+}
+
 TEST_CASE("write_save_file writes, overwrites and leaves no temp file") {
     const std::filesystem::path base =
         std::filesystem::temp_directory_path() /
