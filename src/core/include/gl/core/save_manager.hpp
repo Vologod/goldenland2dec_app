@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <optional>
+#include <span>
 #include <string_view>
 #include <vector>
 
@@ -30,4 +31,7 @@ private:
 };
 
 std::optional<int> slot_index_from_filename(std::string_view filename);
+
+gl::VoidResult write_save_file(const std::filesystem::path& path,
+                               std::span<const std::uint8_t> bytes);
 }

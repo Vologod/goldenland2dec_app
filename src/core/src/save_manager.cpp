@@ -9,6 +9,7 @@
 #include <string>
 #include <system_error>
 #include <utility>
+#include <variant>
 
 namespace gl::core {
 namespace {
@@ -75,6 +76,38 @@ std::optional<int> slot_index_from_filename(std::string_view filename) {
         slot = slot * 10 + digit;
     }
     return slot;
+}
+
+gl::VoidResult write_save_file(const std::filesystem::path& path,
+                               std::span<const std::uint8_t> bytes) {
+    std::error_code ec;
+    if (path.has_parent_path())
+        std::filesystem::create_directories(path.parent_path(), ec);
+    if (ec)
+        return Error{ErrorCode::io, "cannot create save directory"};
+    const std::string temp = path.string() + ".tmp";
+    {
+        std::ofstream out(temp, std::ios::binary | std::ios::trunc);
+        if (!out)
+            return Error{ErrorCode::io, "cannot open temporary save file"};
+        out.write(reinterpret_cast<const char*>(bytes.data()),
+                  static_cast<std::streamsize>(bytes.size()));
+        if (!out)
+            return Error{ErrorCode::io, "cannot write temporary save file"};
+    }
+    std::filesystem::rename(temp, path, ec);
+    if (ec) {
+        std::error_code ignored;
+        std::filesystem::remove(path, ignored);
+        ec.clear();
+        std::filesystem::rename(temp, path, ec);
+    }
+    if (ec) {
+        std::error_code ignored;
+        std::filesystem::remove(temp, ignored);
+        return Error{ErrorCode::io, "cannot replace save file"};
+    }
+    return VoidResult{std::monostate{}};
 }
 
 gl::Result<SaveManager> SaveManager::scan(const std::filesystem::path& save_dir) {

@@ -49,6 +49,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <ctime>
 #include <exception>
 #include <filesystem>
 #include <fstream>
@@ -115,6 +116,9 @@ struct Options {
     std::optional<int> equip_save;
     bool equip_save_pending = false;
     std::optional<int> load_save;
+    fs::path write_save;
+    bool has_write_save = false;
+    std::string save_title = "Quick save";
     bool inventory = false;
     std::optional<int> inventory_select;
     std::string trade_npc;
@@ -175,12 +179,14 @@ void print_usage() {
         "  --click-world <x> <y> Headless test: click the walk tile at x y\n"
         "  --list-saves         Print save slots as tab-separated lines and exit\n"
         "  --dump-save <slot>   Print the decoded save slot payload and exit\n"
+        "  --write-save <path>  Write the loaded save snapshot to <path> after loading\n"
+        "  --save-title <text>  Title stored in the written save (default: Quick save)\n"
         "  --screenshot <png>   Render the current state, save PNG and exit\n"
         "  --exec \"<command>\"   Run a console command after boot (repeatable)\n"
         "  -h, --help           Show this help and exit\n"
         "\n"
         "Console commands include: help, exit, saves, inventory.\n"
-        "Exit codes: 0 success, 1 arguments, 2 I/O, 3 format/load.");
+        "Exit codes: 0 success, 1 arguments, 2 I/O, 3 format/load, 4 save write.");
 }
 
 fs::path path_from_utf8(std::string_view text) {
@@ -465,6 +471,17 @@ ParseStatus parse_args(int argc, char** argv, Options& options) {
                 return ParseStatus::error;
             }
             options.dump_save = slot;
+        } else if (arg == "--write-save") {
+            if (!next_value(arg, value)) return ParseStatus::error;
+            if (value.empty()) {
+                std::fputs("glgame: --write-save must not be empty\n", stderr);
+                return ParseStatus::error;
+            }
+            options.write_save = path_from_utf8(value);
+            options.has_write_save = true;
+        } else if (arg == "--save-title") {
+            if (!next_value(arg, value)) return ParseStatus::error;
+            options.save_title = std::string(value);
         } else if (arg == "--screenshot") {
             if (!next_value(arg, value)) return ParseStatus::error;
             if (value.empty()) {
@@ -717,6 +734,7 @@ class Game {
         if (options_.load_save) {
             if (!load_save(*options_.load_save)) return 3;
             dump_npc_inventories();
+            if (options_.has_write_save && !write_loaded_save()) return 4;
         } else if (options_.has_dialog) {
             rebuild_person_runtime({});
             const gl::Result<void> opened = open_dialog(options_.dialog);
@@ -2108,8 +2126,10 @@ class Game {
     }
 
     bool load_level(std::string_view name) {
-        if (pending_restore_ == nullptr)
+        if (pending_restore_ == nullptr) {
             save_globals_.clear();
+            loaded_payload_.reset();
+        }
         restore_result_ = {};
         gl::game::HeroOutfit hero_outfit;
         if (options_.hero_outfit_none) {
@@ -2290,9 +2310,51 @@ class Game {
                                  " vars=" + std::to_string(payload->vars.size()) +
                                  " tail=" + std::to_string(payload->tail.size());
         gl::log(gl::LogLevel::info, line);
+        loaded_payload_ = payload.value();
         gl::log(gl::LogLevel::info,
                 "save globals: saved=" + std::to_string(save_globals_.size()));
         if (!state_.transition(gl::core::AppState::level)) return false;
+        return true;
+    }
+
+    bool write_loaded_save() {
+        if (!loaded_payload_) {
+            gl::log(gl::LogLevel::error, "save write: no loaded save payload");
+            return false;
+        }
+        gl::assets::SavePayload payload = *loaded_payload_;
+        gl::assets::SaveHeader header = payload.header;
+        header.title = options_.save_title;
+        const std::time_t now = std::time(nullptr);
+        const std::tm* local = std::localtime(&now);
+        if (local != nullptr) {
+            header.year = static_cast<std::uint16_t>(local->tm_year + 1900);
+            header.month = static_cast<std::uint16_t>(local->tm_mon + 1);
+            header.weekday = static_cast<std::uint16_t>(local->tm_wday);
+            header.day = static_cast<std::uint16_t>(local->tm_mday);
+            header.time_a = static_cast<std::uint16_t>(local->tm_hour);
+            header.time_b = static_cast<std::uint16_t>(local->tm_min);
+            header.time_c = static_cast<std::uint16_t>(local->tm_sec);
+        }
+        const auto patched = gl::assets::patch_save_header(payload, header);
+        if (!patched) {
+            gl::log(gl::LogLevel::error, "save write: " + patched.error().message);
+            return false;
+        }
+        const auto encoded = gl::assets::encode_save_payload(payload);
+        if (!encoded) {
+            gl::log(gl::LogLevel::error, "save write: " + encoded.error().message);
+            return false;
+        }
+        const auto written =
+            gl::core::write_save_file(options_.write_save, encoded.value());
+        if (!written) {
+            gl::log(gl::LogLevel::error, "save write: " + written.error().message);
+            return false;
+        }
+        gl::log(gl::LogLevel::info,
+                "save write: path=" + options_.write_save.string() +
+                    " bytes=" + std::to_string(encoded->size()));
         return true;
     }
 
@@ -3085,6 +3147,7 @@ class Game {
     std::optional<gl::assets::HeroInventory> pending_inventory_;
     std::optional<gl::assets::HeroStats> pending_hero_stats_;
     std::optional<gl::game::HeroOutfit> pending_outfit_;
+    std::optional<gl::assets::SavePayload> loaded_payload_;
     const gl::assets::SaveTailEntry* pending_restore_ = nullptr;
     const gl::assets::SaveTribeTable* pending_tribes_ = nullptr;
     std::optional<std::array<std::uint8_t, 0x20>> pending_save_time_;

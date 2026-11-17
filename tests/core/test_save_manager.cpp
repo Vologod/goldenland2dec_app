@@ -6,6 +6,7 @@
 #include <doctest/doctest.h>
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -151,4 +152,31 @@ TEST_CASE("slot_index_from_filename: parses valid slot names and rejects others"
     CHECK_FALSE(gl::core::slot_index_from_filename("slot1.txt").has_value());
     CHECK_FALSE(gl::core::slot_index_from_filename("slot2147483648.sav").has_value());
     CHECK_FALSE(gl::core::slot_index_from_filename("").has_value());
+}
+
+TEST_CASE("write_save_file writes, overwrites and leaves no temp file") {
+    const std::filesystem::path path =
+        std::filesystem::temp_directory_path() / "gl_save_write_test.sav";
+    std::error_code ec;
+    std::filesystem::remove(path, ec);
+    std::filesystem::remove(path.string() + ".tmp", ec);
+
+    const std::vector<std::uint8_t> first{1, 2, 3};
+    REQUIRE(gl::core::write_save_file(path, first).has_value());
+    {
+        std::ifstream in(path, std::ios::binary);
+        const std::vector<std::uint8_t> read((std::istreambuf_iterator<char>(in)),
+                                             std::istreambuf_iterator<char>());
+        CHECK(read == first);
+    }
+    const std::vector<std::uint8_t> second{9, 8};
+    REQUIRE(gl::core::write_save_file(path, second).has_value());
+    {
+        std::ifstream in(path, std::ios::binary);
+        const std::vector<std::uint8_t> read((std::istreambuf_iterator<char>(in)),
+                                             std::istreambuf_iterator<char>());
+        CHECK(read == second);
+    }
+    CHECK_FALSE(std::filesystem::exists(path.string() + ".tmp"));
+    std::filesystem::remove(path, ec);
 }

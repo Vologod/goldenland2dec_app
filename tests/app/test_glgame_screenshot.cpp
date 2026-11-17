@@ -2,6 +2,7 @@
 #define DOCTEST_CONFIG_IMPLEMENT
 #include <doctest.h>
 #include <gl/assets/item_name_index.hpp>
+#include <gl/assets/save_payload.hpp>
 #include <gl/assets/sef.hpp>
 #include <gl/assets/vfs.hpp>
 #include <gl/game/level.hpp>
@@ -2442,4 +2443,43 @@ TEST_CASE("glgame specials mode changes NPC loot and keeps modified trade unsupp
     CHECK(no_specials_width == width);
     CHECK(no_specials_height == height);
     CHECK(count_differences(pixels, no_specials) > 5000);
+}
+
+TEST_CASE("glgame --write-save writes a parseable snapshot") {
+    const char* game_dir = std::getenv("GL_GAME_DIR");
+    REQUIRE(game_dir != nullptr);
+
+    TempDir temp;
+    const fs::path config = write_test_config(temp.path);
+    const fs::path png = temp.path / "write_save.png";
+    const fs::path out = temp.path / "out.sav";
+    std::string output;
+    const int code = run_glgame_capture(
+        screenshot_arguments(game_dir, config, png,
+                             {"--load-save", "0", "--write-save", out.string(),
+                              "--save-title", "TestSave", "--seed", "1"}),
+        output);
+    CAPTURE(code);
+    CAPTURE(output);
+    CHECK(code == 0);
+    CHECK(output.find("save write: path=") != std::string::npos);
+    REQUIRE(fs::exists(out));
+
+    const std::string source = read_file(fs::path(game_dir) / "Saves" / "slot0.sav");
+    const auto source_payload = gl::assets::parse_save_payload(
+        std::span<const std::uint8_t>(
+            reinterpret_cast<const std::uint8_t*>(source.data()), source.size()));
+    REQUIRE(source_payload.has_value());
+    const std::string written = read_file(out);
+    const auto written_payload = gl::assets::parse_save_payload(
+        std::span<const std::uint8_t>(
+            reinterpret_cast<const std::uint8_t*>(written.data()), written.size()));
+    REQUIRE(written_payload.has_value());
+    CHECK(written_payload->header.title == "TestSave");
+    CHECK(written_payload->header.version == source_payload->header.version);
+    CHECK(written_payload->info.level_id == source_payload->info.level_id);
+    CHECK(written_payload->header.weekday <= 6);
+    CHECK(written_payload->header.month >= 1);
+    CHECK(written_payload->header.month <= 12);
+    CHECK(written_payload->decompressed == source_payload->decompressed);
 }
