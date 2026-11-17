@@ -30,8 +30,8 @@
 - **Проверка (2026-11-17):** focused core `*save_slot_path*` — 1 case /
   2 assertions, 0 failed; focused E2E `*save-dir*,*game_save*` — 2 cases /
   37 assertions, 0 failed; c4a regression `*write-save*` — 3 cases /
-  29 assertions, 0 failed; полный `ctest` в этой волне не перезапускался
-  (предыдущий — 19/19, exit 0).
+  29 assertions, 0 failed; полный `ctest` — 19/19 passed, 2040.37 s, exit 0
+  (финальный прогон после fix wave; до фиксов было 2034.50 s).
 - **Остаточное:** snapshot only (c3): живой HERO/tail/world state не
   сериализуется; UI save menu — c4c; `game_load` отсутствует; slot cap
   нет; overwrite atomicity best-effort.
