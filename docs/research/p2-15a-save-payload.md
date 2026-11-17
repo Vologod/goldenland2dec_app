@@ -1342,3 +1342,14 @@ names. Real 28-save oracle: `update_vars_from_globals` over
 Runtime-only/new globals are a c4 policy, type 3 is unit-only (absent from
 the corpus), HERO/tail/ENTITIES remain raw (c3), and no `Saves/` write or
 `game_save` exists yet (c4).
+
+## Implementation result (P2-15c4a, 2026-11-16)
+
+`patch_save_header` updates version/SYSTEMTIME date/weekday/time and a
+64-byte cp1251 title inside the preserved `header_raw`;
+`core::write_save_file` stages `<path>.tmp` (flush/close checked) and
+renames over the target. `glgame --load-save ... --write-save <path>`
+writes a snapshot through the c1 container with typed VARS/TRIBE from c2;
+HERO/tail/ENTS remain raw. The written file parses and its block bodies
+equal the source. Slot UI/`game_save` (c4b) and live state
+serialization (c3) remain out of scope; no implicit `Saves/` writes.

@@ -2,22 +2,41 @@
 
 Обновлено: 2026-11-16
 
-## P2-15c4a — Snapshot save write (design 2026-11-16)
+## P2-15c4a — Snapshot save write (done 2026-11-16)
 
 - **Задача:** запись загруженного payload по явному пути: header
   date/weekday/title patch, c1 encoder, core tmp+rename, glgame
   `--write-save`/`--save-title`; HERO/tail/ENTS raw (snapshot).
 - **Spec:** `docs/specs/2026-11-16-p2-15c4a-snapshot-save-design.md`
-  (approved 2026-11-16); **Plan:** `docs/plans/2026-11-16-p2-15c4a-snapshot-save.md`.
-- **Критерии:** записанный файл парсится, decompressed bodies равны
-  исходному payload, title/date/weekday patched; core write
-  create/overwrite/no-tmp; E2E temp path; полный `ctest`.
-- **Команды:** `cmake --build build`;
-  `gl_assets_tests --test-case="*patch_save_header*,*weekday*"`;
-  `gl_core_tests --test-case="*write_save_file*"`;
-  `glgame_screenshot_tests --test-case="*write-save*"`;
+  (approved 2026-11-16); **Plan:** `docs/plans/2026-11-16-p2-15c4a-snapshot-save.md`;
+  **D-081.**
+- **Реализовано (D-081):** `SaveHeader.weekday` парсится из слова SYSTEMTIME;
+  `patch_save_header` пишет version `+0x14`, year/month/weekday/day/hour/
+  minute/second `+0x18..+0x24` и cp1251 title 64 B (`+0x28`, NUL-padded),
+  title >64 B → `format`. `core::write_save_file` создаёт parent directories,
+  пишет `<path>.tmp` с проверкой flush/close, делает rename поверх target
+  (target-preserved `exists` fallback, remove+retry) и не оставляет temp при
+  ошибке. `glgame --load-save ... --write-save <explicit path>
+  [--save-title <text>]` сохраняет распарсенный payload, патчит
+  date/weekday/title из локальных часов, кодирует c1 (typed VARS/TRIBE из c2;
+  HERO/tail/ENTS raw) и логирует `save write: path=.. bytes=..`; неявных
+  записей в `Saves/` нет; `--write-save` без загруженного payload логирует
+  `save write: no loaded save payload` и выходит с кодом 4 (также для
+  `--dialog`/`--level`).
+- **Команды проверки:** `cmake --build build`;
+  `build\bin\gl_core_tests.exe --test-case="*write_save_file*"`;
+  `build\bin\glgame_screenshot_tests.exe --test-case="*write-save*"`;
   `ctest --test-dir build --output-on-failure`.
-- **Статус:** `design` (implementation не начата).
+- **Проверка (2026-11-17):** focused core `*write_save_file*` — 3 cases /
+  16 assertions, 0 failed; focused E2E `*write-save*` — 2 cases / 23
+  assertions, 0 failed (записанный файл парсится, decompressed bodies равны
+  source payload, title/date/weekday patched); полный `ctest` — 19/19
+  passed, 2077.56 s (real), exit 0 (build exit 0).
+- **Остаточное:** только snapshot: текущий HERO/tail/ENTS/world state не
+  сериализуется из живой симуляции (c3); slot UI/`game_save` — c4b;
+  overwrite atomicity best-effort (remove+rename fallback); SYSTEMTIME
+  mapping (OQ-3); title cp1251 substitution для непредставимых символов.
+- **Статус:** `done`.
 
 ## P2-15c2 — Typed BT_VARS/BT_TRIBE encoders (done 2026-11-16)
 
