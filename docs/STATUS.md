@@ -2,6 +2,17 @@
 
 Обновлено: 2026-11-16
 
+## P2-15c4b — Save slots and game_save (design 2026-11-16)
+
+- **Задача:** `--save-dir`, `--write-save-slot <n>`, console `game_save <n>`;
+  запись snapshot в `slot<N>.sav`, refresh `SaveManager`.
+- **Spec:** `docs/specs/2026-11-16-p2-15c4b-save-slots-design.md`
+  (approved 2026-11-16); **Plan:** `docs/plans/2026-11-16-p2-15c4b-save-slots.md`.
+- **Критерии:** slot write парсится, block bodies равны; temp save-dir E2E
+  без изменений реальных `Saves/`; console `game_save` после load;
+  полный `ctest`.
+- **Статус:** `design` (implementation не начата).
+
 ## P2-15c4a — Snapshot save write (done 2026-11-16)
 
 - **Задача:** запись загруженного payload по явному пути: header
