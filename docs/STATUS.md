@@ -35,6 +35,11 @@
 - **Остаточное:** snapshot only (c3): живой HERO/tail/world state не
   сериализуется; UI save menu — c4c; `game_load` отсутствует; slot cap
   нет; overwrite atomicity best-effort.
+- **Дальше (следующая сессия):** `P2-15c3a` — write-back research
+  (HERO layout за пределами P5a/OQ-10, opaque type-2 поля
+  `+0x40/+0x44/+0x654/+0x658/+0xff0/+0x6cc`, patch-in-raw vs full inverse,
+  BT_ENTS/tail порядок; verdict + декомпозиция). После неё: c4c UI save
+  menu, c4d console `game_load`.
 - **Статус:** `done`.
 
 ## P2-15c4a — Snapshot save write (done 2026-11-16)
