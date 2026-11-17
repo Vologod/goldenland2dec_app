@@ -204,3 +204,26 @@ TEST_CASE("write_save_file creates a missing nested parent directory") {
     CHECK_FALSE(std::filesystem::exists(path.string() + ".tmp"));
     std::filesystem::remove_all(base, ec);
 }
+
+TEST_CASE("write_save_file keeps the target and leaves no temp on failure") {
+    const std::filesystem::path base =
+        std::filesystem::temp_directory_path() /
+        ("gl_save_write_fail_" +
+         std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    const std::filesystem::path path = base / "out.sav";
+    std::error_code ec;
+    std::filesystem::remove_all(base, ec);
+    REQUIRE(std::filesystem::create_directories(path, ec));
+    REQUIRE_FALSE(ec);
+    {
+        std::ofstream blocker(path / "keep.bin", std::ios::binary);
+        REQUIRE(blocker);
+    }
+
+    const std::vector<std::uint8_t> bytes{7};
+    CHECK_FALSE(gl::core::write_save_file(path, bytes).has_value());
+    CHECK(std::filesystem::is_directory(path));
+    CHECK(std::filesystem::exists(path / "keep.bin"));
+    CHECK_FALSE(std::filesystem::exists(path.string() + ".tmp"));
+    std::filesystem::remove_all(base, ec);
+}

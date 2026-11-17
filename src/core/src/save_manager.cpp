@@ -92,10 +92,18 @@ gl::VoidResult write_save_file(const std::filesystem::path& path,
             return Error{ErrorCode::io, "cannot open temporary save file"};
         out.write(reinterpret_cast<const char*>(bytes.data()),
                   static_cast<std::streamsize>(bytes.size()));
+        out.flush();
         if (!out) {
+            out.close();
             std::error_code ignored;
             std::filesystem::remove(temp, ignored);
             return Error{ErrorCode::io, "cannot write temporary save file"};
+        }
+        out.close();
+        if (!out) {
+            std::error_code ignored;
+            std::filesystem::remove(temp, ignored);
+            return Error{ErrorCode::io, "cannot close temporary save file"};
         }
     }
     std::filesystem::rename(temp, path, ec);
