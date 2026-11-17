@@ -1361,6 +1361,7 @@ serialization (c3) remain out of scope; no implicit `Saves/` writes.
 `<game-dir>/Saves`). `--write-save-slot <n>` and console `game_save <n>`
 write the c4a snapshot to `slot<N>.sav`, rescan slots, and refuse to run
 without a loaded payload (CLI exits 4; console returns an error). Tests
-use a temp save dir and confirm source/real saves are unchanged. Snapshot
+use a temp save dir and confirm the copied source slot and the real
+`Saves/slot0.sav`/`slot2.sav` are unchanged. Snapshot
 only: HERO/tail/world state still come from the loaded raw bytes (c3);
 UI save menu (c4c) and `game_load` remain absent.

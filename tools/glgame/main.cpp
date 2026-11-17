@@ -186,15 +186,15 @@ void print_usage() {
         "  --click-world <x> <y> Headless test: click the walk tile at x y\n"
         "  --list-saves         Print save slots as tab-separated lines and exit\n"
         "  --dump-save <slot>   Print the decoded save slot payload and exit\n"
-        "  --write-save <path>  Write the loaded save snapshot to <path> after loading\n"
+        "  --write-save <path>    Write the loaded save snapshot to <path> after loading\n"
         "  --save-dir <dir>       Save directory (default <game-dir>/Saves)\n"
         "  --write-save-slot <n>  Write the loaded snapshot to <save-dir>/slot<n>.sav\n"
-        "  --save-title <text>  Title stored in the written save (default: Quick save)\n"
+        "  --save-title <text>    Title stored in the written save (default: Quick save)\n"
         "  --screenshot <png>   Render the current state, save PNG and exit\n"
         "  --exec \"<command>\"   Run a console command after boot (repeatable)\n"
         "  -h, --help           Show this help and exit\n"
         "\n"
-        "Console commands include: help, exit, saves, inventory.\n"
+        "Console commands include: help, exit, saves, game_save, inventory.\n"
         "Exit codes: 0 success, 1 arguments, 2 I/O, 3 format/load, 4 save write.");
 }
 
@@ -750,10 +750,23 @@ class Game {
 
         if (options_.equip_save) load_equip_save(*options_.equip_save);
 
+        const bool wants_write = options_.has_write_save || options_.write_save_slot.has_value();
+        if (!options_.load_save && wants_write) {
+            write_loaded_save_to(options_.write_save_slot
+                                     ? gl::core::save_slot_path(resolved_save_dir(),
+                                                                *options_.write_save_slot)
+                                     : options_.write_save);
+            return 4;
+        }
+
         if (options_.load_save) {
             if (!load_save(*options_.load_save)) return 3;
             dump_npc_inventories();
             if (options_.has_write_save && !write_loaded_save_to(options_.write_save)) return 4;
+            if (options_.write_save_slot &&
+                !write_loaded_save_to(gl::core::save_slot_path(
+                    resolved_save_dir(), *options_.write_save_slot)))
+                return 4;
         } else if (options_.has_dialog) {
             rebuild_person_runtime({});
             const gl::Result<void> opened = open_dialog(options_.dialog);
@@ -765,17 +778,6 @@ class Game {
             dump_npc_inventories();
             apply_cli_click();
             if (options_.has_trade_npc) show_trade_panel(options_.trade_npc);
-        }
-
-        if (options_.write_save_slot) {
-            if (!write_loaded_save_to(
-                    gl::core::save_slot_path(resolved_save_dir(), *options_.write_save_slot)))
-                return 4;
-        }
-
-        if (options_.has_write_save && !options_.load_save) {
-            write_loaded_save_to(options_.write_save);
-            return 4;
         }
 
         apply_cli_dialog_answer();
@@ -1848,14 +1850,12 @@ class Game {
                                                "game_save: no loaded save payload"};
                           const fs::path path =
                               gl::core::save_slot_path(resolved_save_dir(), slot);
-                          if (!write_loaded_save_to(path))
+                          const auto bytes = write_loaded_save_to(path);
+                          if (!bytes)
                               return gl::Error{gl::ErrorCode::io,
                                                "game_save: write failed"};
-                          std::error_code size_error;
                           return "game_save: slot " + std::to_string(slot) +
-                                 " written (" +
-                                 std::to_string(fs::file_size(path, size_error)) +
-                                 " bytes)";
+                                 " written (" + std::to_string(*bytes) + " bytes)";
                       });
     }
 
@@ -2360,31 +2360,31 @@ class Game {
         return true;
     }
 
-    bool write_loaded_save_to(const fs::path& path) {
+    std::optional<std::size_t> write_loaded_save_to(const fs::path& path) {
         if (!loaded_payload_) {
             gl::log(gl::LogLevel::error, "save write: no loaded save payload");
-            return false;
+            return std::nullopt;
         }
         gl::assets::SavePayload payload = *loaded_payload_;
         const auto vars_body = gl::assets::encode_vars_body(payload.vars);
         if (!vars_body) {
             gl::log(gl::LogLevel::error, "save write: " + vars_body.error().message);
-            return false;
+            return std::nullopt;
         }
         const auto vars_ok = gl::assets::replace_block_body(payload, 2, vars_body.value());
         if (!vars_ok) {
             gl::log(gl::LogLevel::error, "save write: " + vars_ok.error().message);
-            return false;
+            return std::nullopt;
         }
         const auto tribe_body = gl::assets::encode_tribe_body(payload.tribes);
         if (!tribe_body) {
             gl::log(gl::LogLevel::error, "save write: " + tribe_body.error().message);
-            return false;
+            return std::nullopt;
         }
         const auto tribe_ok = gl::assets::replace_block_body(payload, 3, tribe_body.value());
         if (!tribe_ok) {
             gl::log(gl::LogLevel::error, "save write: " + tribe_ok.error().message);
-            return false;
+            return std::nullopt;
         }
         gl::assets::SaveHeader header = payload.header;
         header.title = options_.save_title;
@@ -2402,23 +2402,23 @@ class Game {
         const auto patched = gl::assets::patch_save_header(payload, header);
         if (!patched) {
             gl::log(gl::LogLevel::error, "save write: " + patched.error().message);
-            return false;
+            return std::nullopt;
         }
         const auto encoded = gl::assets::encode_save_payload(payload);
         if (!encoded) {
             gl::log(gl::LogLevel::error, "save write: " + encoded.error().message);
-            return false;
+            return std::nullopt;
         }
         const auto written = gl::core::write_save_file(path, encoded.value());
         if (!written) {
             gl::log(gl::LogLevel::error, "save write: " + written.error().message);
-            return false;
+            return std::nullopt;
         }
         refresh_saves();
+        const std::size_t bytes = encoded->size();
         gl::log(gl::LogLevel::info,
-                "save write: path=" + path.string() +
-                    " bytes=" + std::to_string(encoded->size()));
-        return true;
+                "save write: path=" + path.string() + " bytes=" + std::to_string(bytes));
+        return bytes;
     }
 
     void request_exit() {
@@ -2862,9 +2862,7 @@ class Game {
         }
     }
 
-    fs::path resolved_save_dir() const {
-        return options_.has_save_dir ? options_.save_dir : options_.game_dir / "Saves";
-    }
+    fs::path resolved_save_dir() const { return ::resolved_save_dir(options_); }
 
     void refresh_saves() {
         auto saves = gl::core::SaveManager::scan(resolved_save_dir());

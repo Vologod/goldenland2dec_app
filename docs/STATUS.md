@@ -1,6 +1,6 @@
 # STATUS
 
-Обновлено: 2026-11-16
+Обновлено: 2026-11-17
 
 ## P2-15c4b — Save slots and game_save (done 2026-11-16)
 
@@ -15,8 +15,9 @@
   `--list-saves`/`--load-save`/`--dump-save`, slot write и скана
   `SaveManager` (default `<game-dir>/Saves`); `--write-save-slot <n>`
   после успешного load пишет c4a-snapshot в `<save-dir>/slot<n>.sav`
-  (header date/weekday/title patched, typed VARS/TRIBE, HERO/tail/ENTS
-  raw as loaded), логирует `save write: path=.. bytes=..`, делает rescan
+  (header date/weekday/title patched, VARS/TRIBE re-encoded from the
+  loaded payload, HERO/tail/ENTS raw as loaded), логирует
+  `save write: path=.. bytes=..`, делает rescan
   slots; без загруженного payload — лог и exit 4; console `game_save <n>`
   выполняет ту же запись, rescan и возвращает
   `game_save: slot <n> written (<bytes> bytes)`; ошибки аргументов/io
@@ -26,15 +27,14 @@
   `build\bin\glgame_screenshot_tests.exe --test-case="*save-dir*,*game_save*"`;
   `build\bin\glgame_screenshot_tests.exe --test-case="*write-save*"`;
   `ctest --test-dir build --output-on-failure`.
-- **Проверка (2026-11-16):** focused core `*save_slot_path*` — 1 case /
+- **Проверка (2026-11-17):** focused core `*save_slot_path*` — 1 case /
   2 assertions, 0 failed; focused E2E `*save-dir*,*game_save*` — 2 cases /
-  22 assertions, 0 failed; c4a regression `*write-save*` — 2 cases /
-  23 assertions, 0 failed; полный `ctest --test-dir build --output-on-failure`
-  (`GL_GAME_DIR=I:\Games\Златогорье-2`) — 19/19 passed, 2034.50 s (real),
-  exit 0 (build exit 0).
+  37 assertions, 0 failed; c4a regression `*write-save*` — 3 cases /
+  29 assertions, 0 failed; полный `ctest` в этой волне не перезапускался
+  (предыдущий — 19/19, exit 0).
 - **Остаточное:** snapshot only (c3): живой HERO/tail/world state не
   сериализуется; UI save menu — c4c; `game_load` отсутствует; slot cap
-  нет; overwrite atomicity best-effort; unchecked `file_size` log nit.
+  нет; overwrite atomicity best-effort.
 - **Статус:** `done`.
 
 ## P2-15c4a — Snapshot save write (done 2026-11-16)

@@ -2539,6 +2539,12 @@ TEST_CASE("glgame --save-dir writes slots without touching real saves") {
     REQUIRE(payload.has_value());
     CHECK(payload->header.title == "SlotOne");
     CHECK(payload->info.level_id == "L93_4");
+    const auto source_payload = gl::assets::parse_save_payload(
+        std::span<const std::uint8_t>(
+            reinterpret_cast<const std::uint8_t *>(copied_before.data()),
+            copied_before.size()));
+    REQUIRE(source_payload.has_value());
+    CHECK(payload->decompressed == source_payload->decompressed);
 }
 
 TEST_CASE("glgame console game_save writes a slot") {
@@ -2549,8 +2555,13 @@ TEST_CASE("glgame console game_save writes a slot") {
     const fs::path config = write_test_config(temp.path);
     const fs::path save_dir = temp.path / "Saves";
     fs::create_directories(save_dir);
-    fs::copy_file(fs::path(game_dir) / "Saves" / "slot0.sav",
-                  save_dir / "slot0.sav");
+    const fs::path source = fs::path(game_dir) / "Saves" / "slot0.sav";
+    const fs::path copied = save_dir / "slot0.sav";
+    fs::copy_file(source, copied);
+    const fs::path real_slot2 = fs::path(game_dir) / "Saves" / "slot2.sav";
+    const bool real_slot2_exists = fs::exists(real_slot2);
+    const std::string real_slot2_before =
+        real_slot2_exists ? read_file(real_slot2) : std::string{};
 
     const fs::path png = temp.path / "game_save.png";
     std::string output;
@@ -2564,5 +2575,49 @@ TEST_CASE("glgame console game_save writes a slot") {
     CAPTURE(output);
     CHECK(code == 0);
     CHECK(output.find("game_save: slot 2 written") != std::string::npos);
-    REQUIRE(fs::exists(save_dir / "slot2.sav"));
+    CHECK(fs::exists(real_slot2) == real_slot2_exists);
+    if (real_slot2_exists) CHECK(read_file(real_slot2) == real_slot2_before);
+
+    const fs::path written = save_dir / "slot2.sav";
+    REQUIRE(fs::exists(written));
+    const std::string bytes = read_file(written);
+    const auto payload = gl::assets::parse_save_payload(
+        std::span<const std::uint8_t>(
+            reinterpret_cast<const std::uint8_t *>(bytes.data()), bytes.size()));
+    REQUIRE(payload.has_value());
+    CHECK(payload->header.title == "ConsoleSave");
+    CHECK(payload->info.level_id == "L93_4");
+    const std::string source_bytes = read_file(copied);
+    const auto source_payload = gl::assets::parse_save_payload(
+        std::span<const std::uint8_t>(
+            reinterpret_cast<const std::uint8_t *>(source_bytes.data()),
+            source_bytes.size()));
+    REQUIRE(source_payload.has_value());
+    CHECK(payload->decompressed == source_payload->decompressed);
+
+    std::string list_output;
+    const int list_code = run_glgame_capture(
+        {"--game-dir", game_dir, "--save-dir", save_dir.string(), "--list-saves"},
+        list_output);
+    CHECK(list_code == 0);
+    CHECK(list_output.find("slot2\t") != std::string::npos);
+}
+
+TEST_CASE("glgame --write-save-slot without a loaded save fails") {
+    const char* game_dir = std::getenv("GL_GAME_DIR");
+    REQUIRE(game_dir != nullptr);
+
+    TempDir temp;
+    const fs::path config = write_test_config(temp.path);
+    const fs::path png = temp.path / "slot_fail.png";
+    std::string output;
+    const int code = run_glgame_capture(
+        screenshot_arguments(game_dir, config, png,
+                             {"--save-dir", temp.path.string(), "--write-save-slot", "1"}),
+        output);
+    CAPTURE(code);
+    CAPTURE(output);
+    CHECK(code == 4);
+    CHECK(output.find("save write: no loaded save payload") != std::string::npos);
+    CHECK_FALSE(fs::exists(temp.path / "slot1.sav"));
 }

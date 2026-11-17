@@ -1,6 +1,6 @@
 # Parity matrix
 
-Обновлено: 2026-11-14. Исходно (2026-11-05) — read-only аудит существующего
+Обновлено: 2026-11-17. Исходно (2026-11-05) — read-only аудит существующего
 состояния; Phase 1a добавила evidence VM-паритета и native dispatch (код
 порта менялся, см. D-049); Phase 1b1 добавила evidence person-параметров
 и Hero stat-блока (D-050); Phase 1b2a добавила inventory-запросы Hero
@@ -77,8 +77,8 @@ ID: `P4a-*`, `P4b-*`, `P4b2-*` — прежние A/B/C из аудита (пе�
    `0x5000006`/`0x5000007` остаются unsupported.
 3. **B3 save/load** — формат разобран (P2-15a, `implementable`); payload
    читается и грузится в first increment/entities parser (P2-15b/b1a), restore
-   persons исследован (P2-15b1b, `scoped`), но не реализован, и запись
-   отсутствует (`P2-15b1b1–b3`/P2-15c).
+   persons исследован (P2-15b1b, `scoped`), но не реализован; snapshot write
+   done (D-081/D-082); live state c3.
 4. **B4 тайминг** — порт 28 ms gate (`trunc(1000/35)`, один тик на
    кадр, без catch-up/clamp), research + implementation `P2-9`/D-068;
    residual U1 (host frame time) и pause/gate port-choice (`P4b-16`).
@@ -142,7 +142,7 @@ ID: `P4a-*`, `P4b-*`, `P4b2-*` — прежние A/B/C из аудита (пе�
 | P2-4 | INI | save temp+rename | `config.cpp:102-135`; D-019/D-020 | unit + real | partial | атомарность/ошибки — решение порта | audit p2-p3 |
 | P2-5 | консоль | registry/execute/help | `command.cpp:57-127` | unit | unverified | парсер консоли оригинала | audit p2-p3 |
 | P2-6 | консоль | buffer/history/keys | `console.cpp:15-53` | unit | unverified | лимиты 256/64/10 — порт | audit p2-p3 |
-| P2-7 | команды | 9 команд из ~137 | `main.cpp:802-893` | string scan `Client.dll` | partial | `game_save/load` стабы | audit p2-p3 |
+| P2-7 | команды | 9 команд из ~137 | `main.cpp:802-893` | string scan `Client.dll` | partial | `game_load` отсутствует; snapshot `game_save` done (D-082) | audit p2-p3 |
 | P2-8 | состояния | boot/menu/level | `state.cpp:6-27` | только порт | unverified | boot/logo/loading/save-menu | audit p2-p3 |
 | P2-9 | tick | 28 ms gate, one tick per host frame (port) | `server.hpp:8-13`; `server.cpp:68-97`; `level_simulation.cpp:149-250`; D-021/D-068 | research `p2-9-35hz.md`: host gate `trunc(1000/sv_fps)` = 28 ms at 35, one tick per host frame, no accumulator/catch-up/clamp; D-033 consistent. **P2-9a/b (D-068):** integer-ms clock, 28 ms gate, one tick/`tick(dt)`, one sim step (`speed*delta_ms/1000`), STAY_ROTATE `((go_delay-17)/3)*2`, headless 16 ms schedule; full `ctest` 19/19 (1296.70 s) | partial | gate implemented and verified against asm; residual U1 host frame time/effective period, pause/gate port-choice (OQ-T4-3), config plumbing absent, movement `0.8` vs U-C1, `sv_fps != 35` | audit p2-p3; A5; P2-9 research/impl; D-068 |
 | P2-10 | pause | команды до pause | `server.cpp:68-148` | port tests | partial | порядок/семантика не извлечены | audit p2-p3 |
