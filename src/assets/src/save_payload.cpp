@@ -760,6 +760,68 @@ Result<std::vector<std::uint8_t>> encode_tribe_body(const SaveTribeTable &table)
     }
 }
 
+VoidResult replace_block_body(SavePayload &payload, std::size_t index,
+                              std::span<const std::uint8_t> body) {
+    try {
+        if (index >= payload.blocks.size())
+            return format_error("save block index is out of range");
+        SaveBlockView &block = payload.blocks[index];
+        if (block.tag != kBlockOrder[index])
+            return format_error("save payload block order mismatch");
+        const std::uint64_t offset = block.offset;
+        const std::uint64_t old_size = block.size;
+        if (offset < 12 || offset - 12 + 12 > payload.decompressed.size())
+            return format_error("save block header is out of range");
+        const std::size_t header = static_cast<std::size_t>(offset - 12);
+        if (std::memcmp(payload.decompressed.data() + header, block.tag.data(), 8) != 0)
+            return format_error("save block tag mismatch");
+        if (u32_at(payload.decompressed, header + 8) != block.size)
+            return format_error("save block size mismatch");
+        if (body.size() > std::numeric_limits<std::uint32_t>::max())
+            return format_error("save block body is too large");
+        if (old_size > payload.decompressed.size() - static_cast<std::size_t>(offset))
+            return format_error("save block body is out of range");
+
+        const std::int64_t delta = static_cast<std::int64_t>(body.size()) -
+                                   static_cast<std::int64_t>(old_size);
+        const std::size_t suffix = static_cast<std::size_t>(offset + old_size);
+        std::vector<std::uint8_t> rebuilt;
+        rebuilt.insert(rebuilt.end(), payload.decompressed.begin(),
+                       payload.decompressed.begin() + static_cast<std::ptrdiff_t>(header));
+        rebuilt.insert(rebuilt.end(), block.tag.begin(), block.tag.end());
+        append_u32(rebuilt, static_cast<std::uint32_t>(body.size()));
+        rebuilt.insert(rebuilt.end(), body.begin(), body.end());
+        rebuilt.insert(rebuilt.end(),
+                       payload.decompressed.begin() + static_cast<std::ptrdiff_t>(suffix),
+                       payload.decompressed.end());
+
+        std::vector<std::uint32_t> moved_offsets;
+        moved_offsets.reserve(payload.blocks.size() - index - 1);
+        for (std::size_t later = index + 1; later < payload.blocks.size(); ++later) {
+            const std::int64_t moved =
+                static_cast<std::int64_t>(payload.blocks[later].offset) + delta;
+            if (moved < 0 ||
+                moved > static_cast<std::int64_t>(std::numeric_limits<std::uint32_t>::max()))
+                return format_error("save block offset is out of range");
+            const std::uint64_t end =
+                static_cast<std::uint64_t>(moved) + payload.blocks[later].size;
+            if (end > rebuilt.size())
+                return format_error("save block body is out of range");
+            moved_offsets.push_back(static_cast<std::uint32_t>(moved));
+        }
+
+        for (std::size_t later = index + 1; later < payload.blocks.size(); ++later)
+            payload.blocks[later].offset = moved_offsets[later - index - 1];
+        block.size = static_cast<std::uint32_t>(body.size());
+        payload.decompressed = std::move(rebuilt);
+        return VoidResult{std::monostate{}};
+    } catch (const std::bad_alloc &) {
+        return format_error("save payload allocation failed");
+    } catch (const std::length_error &) {
+        return format_error("save payload allocation failed");
+    }
+}
+
 VoidResult patch_save_header(SavePayload &payload, const SaveHeader &header) {
     const std::string title = utf8_to_cp1251(header.title);
     if (title.size() > 64)

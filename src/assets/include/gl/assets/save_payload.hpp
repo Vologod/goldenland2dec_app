@@ -110,5 +110,7 @@ Result<SavePayload> parse_save_payload(std::span<const std::uint8_t> file);
 Result<std::vector<std::uint8_t>> encode_save_payload(const SavePayload &payload);
 Result<std::vector<std::uint8_t>> encode_vars_body(std::span<const SaveVar> vars);
 Result<std::vector<std::uint8_t>> encode_tribe_body(const SaveTribeTable &table);
+VoidResult replace_block_body(SavePayload &payload, std::size_t index,
+                              std::span<const std::uint8_t> body);
 VoidResult patch_save_header(SavePayload &payload, const SaveHeader &header);
 }

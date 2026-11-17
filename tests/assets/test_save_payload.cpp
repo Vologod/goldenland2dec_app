@@ -1151,3 +1151,49 @@ TEST_CASE("save header parses the weekday word") {
     REQUIRE(header.has_value());
     CHECK(header->weekday == 3);
 }
+
+TEST_CASE("save payload: replace_block_body rewrites BT_VARS in place") {
+    const auto file = make_save(make_body("L93_4", make_vars()), make_default_tail("L93_4"));
+    auto payload = gl::assets::parse_save_payload(file);
+    REQUIRE(payload.has_value());
+    const std::vector<std::uint8_t> before = payload->decompressed;
+    const std::vector<gl::assets::SaveVar> vars = payload->vars;
+    REQUIRE(vars.size() == 3u);
+
+    const auto vars_body = gl::assets::encode_vars_body(payload->vars);
+    REQUIRE(vars_body.has_value());
+    const auto replaced = gl::assets::replace_block_body(payload.value(), 2, vars_body.value());
+    REQUIRE(replaced.has_value());
+    CHECK(payload->decompressed == before);
+    CHECK(payload->blocks[2].tag == "BT_VARS ");
+    CHECK(payload->blocks[2].size == vars_body->size());
+
+    const auto encoded = gl::assets::encode_save_payload(payload.value());
+    REQUIRE(encoded.has_value());
+    const auto reparsed = gl::assets::parse_save_payload(encoded.value());
+    REQUIRE(reparsed.has_value());
+    CHECK(reparsed->decompressed == before);
+    REQUIRE(reparsed->vars.size() == vars.size());
+    for (std::size_t index = 0; index < vars.size(); ++index) {
+        CHECK(reparsed->vars[index].type == vars[index].type);
+        CHECK(reparsed->vars[index].name == vars[index].name);
+        CHECK(reparsed->vars[index].value == vars[index].value);
+        CHECK(reparsed->vars[index].text_value == vars[index].text_value);
+    }
+}
+
+TEST_CASE("save payload: replace_block_body rejects invalid input") {
+    auto payload = gl::assets::parse_save_payload(
+        make_save(make_body("L93_4", make_vars()), make_default_tail("L93_4")));
+    REQUIRE(payload.has_value());
+    const std::vector<std::uint8_t> body{0, 0, 0, 0};
+
+    const auto out_of_range = gl::assets::replace_block_body(payload.value(), 7, body);
+    REQUIRE_FALSE(out_of_range.has_value());
+    CHECK(out_of_range.error().code == gl::ErrorCode::format);
+
+    payload->blocks[2].tag = "BT_BAD  ";
+    const auto mismatch = gl::assets::replace_block_body(payload.value(), 2, body);
+    REQUIRE_FALSE(mismatch.has_value());
+    CHECK(mismatch.error().code == gl::ErrorCode::format);
+}

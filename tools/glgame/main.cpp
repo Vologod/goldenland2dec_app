@@ -2328,6 +2328,26 @@ class Game {
             return false;
         }
         gl::assets::SavePayload payload = *loaded_payload_;
+        const auto vars_body = gl::assets::encode_vars_body(payload.vars);
+        if (!vars_body) {
+            gl::log(gl::LogLevel::error, "save write: " + vars_body.error().message);
+            return false;
+        }
+        const auto vars_ok = gl::assets::replace_block_body(payload, 2, vars_body.value());
+        if (!vars_ok) {
+            gl::log(gl::LogLevel::error, "save write: " + vars_ok.error().message);
+            return false;
+        }
+        const auto tribe_body = gl::assets::encode_tribe_body(payload.tribes);
+        if (!tribe_body) {
+            gl::log(gl::LogLevel::error, "save write: " + tribe_body.error().message);
+            return false;
+        }
+        const auto tribe_ok = gl::assets::replace_block_body(payload, 3, tribe_body.value());
+        if (!tribe_ok) {
+            gl::log(gl::LogLevel::error, "save write: " + tribe_ok.error().message);
+            return false;
+        }
         gl::assets::SaveHeader header = payload.header;
         header.title = options_.save_title;
         const std::time_t now = std::time(nullptr);
