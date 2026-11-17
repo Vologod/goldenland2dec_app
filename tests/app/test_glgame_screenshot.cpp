@@ -2483,3 +2483,21 @@ TEST_CASE("glgame --write-save writes a parseable snapshot") {
     CHECK(written_payload->header.month <= 12);
     CHECK(written_payload->decompressed == source_payload->decompressed);
 }
+
+TEST_CASE("glgame --write-save without a loaded save fails") {
+    const char* game_dir = std::getenv("GL_GAME_DIR");
+    REQUIRE(game_dir != nullptr);
+
+    TempDir temp;
+    const fs::path config = write_test_config(temp.path);
+    const fs::path out = temp.path / "x.sav";
+    std::string output;
+    const int code = run_glgame_capture(
+        {"--game-dir", game_dir, "--config", config.string(), "--write-save", out.string()},
+        output);
+    CAPTURE(code);
+    CAPTURE(output);
+    CHECK(code == 4);
+    CHECK(output.find("save write: no loaded save payload") != std::string::npos);
+    CHECK_FALSE(fs::exists(out));
+}

@@ -748,6 +748,11 @@ class Game {
             if (options_.has_trade_npc) show_trade_panel(options_.trade_npc);
         }
 
+        if (options_.has_write_save && !options_.load_save) {
+            write_loaded_save();
+            return 4;
+        }
+
         apply_cli_dialog_answer();
 
         if (options_.equip_save && !options_.equip_save_pending)

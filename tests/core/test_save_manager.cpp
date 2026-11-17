@@ -155,11 +155,13 @@ TEST_CASE("slot_index_from_filename: parses valid slot names and rejects others"
 }
 
 TEST_CASE("write_save_file writes, overwrites and leaves no temp file") {
-    const std::filesystem::path path =
-        std::filesystem::temp_directory_path() / "gl_save_write_test.sav";
+    const std::filesystem::path base =
+        std::filesystem::temp_directory_path() /
+        ("gl_save_write_" +
+         std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    const std::filesystem::path path = base / "out.sav";
     std::error_code ec;
-    std::filesystem::remove(path, ec);
-    std::filesystem::remove(path.string() + ".tmp", ec);
+    std::filesystem::remove_all(base, ec);
 
     const std::vector<std::uint8_t> first{1, 2, 3};
     REQUIRE(gl::core::write_save_file(path, first).has_value());
@@ -178,5 +180,27 @@ TEST_CASE("write_save_file writes, overwrites and leaves no temp file") {
         CHECK(read == second);
     }
     CHECK_FALSE(std::filesystem::exists(path.string() + ".tmp"));
-    std::filesystem::remove(path, ec);
+    std::filesystem::remove_all(base, ec);
+}
+
+TEST_CASE("write_save_file creates a missing nested parent directory") {
+    const std::filesystem::path base =
+        std::filesystem::temp_directory_path() /
+        ("gl_save_write_nested_" +
+         std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    const std::filesystem::path path = base / "sub" / "out.sav";
+    std::error_code ec;
+    std::filesystem::remove_all(base, ec);
+
+    const std::vector<std::uint8_t> bytes{4, 5, 6};
+    REQUIRE(gl::core::write_save_file(path, bytes).has_value());
+    REQUIRE(std::filesystem::exists(path));
+    {
+        std::ifstream in(path, std::ios::binary);
+        const std::vector<std::uint8_t> read((std::istreambuf_iterator<char>(in)),
+                                             std::istreambuf_iterator<char>());
+        CHECK(read == bytes);
+    }
+    CHECK_FALSE(std::filesystem::exists(path.string() + ".tmp"));
+    std::filesystem::remove_all(base, ec);
 }
