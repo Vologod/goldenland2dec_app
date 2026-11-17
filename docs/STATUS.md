@@ -2,16 +2,40 @@
 
 Обновлено: 2026-11-16
 
-## P2-15c4b — Save slots and game_save (design 2026-11-16)
+## P2-15c4b — Save slots and game_save (done 2026-11-16)
 
-- **Задача:** `--save-dir`, `--write-save-slot <n>`, console `game_save <n>`;
-  запись snapshot в `slot<N>.sav`, refresh `SaveManager`.
+- **Задача:** `--save-dir <dir>`, `--write-save-slot <n>`, console
+  `game_save <n>`; запись c4a-snapshot в `slot<N>.sav`, refresh
+  `SaveManager`.
 - **Spec:** `docs/specs/2026-11-16-p2-15c4b-save-slots-design.md`
-  (approved 2026-11-16); **Plan:** `docs/plans/2026-11-16-p2-15c4b-save-slots.md`.
-- **Критерии:** slot write парсится, block bodies равны; temp save-dir E2E
-  без изменений реальных `Saves/`; console `game_save` после load;
-  полный `ctest`.
-- **Статус:** `design` (implementation не начата).
+  (approved 2026-11-16); **Plan:** `docs/plans/2026-11-16-p2-15c4b-save-slots.md`;
+  **D-082.**
+- **Реализовано (D-082):** `core::save_slot_path(dir, slot)` строит
+  `slot<N>.sav`; `glgame --save-dir` переопределяет каталог для
+  `--list-saves`/`--load-save`/`--dump-save`, slot write и скана
+  `SaveManager` (default `<game-dir>/Saves`); `--write-save-slot <n>`
+  после успешного load пишет c4a-snapshot в `<save-dir>/slot<n>.sav`
+  (header date/weekday/title patched, typed VARS/TRIBE, HERO/tail/ENTS
+  raw as loaded), логирует `save write: path=.. bytes=..`, делает rescan
+  slots; без загруженного payload — лог и exit 4; console `game_save <n>`
+  выполняет ту же запись, rescan и возвращает
+  `game_save: slot <n> written (<bytes> bytes)`; ошибки аргументов/io
+  возвращаются без частичного состояния; неявных записей нет.
+- **Команды проверки:** `cmake --build build`;
+  `build\bin\gl_core_tests.exe --test-case="*save_slot_path*"`;
+  `build\bin\glgame_screenshot_tests.exe --test-case="*save-dir*,*game_save*"`;
+  `build\bin\glgame_screenshot_tests.exe --test-case="*write-save*"`;
+  `ctest --test-dir build --output-on-failure`.
+- **Проверка (2026-11-16):** focused core `*save_slot_path*` — 1 case /
+  2 assertions, 0 failed; focused E2E `*save-dir*,*game_save*` — 2 cases /
+  22 assertions, 0 failed; c4a regression `*write-save*` — 2 cases /
+  23 assertions, 0 failed; полный `ctest --test-dir build --output-on-failure`
+  (`GL_GAME_DIR=I:\Games\Златогорье-2`) — 19/19 passed, 2034.50 s (real),
+  exit 0 (build exit 0).
+- **Остаточное:** snapshot only (c3): живой HERO/tail/world state не
+  сериализуется; UI save menu — c4c; `game_load` отсутствует; slot cap
+  нет; overwrite atomicity best-effort; unchecked `file_size` log nit.
+- **Статус:** `done`.
 
 ## P2-15c4a — Snapshot save write (done 2026-11-16)
 

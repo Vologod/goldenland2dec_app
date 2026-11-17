@@ -1353,3 +1353,14 @@ writes a snapshot through the c1 container with typed VARS/TRIBE from c2;
 HERO/tail/ENTS remain raw. The written file parses and its block bodies
 equal the source. Slot UI/`game_save` (c4b) and live state
 serialization (c3) remain out of scope; no implicit `Saves/` writes.
+
+## Implementation result (P2-15c4b, 2026-11-16)
+
+`core::save_slot_path` and `glgame --save-dir` route every save operation
+(list/load/dump/write/menu) to an overridable directory (default
+`<game-dir>/Saves`). `--write-save-slot <n>` and console `game_save <n>`
+write the c4a snapshot to `slot<N>.sav`, rescan slots, and refuse to run
+without a loaded payload (CLI exits 4; console returns an error). Tests
+use a temp save dir and confirm source/real saves are unchanged. Snapshot
+only: HERO/tail/world state still come from the loaded raw bytes (c3);
+UI save menu (c4c) and `game_load` remain absent.
