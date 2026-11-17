@@ -1103,3 +1103,51 @@ TEST_CASE("encode_tribe_body writes entries and the matrix") {
     REQUIRE_FALSE(error.has_value());
     CHECK(error.error().code == gl::ErrorCode::format);
 }
+
+TEST_CASE("patch_save_header writes version, date and title") {
+    auto payload = gl::assets::parse_save_payload(
+        make_save(make_body("L93_4", make_vars()), make_default_tail("L93_4")));
+    REQUIRE(payload.has_value());
+
+    gl::assets::SaveHeader header;
+    header.version = 17;
+    header.year = 2026;
+    header.month = 11;
+    header.weekday = 2;
+    header.day = 16;
+    header.time_a = 12;
+    header.time_b = 34;
+    header.time_c = 56;
+    header.title = "TestSave";
+    const auto patched = gl::assets::patch_save_header(payload.value(), header);
+    REQUIRE(patched.has_value());
+
+    CHECK(payload->header_raw[0x14] == 17);
+    const auto u16 = [&payload](std::size_t offset) {
+        return static_cast<std::uint16_t>(payload->header_raw[offset]) |
+               (static_cast<std::uint16_t>(payload->header_raw[offset + 1]) << 8);
+    };
+    CHECK(u16(0x18) == 2026);
+    CHECK(u16(0x1a) == 11);
+    CHECK(u16(0x1c) == 2);
+    CHECK(u16(0x1e) == 16);
+    CHECK(u16(0x20) == 12);
+    CHECK(u16(0x22) == 34);
+    CHECK(u16(0x24) == 56);
+    CHECK(payload->header_raw[0x28] == 'T');
+    CHECK(payload->header_raw[0x28 + header.title.size()] == 0);
+
+    header.title = std::string(65, 'x');
+    const auto too_long = gl::assets::patch_save_header(payload.value(), header);
+    REQUIRE_FALSE(too_long.has_value());
+    CHECK(too_long.error().code == gl::ErrorCode::format);
+}
+
+TEST_CASE("save header parses the weekday word") {
+    auto file = make_save(make_body("L93_4", make_vars()), make_default_tail("L93_4"));
+    file[0x1c] = 3;
+    file[0x1d] = 0;
+    const auto header = gl::assets::parse_save_header(file);
+    REQUIRE(header.has_value());
+    CHECK(header->weekday == 3);
+}

@@ -32,7 +32,7 @@ Result<SaveHeader> parse_save_header(std::span<const std::uint8_t> data) {
         ByteReader reader(data);
         reader.skip(kMagic.size());
         if (!reader.read_u32le(header.version) || !reader.read_u16le(header.year) ||
-            !reader.read_u16le(header.month) || !reader.skip(2) ||
+            !reader.read_u16le(header.month) || !reader.read_u16le(header.weekday) ||
             !reader.read_u16le(header.day) || !reader.read_u16le(header.time_a) ||
             !reader.read_u16le(header.time_b) || !reader.read_u16le(header.time_c)) {
             return format_error("truncated save header");

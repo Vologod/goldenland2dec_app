@@ -7,7 +7,9 @@
 namespace gl::assets {
 struct SaveHeader {
     std::uint32_t version = 0;
-    std::uint16_t year = 0, month = 0, day = 0;
+    std::uint16_t year = 0, month = 0;
+    std::uint16_t weekday = 0;
+    std::uint16_t day = 0;
     std::uint16_t time_a = 0, time_b = 0, time_c = 0;
     std::string title;
 };

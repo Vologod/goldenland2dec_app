@@ -759,4 +759,30 @@ Result<std::vector<std::uint8_t>> encode_tribe_body(const SaveTribeTable &table)
         return format_error("BT_TRIBE allocation failed");
     }
 }
+
+VoidResult patch_save_header(SavePayload &payload, const SaveHeader &header) {
+    const std::string title = utf8_to_cp1251(header.title);
+    if (title.size() > 64)
+        return Error{ErrorCode::format, "save title is longer than 64 bytes"};
+    const auto put_u16 = [&payload](std::size_t offset, std::uint16_t value) {
+        payload.header_raw[offset] = static_cast<std::uint8_t>(value & 0xFF);
+        payload.header_raw[offset + 1] = static_cast<std::uint8_t>((value >> 8) & 0xFF);
+    };
+    payload.header_raw[0x14] = static_cast<std::uint8_t>(header.version & 0xFF);
+    payload.header_raw[0x15] = static_cast<std::uint8_t>((header.version >> 8) & 0xFF);
+    payload.header_raw[0x16] = static_cast<std::uint8_t>((header.version >> 16) & 0xFF);
+    payload.header_raw[0x17] = static_cast<std::uint8_t>((header.version >> 24) & 0xFF);
+    put_u16(0x18, header.year);
+    put_u16(0x1a, header.month);
+    put_u16(0x1c, header.weekday);
+    put_u16(0x1e, header.day);
+    put_u16(0x20, header.time_a);
+    put_u16(0x22, header.time_b);
+    put_u16(0x24, header.time_c);
+    for (std::size_t index = 0; index < 64; ++index)
+        payload.header_raw[0x28 + index] = 0;
+    for (std::size_t index = 0; index < title.size(); ++index)
+        payload.header_raw[0x28 + index] = static_cast<std::uint8_t>(title[index]);
+    return VoidResult{std::monostate{}};
+}
 } // namespace gl::assets
