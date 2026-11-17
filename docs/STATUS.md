@@ -2,6 +2,23 @@
 
 Обновлено: 2026-11-16
 
+## P2-15c4a — Snapshot save write (design 2026-11-16)
+
+- **Задача:** запись загруженного payload по явному пути: header
+  date/weekday/title patch, c1 encoder, core tmp+rename, glgame
+  `--write-save`/`--save-title`; HERO/tail/ENTS raw (snapshot).
+- **Spec:** `docs/specs/2026-11-16-p2-15c4a-snapshot-save-design.md`
+  (approved 2026-11-16); **Plan:** `docs/plans/2026-11-16-p2-15c4a-snapshot-save.md`.
+- **Критерии:** записанный файл парсится, decompressed bodies равны
+  исходному payload, title/date/weekday patched; core write
+  create/overwrite/no-tmp; E2E temp path; полный `ctest`.
+- **Команды:** `cmake --build build`;
+  `gl_assets_tests --test-case="*patch_save_header*,*weekday*"`;
+  `gl_core_tests --test-case="*write_save_file*"`;
+  `glgame_screenshot_tests --test-case="*write-save*"`;
+  `ctest --test-dir build --output-on-failure`.
+- **Статус:** `design` (implementation не начата).
+
 ## P2-15c2 — Typed BT_VARS/BT_TRIBE encoders (done 2026-11-16)
 
 - **Задача:** `encode_vars_body`/`encode_tribe_body` + `script::
