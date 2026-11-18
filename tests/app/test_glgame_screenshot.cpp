@@ -2,6 +2,7 @@
 #define DOCTEST_CONFIG_IMPLEMENT
 #include <doctest.h>
 #include <gl/assets/item_name_index.hpp>
+#include <gl/assets/hero_save_body.hpp>
 #include <gl/assets/save_payload.hpp>
 #include <gl/assets/sef.hpp>
 #include <gl/assets/vfs.hpp>
@@ -39,6 +40,13 @@
 #endif
 
 namespace {
+std::vector<std::uint8_t> payload_block_body(const gl::assets::SavePayload& payload,
+                                             std::size_t index) {
+    const auto& block = payload.blocks[index];
+    return std::vector<std::uint8_t>(
+        payload.decompressed.begin() + static_cast<std::ptrdiff_t>(block.offset),
+        payload.decompressed.begin() + static_cast<std::ptrdiff_t>(block.offset + block.size));
+}
 namespace fs = std::filesystem;
 
 const fs::path g_glgame_exe = GLGAME_EXE;
@@ -2481,7 +2489,35 @@ TEST_CASE("glgame --write-save writes a parseable snapshot") {
     CHECK(written_payload->header.weekday <= 6);
     CHECK(written_payload->header.month >= 1);
     CHECK(written_payload->header.month <= 12);
-    CHECK(written_payload->decompressed == source_payload->decompressed);
+    const auto block_body = [](const gl::assets::SavePayload& payload, std::size_t index) {
+        const auto& block = payload.blocks[index];
+        return std::vector<std::uint8_t>(
+            payload.decompressed.begin() + static_cast<std::ptrdiff_t>(block.offset),
+            payload.decompressed.begin() + static_cast<std::ptrdiff_t>(block.offset + block.size));
+    };
+    for (std::size_t index : {2u, 3u, 4u, 5u})
+        CHECK(block_body(written_payload.value(), index) == block_body(source_payload.value(), index));
+    const auto source_hero = gl::assets::parse_hero_save_body(block_body(source_payload.value(), 6));
+    const auto written_hero = gl::assets::parse_hero_save_body(block_body(written_payload.value(), 6));
+    REQUIRE(source_hero.has_value());
+    REQUIRE(written_hero.has_value());
+    for (std::size_t index = 0; index < 3; ++index)
+        CHECK(written_hero->containers[index].items.size() ==
+              source_hero->containers[index].items.size());
+    REQUIRE(written_payload->level_tail_index.has_value());
+    REQUIRE(source_payload->level_tail_index.has_value());
+    const auto& written_tail = written_payload->tail[*written_payload->level_tail_index];
+    const auto& source_tail = source_payload->tail[*source_payload->level_tail_index];
+    CHECK(written_tail.person_names.size() == source_tail.person_names.size());
+    std::size_t source_persons = 0;
+    std::size_t written_persons = 0;
+    for (const auto& entity : source_tail.entities)
+        if (entity.type == 2)
+            ++source_persons;
+    for (const auto& entity : written_tail.entities)
+        if (entity.type == 2)
+            ++written_persons;
+    CHECK(written_persons == source_persons);
 }
 
 TEST_CASE("glgame --write-save without a loaded save fails") {
@@ -2544,7 +2580,13 @@ TEST_CASE("glgame --save-dir writes slots without touching real saves") {
             reinterpret_cast<const std::uint8_t *>(copied_before.data()),
             copied_before.size()));
     REQUIRE(source_payload.has_value());
-    CHECK(payload->decompressed == source_payload->decompressed);
+    for (std::size_t index : {2u, 3u, 4u, 5u})
+        CHECK(payload_block_body(payload.value(), index) ==
+              payload_block_body(source_payload.value(), index));
+    REQUIRE(payload->level_tail_index.has_value());
+    REQUIRE(source_payload->level_tail_index.has_value());
+    CHECK(payload->tail[*payload->level_tail_index].person_names.size() ==
+          source_payload->tail[*source_payload->level_tail_index].person_names.size());
 }
 
 TEST_CASE("glgame console game_save writes a slot") {
@@ -2593,7 +2635,13 @@ TEST_CASE("glgame console game_save writes a slot") {
             reinterpret_cast<const std::uint8_t *>(source_bytes.data()),
             source_bytes.size()));
     REQUIRE(source_payload.has_value());
-    CHECK(payload->decompressed == source_payload->decompressed);
+    for (std::size_t index : {2u, 3u, 4u, 5u})
+        CHECK(payload_block_body(payload.value(), index) ==
+              payload_block_body(source_payload.value(), index));
+    REQUIRE(payload->level_tail_index.has_value());
+    REQUIRE(source_payload->level_tail_index.has_value());
+    CHECK(payload->tail[*payload->level_tail_index].person_names.size() ==
+          source_payload->tail[*source_payload->level_tail_index].person_names.size());
 
     std::string list_output;
     const int list_code = run_glgame_capture(

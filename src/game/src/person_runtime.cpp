@@ -344,6 +344,15 @@ double PersonRuntime::get_parameter(std::string_view person, PersonParameter par
     return 0.0;
 }
 
+bool PersonRuntime::has_parameter(std::string_view person,
+                                  PersonParameter parameter) const {
+    const PersonState *state = find(person);
+    if (state == nullptr || parameter == PersonParameter::unknown)
+        return false;
+    const std::size_t index = value_index(parameter);
+    return index < state->present.size() && state->present[index];
+}
+
 void PersonRuntime::set_parameter(std::string_view person, PersonParameter parameter,
                                   double value) {
     PersonState *state = find(person);

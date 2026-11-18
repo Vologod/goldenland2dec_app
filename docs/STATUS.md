@@ -2,6 +2,35 @@
 
 Обновлено: 2026-11-18
 
+## P2-15c3f — Live save integration (done 2026-11-18)
+
+- **Задача:** `apply_live_save` (HERO c3b, selected tail c3c, RGINF latch,
+  VARS), `PersonRuntime::has_parameter`, glgame `write_loaded_save_to`/
+  `game_save` wiring, E2E/real tests.
+- **Spec:** `docs/specs/2026-11-18-p2-15c3f-live-save-design.md`;
+  **Plan:** `docs/plans/2026-11-18-p2-15c3f-live-save.md`; **D-087**.
+- **Реализовано (D-087):** `PersonRuntime::has_parameter`;
+  `game::apply_live_save` — HERO body из `HeroLiveState` (tile/direction,
+  c0/c1/c2, HP/EP), selected tail через `build_selected_tail` (alive/HP/EP
+  из `PersonRuntime`, RGINF latch, c2 raw), VARS encode; `live_save_vars_`
+  обновляется на dialog close и активном VM; `runtime_rginf_latch_`;
+  `write_loaded_save_to`/`game_save` используют live state; E2E parse
+  записанного слота (HERO/tail), VARS/TRIBE/DIARY/HSTRY raw preservation.
+- **Команды проверки:** `cmake --build build`;
+  `build\bin\gl_game_tests.exe --test-case="*person runtime*,*live save*"`;
+  `build\bin\glgame_screenshot_tests.exe --test-case="*save*"`;
+  `ctest --test-dir build --output-on-failure`.
+- **Проверка (2026-11-18):** game focused — 25 cases / 1,163 assertions,
+  0 failed; E2E save — 15 cases / 349 assertions, 0 failed; полный `ctest`
+  — 19/19 passed, 1421.98 s, exit 0.
+- **Остаточное:** VARS новые имена не добавляются (D-080 policy);
+  DIARY/HSTRY, c2 runtime, calendar datetime (c3g), RNG/restock parity
+  (D-064), level transitions — вне scope; Hero AP — loaded; duplicate-name
+  HP/EP/alive — loaded values (`PersonRuntime` name-keyed).
+- **Дальше:** `P2-15c3d` DIARY/HSTRY (blocked b4c/b4d) или `P2-15c3g`
+  game calendar; затем P6/P7.
+- **Статус:** `done`.
+
 ## P2-15c3e — Multi-level tails and BT_INFO level id (done 2026-11-18)
 
 - **Задача:** `SaveInfo.session/description`, `encode_info_body`/`update_info_block`,

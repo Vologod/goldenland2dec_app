@@ -39,6 +39,15 @@ TEST_CASE("person runtime finds NPCs by exact name") {
     CHECK(runtime.get_parameter("Hero", PersonParameter::strength) == 0.0);
 }
 
+TEST_CASE("person runtime reports parameter presence") {
+    const std::vector<gl::game::PersonInstance> persons{make_person("L1.P1", "L1.P1")};
+    const auto runtime = gl::game::PersonRuntime::create(persons, std::nullopt);
+    CHECK(runtime.has_parameter("L1.P1", PersonParameter::strength));
+    CHECK_FALSE(runtime.has_parameter("L1.P1", PersonParameter::life));
+    CHECK_FALSE(runtime.has_parameter("missing", PersonParameter::strength));
+    CHECK_FALSE(runtime.has_parameter("L1.P1", PersonParameter::unknown));
+}
+
 TEST_CASE("person runtime keeps the hero entry without save") {
     auto runtime = gl::game::PersonRuntime::create({}, std::nullopt);
     CHECK(runtime.get_parameter("Hero", PersonParameter::reputation) == 0.0);

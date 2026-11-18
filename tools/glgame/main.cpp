@@ -12,6 +12,7 @@
 #include <gl/assets/item_catalog.hpp>
 #include <gl/assets/item_name_index.hpp>
 #include <gl/assets/log.hpp>
+#include <gl/assets/hero_save_body.hpp>
 #include <gl/assets/save_payload.hpp>
 #include <gl/assets/sdb.hpp>
 #include <gl/assets/specials.hpp>
@@ -25,7 +26,9 @@
 #include <gl/game/dialog_path.hpp>
 #include <gl/game/game_script_host.hpp>
 #include <gl/game/hero_outfit_resolver.hpp>
+#include <gl/game/hero_save_write.hpp>
 #include <gl/game/inventory_runtime.hpp>
+#include <gl/game/live_save.hpp>
 #include <gl/game/npc_loot.hpp>
 #include <gl/game/person_runtime.hpp>
 #include <gl/game/rginf.hpp>
@@ -1388,6 +1391,8 @@ class Game {
     }
 
     void reset_dialog() {
+        if (dialog_ && dialog_->vm)
+            live_save_vars_ = gl::script::update_vars_from_globals(live_save_vars_, *dialog_->vm);
         dialog_.reset();
         dialog_overlay_.clear();
         pending_trade_npc_.reset();
@@ -2221,6 +2226,8 @@ class Game {
                 const gl::game::RginfDecision decision = gl::game::decide_rginf(
                     pending_restore_->rginf, now,
                     gl::game::kSinglePlayerItemsRegenerateIntervalDays);
+                runtime_rginf_latch_ = decision.runtime_latch;
+                has_rginf_latch_ = true;
                 gl::log(gl::LogLevel::info,
                         "rginf: saved_latch=" +
                             std::to_string(pending_restore_->rginf.latch) + " due=" +
@@ -2316,10 +2323,15 @@ class Game {
         auto outfit_before = pending_outfit_;
         const bool hero_stats_absent_before = hero_stats_absent_logged_;
         auto save_globals_before = save_globals_;
+        auto live_vars_before = live_save_vars_;
+        auto restore_result_before = restore_result_;
+        const std::uint32_t rginf_latch_before = runtime_rginf_latch_;
+        const bool has_rginf_latch_before = has_rginf_latch_;
 
         apply_hero_from_body(hero_body, slot, true);
 
         save_globals_ = gl::script::save_globals_from_vars(payload->vars);
+        live_save_vars_ = payload->vars;
 
         if (payload->level_tail_index) {
             pending_restore_ = &payload->tail[*payload->level_tail_index];
@@ -2339,6 +2351,10 @@ class Game {
             hero_stats_absent_logged_ = hero_stats_absent_before;
             inventory_runtime_ = std::move(inventory_before);
             save_globals_ = std::move(save_globals_before);
+            live_save_vars_ = std::move(live_vars_before);
+            restore_result_ = std::move(restore_result_before);
+            runtime_rginf_latch_ = rginf_latch_before;
+            has_rginf_latch_ = has_rginf_latch_before;
             gl::log(gl::LogLevel::warning,
                     "save: rollback slot=" + std::to_string(slot));
             const std::string message =
@@ -2370,16 +2386,68 @@ class Game {
             return std::nullopt;
         }
         gl::assets::SavePayload payload = *loaded_payload_;
-        const auto vars_body = gl::assets::encode_vars_body(payload.vars);
-        if (!vars_body) {
-            gl::log(gl::LogLevel::error, "save write: " + vars_body.error().message);
+        gl::game::LiveSaveInput live;
+        live.inventory = &inventory_runtime_;
+        live.persons = &person_runtime_;
+        live.vars = live_save_vars_;
+        if (dialog_ && dialog_->vm)
+            live.vars = gl::script::update_vars_from_globals(live.vars, *dialog_->vm);
+        live.rginf_latch = runtime_rginf_latch_;
+        live.has_rginf_latch = has_rginf_latch_;
+
+        gl::game::HeroLiveState hero;
+        bool has_hero = false;
+        if (payload.blocks.size() > 6) {
+            const auto &block = payload.blocks[6];
+            const auto body = gl::assets::parse_hero_save_body(
+                std::span<const std::uint8_t>(payload.decompressed)
+                    .subspan(block.offset, block.size));
+            if (body) {
+                has_hero = true;
+                hero.tile_x = body->tile_x;
+                hero.tile_y = body->tile_y;
+                hero.direction = body->direction;
+                hero.hp = body->hp;
+                hero.ep = body->ep;
+                hero.ap = body->ap;
+                hero.containers[0] = inventory_runtime_.hero_inventory().hot;
+                hero.containers[1] = inventory_runtime_.hero_inventory().items;
+                hero.containers[2] = inventory_runtime_.hero_inventory().equipped;
+                for (std::size_t index = 0; index < 3; ++index)
+                    hero.present[index] = body->containers[index].flag != 0;
+                if (level_.has_value()) {
+                    hero.tile_x = static_cast<std::uint32_t>(level_->hero().hero().tile.x);
+                    hero.tile_y = static_cast<std::uint32_t>(level_->hero().hero().tile.y);
+                    hero.direction = level_->hero().hero().direction;
+                }
+                if (person_runtime_.has_parameter("Hero",
+                                                 gl::script::PersonParameter::life))
+                    hero.hp = static_cast<std::uint32_t>(person_runtime_.get_parameter(
+                        "Hero", gl::script::PersonParameter::life));
+                if (person_runtime_.has_parameter("Hero",
+                                                 gl::script::PersonParameter::energy))
+                    hero.ep = static_cast<std::uint32_t>(person_runtime_.get_parameter(
+                        "Hero", gl::script::PersonParameter::energy));
+            } else {
+                gl::log(gl::LogLevel::warning,
+                        "save write: HERO body parse failed: " + body.error().message);
+            }
+        }
+        if (has_hero)
+            live.hero = &hero;
+
+        if (level_.has_value() && loaded_payload_->level_tail_index) {
+            live.level = &level_->level();
+            live.simulation = &level_->simulation();
+            live.restore = &restore_result_;
+        }
+
+        auto live_payload = gl::game::apply_live_save(std::move(payload), live);
+        if (!live_payload) {
+            gl::log(gl::LogLevel::error, "save write: " + live_payload.error().message);
             return std::nullopt;
         }
-        const auto vars_ok = gl::assets::replace_block_body(payload, 2, vars_body.value());
-        if (!vars_ok) {
-            gl::log(gl::LogLevel::error, "save write: " + vars_ok.error().message);
-            return std::nullopt;
-        }
+        payload = std::move(live_payload.value());
         const auto tribe_body = gl::assets::encode_tribe_body(payload.tribes);
         if (!tribe_body) {
             gl::log(gl::LogLevel::error, "save write: " + tribe_body.error().message);
@@ -3232,6 +3300,9 @@ class Game {
     std::optional<std::array<std::uint8_t, 0x20>> pending_save_time_;
     gl::game::RestoreResult restore_result_;
     std::vector<gl::script::ScriptGlobal> save_globals_;
+    std::vector<gl::assets::SaveVar> live_save_vars_;
+    std::uint32_t runtime_rginf_latch_ = 0;
+    bool has_rginf_latch_ = false;
     gl::game::PersonRuntime person_runtime_;
     gl::game::InventoryRuntime inventory_runtime_;
     std::optional<gl::assets::ItemNameIndex> item_names_;

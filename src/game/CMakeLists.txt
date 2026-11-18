@@ -9,6 +9,7 @@ add_library(gl_game STATIC
     src/inventory_view.cpp
     src/level_loader.cpp
     src/level_simulation.cpp
+    src/live_save.cpp
     src/mask_selection.cpp
     src/msvc_random.cpp
     src/npc_loot.cpp
