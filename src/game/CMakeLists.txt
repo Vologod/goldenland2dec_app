@@ -21,6 +21,7 @@ add_library(gl_game STATIC
     src/save_person.cpp
     src/save_restore.cpp
     src/special_engine.cpp
+    src/tail_write.cpp
     src/trade_price.cpp
     src/walk_grid.cpp
 )

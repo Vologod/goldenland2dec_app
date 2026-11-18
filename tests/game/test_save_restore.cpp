@@ -450,10 +450,12 @@ TEST_CASE("save restore keeps BT_ENTS order when it differs from SEF order") {
     CHECK(level.persons[2].name == "dup");
     REQUIRE(result.persons.size() == 2);
     CHECK(result.persons[0].level_index == 0);
+    CHECK(result.persons[0].entity_index == 0);
     CHECK(result.persons[0].current == (gl::game::Tile{40, 41}));
     CHECK(result.persons[0].direction == 2);
     CHECK(result.persons[0].route_index == 2);
     CHECK(result.persons[1].level_index == 1);
+    CHECK(result.persons[1].entity_index == 1);
     CHECK(result.persons[1].current == (gl::game::Tile{50, 51}));
     CHECK(result.persons[1].direction == 1);
     CHECK(result.persons[1].route_index == 0);

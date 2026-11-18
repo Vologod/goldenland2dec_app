@@ -19,6 +19,8 @@ add_executable(gl_game_tests
     test_person_loader.cpp
     test_person_movement.cpp
     test_person_runtime.cpp
+    test_save_person.cpp
+    test_save_person_real.cpp
     test_person_runtime_real.cpp
     test_person_rng.cpp
     test_real_person_loader.cpp
@@ -30,6 +32,8 @@ add_executable(gl_game_tests
     test_special_engine.cpp
     test_special_gates.cpp
     test_stability.cpp
+    test_tail_write.cpp
+    test_tail_write_real.cpp
     test_trade_price.cpp
     test_walk_grid.cpp
 )

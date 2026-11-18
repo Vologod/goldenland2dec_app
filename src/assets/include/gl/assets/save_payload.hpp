@@ -108,6 +108,9 @@ struct SavePayload {
 
 Result<SavePayload> parse_save_payload(std::span<const std::uint8_t> file);
 Result<std::vector<std::uint8_t>> encode_save_payload(const SavePayload &payload);
+Result<std::vector<std::uint8_t>> encode_tail_section(const SaveRginf &rginf,
+                                                      std::span<const std::string> names,
+                                                      std::span<const SaveEntity> entities);
 Result<std::vector<std::uint8_t>> encode_vars_body(std::span<const SaveVar> vars);
 Result<std::vector<std::uint8_t>> encode_tribe_body(const SaveTribeTable &table);
 VoidResult replace_block_body(SavePayload &payload, std::size_t index,

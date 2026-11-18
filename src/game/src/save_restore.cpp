@@ -123,7 +123,8 @@ RestoreResult restore_save_persons(Level &level, const gl::assets::SaveTailEntry
     bool warned_missing_table = false;
 
     RestoreResult result;
-    for (const gl::assets::SaveEntity &entity : tail.entities) {
+    for (std::size_t entity_index = 0; entity_index < tail.entities.size(); ++entity_index) {
+        const gl::assets::SaveEntity &entity = tail.entities[entity_index];
         if (entity.type != 2) {
             ++result.counts.skipped;
             continue;
@@ -161,6 +162,7 @@ RestoreResult restore_save_persons(Level &level, const gl::assets::SaveTailEntry
         result.counts.c2_items += decoded->containers[2].items.size();
         result.persons.push_back(RestoredPerson{
             matched_order.size(),
+            entity_index,
             Tile{decoded->current_tile_x, decoded->current_tile_y},
             decoded->direction,
             decoded->route_index,

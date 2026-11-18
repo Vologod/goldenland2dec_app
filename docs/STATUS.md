@@ -1,6 +1,45 @@
 # STATUS
 
-Обновлено: 2026-11-17
+Обновлено: 2026-11-18
+
+## P2-15c3c — Selected tail live write (done 2026-11-18)
+
+- **Задача:** type-2 inverse (`SavePersonRecord` extension + encoder),
+  `assets::encode_tail_section`, raw-carry rebuild selected tail (matched
+  patch, dead drop, type 8/16/32 raw, new append), `BT_PNAME`,
+  `BT_RGINF` latch, c0/c1 live + c2 raw; adapter + тесты.
+- **Spec:** `docs/specs/2026-11-18-p2-15c3c-tail-write-design.md`;
+  **Plan:** `docs/plans/2026-11-18-p2-15c3c-tail-write.md`; **D-085**.
+- **Реализовано (D-085):** `SavePersonRecord`/`SaveContainer` хранят
+  `+0x40/+0x44/+0x654/+0x658/+0x6cc/+0xff0/+0xf50`, AP, tail `0x80`,
+  extra, container `flag`/`raw_items`; `encode_save_person_body` — inverse
+  `FUN_1401ec40` (byte-identity 14,507/14,507). `encode_tail_section` —
+  PNAME → RGINF → ENTS с terminator'ами (2,599/2,599 секций byte-equal).
+  `RestoredPerson.entity_index`; `build_selected_tail` патчит matched type-2
+  (tile/direction из `LevelSimulation`, HP/EP/AP из `TailPersonLive`,
+  c0/c1 из inventory, c2 raw), удаляет dead, оставляет type-2-only и
+  type 8/16/32 raw, добавляет только явные `new_persons` в конец (SEF-only
+  из загрузки не добавляются), строит PNAME, latch из caller + raw
+  datetime; live c0/c1 применяются только к уникальным именам, absent
+  flag сохраняется пока не появятся предметы.
+- **Команды проверки:** `cmake --build build`;
+  `build\bin\gl_assets_tests.exe --test-case="*tail_section*,*save_item*,*hero save body*"`;
+  `build\bin\gl_assets_real_tests.exe --test-case="*tail section*,*entity item records*,*hero save body*"`;
+  `build\bin\gl_game_tests.exe --test-case="*save person*,*all type-2*,*save restore*,*save container*,*npc*loot*,*build_selected_tail*,*no-change build*,*transfer preserves*"`;
+  `ctest --test-dir build --output-on-failure`.
+- **Проверка (2026-11-18):** unit assets — 11 cases / 3,786 assertions;
+  real assets — 4 cases / 1,534,110 assertions (tail 2,599/2,599, type-2
+  14,507/14,507 + selected 499, entity items 115,405, HERO 28/28); game
+  focused — 67 cases / 59,901 assertions, 0 failed (includes real no-change
+  selected tail slot0/slot9/slot21, absent-container, duplicate-name and
+  unknown route/tribe cases); полный `ctest` — 19/19 passed,
+  2243.39 s, exit 0.
+- **Остаточное:** CLI/`game_save` не подключены (c3f); c2 raw; opaque
+  type-2 блоки matched — raw, appended — нули; calendar datetime (c3g);
+  RNG/restock parity (D-064); item `+0xA4/+0xAC`.
+- **Дальше:** `P2-15c3e` multi-level tails + `BT_INFO` level id, затем
+  `P2-15c3f` live integration.
+- **Статус:** `done`.
 
 ## P2-15c3b — HERO live write (done 2026-11-17)
 

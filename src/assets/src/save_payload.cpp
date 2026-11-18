@@ -635,6 +635,57 @@ Result<SavePayload> parse_save_payload(std::span<const std::uint8_t> file) {
     }
 }
 
+Result<std::vector<std::uint8_t>> encode_tail_section(const SaveRginf &rginf,
+                                                      std::span<const std::string> names,
+                                                      std::span<const SaveEntity> entities) {
+    try {
+        std::vector<std::uint8_t> out;
+        const auto append_tag = [&out](std::string_view tag, std::uint32_t size) {
+            out.insert(out.end(), tag.begin(), tag.end());
+            append_u32(out, size);
+        };
+
+        std::vector<std::uint8_t> pnames;
+        for (const std::string &name : names) {
+            if (name.empty())
+                return format_error("tail person name is empty");
+            if (name.find('\0') != std::string::npos)
+                return format_error("tail person name contains a NUL");
+            const std::string encoded = utf8_to_cp1251(name);
+            if (encoded.size() > std::numeric_limits<std::uint32_t>::max())
+                return format_error("tail person name is too long");
+            append_u32(pnames, static_cast<std::uint32_t>(encoded.size()));
+            pnames.insert(pnames.end(), encoded.begin(), encoded.end());
+        }
+        append_u32(pnames, 0);
+        append_tag("BT_PNAME", static_cast<std::uint32_t>(pnames.size()));
+        out.insert(out.end(), pnames.begin(), pnames.end());
+
+        append_tag("BT_RGINF", 36);
+        append_u32(out, rginf.latch);
+        for (std::uint32_t word : rginf.datetime)
+            append_u32(out, word);
+
+        std::vector<std::uint8_t> ents;
+        for (const SaveEntity &entity : entities) {
+            if (entity.type == 1)
+                return format_error("tail entity type 1 is a terminator");
+            if (entity.body.size() > std::numeric_limits<std::uint32_t>::max())
+                return format_error("tail entity body is too large");
+            append_u32(ents, entity.type);
+            ents.insert(ents.end(), entity.body.begin(), entity.body.end());
+        }
+        append_u32(ents, 1);
+        append_tag("BT_ENTS ", static_cast<std::uint32_t>(ents.size()));
+        out.insert(out.end(), ents.begin(), ents.end());
+        return out;
+    } catch (const std::bad_alloc &) {
+        return format_error("tail section allocation failed");
+    } catch (const std::length_error &) {
+        return format_error("tail section allocation failed");
+    }
+}
+
 Result<std::vector<std::uint8_t>> encode_save_payload(const SavePayload &payload) {
     try {
         if (payload.blocks.size() != kBlockOrder.size())

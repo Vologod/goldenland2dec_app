@@ -21,6 +21,7 @@ struct RestoreCounts {
 
 struct RestoredPerson {
     std::size_t level_index = 0;
+    std::size_t entity_index = 0;
     Tile current;
     std::uint8_t direction = 0;
     std::int32_t route_index = 0;
