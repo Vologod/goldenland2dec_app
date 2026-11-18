@@ -1,6 +1,7 @@
 #include "gl/game/save_restore.hpp"
 
 #include "gl/assets/log.hpp"
+#include "gl/assets/save_item_convert.hpp"
 #include "gl/game/inventory_runtime.hpp"
 #include "gl/game/save_person.hpp"
 
@@ -60,8 +61,7 @@ std::vector<gl::assets::InventoryItem> to_inventory_items(const SaveContainer &c
     std::vector<gl::assets::InventoryItem> items;
     items.reserve(container.items.size());
     for (const gl::assets::SaveItemRecord &record : container.items)
-        items.emplace_back(record.item_id, record.count, record.flags, record.type, record.style,
-                           record.durability, record.mod_count);
+        items.push_back(gl::assets::inventory_item_from_save(record));
     return items;
 }
 

@@ -17,6 +17,8 @@ add_executable(gl_assets_tests
     test_save.cpp
     test_save_payload.cpp
     test_save_item.cpp
+    test_save_item_convert.cpp
+    test_hero_save_body.cpp
     test_cs.cpp
     test_pad.cpp
     test_iad.cpp
@@ -45,6 +47,8 @@ add_executable(gl_assets_real_tests
     test_real_persons.cpp
     test_hero_wear_real.cpp
     test_hero_equipment_real.cpp
+    test_hero_save_body_real.cpp
+    test_item_modifier_map_real.cpp
     test_item_catalog.cpp
     test_item_name_index.cpp
     test_inv_table_real.cpp

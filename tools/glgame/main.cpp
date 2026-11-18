@@ -699,11 +699,15 @@ make_item_template(const gl::assets::ItemCatalogEntry *entry) {
     std::vector<gl::game::ItemTemplateEffect> effects;
     effects.reserve(entry->item.effects.size());
     for (const gl::assets::ItemEffect &effect : entry->item.effects)
-        effects.push_back({effect.type, static_cast<std::int32_t>(effect.amount), effect.flags});
+        effects.push_back({effect.type, static_cast<std::int32_t>(effect.amount), effect.flags,
+                           effect.duration.hi, effect.duration.lo, effect.delay.hi,
+                           effect.delay.lo});
     return gl::game::ItemTemplate{
         static_cast<std::uint32_t>(entry->item.type), entry->item.flags,
         entry->item.unknown_b[1], entry->item.max_stack,
-        static_cast<std::uint32_t>(effects.size()), std::move(effects)};
+        static_cast<std::uint32_t>(effects.size()), std::move(effects),
+        entry->item.price, entry->item.weight_x10, entry->item.unknown_a,
+        entry->item.material};
 }
 
 class Game {

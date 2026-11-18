@@ -18,8 +18,14 @@ struct SaveItemRecord {
     std::uint32_t type = 0;
     std::uint32_t flags = 0;
     std::uint32_t style = 0;
+    std::uint32_t price = 0;
+    std::uint32_t weight_x10 = 0;
+    std::uint32_t unknown_a = 0;
+    std::uint32_t material = 0;
     std::uint32_t mod_count = 0;
     std::vector<SaveItemModifier> modifiers;
+    std::array<std::uint8_t, 0xC0> raw{};
+    bool has_raw = false;
 };
 
 struct ItemRecordRead {
@@ -28,4 +34,5 @@ struct ItemRecordRead {
 };
 
 Result<ItemRecordRead> parse_item_record(std::span<const std::uint8_t> data);
+Result<std::vector<std::uint8_t>> encode_item_record(const SaveItemRecord &record);
 } // namespace gl::assets

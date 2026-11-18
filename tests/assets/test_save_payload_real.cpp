@@ -1,5 +1,6 @@
 #include "gl/assets/hero_equipment.hpp"
 #include "gl/assets/save_payload.hpp"
+#include "gl/game/save_person.hpp"
 
 #include <algorithm>
 #include <array>
@@ -511,4 +512,44 @@ TEST_CASE("real data: BT_TRIBE re-encodes byte-identically" *
                 static_cast<std::ptrdiff_t>(block.offset + block.size));
         CHECK(body.value() == expected);
     }
+}
+
+TEST_CASE("real data: entity item records round-trip" * doctest::skip(!game_dir_available())) {
+    std::size_t records = 0;
+    for (int slot = 0; slot < 28; ++slot) {
+        CAPTURE(slot);
+        auto payload = gl::assets::parse_save_payload(read_save(slot));
+        REQUIRE(payload.has_value());
+        for (const auto &entry : payload->tail) {
+            for (const auto &entity : entry.entities) {
+                if (entity.type != 2)
+                    continue;
+                const auto person = gl::game::decode_save_person(entity);
+                REQUIRE(person.has_value());
+                for (const auto &container : person->containers) {
+                    for (const auto &record : container.items) {
+                        const auto encoded = gl::assets::encode_item_record(record);
+                        REQUIRE(encoded.has_value());
+                        CHECK(encoded->size() == 0xC4 + record.modifiers.size() * 0x14);
+                        const auto reparsed = gl::assets::parse_item_record(encoded.value());
+                        REQUIRE(reparsed.has_value());
+                        CHECK(reparsed->record.item_id == record.item_id);
+                        CHECK(reparsed->record.count == record.count);
+                        CHECK(reparsed->record.flags == record.flags);
+                        CHECK(reparsed->record.type == record.type);
+                        CHECK(reparsed->record.style == record.style);
+                        CHECK(reparsed->record.durability == record.durability);
+                        CHECK(reparsed->record.mod_count == record.mod_count);
+                        CHECK(reparsed->record.raw == record.raw);
+                        REQUIRE(reparsed->record.modifiers.size() == record.modifiers.size());
+                        for (std::size_t index = 0; index < record.modifiers.size(); ++index)
+                            CHECK(reparsed->record.modifiers[index].words ==
+                                  record.modifiers[index].words);
+                        ++records;
+                    }
+                }
+            }
+        }
+    }
+    CHECK(records == 115405);
 }

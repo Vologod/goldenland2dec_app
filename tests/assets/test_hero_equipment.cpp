@@ -4,6 +4,7 @@
 #include <doctest/doctest.h>
 #include <miniz.h>
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -15,7 +16,7 @@ using namespace gl::assets;
 namespace {
 constexpr std::size_t kFixedPrefix = 0x734;
 constexpr std::size_t kRecordFixed = 0xC4;
-constexpr std::uint32_t kAbsent = 0xFFFFFFFFu;
+constexpr std::uint32_t kAbsent = 0u;
 
 void put_u32(Bytes &bytes, std::size_t offset, std::uint32_t value) {
     for (std::size_t i = 0; i < 4; ++i)
@@ -108,6 +109,40 @@ TEST_CASE("parse_hero_equipment reads third BT_HERO container") {
     CHECK(parsed->items[0].style == 13);
 }
 
+TEST_CASE("parse_hero_inventory keeps raw item records and modifier words") {
+    Bytes record = make_record(933, 19, 0xC0000284u, 9, 1, 3, 77, 1);
+    put_u32(record, 0xC4, 7);
+    put_u32(record, 0xC8, 1);
+    put_u32(record, 0xCC, 80);
+    put_u32(record, 0xD0, 0x00001E01u);
+    put_u32(record, 0xD4, 0xFFFFFFFFu);
+    const Bytes body = make_body({record}, {}, {});
+
+    const auto parsed = parse_hero_inventory(body);
+    REQUIRE(parsed.has_value());
+    REQUIRE(parsed->hot.size() == 1);
+    const auto &item = parsed->hot[0];
+    CHECK(item.item_id == 933);
+    CHECK(item.count == 3);
+    CHECK(item.durability == 77);
+    CHECK(item.flags == 0xC0000284u);
+    CHECK(item.mod_count == 1);
+    REQUIRE(item.mods.size() == 1);
+    CHECK(item.mods[0].id == 7);
+    CHECK(item.mods[0].value == 1);
+    CHECK(item.mods[0].flags == 80);
+    CHECK(item.mods[0].word3 == 0x00001E01u);
+    CHECK(item.mods[0].word4 == 0xFFFFFFFFu);
+    REQUIRE(item.save_record.has_value());
+    CHECK(item.save_record->has_raw);
+    CHECK(item.save_record->item_id == 933);
+    CHECK(item.save_record->count == 3);
+    CHECK(item.save_record->modifiers.size() == 1);
+    CHECK((item.save_record->modifiers[0].words ==
+           std::array<std::uint32_t, 5>{7, 1, 80, 0x00001E01u, 0xFFFFFFFFu}));
+    CHECK(std::equal(record.begin(), record.begin() + 0xC0, item.save_record->raw.begin()));
+}
+
 TEST_CASE("parse_hero_equipment skips an absent container and continues") {
     Bytes body(kFixedPrefix, 0);
     append_container(body, kAbsent, {});
@@ -183,7 +218,7 @@ TEST_CASE("parse_hero_equipment rejects truncated subrecords") {
 }
 
 TEST_CASE("parse_hero_inventory reads all three BT_HERO containers") {
-    const Bytes body = make_body({make_record(1554, 22, 0x00001008, 4, 0, 2, 88, 3)},
+    const Bytes body = make_body({make_record(1554, 22, 0x00001008, 4, 3, 2, 88, 3)},
                                  {make_record(318, 12, 0x100000, 13, 1, 5, 42, 1)},
                                  {make_record(72, 15, 0x040000, 11, 0, 7, 100, 0)});
 
@@ -213,7 +248,7 @@ TEST_CASE("parse_hero_inventory reads all three BT_HERO containers") {
     CHECK(inventory->equipped[0].type == 15);
     CHECK(inventory->equipped[0].flags == 0x040000);
     CHECK(inventory->equipped[0].style == 11);
-    CHECK(inventory->equipped[0].count == 1);
+    CHECK(inventory->equipped[0].count == 7);
     CHECK(inventory->equipped[0].durability == 100);
     CHECK(inventory->equipped[0].mod_count == 0);
 }

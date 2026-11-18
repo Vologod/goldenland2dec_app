@@ -4,6 +4,7 @@ add_executable(gl_game_tests
     test_game_script_host.cpp
     test_hero.cpp
     test_hero_outfit_resolver.cpp
+    test_hero_save_write.cpp
     test_hero_wear.cpp
     test_inventory_runtime.cpp
     test_inventory_runtime_real.cpp

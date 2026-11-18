@@ -38,9 +38,14 @@ bool append_items(std::vector<gl::assets::InventoryItem> &items, std::uint32_t i
         gl::assets::InventoryItem record{item_id, added, item_template.flags,
                                          item_template.type, item_template.style, 100,
                                          item_template.mod_count};
+        record.price = item_template.price;
+        record.weight_x10 = item_template.weight_x10;
+        record.unknown_a = item_template.unknown_a;
+        record.material = item_template.material;
         record.mods.reserve(item_template.effects.size());
         for (const ItemTemplateEffect &effect : item_template.effects)
-            record.mods.push_back({effect.type, effect.value, effect.flags});
+            record.mods.push_back({effect.type, effect.value, effect.flags,
+                                   item_effect_word3(effect), 0xFFFFFFFFu});
         items.push_back(std::move(record));
         remaining -= added;
     }
@@ -68,7 +73,12 @@ bool append_items_preserving(std::vector<gl::assets::InventoryItem> &items, std:
         const std::uint32_t added = std::min(remaining, max_stack);
         gl::assets::InventoryItem record{item_id, added, source.flags, source.type, source.style,
                                          source.durability, source.mod_count};
+        record.price = source.price;
+        record.weight_x10 = source.weight_x10;
+        record.unknown_a = source.unknown_a;
+        record.material = source.material;
         record.mods = source.mods;
+        record.save_record = source.save_record;
         items.push_back(std::move(record));
         remaining -= added;
     }

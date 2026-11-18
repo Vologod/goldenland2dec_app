@@ -46,9 +46,14 @@ void append_chunks(std::vector<LootItem> &out, std::uint32_t item_id, std::int32
         }
         LootItem loot{item_id, chunk, item_template.type, flags, item_template.style};
         loot.mod_count = item_template.mod_count;
+        loot.price = item_template.price;
+        loot.weight_x10 = item_template.weight_x10;
+        loot.unknown_a = item_template.unknown_a;
+        loot.material = item_template.material;
         loot.mods.reserve(item_template.effects.size());
         for (const ItemTemplateEffect &effect : item_template.effects)
-            loot.mods.push_back({effect.type, effect.value, effect.flags});
+            loot.mods.push_back({effect.type, effect.value, effect.flags,
+                                 item_effect_word3(effect), 0xFFFFFFFFu});
         out.push_back(std::move(loot));
         return out.back();
     };
@@ -153,6 +158,10 @@ std::vector<gl::assets::InventoryItem> convert_loot(const std::vector<LootItem> 
                                         item.flags, item.type, item.style, 100,
                                         item.mod_count};
         entry.mods = item.mods;
+        entry.price = item.price;
+        entry.weight_x10 = item.weight_x10;
+        entry.unknown_a = item.unknown_a;
+        entry.material = item.material;
         converted.push_back(std::move(entry));
     }
     return converted;

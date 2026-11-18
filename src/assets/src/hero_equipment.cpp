@@ -2,6 +2,7 @@
 #include "gl/assets/byte_reader.hpp"
 #include "gl/assets/save.hpp"
 #include "gl/assets/save_item.hpp"
+#include "gl/assets/save_item_convert.hpp"
 
 #include <algorithm>
 #include <array>
@@ -19,8 +20,6 @@ namespace {
 constexpr std::size_t kSaveHeaderSize = 112;
 constexpr std::size_t kMaxBodySize = 32 * 1024 * 1024;
 constexpr std::size_t kHeroFixedPrefix = 0x734;
-constexpr std::size_t kItemModCountOffset = 0x78;
-constexpr std::uint32_t kAbsentContainer = 0xFFFFFFFFu;
 constexpr std::array<std::uint8_t, 8> kHeroTag = {'B', 'T', '_', 'H', 'E', 'R', 'O', ' '};
 
 Error format_error(std::string message) { return Error{ErrorCode::format, std::move(message)}; }
@@ -85,7 +84,7 @@ Result<HeroInventory> parse_hero_inventory(std::span<const std::uint8_t> body) {
             std::uint32_t id = 0;
             if (!reader.read_u32le(id))
                 return format_error("truncated BT_HERO container id");
-            if (id == kAbsentContainer)
+            if (id == 0)
                 continue;
 
             std::uint32_t count = 0;
@@ -104,16 +103,7 @@ Result<HeroInventory> parse_hero_inventory(std::span<const std::uint8_t> body) {
                 if (!parsed)
                     return format_error("truncated BT_HERO item record");
 
-                InventoryItem item;
-                item.item_id = parsed->record.item_id;
-                item.type = parsed->record.type;
-                item.flags = parsed->record.flags;
-                item.style = parsed->record.style;
-                item.mod_count = read_u32(remaining, kItemModCountOffset);
-                item.count = container == 2 ? 1u : parsed->record.count;
-                item.durability = parsed->record.durability;
-                target->push_back(item);
-
+                target->push_back(inventory_item_from_save(parsed->record));
                 if (!reader.skip(parsed->size))
                     return format_error("truncated BT_HERO item record");
             }

@@ -2,6 +2,50 @@
 
 Обновлено: 2026-11-17
 
+## P2-15c3b — HERO live write (done 2026-11-17)
+
+- **Задача:** `assets`-модель `BT_HERO ` body (parse/encode, raw `0x11c`/
+  `0x600`/`0x80`/extra/attached), raw-carry item record + 5-словные mods,
+  `InventoryItem` raw state, game-адаптер `HeroController`+
+  `InventoryRuntime`+`HeroStats` → HERO body; mapping ITM→modifier.
+- **Spec:** `docs/specs/2026-11-17-p2-15c3b-hero-write-design.md`;
+  **Plan:** `docs/plans/2026-11-17-p2-15c3b-hero-write.md`;
+  **Research:** `docs/research/p2-15c3b-item-modifiers.md`; **D-084**.
+- **Реализовано (D-084):** `SaveItemRecord.raw/has_raw` +
+  `encode_item_record` (raw-carry, patch `+0x08/+0x0C/+0x20/+0xA8/+0xB0/
+  +0xB4`, marker `0x14092248`, 5×u32 mods); `HeroSaveBody`/`HeroContainerState`
+  + `parse_hero_save_body`/`encode_hero_save_body` (tile/direction, raw
+  `0x11c`, HP/EP/AP, raw `0x600`, 3 контейнера с literal flag, `+0x2bb4/
+  +0x2bb8`, `0x80`, extra, attached raw); `InventoryItem.save_record`,
+  `SpecialMod.word3/word4`, `inventory_item_from_save`/
+  `save_item_from_inventory`; `parse_hero_inventory` сохраняет raw/5 слов и
+  читает flag `0` как absent, count всех контейнеров — из save;
+  `restore_save_persons` использует конвертер; transfer/trade сохраняют
+  price/weight/unknown_a/material и raw через `append_items_preserving`; game
+  `make_hero_save_body(loaded, HeroLiveState)` (tile/direction, HP/EP/AP,
+  `present[3]`, контейнеры); `ItemTemplateEffect`/`ItemTemplate` carry
+  price/weight/unknown_a/material + ITM time bytes; generated records
+  пишут `+0x10/+0x14/+0x18/+0x30`, duplicate `+0x78` и 5-word mods
+  (`word3` из time bytes, `word4=0xFFFFFFFF`).
+- **Команды проверки:** `cmake --build build`;
+  `build\bin\gl_assets_tests.exe --test-case="*item_record*,*hero save body*,*save_item*"`;
+  `build\bin\gl_assets_real_tests.exe --test-case="*hero save body*,*entity item records*,*ITM effects match*"`;
+  `build\bin\gl_game_tests.exe --test-case="*hero save write*,*save restore*,*transfer preserves*"`;
+  `ctest --test-dir build --output-on-failure`.
+- **Проверка (2026-11-17):** unit assets — 15 cases / 3,810 assertions,
+  0 failed; real assets — 4 cases / 1,528,944 assertions, 0 failed (HERO
+  byte-identity 28/28; HERO 1,599 items / 924 mods; entity item records
+  115,405; ITM mapping 250 records / 741 pairs; pins slot0/slot2/slot21);
+  game focused — 18 cases / 757 assertions, 0 failed; полный `ctest` —
+  19/19 passed, 1533.46 s, exit 0.
+- **Остаточное:** CLI/`game_save` не подключены (c3f); NPC-контейнеры в
+  `BT_ENTS` не пишутся (c3c, конвертер готов); `+0xA4` instance id и
+  `+0xAC` owner id для generated items — non-claim; special-added mods вне
+  ITM-набора — non-claim; DIARY/HSTRY — blocked.
+- **Дальше:** `P2-15c3c` — selected tail live write (`BT_ENTS` type-2,
+  c0/c1/c2, `BT_PNAME`, `BT_RGINF` latch).
+- **Статус:** `done`.
+
 ## P2-15c3a — Save write-back research (done 2026-11-17)
 
 - **Задача:** для каждого домена save решить `raw` / `patch-in-raw` /

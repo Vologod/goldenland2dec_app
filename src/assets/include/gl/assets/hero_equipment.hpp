@@ -1,6 +1,8 @@
 #pragma once
 #include "gl/assets/result.hpp"
+#include "gl/assets/save_item.hpp"
 #include <cstdint>
+#include <optional>
 #include <span>
 #include <vector>
 
@@ -20,6 +22,8 @@ struct SpecialMod {
     std::uint32_t id = 0;
     std::int32_t value = 0;
     std::uint32_t flags = 0;
+    std::uint32_t word3 = 0;
+    std::uint32_t word4 = 0;
 };
 
 struct InventoryItem {
@@ -36,11 +40,16 @@ struct InventoryItem {
     std::uint32_t type = 0;
     std::uint32_t style = 0;
     std::uint32_t durability = 100;
+    std::uint32_t price = 0;
+    std::uint32_t weight_x10 = 0;
+    std::uint32_t unknown_a = 0;
+    std::uint32_t material = 0;
     // Saves store only the mod count. For added/generated records,
     // mod_count == mods.size() (generated specials and inherited ITM prototype
     // effects both populate mods); save-loaded records keep the count-only value.
     std::uint32_t mod_count = 0;
     std::vector<SpecialMod> mods;
+    std::optional<SaveItemRecord> save_record;
 };
 
 struct HeroInventory {

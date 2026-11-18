@@ -3,6 +3,7 @@
 #include "gl/assets/hero_equipment.hpp"
 #include "gl/assets/inv_table.hpp"
 #include "gl/assets/item_name_index.hpp"
+#include "gl/assets/save_item_convert.hpp"
 #include "gl/assets/sdb.hpp"
 #include "gl/assets/vfs.hpp"
 #include "gl/game/msvc_random.hpp"
@@ -405,8 +406,8 @@ TEST_CASE("inventory_runtime add copies inherited ITM effects into mods") {
     auto lookup = [](std::uint32_t item_id) -> std::optional<ItemTemplate> {
         if (item_id == 1101)
             return ItemTemplate{26, 0x04u, 0, 1, 2,
-                                {ItemTemplateEffect{7, 1, 0x50},
-                                 ItemTemplateEffect{8, -1, 0x50}}};
+                                {ItemTemplateEffect{7, 1, 0x50, 0, 30, 0, 0},
+                                 ItemTemplateEffect{8, -1, 0x50, 1, 0, 0, 0}}};
         return std::nullopt;
     };
     auto runtime = InventoryRuntime::create({}, make_names(), lookup);
@@ -419,9 +420,13 @@ TEST_CASE("inventory_runtime add copies inherited ITM effects into mods") {
     CHECK(items[0].mods[0].id == 7);
     CHECK(items[0].mods[0].value == 1);
     CHECK(items[0].mods[0].flags == 0x50u);
+    CHECK(items[0].mods[0].word3 == 0x00001E00u);
+    CHECK(items[0].mods[0].word4 == 0xFFFFFFFFu);
     CHECK(items[0].mods[1].id == 8);
     CHECK(items[0].mods[1].value == -1);
     CHECK(items[0].mods[1].flags == 0x50u);
+    CHECK(items[0].mods[1].word3 == 0x00000001u);
+    CHECK(items[0].mods[1].word4 == 0xFFFFFFFFu);
 
     TradePriceInput input{};
     input.item_id = 1101;
@@ -604,8 +609,48 @@ TEST_CASE("inventory_runtime transfer_item moves part of a stack to an npc") {
     CHECK(runtime.hero_inventory().items.size() == 3);
 }
 
-TEST_CASE("inventory_runtime transfer_item moves an exact stack and removes the source record") {
-    auto runtime = InventoryRuntime::create(make_inventory(), make_names(), template_for);
+TEST_CASE("inventory_runtime transfer preserves item save fields") {
+    auto runtime = InventoryRuntime::create({}, make_names(), template_for);
+    InventoryItem source{1101, 2, 0xC0000284u, 19, 9, 77, 1};
+    source.price = 85;
+    source.weight_x10 = 1;
+    source.unknown_a = 3;
+    source.material = 0xFFFFFFFFu;
+    source.mods.push_back({7, 1, 80, 0x00001E01u, 0xFFFFFFFFu});
+    gl::assets::SaveItemRecord record;
+    record.has_raw = true;
+    record.raw[0] = 0xAB;
+    record.price = 85;
+    record.weight_x10 = 1;
+    record.unknown_a = 3;
+    record.material = 0xFFFFFFFFu;
+    record.mod_count = 1;
+    record.modifiers.push_back({{{7, 1, 80, 0x00001E01u, 0xFFFFFFFFu}}});
+    source.save_record = record;
+    runtime.replace_person_items("A", {source});
+    runtime.set_person_items("B", {});
+
+    REQUIRE(runtime.transfer_item("A", "B", "QST_1_0_159", 1));
+    REQUIRE(runtime.person_items("B").size() == 1);
+    const auto &moved = runtime.person_items("B")[0];
+    CHECK(moved.price == 85);
+    CHECK(moved.weight_x10 == 1);
+    CHECK(moved.unknown_a == 3);
+    CHECK(moved.material == 0xFFFFFFFFu);
+    REQUIRE(moved.save_record.has_value());
+    CHECK(moved.save_record->has_raw);
+    CHECK(moved.save_record->raw[0] == 0xAB);
+
+    const auto saved = gl::assets::save_item_from_inventory(moved);
+    CHECK(saved.raw[0] == 0xAB);
+    CHECK(saved.price == 85);
+    CHECK(saved.weight_x10 == 1);
+    CHECK(saved.unknown_a == 3);
+    CHECK(saved.material == 0xFFFFFFFFu);
+    CHECK(saved.count == 1);
+}
+
+TEST_CASE("inventory_runtime transfer_item moves an exact stack and removes the source record") {    auto runtime = InventoryRuntime::create(make_inventory(), make_names(), template_for);
     runtime.set_person_items("L0.P1", {});
 
     REQUIRE(runtime.transfer_item("Hero", "L0.P1", "MON_1_0_1", 500));

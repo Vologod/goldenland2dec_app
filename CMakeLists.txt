@@ -52,6 +52,8 @@ add_library(gl_assets STATIC
     src/assets/src/specials.cpp
     src/assets/src/hero_equipment.cpp
     src/assets/src/save_item.cpp
+    src/assets/src/save_item_convert.cpp
+    src/assets/src/hero_save_body.cpp
     src/assets/src/hero_stats.cpp
     src/assets/src/herowear.cpp
     src/assets/src/item_catalog.cpp

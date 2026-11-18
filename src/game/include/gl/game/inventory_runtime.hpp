@@ -17,7 +17,18 @@ struct ItemTemplateEffect {
     std::uint32_t type = 0;
     std::int32_t value = 0;
     std::uint32_t flags = 0;
+    std::uint8_t duration_hi = 0;
+    std::uint8_t duration_lo = 0;
+    std::uint8_t delay_hi = 0;
+    std::uint8_t delay_lo = 0;
 };
+
+inline std::uint32_t item_effect_word3(const ItemTemplateEffect &effect) {
+    return static_cast<std::uint32_t>(effect.duration_hi) |
+           (static_cast<std::uint32_t>(effect.duration_lo) << 8) |
+           (static_cast<std::uint32_t>(effect.delay_hi) << 16) |
+           (static_cast<std::uint32_t>(effect.delay_lo) << 24);
+}
 
 struct ItemTemplate {
     std::uint32_t type = 0;
@@ -26,6 +37,10 @@ struct ItemTemplate {
     std::uint32_t max_stack = 0;
     std::uint32_t mod_count = 0;
     std::vector<ItemTemplateEffect> effects{};
+    std::uint32_t price = 0;
+    std::uint32_t weight_x10 = 0;
+    std::uint32_t unknown_a = 0;
+    std::uint32_t material = 0;
 };
 
 enum class TradeStatus {

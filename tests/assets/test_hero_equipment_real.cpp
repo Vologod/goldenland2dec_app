@@ -104,7 +104,7 @@ TEST_CASE("real save inventory hot slots match research" * doctest::skip(!game_d
     }
 }
 
-TEST_CASE("real save equipped items are not stacked" * doctest::skip(!game_dir_available())) {
+TEST_CASE("real save equipped counts come from the save" * doctest::skip(!game_dir_available())) {
     for (int slot : {0, 2}) {
         auto body = gl::assets::decode_save_body(read_save(slot));
         REQUIRE(body.has_value());
@@ -113,6 +113,18 @@ TEST_CASE("real save equipped items are not stacked" * doctest::skip(!game_dir_a
         for (const auto &item : inventory->equipped)
             CHECK(item.count == 1);
     }
+    auto body = gl::assets::decode_save_body(read_save(10));
+    REQUIRE(body.has_value());
+    auto inventory = gl::assets::parse_hero_inventory(body.value());
+    REQUIRE(inventory.has_value());
+    bool found_ammo = false;
+    for (const auto &item : inventory->equipped) {
+        if (item.item_id == 918) {
+            found_ammo = true;
+            CHECK(item.count == 20);
+        }
+    }
+    CHECK(found_ammo);
 }
 
 TEST_CASE("real save hero_stats match research" * doctest::skip(!game_dir_available())) {
