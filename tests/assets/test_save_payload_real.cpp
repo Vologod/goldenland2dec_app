@@ -553,3 +553,99 @@ TEST_CASE("real data: entity item records round-trip" * doctest::skip(!game_dir_
     }
     CHECK(records == 115405);
 }
+
+TEST_CASE("real data: BT_INFO bodies re-encode byte-identically" *
+          doctest::skip(!game_dir_available())) {
+    for (int slot = 0; slot < 28; ++slot) {
+        CAPTURE(slot);
+        auto payload = gl::assets::parse_save_payload(read_save(slot));
+        REQUIRE(payload.has_value());
+        const auto body = gl::assets::encode_info_body(payload->info);
+        REQUIRE(body.has_value());
+        const auto &block = payload->blocks[1];
+        const std::vector<std::uint8_t> expected(
+            payload->decompressed.begin() + static_cast<std::ptrdiff_t>(block.offset),
+            payload->decompressed.begin() +
+                static_cast<std::ptrdiff_t>(block.offset + block.size));
+        CHECK(body.value() == expected);
+    }
+}
+
+TEST_CASE("real data: tail upsert is identity and level switch round-trips" *
+          doctest::skip(!game_dir_available())) {
+    for (int slot = 0; slot < 28; ++slot) {
+        CAPTURE(slot);
+        auto payload = gl::assets::parse_save_payload(read_save(slot));
+        REQUIRE(payload.has_value());
+        std::vector<std::string> names;
+        std::vector<std::vector<std::uint8_t>> sections;
+        for (const auto &entry : payload->tail) {
+            names.push_back(entry.name);
+            sections.push_back(entry.section);
+        }
+        for (const auto &entry : payload->tail) {
+            const auto index = gl::assets::upsert_tail_entry(payload.value(), entry);
+            REQUIRE(index.has_value());
+        }
+        REQUIRE(payload->tail.size() == names.size());
+        for (std::size_t index = 0; index < names.size(); ++index) {
+            CHECK(payload->tail[index].name == names[index]);
+            CHECK(payload->tail[index].section == sections[index]);
+        }
+    }
+
+    auto payload = gl::assets::parse_save_payload(read_save(0));
+    REQUIRE(payload.has_value());
+    REQUIRE(payload->tail.size() >= 2);
+    const std::string old_level = payload->info.level_id;
+    const std::string new_level = payload->tail[1].name;
+    REQUIRE(new_level != old_level);
+    const std::string session = payload->info.session;
+    const std::string description = payload->info.description;
+    const std::uint32_t field_218 = payload->info.field_218;
+    const std::int32_t party_level = payload->info.party_level;
+    const auto time = payload->info.time;
+    const auto field_26c8 = payload->info.field_26c8;
+    const std::vector<std::uint8_t> new_section = payload->tail[1].section;
+    REQUIRE(gl::assets::set_current_level(payload.value(), new_level).has_value());
+    REQUIRE(gl::assets::update_info_block(payload.value()).has_value());
+    const auto encoded = gl::assets::encode_save_payload(payload.value());
+    REQUIRE(encoded.has_value());
+    auto reparsed = gl::assets::parse_save_payload(encoded.value());
+    REQUIRE(reparsed.has_value());
+    CHECK(reparsed->info.level_id == new_level);
+    CHECK(reparsed->info.session == session);
+    CHECK(reparsed->info.description == description);
+    CHECK(reparsed->info.field_218 == field_218);
+    CHECK(reparsed->info.party_level == party_level);
+    CHECK(reparsed->info.time == time);
+    CHECK(reparsed->info.field_26c8 == field_26c8);
+    REQUIRE(reparsed->level_tail_index.has_value());
+    CHECK(reparsed->tail[*reparsed->level_tail_index].name == new_level);
+    CHECK(reparsed->tail[*reparsed->level_tail_index].section == new_section);
+    bool old_present = false;
+    for (const auto &entry : reparsed->tail)
+        if (entry.name == old_level)
+            old_present = true;
+    CHECK(old_present);
+
+    auto added = gl::assets::parse_save_payload(read_save(0));
+    REQUIRE(added.has_value());
+    REQUIRE(added->level_tail_index.has_value());
+    const auto base = *added->level_tail_index;
+    gl::assets::SaveTailEntry copy = added->tail[base];
+    copy.name = "NEW_LEVEL";
+    const std::size_t before = added->tail.size();
+    REQUIRE(gl::assets::upsert_tail_entry(added.value(), copy).has_value());
+    REQUIRE(gl::assets::set_current_level(added.value(), "NEW_LEVEL").has_value());
+    REQUIRE(gl::assets::update_info_block(added.value()).has_value());
+    const auto encoded_added = gl::assets::encode_save_payload(added.value());
+    REQUIRE(encoded_added.has_value());
+    auto reparsed_added = gl::assets::parse_save_payload(encoded_added.value());
+    REQUIRE(reparsed_added.has_value());
+    CHECK(reparsed_added->tail.size() == before + 1);
+    CHECK(reparsed_added->info.level_id == "NEW_LEVEL");
+    REQUIRE(reparsed_added->level_tail_index.has_value());
+    CHECK(reparsed_added->tail[*reparsed_added->level_tail_index].section ==
+          added->tail[before].section);
+}

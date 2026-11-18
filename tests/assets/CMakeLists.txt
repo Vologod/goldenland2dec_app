@@ -19,6 +19,8 @@ add_executable(gl_assets_tests
     test_save_item.cpp
     test_save_item_convert.cpp
     test_tail_section.cpp
+    test_info_body.cpp
+    test_tail_index.cpp
     test_hero_save_body.cpp
     test_cs.cpp
     test_pad.cpp

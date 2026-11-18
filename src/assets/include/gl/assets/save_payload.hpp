@@ -18,6 +18,8 @@ struct SaveBlockView {
 };
 
 struct SaveInfo {
+    std::string session;
+    std::string description;
     std::string level_id;
     std::array<std::uint8_t, 0x20> time{};
     std::uint32_t field_218 = 0;
@@ -108,6 +110,12 @@ struct SavePayload {
 
 Result<SavePayload> parse_save_payload(std::span<const std::uint8_t> file);
 Result<std::vector<std::uint8_t>> encode_save_payload(const SavePayload &payload);
+Result<std::vector<std::uint8_t>> encode_info_body(const SaveInfo &info);
+VoidResult update_info_block(SavePayload &payload);
+Result<SaveTailEntry> parse_tail_section_entry(std::string_view name,
+                                               std::span<const std::uint8_t> section);
+Result<std::size_t> upsert_tail_entry(SavePayload &payload, SaveTailEntry entry);
+Result<std::size_t> set_current_level(SavePayload &payload, std::string level_id);
 Result<std::vector<std::uint8_t>> encode_tail_section(const SaveRginf &rginf,
                                                       std::span<const std::string> names,
                                                       std::span<const SaveEntity> entities);

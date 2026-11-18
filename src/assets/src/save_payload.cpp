@@ -504,15 +504,15 @@ Result<SavePayload> parse_save_payload(std::span<const std::uint8_t> file) {
         const SaveBlockView &info_view = payload.blocks[1];
         ByteReader info(std::span<const std::uint8_t>(payload.decompressed)
                             .subspan(info_view.offset, info_view.size));
-        std::string session;
-        std::string description;
-        if (!read_string(info, session) || !info.read_u32le(payload.info.field_218))
+        if (!read_string(info, payload.info.session) ||
+            !info.read_u32le(payload.info.field_218))
             return format_error("BT_INFO header is truncated");
         std::span<const std::uint8_t> time;
         if (!info.read_bytes(payload.info.time.size(), time))
             return format_error("BT_INFO time blob is truncated");
         std::memcpy(payload.info.time.data(), time.data(), time.size());
-        if (!read_string(info, description) || !read_string(info, payload.info.level_id))
+        if (!read_string(info, payload.info.description) ||
+            !read_string(info, payload.info.level_id))
             return format_error("BT_INFO strings are truncated");
         if (payload.info.level_id.empty())
             return format_error("BT_INFO level id is empty");
@@ -684,6 +684,102 @@ Result<std::vector<std::uint8_t>> encode_tail_section(const SaveRginf &rginf,
     } catch (const std::length_error &) {
         return format_error("tail section allocation failed");
     }
+}
+
+Result<std::vector<std::uint8_t>> encode_info_body(const SaveInfo &info) {
+    try {
+        if (info.level_id.empty())
+            return format_error("BT_INFO level id is empty");
+        std::vector<std::uint8_t> out;
+        const auto put_string = [&out](const std::string &text) -> bool {
+            const std::string encoded = utf8_to_cp1251(text);
+            if (encoded.size() > std::numeric_limits<std::uint32_t>::max())
+                return false;
+            append_u32(out, static_cast<std::uint32_t>(encoded.size()));
+            out.insert(out.end(), encoded.begin(), encoded.end());
+            return true;
+        };
+        if (!put_string(info.session))
+            return format_error("BT_INFO session is too long");
+        append_u32(out, info.field_218);
+        out.insert(out.end(), info.time.begin(), info.time.end());
+        if (!put_string(info.description))
+            return format_error("BT_INFO description is too long");
+        if (!put_string(info.level_id))
+            return format_error("BT_INFO level id is too long");
+        append_u32(out, static_cast<std::uint32_t>(info.party_level));
+        out.insert(out.end(), info.field_26c8.begin(), info.field_26c8.end());
+        return out;
+    } catch (const std::bad_alloc &) {
+        return format_error("BT_INFO allocation failed");
+    } catch (const std::length_error &) {
+        return format_error("BT_INFO allocation failed");
+    }
+}
+
+VoidResult update_info_block(SavePayload &payload) {
+    auto body = encode_info_body(payload.info);
+    if (!body)
+        return body.error();
+    return replace_block_body(payload, 1, body.value());
+}
+
+Result<SaveTailEntry> parse_tail_section_entry(std::string_view name,
+                                               std::span<const std::uint8_t> section) {
+    if (name.empty())
+        return format_error("tail section name is empty");
+    if (section.empty())
+        return format_error("tail section is empty");
+    if (section.size() > std::numeric_limits<std::uint32_t>::max())
+        return format_error("tail section is too large");
+    try {
+        SaveTailEntry entry;
+        entry.name = std::string(name);
+        entry.raw_len = static_cast<std::uint32_t>(section.size());
+        entry.section.assign(section.begin(), section.end());
+        std::string detail;
+        if (!parse_tail_section(entry, nullptr, nullptr, detail))
+            return format_error("tail section '" + entry.name + "': " + detail);
+        return entry;
+    } catch (const std::bad_alloc &) {
+        return format_error("tail section allocation failed");
+    } catch (const std::length_error &) {
+        return format_error("tail section allocation failed");
+    }
+}
+
+Result<std::size_t> upsert_tail_entry(SavePayload &payload, SaveTailEntry entry) {
+    if (entry.name.empty())
+        return format_error("tail entry name is empty");
+    if (entry.section.empty())
+        return format_error("tail entry section is empty");
+    if (entry.raw_len == 0)
+        entry.raw_len = static_cast<std::uint32_t>(entry.section.size());
+    if (entry.raw_len != entry.section.size())
+        return format_error("tail entry raw length mismatch");
+    for (std::size_t index = 0; index < payload.tail.size(); ++index) {
+        if (payload.tail[index].name == entry.name) {
+            payload.tail[index] = std::move(entry);
+            payload.level_tail_index = index;
+            return index;
+        }
+    }
+    payload.tail.push_back(std::move(entry));
+    payload.level_tail_index = payload.tail.size() - 1;
+    return payload.tail.size() - 1;
+}
+
+Result<std::size_t> set_current_level(SavePayload &payload, std::string level_id) {
+    if (level_id.empty())
+        return format_error("BT_INFO level id is empty");
+    for (std::size_t index = 0; index < payload.tail.size(); ++index) {
+        if (payload.tail[index].name == level_id) {
+            payload.info.level_id = std::move(level_id);
+            payload.level_tail_index = index;
+            return index;
+        }
+    }
+    return format_error("BT_INFO level id has no tail entry");
 }
 
 Result<std::vector<std::uint8_t>> encode_save_payload(const SavePayload &payload) {

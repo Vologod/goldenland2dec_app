@@ -2,6 +2,36 @@
 
 Обновлено: 2026-11-18
 
+## P2-15c3e — Multi-level tails and BT_INFO level id (done 2026-11-18)
+
+- **Задача:** `SaveInfo.session/description`, `encode_info_body`/`update_info_block`,
+  `parse_tail_section_entry`, `upsert_tail_entry`, `set_current_level`;
+  byte-identity BT_INFO 28/28, upsert/level-switch/add-level round-trip.
+- **Spec:** `docs/specs/2026-11-18-p2-15c3e-multilevel-info-design.md`;
+  **Plan:** `docs/plans/2026-11-18-p2-15c3e-multilevel-info.md`; **D-086**.
+- **Реализовано (D-086):** `SaveInfo.session/description` парсятся и
+  сохраняются; `encode_info_body` (session, `+0x218`, 0x20 time,
+  description, level id, party level, 8 B) — byte-identity 28/28;
+  `update_info_block` через `replace_block_body(1)`;
+  `parse_tail_section_entry` (PNAME/RGINF/ENTS, exact consume);
+  `upsert_tail_entry` (replace по имени, иначе append, обновляет
+  `level_tail_index`); `set_current_level` (info level id + index, ошибка
+  без entry).
+- **Команды проверки:** `cmake --build build`;
+  `build\bin\gl_assets_tests.exe --test-case="*info_body*,*tail_section_entry*,*upsert_tail_entry*,*set_current_level*"`;
+  `build\bin\gl_assets_real_tests.exe --test-case="*BT_INFO*,*tail upsert*"`;
+  `ctest --test-dir build --output-on-failure`.
+- **Проверка (2026-11-18):** unit — 7 cases / 74 assertions, 0 failed;
+  real — 2 cases / 7,966 assertions, 0 failed (BT_INFO 28/28; upsert
+  identity 28 слотов; switch slot0→tail[1] и add `NEW_LEVEL` encode→parse);
+  полный `ctest` — 19/19 passed, 2232.50 s, exit 0.
+- **Остаточное:** порядок новых уровней — append (port choice); календарь
+  (`BT_INFO` 0x20) — c3g; автоматические переходы уровней/CLI — c3f/P6;
+  `BT_SCRN ` не обновляется.
+- **Дальше:** `P2-15c3f` live integration (`write_loaded_save_to`/`game_save`:
+  HERO c3b + selected tail c3c + level id c3e + VARS wiring).
+- **Статус:** `done`.
+
 ## P2-15c3c — Selected tail live write (done 2026-11-18)
 
 - **Задача:** type-2 inverse (`SavePersonRecord` extension + encoder),
