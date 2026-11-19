@@ -1,6 +1,8 @@
 add_executable(gl_game_tests
     test_main.cpp
     test_calendar.cpp
+    test_diary.cpp
+    test_diary_real.cpp
     test_dialog_path.cpp
     test_game_script_host.cpp
     test_hero.cpp

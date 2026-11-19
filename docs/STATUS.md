@@ -2,6 +2,19 @@
 
 Обновлено: 2026-11-19
 
+## P2-15b4c2 — Read-only DIARY header model (done 2026-11-19)
+
+- **Задача:** `DiaryEntry` + `decode_diary_entries` (header fields D-091,
+  2 datetime, raw blocks); тесты unit/real; без UI/write.
+- **Spec/plan:** `docs/specs/2026-11-19-p2-15b4c2-diary-model-design.md`,
+  `docs/plans/2026-11-19-p2-15b4c2-diary-model.md`.
+- **Результат (D-093):** `DiaryEntry`/`decode_diary_entries`; 28 saves /
+  1,013 entries, datetime A 1,013/1,013, end 797 ⇔ `+0x08==1`, raw blocks
+  byte-equal; count/key/flag/datetime errors → `format`.
+- **Проверка (2026-11-19):** focused `gl_game_tests --test-case="*diary*"`
+  4/4, 6,188 assertions; full `ctest` 19/19, 2154.88 s.
+- **Статус:** `done`.
+
 ## P2-15b4c1 — DIARY record payload research (done 2026-11-19)
 
 - **Задача:** трассировать источники полей `+0x00..+0x15` в
