@@ -2,6 +2,25 @@
 
 Обновлено: 2026-11-19
 
+## P6a1 — Quest/event runtime (done 2026-11-19)
+
+- **Задача:** `QuestRuntime` (quest/stage state, string names) + нативы
+  `0x7000000..4`; `glgame` wiring; без save/UI/events/триггеров.
+- **Spec/plan:** `docs/specs/2026-11-19-p6a1-quest-runtime-design.md`,
+  `docs/plans/2026-11-19-p6a1-quest-runtime.md`.
+- **Результат (D-094):** `QuestRuntime` + `QuestAccess` (string names);
+  нативы `0x7000000..4` supported (21/65), возврат `0.0`; `0x5..7`
+  time-events, `0x8/0x9` триггеры/локации вне scope; glgame wiring +
+  `load_level` clear.
+- **Проверка (2026-11-19):** `gl_game_tests --test-case="*quest*"` 12/12,
+  93 assertions; `gl_script_tests` 131/131, 1,004 assertions;
+  `glgame_screenshot_tests` 45/45, 1,065 assertions; full `ctest` 19/19,
+  2074.68 s.
+- **Статус:** `done`.
+- **Residual:** реальный P387-диалог не доходит до quest-нативов в
+  покрытых ветках (только строки `potion_*`); real-script E2E для
+  `RS_Stage*` остаётся Open Question, синтетика использует реальные имена.
+
 ## P2-15b4c2 — Read-only DIARY header model (done 2026-11-19)
 
 - **Задача:** `DiaryEntry` + `decode_diary_entries` (header fields D-091,

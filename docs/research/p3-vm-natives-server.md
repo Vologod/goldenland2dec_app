@@ -325,11 +325,11 @@ fallback-константа при несовпадении типов — `0.0`
 | 100663297 | RS_GetCurrentTimeOfDayI | `0x40db8` | 0 | `[]` | computed int | time vtable `+0x18` | unsupported: time |
 | 100663298 | RS_GetDaysFromBeginningI | `0x40de8` | 0 | `[]` | computed int | `FUN_1405b140` | unsupported: time |
 | 100663299 | RS_AddTime | `0x40f34` | 2 | `0,0` | 0.0 | `FUN_1405b504(time,args)` | unsupported: time |
-| 117440512 | RS_QuestComplete | `0x403dc` | 1 | `3` | 0.0 | `FUN_140591b8(quest,arg0)` | unsupported: quests |
-| 117440513 | RS_StageEnable | `0x4040c` | 2 | `3,3` | 0.0 | `FUN_14059030(quest,arg0,arg1)` | unsupported: quests |
-| 117440514 | RS_QuestEnable | `0x40448` | 2 | `3,3` | 0.0 | `FUN_14059f6c` | unsupported: quests |
-| 117440515 | RS_StageComplete | `0x404b4` | 2 | `3,3` | 0.0 | `FUN_14058de0` | unsupported: quests |
-| 117440516 | RS_StorylineQuestEnable | `0x40484` | 1 | `3` | 0.0 | `FUN_1405a21c` | unsupported: quests |
+| 117440512 | RS_QuestComplete | `0x403dc` | 1 | `3` | 0.0 | `FUN_140591b8(quest,arg0)` | supported D-094 (string args, 0.0) |
+| 117440513 | RS_StageEnable | `0x4040c` | 2 | `3,3` | 0.0 | `FUN_14059030(quest,arg0,arg1)` | supported D-094 (string args, 0.0) |
+| 117440514 | RS_QuestEnable | `0x40448` | 2 | `3,3` | 0.0 | `FUN_14059f6c` | supported D-094 (string args, 0.0) |
+| 117440515 | RS_StageComplete | `0x404b4` | 2 | `3,3` | 0.0 | `FUN_14058de0` | supported D-094 (string args, 0.0) |
+| 117440516 | RS_StorylineQuestEnable | `0x40484` | 1 | `3` | 0.0 | `FUN_1405a21c` | supported D-094 (string args, 0.0) |
 | 117440517 | RS_SetEvent | `0x40e2c` | 2 | `0,0` | computed double | `FUN_1405b9b4(time)` — установить событие | unsupported: events/time |
 | 117440518 | RS_GetEvent | `0x40ec8` | 1 | `0` | computed int | `FUN_1405b80c(time,arg0,0)` | unsupported: events |
 | 117440519 | RS_ClearEvent | `0x40f04` | 1 | `0` | 0.0 | `FUN_1405b6c4(time,arg0)` | unsupported: events |

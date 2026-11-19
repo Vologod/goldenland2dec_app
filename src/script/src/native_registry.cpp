@@ -168,6 +168,41 @@ std::string_view first_string(std::span<const Value> args) {
     return args.empty() ? std::string_view{} : as_string(args.front());
 }
 
+Value native_quest_complete(std::span<const Value> args, NativeServices& services) {
+    if (!services.quest.complete_quest || !is_string(args[0])) return double{0.0};
+    services.quest.complete_quest(as_string(args[0]));
+    return double{0.0};
+}
+
+Value native_stage_enable(std::span<const Value> args, NativeServices& services) {
+    if (!services.quest.enable_stage || !is_string(args[0]) || !is_string(args[1]))
+        return double{0.0};
+    services.quest.enable_stage(as_string(args[0]), as_string(args[1]));
+    return double{0.0};
+}
+
+Value native_quest_enable(std::span<const Value> args, NativeServices& services) {
+    if (!services.quest.enable_quest || !is_string(args[0]) || !is_string(args[1]))
+        return double{0.0};
+    services.quest.enable_quest(as_string(args[0]), false);
+    if (services.quest.enable_stage)
+        services.quest.enable_stage(as_string(args[0]), as_string(args[1]));
+    return double{0.0};
+}
+
+Value native_stage_complete(std::span<const Value> args, NativeServices& services) {
+    if (!services.quest.complete_stage || !is_string(args[0]) || !is_string(args[1]))
+        return double{0.0};
+    services.quest.complete_stage(as_string(args[0]), as_string(args[1]));
+    return double{0.0};
+}
+
+Value native_storyline_quest_enable(std::span<const Value> args,
+                                    NativeServices& services) {
+    if (!services.quest.enable_quest || !is_string(args[0])) return double{0.0};
+    services.quest.enable_quest(as_string(args[0]), true);
+    return double{0.0};
+}
 Value native_exit(std::span<const Value> args, NativeServices& services) {
     if (args.empty() || std::holds_alternative<std::string>(args.front())) {
         if (services.log) services.log("script native Exit: expected a numeric argument");
@@ -240,10 +275,22 @@ std::vector<NativeInfo> make_entries() {
             add(id, NativeSupport::unsupported, "requires item runtime state");
     for (std::uint32_t id = 0x6000000; id <= 0x6000003; ++id)
         add(id, NativeSupport::unsupported, "requires world clock");
+    add(0x7000000, NativeSupport::supported, {}, &native_quest_complete, 1);
+    add(0x7000001, NativeSupport::supported, {}, &native_stage_enable, 2);
+    add(0x7000002, NativeSupport::supported, {}, &native_quest_enable, 2);
+    add(0x7000003, NativeSupport::supported, {}, &native_stage_complete, 2);
+    add(0x7000004, NativeSupport::supported, {}, &native_storyline_quest_enable, 1);
+    add(0x7000005, NativeSupport::unsupported, "requires time-event runtime");
+    add(0x7000006, NativeSupport::unsupported, "requires time-event runtime");
+    add(0x7000007, NativeSupport::unsupported, "requires time-event runtime");
+    add(0x7000008, NativeSupport::unsupported, "requires world/level runtime");
+    add(0x7000009, NativeSupport::unsupported, "requires trigger runtime");
+    for (std::uint32_t id = 0x700000a; id <= 0x700000c; ++id)
+        add(id, NativeSupport::unsupported, "requires world/level runtime");
     add(0x700000d, NativeSupport::supported, {}, &native_pass_to_trade_panel, 0);
-    for (std::uint32_t id = 0x7000000; id <= 0x7000010; ++id)
-        if (id != 0x700000d)
-            add(id, NativeSupport::unsupported, "requires quest/event runtime");
+    add(0x700000e, NativeSupport::unsupported, "requires dialog/person runtime");
+    add(0x700000f, NativeSupport::unsupported, "requires person runtime state");
+    add(0x7000010, NativeSupport::unsupported, "requires world/global-map runtime");
     add(0x7000013, NativeSupport::unsupported, "requires person runtime state");
     add(0x7000014, NativeSupport::unsupported, "requires world/level runtime");
 

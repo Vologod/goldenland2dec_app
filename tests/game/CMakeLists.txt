@@ -21,6 +21,7 @@ add_executable(gl_game_tests
     test_npc_loot_specials.cpp
     test_pathfinder.cpp
     test_person_loader.cpp
+    test_quest_runtime.cpp
     test_person_movement.cpp
     test_person_runtime.cpp
     test_save_person.cpp
