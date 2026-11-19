@@ -2,6 +2,31 @@
 
 Обновлено: 2026-11-19
 
+## P2-15b4c — DIARY record semantics research (done 2026-11-19)
+
+- **Задача:** map 0x58 header/record полей (constructors 59f6c/5a21c,
+  consumers 591b8/5a46c), два datetime, flags/ids vs runtime pointers;
+  verdict + декомпозиция для c3d.
+- **Spec/plan:** `docs/specs/2026-11-19-p2-15b4c-diary-records-design.md`,
+  `docs/plans/2026-11-19-p2-15b4c-diary-records.md`;
+  **Research:** `docs/research/p2-15b4c-diary-records.md`; **D-091**.
+- **Результат (D-091):** header block — key `+0x00`, record count `+0x04`,
+  end-time flag `+0x08`, status `+0x0c`, text id `+0x10`, datetime A
+  `+0x14..+0x30` (1,013/1,013 valid), datetime B `+0x34..+0x50`
+  (797/1,013, iff `+0x08==1`), `+0x54` 0..15/`-1` (blocked linked id; `-1`
+  ⇔ `+0x0c==1`). Record blocks — key, opaque ids/payload `+0x04..+0x50`,
+  `+0x54` `0x1400xxxx` pointer; no datetime.
+  Corpus: 28 / 1,013 entries / 1,013 headers / 3,842 records; key 0..550;
+  text id 180..510. Verdict **`scoped`**: header usable, record payload
+  blocked.
+- **Проверка (2026-11-19):** docs-only; `diary_scan.py` (SHA-256
+  `64D2EC55…32D71`); `git diff --check`; UTF-8 no BOM/NUL; `src/`/`tests/`
+  не менялись.
+- **Декомпозиция:** `b4c1` record payload map; `b4c2` journal model;
+  `c3d` DIARY write (datetime A/B + `+0x08` now; `+0x0c`/`+0x54` и новые
+  записи после b4c1).
+- **Статус:** `done` (research-only).
+
 ## P2-15c3g2 — Live time wiring (done 2026-11-19)
 
 - **Задача:** `GameDatetime::to_time_bytes`, `LiveSaveInput.calendar`/
