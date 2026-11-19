@@ -1,6 +1,29 @@
 # STATUS
 
-Обновлено: 2026-11-18
+Обновлено: 2026-11-19
+
+## P2-15c3g — Game calendar research (done 2026-11-19)
+
+- **Задача:** layout `BT_INFO` 0x20 time и `BT_RGINF` datetime, clock
+  контракт (`DAT_14088e14`/vtable `0x14092b98`), advance rate/cadence,
+  `gv_items_regenerate_interval`/`+0x26c0`; verdict + декомпозиция.
+- **Spec/plan:** `docs/specs/2026-11-18-p2-15c3g-game-calendar-research-design.md`,
+  `docs/plans/2026-11-18-p2-15c3g-game-calendar-research.md`;
+  **Research:** `docs/research/p2-15c3g-game-calendar.md`; **D-088**.
+- **Результат (D-088):** `BT_INFO`/`BT_RGINF` = year/month/day/weekday/hour/
+  minute/second/ms; save 1-based month/day (clock object internal 0-based);
+  Gregorian 365/366 calendar (real month lengths, leap years). Clock `DAT_14088e14`, vtable `0x14092b98`
+  (add/compare/get/set/advance; `0x5bc84` uses `timeGetTime`, speed `+8`,
+  factor 60, duration year-ms `31,104,000,000`; no clock-level gate). Due-check `saved + 7 days
+  <= now` (+`+0x26c0`/`+0x26a0`). Corpus 28/2,599: valid ranges,
+  `RGINF > BT_INFO` 0/2,599, header date != game date 28/28. Rate 60× —
+  inferred; live check pending.
+- **Проверка (2026-11-19):** docs-only; `calendar_scan.py` (SHA-256
+  `9621C06A…C570C`) 28 saves / 2,599 RGINF; `git diff --check`; UTF-8
+  no BOM/NUL; `src/`/`tests/`/`tools/` не менялись.
+- **Декомпозиция:** `c3g1` `GameCalendar` model; `c3g2` live time wiring
+  (`BT_INFO`/`RGINF`); `c3g3` live rate/cadence read-only check.
+- **Статус:** `done` (research-only).
 
 ## P2-15c3f — Live save integration (done 2026-11-18)
 
