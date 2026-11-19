@@ -2,6 +2,27 @@
 
 Обновлено: 2026-11-19
 
+## P2-15c3g1 — Game calendar model (done 2026-11-19)
+
+- **Задача:** `days_from_civil`/`add_milliseconds` + `GameCalendar`
+  (advance 60×, speed, pause, weekday day-carry); без save wiring.
+- **Spec/plan:** `docs/specs/2026-11-19-p2-15c3g1-calendar-model-design.md`,
+  `docs/plans/2026-11-19-p2-15c3g1-calendar-model.md`; **D-089**.
+- **Реализовано (D-089):** `days_from_civil` (proleptic Gregorian),
+  `add_milliseconds` (ms/60/60/24 carries, month/year/leap, weekday via
+  day-carry mod 7), `GameCalendar` (first `advance` no-op, uint32 delta,
+  pause excludes real time, speed default 1.0, `game_ms = round(delta*60*speed)`).
+- **Команды проверки:** `cmake --build build`;
+  `build\bin\gl_game_tests.exe --test-case="*add_milliseconds*,*days_from_civil*,*calendar*"`;
+  `ctest --test-dir build --output-on-failure`.
+- **Проверка (2026-11-19):** unit — 7 cases / 42 assertions, 0 failed;
+  полный `ctest` — 19/19 passed, 1505.76 s, exit 0.
+- **Остаточное:** точная epoch/формула weekday не заявлена (сохраняется
+  day-carry); `BT_INFO`/`BT_RGINF` wiring — c3g2; live rate — c3g3.
+- **Дальше:** `P2-15c3g2` live time wiring (`BT_INFO` time, `BT_RGINF`
+  datetime), затем `c3g3` live rate check.
+- **Статус:** `done`.
+
 ## P2-15c3g — Game calendar research (done 2026-11-19)
 
 - **Задача:** layout `BT_INFO` 0x20 time и `BT_RGINF` datetime, clock

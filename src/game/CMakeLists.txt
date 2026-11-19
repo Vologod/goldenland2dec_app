@@ -1,4 +1,5 @@
 add_library(gl_game STATIC
+    src/calendar.cpp
     src/dialog_path.cpp
     src/game_script_host.cpp
     src/hero.cpp
