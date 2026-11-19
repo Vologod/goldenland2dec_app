@@ -71,9 +71,22 @@ TEST_CASE("add_milliseconds carries time and Gregorian dates") {
     CHECK(year_end.day == 1);
 }
 
+TEST_CASE("valid_datetime covers Gregorian ranges") {
+    CHECK(gl::game::valid_datetime(dt(2020, 2, 29, 23, 59, 59, 999, 6)));
+    CHECK_FALSE(gl::game::valid_datetime(dt(2019, 2, 29)));
+    CHECK_FALSE(gl::game::valid_datetime(dt(2020, 13, 1)));
+    CHECK_FALSE(gl::game::valid_datetime(dt(2020, 1, 32)));
+    CHECK_FALSE(gl::game::valid_datetime(dt(2020, 1, 1, 24)));
+    CHECK_FALSE(gl::game::valid_datetime(dt(2020, 1, 1, 0, 60)));
+    CHECK_FALSE(gl::game::valid_datetime(dt(2020, 1, 1, 0, 0, 60)));
+    CHECK_FALSE(gl::game::valid_datetime(dt(2020, 1, 1, 0, 0, 0, 1000)));
+    CHECK_FALSE(gl::game::valid_datetime(dt(2020, 1, 1, 0, 0, 0, 0, 7)));
+}
+
 TEST_CASE("GameDatetime save array round-trips") {
     const auto value = dt(2020, 2, 29, 23, 59, 58, 997, 6);
     CHECK(GameDatetime::from_array(value.to_array()) == value);
+    CHECK(GameDatetime::from_time_bytes(value.to_time_bytes()) == value);
     CHECK(GameDatetime::from_time_bytes(
               [] {
                   std::array<std::uint8_t, 0x20> bytes{};

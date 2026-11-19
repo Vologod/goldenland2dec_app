@@ -47,6 +47,15 @@ Result<gl::assets::SavePayload> apply_live_save(gl::assets::SavePayload payload,
                 return replaced.error();
         }
 
+        if (input.calendar != nullptr) {
+            if (!valid_datetime(input.calendar->now()))
+                return format_error("live save: calendar datetime is invalid");
+            payload.info.time = input.calendar->now().to_time_bytes();
+            auto info = gl::assets::update_info_block(payload);
+            if (!info)
+                return info.error();
+        }
+
         if (input.level != nullptr && input.simulation != nullptr &&
             input.inventory != nullptr && input.restore != nullptr &&
             payload.level_tail_index.has_value()) {
@@ -79,6 +88,8 @@ Result<gl::assets::SavePayload> apply_live_save(gl::assets::SavePayload payload,
             gl::assets::SaveRginf rginf = loaded.rginf;
             if (input.has_rginf_latch)
                 rginf.latch = input.rginf_latch;
+            if (input.rginf_datetime)
+                rginf.datetime = input.rginf_datetime->to_array();
             const std::vector<std::size_t> no_new_persons;
             auto built = build_selected_tail(loaded, *input.level, *input.simulation,
                                              *input.inventory, *input.restore, live,

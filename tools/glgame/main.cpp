@@ -25,6 +25,7 @@
 #include <gl/core/state.hpp>
 #include <gl/game/dialog_path.hpp>
 #include <gl/game/game_script_host.hpp>
+#include <gl/game/calendar.hpp>
 #include <gl/game/hero_outfit_resolver.hpp>
 #include <gl/game/hero_save_write.hpp>
 #include <gl/game/inventory_runtime.hpp>
@@ -45,6 +46,7 @@
 #include <stb_image_write.h>
 
 #include <algorithm>
+#include <chrono>
 #include <charconv>
 #include <climits>
 #include <cmath>
@@ -870,6 +872,8 @@ class Game {
             const std::uint64_t now = SDL_GetTicks64();
             std::uint64_t delta_ms = now - previous;
             previous = now;
+            if (has_calendar_)
+                calendar_.advance(now);
 
             const float delta_seconds = static_cast<float>(delta_ms) / 1000.0f;
             SDL_Event event;
@@ -2181,6 +2185,9 @@ class Game {
         if (pending_restore_ == nullptr) {
             save_globals_.clear();
             loaded_payload_.reset();
+            has_calendar_ = false;
+            runtime_rginf_timestamp_.reset();
+            has_rginf_latch_ = false;
         }
         restore_result_ = {};
         gl::game::HeroOutfit hero_outfit;
@@ -2228,6 +2235,7 @@ class Game {
                     gl::game::kSinglePlayerItemsRegenerateIntervalDays);
                 runtime_rginf_latch_ = decision.runtime_latch;
                 has_rginf_latch_ = true;
+                runtime_rginf_timestamp_ = decision.timestamp;
                 gl::log(gl::LogLevel::info,
                         "rginf: saved_latch=" +
                             std::to_string(pending_restore_->rginf.latch) + " due=" +
@@ -2325,6 +2333,9 @@ class Game {
         auto save_globals_before = save_globals_;
         auto live_vars_before = live_save_vars_;
         auto restore_result_before = restore_result_;
+        auto calendar_before = calendar_;
+        const bool has_calendar_before = has_calendar_;
+        auto rginf_timestamp_before = runtime_rginf_timestamp_;
         const std::uint32_t rginf_latch_before = runtime_rginf_latch_;
         const bool has_rginf_latch_before = has_rginf_latch_;
 
@@ -2332,6 +2343,9 @@ class Game {
 
         save_globals_ = gl::script::save_globals_from_vars(payload->vars);
         live_save_vars_ = payload->vars;
+        calendar_ = gl::game::GameCalendar(
+            gl::game::GameDatetime::from_time_bytes(payload->info.time));
+        has_calendar_ = true;
 
         if (payload->level_tail_index) {
             pending_restore_ = &payload->tail[*payload->level_tail_index];
@@ -2353,6 +2367,9 @@ class Game {
             save_globals_ = std::move(save_globals_before);
             live_save_vars_ = std::move(live_vars_before);
             restore_result_ = std::move(restore_result_before);
+            calendar_ = calendar_before;
+            has_calendar_ = has_calendar_before;
+            runtime_rginf_timestamp_ = std::move(rginf_timestamp_before);
             runtime_rginf_latch_ = rginf_latch_before;
             has_rginf_latch_ = has_rginf_latch_before;
             gl::log(gl::LogLevel::warning,
@@ -2394,6 +2411,9 @@ class Game {
             live.vars = gl::script::update_vars_from_globals(live.vars, *dialog_->vm);
         live.rginf_latch = runtime_rginf_latch_;
         live.has_rginf_latch = has_rginf_latch_;
+        live.rginf_datetime = runtime_rginf_timestamp_;
+        if (has_calendar_)
+            live.calendar = &calendar_;
 
         gl::game::HeroLiveState hero;
         bool has_hero = false;
@@ -3301,8 +3321,11 @@ class Game {
     gl::game::RestoreResult restore_result_;
     std::vector<gl::script::ScriptGlobal> save_globals_;
     std::vector<gl::assets::SaveVar> live_save_vars_;
+    gl::game::GameCalendar calendar_;
+    bool has_calendar_ = false;
     std::uint32_t runtime_rginf_latch_ = 0;
     bool has_rginf_latch_ = false;
+    std::optional<gl::game::GameDatetime> runtime_rginf_timestamp_;
     gl::game::PersonRuntime person_runtime_;
     gl::game::InventoryRuntime inventory_runtime_;
     std::optional<gl::assets::ItemNameIndex> item_names_;

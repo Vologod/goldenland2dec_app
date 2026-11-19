@@ -126,7 +126,7 @@ Result<gl::assets::SaveTailEntry> build_selected_tail(
     gl::assets::SaveTailEntry out;
     out.name = loaded.name;
     out.rginf.latch = rginf.latch;
-    out.rginf.datetime = loaded.rginf.datetime;
+    out.rginf.datetime = rginf.datetime;
 
     const std::size_t no_entity = std::numeric_limits<std::size_t>::max();
     std::vector<std::size_t> restored_by_entity(loaded.entities.size(), no_entity);

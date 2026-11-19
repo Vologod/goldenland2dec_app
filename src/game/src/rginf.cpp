@@ -53,6 +53,18 @@ std::array<std::uint32_t, 8> GameDatetime::to_array() const {
     return {year, month, day, weekday, hour, minute, second, millisecond};
 }
 
+std::array<std::uint8_t, 0x20> GameDatetime::to_time_bytes() const {
+    std::array<std::uint8_t, 0x20> bytes{};
+    const auto fields = to_array();
+    for (std::size_t index = 0; index < fields.size(); ++index) {
+        bytes[index * 4] = static_cast<std::uint8_t>(fields[index] & 0xFF);
+        bytes[index * 4 + 1] = static_cast<std::uint8_t>((fields[index] >> 8) & 0xFF);
+        bytes[index * 4 + 2] = static_cast<std::uint8_t>((fields[index] >> 16) & 0xFF);
+        bytes[index * 4 + 3] = static_cast<std::uint8_t>((fields[index] >> 24) & 0xFF);
+    }
+    return bytes;
+}
+
 bool datetime_le(const GameDatetime &lhs, const GameDatetime &rhs) {
     const std::array<std::uint32_t, 7> left{lhs.year, lhs.month, lhs.day, lhs.hour,
                                             lhs.minute, lhs.second, lhs.millisecond};
@@ -65,6 +77,15 @@ bool datetime_le(const GameDatetime &lhs, const GameDatetime &rhs) {
             return false;
     }
     return true;
+}
+
+bool valid_datetime(const GameDatetime &value) {
+    if (value.year == 0 || value.month < 1 || value.month > 12)
+        return false;
+    if (value.day < 1 || value.day > days_in_month(value.year, value.month))
+        return false;
+    return value.weekday <= 6 && value.hour <= 23 && value.minute <= 59 &&
+           value.second <= 59 && value.millisecond <= 999;
 }
 
 GameDatetime add_days(const GameDatetime &value, std::int32_t days) {

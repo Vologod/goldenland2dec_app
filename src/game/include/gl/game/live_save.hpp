@@ -1,5 +1,6 @@
 #pragma once
 #include "gl/assets/save_payload.hpp"
+#include "gl/game/calendar.hpp"
 #include "gl/game/hero_save_write.hpp"
 #include "gl/game/inventory_runtime.hpp"
 #include "gl/game/level.hpp"
@@ -8,6 +9,7 @@
 #include "gl/game/save_restore.hpp"
 
 #include <cstdint>
+#include <optional>
 #include <vector>
 
 namespace gl::game {
@@ -20,6 +22,8 @@ struct LiveSaveInput {
     const HeroLiveState *hero = nullptr;
     std::uint32_t rginf_latch = 0;
     bool has_rginf_latch = false;
+    const GameCalendar *calendar = nullptr;
+    std::optional<GameDatetime> rginf_datetime;
     std::vector<gl::assets::SaveVar> vars;
 };
 

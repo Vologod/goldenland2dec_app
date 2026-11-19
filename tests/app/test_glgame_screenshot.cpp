@@ -2486,6 +2486,7 @@ TEST_CASE("glgame --write-save writes a parseable snapshot") {
     CHECK(written_payload->header.title == "TestSave");
     CHECK(written_payload->header.version == source_payload->header.version);
     CHECK(written_payload->info.level_id == source_payload->info.level_id);
+    CHECK(written_payload->info.time == source_payload->info.time);
     CHECK(written_payload->header.weekday <= 6);
     CHECK(written_payload->header.month >= 1);
     CHECK(written_payload->header.month <= 12);

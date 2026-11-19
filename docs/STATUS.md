@@ -2,6 +2,31 @@
 
 Обновлено: 2026-11-19
 
+## P2-15c3g2 — Live time wiring (done 2026-11-19)
+
+- **Задача:** `GameDatetime::to_time_bytes`, `LiveSaveInput.calendar`/
+  `rginf_datetime`, `apply_live_save` пишет `BT_INFO` time и `BT_RGINF`
+  datetime; glgame calendar + frame advance + decision timestamp.
+- **Spec/plan:** `docs/specs/2026-11-19-p2-15c3g2-live-time-wiring-design.md`,
+  `docs/plans/2026-11-19-p2-15c3g2-live-time-wiring.md`; **D-090**.
+- **Реализовано (D-090):** `to_time_bytes`; `LiveSaveInput.calendar`
+  (BT_INFO time + `update_info_block`) и `rginf_datetime` (RGINF datetime);
+  glgame `GameCalendar` инициализируется из `payload.info.time`, advance в
+  интерактивном frame loop (SDL ticks), `runtime_rginf_timestamp_` из
+  `decide_rginf`; rollback/New Game очищают calendar/latch/timestamp;
+  headless write без calendar сохраняет time raw.
+- **Команды проверки:** `cmake --build build`;
+  `build\bin\gl_game_tests.exe --test-case="*live save*,*calendar*"`;
+  `build\bin\glgame_screenshot_tests.exe --test-case="*save*"`;
+  `ctest --test-dir build --output-on-failure`.
+- **Проверка (2026-11-19):** game focused — 7 cases / 1,094 assertions,
+  0 failed; E2E save — 15 cases / 350 assertions, 0 failed; полный `ctest`
+  — 19/19 passed, 1497.96 s, exit 0.
+- **Остаточное:** live rate 60× — inferred (c3g3); weekday epoch; timer-list
+  `+0x30/+0x34`; headless write не двигает time.
+- **Дальше:** `P2-15c3g3` live rate/cadence read-only check; затем P6/P7.
+- **Статус:** `done`.
+
 ## P2-15c3g1 — Game calendar model (done 2026-11-19)
 
 - **Задача:** `days_from_civil`/`add_milliseconds` + `GameCalendar`

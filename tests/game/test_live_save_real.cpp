@@ -129,6 +129,26 @@ TEST_CASE("live save applies HERO, tail and VARS from real slot0" *
     CHECK(reparsed->tail[*reparsed->level_tail_index].rginf.latch == 7);
     CHECK(reparsed->tail[*reparsed->level_tail_index].rginf.datetime ==
           loaded_tail.rginf.datetime);
+
+    gl::game::GameCalendar calendar(
+        gl::game::GameDatetime::from_time_bytes(payload->info.time));
+    calendar.advance(0);
+    calendar.advance(1000);
+    input.calendar = &calendar;
+    const auto override_dt = gl::game::add_days(
+        gl::game::GameDatetime::from_array(loaded_tail.rginf.datetime), 1);
+    input.rginf_datetime = override_dt;
+    auto timed = gl::game::apply_live_save(payload.value(), input);
+    REQUIRE(timed.has_value());
+    const auto timed_payload = gl::assets::parse_save_payload(
+        gl::assets::encode_save_payload(timed.value()).value());
+    REQUIRE(timed_payload.has_value());
+    CHECK(timed_payload->info.time == calendar.now().to_time_bytes());
+    REQUIRE(timed_payload->level_tail_index.has_value());
+    CHECK(timed_payload->tail[*timed_payload->level_tail_index].rginf.datetime ==
+          override_dt.to_array());
+    input.calendar = nullptr;
+    input.rginf_datetime.reset();
     CHECK(type2_names(reparsed->tail[*reparsed->level_tail_index]) == type2_names(loaded_tail));
 
     std::map<std::string, std::size_t, std::less<>> name_counts;
@@ -233,6 +253,23 @@ TEST_CASE("live save applies HERO, tail and VARS from real slot0" *
     REQUIRE(found_text != text_parsed->vars.end());
     CHECK(found_text->type == 3);
     CHECK(found_text->text_value == "abc");
+}
+
+TEST_CASE("live save rejects an invalid calendar" *
+          doctest::skip(!game_dir_available())) {
+    auto payload = gl::assets::parse_save_payload(read_save(0));
+    REQUIRE(payload.has_value());
+    gl::game::GameDatetime invalid;
+    invalid.year = 1124;
+    invalid.month = 13;
+    invalid.day = 1;
+    gl::game::GameCalendar calendar(invalid);
+    gl::game::LiveSaveInput input;
+    input.vars = payload->vars;
+    input.calendar = &calendar;
+    const auto applied = gl::game::apply_live_save(payload.value(), input);
+    REQUIRE_FALSE(applied.has_value());
+    CHECK(applied.error().code == gl::ErrorCode::format);
 }
 
 TEST_CASE("live save rejects a malformed HERO body without mutating the payload" *

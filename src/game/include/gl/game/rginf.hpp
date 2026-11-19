@@ -17,6 +17,7 @@ struct GameDatetime {
     static GameDatetime from_array(const std::array<std::uint32_t, 8> &value);
     static GameDatetime from_time_bytes(const std::array<std::uint8_t, 0x20> &value);
     std::array<std::uint32_t, 8> to_array() const;
+    std::array<std::uint8_t, 0x20> to_time_bytes() const;
 };
 
 inline bool operator==(const GameDatetime &lhs, const GameDatetime &rhs) {
@@ -35,6 +36,7 @@ struct RginfDecision {
 constexpr std::int32_t kSinglePlayerItemsRegenerateIntervalDays = 7;
 
 bool datetime_le(const GameDatetime &lhs, const GameDatetime &rhs);
+bool valid_datetime(const GameDatetime &value);
 GameDatetime add_days(const GameDatetime &value, std::int32_t days);
 RginfDecision decide_rginf(const gl::assets::SaveRginf &saved, const GameDatetime &now,
                            std::int32_t interval_days);
