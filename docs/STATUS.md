@@ -2,6 +2,27 @@
 
 Обновлено: 2026-11-19
 
+## P2-15b4c1 — DIARY record payload research (done 2026-11-19)
+
+- **Задача:** трассировать источники полей `+0x00..+0x15` в
+  `FUN_14058de0`/`FUN_14059030`, reads `FUN_140591b8`/`FUN_1405a46c`,
+  `+0x54`; verdict + точные next checks.
+- **Spec/plan:** `docs/specs/2026-11-19-p2-15b4c1-diary-payload-design.md`,
+  `docs/plans/2026-11-19-p2-15b4c1-diary-payload.md`;
+  **Research:** `docs/research/p2-15b4c1-diary-payload.md`; **D-092**.
+- **Результат (D-092):** header builders 59f6c/5a21c отделены от record
+  builders 58de0/59030; record — host-object snapshot через
+  `DAT_14088e0c+0x2c`, `FUN_14059030` пишет stack pointer в `+0x04`, `+0x54`
+  — `0x1400xxxx` pointer 3,842/3,842; стабильного datetime в records нет;
+  consumer 591b8 читает только flattened header; 5a46c — другой объект.
+  Verdict **`blocked (scoped)`**; next: host journal `DAT_14088e0c`/vtable
+  `+0x2c`/`DAT_14088e08`, либо live-diff одного entry.
+- **Проверка (2026-11-19):** docs-only; disassembly 58de0/59030/591b8/
+  5a46c; `git diff --check`; UTF-8 no BOM/NUL.
+- **Декомпозиция:** `b4c1a` host journal object map; `b4c1b` record field
+  classifier; `c3d` new records остаются blocked.
+- **Статус:** `done` (research-only, blocked payload).
+
 ## P2-15b4c — DIARY record semantics research (done 2026-11-19)
 
 - **Задача:** map 0x58 header/record полей (constructors 59f6c/5a21c,
