@@ -2,6 +2,14 @@
 
 Обновлено: 2026-11-19
 
+## P6a9 — Clock query natives (done 2026-11-19)
+
+- **Задача:** RS_GetCurrentTimeOfDayI (0x6000001), RS_GetDaysFromBeginningI (0x6000002).
+- **Spec/plan:** docs/specs/2026-11-19-p6a9-time-queries-design.md, docs/plans/2026-11-19-p6a9-time-queries.md; **D-104**.
+- **Результат:** days_from_beginning (FUN_1405b140), ClockAccess, 30/65 supported; hour/day → double; day/night 0x6000000 остаётся unsupported.
+- **Проверка (2026-11-19):** clock 3/3, 13 assertions; gl_script 131/131; screenshot 45/45; full ctest 19/19, 2142.51 s.
+- **Статус:** done.
+
 ## P6a8 — Person dialog/injury research (done 2026-11-19)
 
 - **Задача:** RS_GetDialogEnabled (0xE), RS_SetInjured (0x13).

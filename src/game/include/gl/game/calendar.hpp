@@ -7,6 +7,7 @@
 namespace gl::game {
 std::int64_t days_from_civil(std::int32_t year, std::uint32_t month, std::uint32_t day);
 GameDatetime add_milliseconds(const GameDatetime &value, std::int64_t milliseconds);
+std::int32_t days_from_beginning(const GameDatetime &value);
 
 class GameCalendar {
   public:

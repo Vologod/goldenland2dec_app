@@ -96,4 +96,29 @@ void GameCalendar::advance(std::uint64_t now_ms) {
     if (game_ms != 0)
         value_ = add_milliseconds(value_, static_cast<std::int64_t>(game_ms));
 }
+std::int32_t days_from_beginning(const GameDatetime &value) {
+    if (value.year == 0) return 0;
+    const std::int32_t year = static_cast<std::int32_t>(value.year);
+    const std::int32_t previous = year - 1;
+    std::int32_t offset = 0;
+    switch (value.month) {
+    case 12: offset += 30; [[fallthrough]];
+    case 11: offset += 31; [[fallthrough]];
+    case 10: offset += 30; [[fallthrough]];
+    case 9: offset += 31; [[fallthrough]];
+    case 8: offset += 31; [[fallthrough]];
+    case 7: offset += 30; [[fallthrough]];
+    case 6: offset += 31; [[fallthrough]];
+    case 5: offset += 30; [[fallthrough]];
+    case 4: offset += 31; [[fallthrough]];
+    case 3:
+        offset += (year % 4 == 0 && (year % 100 != 0 || year % 400 == 0)) ? 29 : 28;
+        [[fallthrough]];
+    case 2: offset += 31; [[fallthrough]];
+    default: break;
+    }
+    return (year * 73 - 73) * 5 +
+           ((((previous >> 1) >> 30) - 1 + year) >> 2) - previous / 100 +
+           previous / 400 - 1 + static_cast<std::int32_t>(value.day) + offset;
+}
 } // namespace gl::game

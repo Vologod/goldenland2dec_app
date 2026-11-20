@@ -227,6 +227,16 @@ Value native_get_rand_min_max(std::span<const Value> args, NativeServices& servi
         services.random.range(as_int(args[0]), as_int(args[1])))};
 }
 
+Value native_current_hour(std::span<const Value>, NativeServices& services) {
+    if (!services.clock.current_hour) return double{0.0};
+    return double{static_cast<double>(services.clock.current_hour())};
+}
+
+Value native_days_from_beginning(std::span<const Value>, NativeServices& services) {
+    if (!services.clock.days_from_beginning) return double{0.0};
+    return double{static_cast<double>(services.clock.days_from_beginning())};
+}
+
 Value native_set_weather(std::span<const Value> args, NativeServices& services) {
     if (!services.weather.set_weather || !is_numeric(args[0])) return double{0.0};
     services.weather.set_weather(as_int(args[0]));
@@ -317,8 +327,10 @@ std::vector<NativeInfo> make_entries() {
             id != 0x5000003 && id != 0x5000004 && id != 0x5000005 &&
             id != 0x5000008)
             add(id, NativeSupport::unsupported, "requires item runtime state");
-    for (std::uint32_t id = 0x6000000; id <= 0x6000003; ++id)
-        add(id, NativeSupport::unsupported, "requires world clock");
+    add(0x6000000, NativeSupport::unsupported, "requires clock day/night slot");
+    add(0x6000001, NativeSupport::supported, {}, &native_current_hour, 0);
+    add(0x6000002, NativeSupport::supported, {}, &native_days_from_beginning, 0);
+    add(0x6000003, NativeSupport::unsupported, "requires clock runtime");
     add(0x7000000, NativeSupport::supported, {}, &native_quest_complete, 1);
     add(0x7000001, NativeSupport::supported, {}, &native_stage_enable, 2);
     add(0x7000002, NativeSupport::supported, {}, &native_quest_enable, 2);

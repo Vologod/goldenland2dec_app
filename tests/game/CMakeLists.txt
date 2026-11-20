@@ -26,6 +26,7 @@ add_executable(gl_game_tests
     test_time_event_runtime.cpp
     test_trigger_runtime.cpp
     test_weather_runtime.cpp
+    test_clock_native.cpp
     test_person_movement.cpp
     test_person_runtime.cpp
     test_save_person.cpp

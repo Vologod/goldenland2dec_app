@@ -1367,6 +1367,12 @@ class Game {
         context->host.services().time_event = time_events_.access();
         context->host.services().trigger = triggers_.access();
         context->host.services().weather = weather_.access();
+        context->host.services().clock.current_hour = [this] {
+            return static_cast<std::int32_t>(calendar_.now().hour);
+        };
+        context->host.services().clock.days_from_beginning = [this] {
+            return gl::game::days_from_beginning(calendar_.now());
+        };
         context->host.services().random.range = [this](std::int32_t low, std::int32_t high) {
             return level_ ? level_->simulation().rng().range(low, high)
                           : fallback_rng_.range(low, high);

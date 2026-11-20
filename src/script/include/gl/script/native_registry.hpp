@@ -3,6 +3,7 @@
 #include "gl/script/quest_access.hpp"
 #include "gl/script/time_event_access.hpp"
 #include "gl/script/random_access.hpp"
+#include "gl/script/clock_access.hpp"
 #include "gl/script/weather_access.hpp"
 #include "gl/script/trigger_access.hpp"
 #include "gl/script/value.hpp"
@@ -43,6 +44,7 @@ struct NativeServices {
     TriggerAccess trigger;
     RandomAccess random;
     WeatherAccess weather;
+    ClockAccess clock;
 };
 
 using NativeHandler = Value (*)(std::span<const Value>, NativeServices&);

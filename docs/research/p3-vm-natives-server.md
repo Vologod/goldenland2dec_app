@@ -322,8 +322,8 @@ fallback-константа при несовпадении типов — `0.0`
 | 83886087 | RS_PersonRemoveItemToTrade | `0x41400` | 3 | `3,3,0` | 0.0 | `FUN_1404cae8` на trade-контейнере; пишет `+0x18` | unsupported: trade |
 | 83886088 | RS_GetMoney | `0x41120` | 0 | `[]` | computed int | текущая персона; `FUN_1404c494` | unsupported: inventory/persons |
 | 100663296 | RS_GetDayOrNight | `0x40d98` | 0 | `[]` | computed double | time-объект `DAT_14088e14`, vtable `+0xc` | unsupported: time |
-| 100663297 | RS_GetCurrentTimeOfDayI | `0x40db8` | 0 | `[]` | computed int | time vtable `+0x18` | unsupported: time |
-| 100663298 | RS_GetDaysFromBeginningI | `0x40de8` | 0 | `[]` | computed int | `FUN_1405b140` | unsupported: time |
+| 100663297 | RS_GetCurrentTimeOfDayI | `0x40db8` | 0 | `[]` | computed int | time vtable `+0x18` | supported D-104 |
+| 100663298 | RS_GetDaysFromBeginningI | `0x40de8` | 0 | `[]` | computed int | `FUN_1405b140` | supported D-104 |
 | 100663299 | RS_AddTime | `0x40f34` | 2 | `0,0` | 0.0 | `FUN_1405b504(time,args)` | unsupported: time |
 | 117440512 | RS_QuestComplete | `0x403dc` | 1 | `3` | 0.0 | `FUN_140591b8(quest,arg0)` | supported D-094 (string args, 0.0) |
 | 117440513 | RS_StageEnable | `0x4040c` | 2 | `3,3` | 0.0 | `FUN_14059030(quest,arg0,arg1)` | supported D-094 (string args, 0.0) |
