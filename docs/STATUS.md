@@ -2,6 +2,20 @@
 
 Обновлено: 2026-11-19
 
+## P6a2 — Time-event natives research (done 2026-11-19)
+
+- **Задача:** `RS_SetEvent/GetEvent/ClearEvent` (0x7000005..7), clock list.
+- **Research:** `docs/research/p6a2-time-events.md`; **D-095**.
+- **Результат:** `GetEvent/ClearEvent` принимают handle счётчика
+  `clock+0x38`, а не id; события — таймеры с due-datetime; `GetEvent` —
+  предикат «срок наступил». Verdict **`blocked (scoped)`**: clock vtable
+  `+0` (расчёт due), layout entry и возврат `SetEvent` не доказаны.
+- **Проверка:** docs-only; disasm `0x40e2c..0x40f34`, decompile
+  `5b9b4/5b80c/5b6c4`; `git diff --check`.
+- **Дальше:** decompile clock vtable `+0` или live capture; затем
+  `TimeEventRuntime` на `GameCalendar`.
+- **Статус:** `done` (research-only, blocked).
+
 ## P6a1 — Quest/event runtime (done 2026-11-19)
 
 - **Задача:** `QuestRuntime` (quest/stage state, string names) + нативы
