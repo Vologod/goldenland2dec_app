@@ -2,6 +2,14 @@
 
 Обновлено: 2026-11-19
 
+## P6a5 — Script RNG native (done 2026-11-19)
+
+- **Задача:** RS_GetRandMinMaxI (0x700000A) на общем MsvcRandom.
+- **Spec/plan:** docs/specs/2026-11-19-p6a5-script-rng-design.md, docs/plans/2026-11-19-p6a5-script-rng.md; **D-100**.
+- **Результат:** native supported (26/65), numeric args → double (fild); glgame использует level simulation rng, fallback stream вне уровня.
+- **Проверка (2026-11-19):** rand-min-max 4/4, 71 assertions; gl_script 131/131; screenshot 45/45; full ctest 19/19, 1876.98 s.
+- **Статус:** done.
+
 ## P6a4 — Location access research (done 2026-11-19)
 
 - **Задача:** RS_SetLocationAccess (0x7000008), global table/VM-visible bridge.

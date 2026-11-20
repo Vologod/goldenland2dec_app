@@ -22,6 +22,7 @@ add_executable(gl_game_tests
     test_pathfinder.cpp
     test_person_loader.cpp
     test_quest_runtime.cpp
+    test_random_native.cpp
     test_time_event_runtime.cpp
     test_trigger_runtime.cpp
     test_person_movement.cpp

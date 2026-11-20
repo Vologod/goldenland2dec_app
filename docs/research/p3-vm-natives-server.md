@@ -335,7 +335,7 @@ fallback-константа при несовпадении типов — `0.0`
 | 117440519 | RS_ClearEvent | `0x40f04` | 1 | `0` | 0.0 | `FUN_1405b6c4(time,arg0)` | supported D-096 (handle) |
 | 117440520 | RS_SetLocationAccess | `0x41634` | 2 | `3,0` | 0.0 | копирует arg0, добавляет `"_state"`, set через vtable `DAT_1407f9a0+0x1c` | unsupported: world state |
 | 117440521 | RS_EnableTrigger | `0x416e8` | 2 | `3,0` | 0.0 | `FUN_14043030`, поиск объекта/триггера, запись флагов | supported D-097 |
-| 117440522 | RS_GetRandMinMaxI | `0x41bf8` | 2 | `0,0` | computed int | `FUN_140061e4(min,max)` | unsupported: RNG |
+| 117440522 | RS_GetRandMinMaxI | `0x41bf8` | 2 | `0,0` | computed int | `FUN_140061e4(min,max)` | supported D-100 |
 | 117440523 | RS_SetWeather | `0x41204` | 1 | `0` | 0.0 | `FUN_1405c1fc(weather,id)` | unsupported: weather |
 | 117440524 | RS_SetSpecialPerk | `0x41264` | 1 | `0` | 0.0 | текущая персона; `FUN_14009b38` | unsupported: perks |
 | 117440525 | RS_PassToTradePanel | `0x41558` | 0 | `[]` | 0.0 | `FUN_14028404`, `DAT_14088de8+0x5528=1` | unsupported: trade/UI |

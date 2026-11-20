@@ -727,6 +727,8 @@ class Game {
         level_name_ = options_.level;
         screenshot_mode_ = !options_.screenshot.empty();
         register_commands();
+        fallback_rng_ = gl::game::MsvcRandom(static_cast<std::uint32_t>(
+            options_.seed.value_or(gl::game::MsvcRandom::production_seed())));
         time_events_.set_now([this] { return calendar_.now(); });
     }
 
@@ -1363,6 +1365,10 @@ class Game {
         context->host.services().quest = quest_runtime_.access();
         context->host.services().time_event = time_events_.access();
         context->host.services().trigger = triggers_.access();
+        context->host.services().random.range = [this](std::int32_t low, std::int32_t high) {
+            return level_ ? level_->simulation().rng().range(low, high)
+                          : fallback_rng_.range(low, high);
+        };
         context->host.services().trade_panel = [this]() { request_trade_panel(); };
         context->path = std::string(virtual_path);
         context->speaker = std::string(speaker);
@@ -3347,6 +3353,7 @@ class Game {
     gl::game::QuestRuntime quest_runtime_;
     gl::game::TimeEventRuntime time_events_;
     gl::game::TriggerRuntime triggers_;
+    gl::game::MsvcRandom fallback_rng_ = gl::game::MsvcRandom(gl::game::MsvcRandom::production_seed());
     gl::game::InventoryRuntime inventory_runtime_;
     std::optional<gl::assets::ItemNameIndex> item_names_;
     bool hero_stats_absent_logged_ = false;

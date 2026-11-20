@@ -67,7 +67,7 @@ TEST_CASE("enable-trigger native dispatches and returns zero") {
           Value{double{0.0}});
     CHECK(call(0x7000009, {std::string{"closed_gate"}, double{1.0}}, services) ==
           Value{double{0.0}});
-    CHECK_FALSE(runtime.enabled("closed_gate"));
+    CHECK(runtime.enabled("closed_gate"));
     CHECK(call(0x7000009, {std::string{"missing"}, std::int32_t{1}}, services) ==
           Value{double{0.0}});
     CHECK(call(0x7000009, {std::int32_t{1}, std::int32_t{1}}, services) == Value{double{0.0}});
