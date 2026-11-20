@@ -4,6 +4,7 @@
 #include "gl/assets/sdb.hpp"
 #include "gl/assets/vfs.hpp"
 #include "gl/game/game_script_host.hpp"
+#include "gl/game/msvc_random.hpp"
 #include "gl/script/globals.hpp"
 #include "gl/script/script_vm.hpp"
 
@@ -233,7 +234,11 @@ int run(int argc, char** argv) {
     auto globals = gl::script::parse_globals(globals_data.value());
     if (!globals) return fail(globals.error());
 
+    gl::game::MsvcRandom rng(1);
     gl::script::NativeServices services;
+    services.random.range = [&rng](std::int32_t low, std::int32_t high) {
+        return rng.range(low, high);
+    };
     services.console = [](std::string_view text) {
         gl::log(gl::LogLevel::info, "script console: " + std::string(text));
     };
