@@ -35,6 +35,7 @@
 #include <gl/game/quest_runtime.hpp>
 #include <gl/game/time_event_runtime.hpp>
 #include <gl/game/trigger_runtime.hpp>
+#include <gl/game/weather_runtime.hpp>
 #include <gl/game/rginf.hpp>
 #include <gl/game/save_restore.hpp>
 #include <gl/platform/sdl_context.hpp>
@@ -1365,6 +1366,7 @@ class Game {
         context->host.services().quest = quest_runtime_.access();
         context->host.services().time_event = time_events_.access();
         context->host.services().trigger = triggers_.access();
+        context->host.services().weather = weather_.access();
         context->host.services().random.range = [this](std::int32_t low, std::int32_t high) {
             return level_ ? level_->simulation().rng().range(low, high)
                           : fallback_rng_.range(low, high);
@@ -2354,6 +2356,7 @@ class Game {
         const bool has_rginf_latch_before = has_rginf_latch_;
         auto quest_runtime_before = quest_runtime_;
         auto time_events_before = time_events_;
+        auto weather_before = weather_;
 
         apply_hero_from_body(hero_body, slot, true);
 
@@ -2390,6 +2393,7 @@ class Game {
             has_rginf_latch_ = has_rginf_latch_before;
             quest_runtime_ = std::move(quest_runtime_before);
             time_events_ = std::move(time_events_before);
+            weather_ = std::move(weather_before);
             gl::log(gl::LogLevel::warning,
                     "save: rollback slot=" + std::to_string(slot));
             const std::string message =
@@ -2402,6 +2406,7 @@ class Game {
 
         quest_runtime_.clear();
         time_events_.clear();
+        weather_.clear();
         apply_restored_person_state();
         apply_loaded_equip_save();
 
@@ -2954,6 +2959,7 @@ class Game {
             if (!load_level(kNewGameLevel)) return;
             quest_runtime_.clear();
             time_events_.clear();
+            weather_.clear();
             if (state_.transition(gl::core::AppState::level)) {
                 mouse_down_ = false;
                 dragging_ = false;
@@ -3353,6 +3359,7 @@ class Game {
     gl::game::QuestRuntime quest_runtime_;
     gl::game::TimeEventRuntime time_events_;
     gl::game::TriggerRuntime triggers_;
+    gl::game::WeatherRuntime weather_;
     gl::game::MsvcRandom fallback_rng_ = gl::game::MsvcRandom(gl::game::MsvcRandom::production_seed());
     gl::game::InventoryRuntime inventory_runtime_;
     std::optional<gl::assets::ItemNameIndex> item_names_;

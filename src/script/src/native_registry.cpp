@@ -227,6 +227,12 @@ Value native_get_rand_min_max(std::span<const Value> args, NativeServices& servi
         services.random.range(as_int(args[0]), as_int(args[1])))};
 }
 
+Value native_set_weather(std::span<const Value> args, NativeServices& services) {
+    if (!services.weather.set_weather || !is_numeric(args[0])) return double{0.0};
+    services.weather.set_weather(as_int(args[0]));
+    return double{0.0};
+}
+
 Value native_enable_trigger(std::span<const Value> args, NativeServices& services) {
     if (!services.trigger.set || !is_string(args[0]) || !is_numeric(args[1]))
         return double{0.0};
@@ -317,8 +323,8 @@ std::vector<NativeInfo> make_entries() {
     add(0x7000008, NativeSupport::unsupported, "requires world/level runtime");
     add(0x7000009, NativeSupport::supported, {}, &native_enable_trigger, 2);
     add(0x700000a, NativeSupport::supported, {}, &native_get_rand_min_max, 2);
-    for (std::uint32_t id = 0x700000b; id <= 0x700000c; ++id)
-        add(id, NativeSupport::unsupported, "requires world/level runtime");
+    add(0x700000b, NativeSupport::supported, {}, &native_set_weather, 1);
+    add(0x700000c, NativeSupport::unsupported, "requires world/level runtime");
     add(0x700000d, NativeSupport::supported, {}, &native_pass_to_trade_panel, 0);
     add(0x700000e, NativeSupport::unsupported, "requires dialog/person runtime");
     add(0x700000f, NativeSupport::unsupported, "requires person runtime state");

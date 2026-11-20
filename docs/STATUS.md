@@ -2,6 +2,14 @@
 
 Обновлено: 2026-11-19
 
+## P6a6 — Weather state native (done 2026-11-19)
+
+- **Задача:** RS_SetWeather (0x700000B) — код 1→0x10001, 2→0x10002, иначе 0.
+- **Spec/plan:** docs/specs/2026-11-19-p6a6-weather-state-design.md, docs/plans/2026-11-19-p6a6-weather-state.md; **D-101**.
+- **Результат:** WeatherRuntime/current, native supported (27/65), numeric → 0.0; glgame wiring/clear/rollback; рендер вне scope.
+- **Проверка (2026-11-19):** weather 4/4, 20 assertions; gl_script 131/131; screenshot 45/45; full ctest 19/19, 1717.67 s.
+- **Статус:** done.
+
 ## P6a5 — Script RNG native (done 2026-11-19)
 
 - **Задача:** RS_GetRandMinMaxI (0x700000A) на общем MsvcRandom.
