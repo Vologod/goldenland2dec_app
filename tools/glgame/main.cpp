@@ -1373,6 +1373,9 @@ class Game {
         context->host.services().clock.days_from_beginning = [this] {
             return gl::game::days_from_beginning(calendar_.now());
         };
+        context->host.services().clock.day_night = [this] {
+            return gl::game::day_night_factor(calendar_.now());
+        };
         context->host.services().random.range = [this](std::int32_t low, std::int32_t high) {
             return level_ ? level_->simulation().rng().range(low, high)
                           : fallback_rng_.range(low, high);

@@ -2,6 +2,14 @@
 
 Обновлено: 2026-11-19
 
+## P6a9b — Day/night light native (done 2026-11-19)
+
+- **Задача:** RS_GetDayOrNight (0x6000000), clock vtable +0xc.
+- **Spec/plan:** docs/specs/2026-11-19-p6a9b-day-night-design.md, docs/plans/2026-11-19-p6a9b-day-night.md; **D-105**.
+- **Результат:** day_night_factor (sunrise 7:00-12:00, day 8..20, sunset 13:00-22:00, night 22..7); ClockAccess.day_night; 31/65 supported.
+- **Проверка (2026-11-19):** day-night 2/2, 8 assertions; clock 3/3, 21; gl_script 131/131; screenshot 45/45; full ctest 19/19, 1826.74 s.
+- **Статус:** done.
+
 ## P6a9 — Clock query natives (done 2026-11-19)
 
 - **Задача:** RS_GetCurrentTimeOfDayI (0x6000001), RS_GetDaysFromBeginningI (0x6000002).

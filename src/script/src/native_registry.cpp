@@ -227,6 +227,11 @@ Value native_get_rand_min_max(std::span<const Value> args, NativeServices& servi
         services.random.range(as_int(args[0]), as_int(args[1])))};
 }
 
+Value native_day_or_night(std::span<const Value>, NativeServices& services) {
+    if (!services.clock.day_night) return double{0.0};
+    return double{services.clock.day_night()};
+}
+
 Value native_current_hour(std::span<const Value>, NativeServices& services) {
     if (!services.clock.current_hour) return double{0.0};
     return double{static_cast<double>(services.clock.current_hour())};
@@ -327,7 +332,7 @@ std::vector<NativeInfo> make_entries() {
             id != 0x5000003 && id != 0x5000004 && id != 0x5000005 &&
             id != 0x5000008)
             add(id, NativeSupport::unsupported, "requires item runtime state");
-    add(0x6000000, NativeSupport::unsupported, "requires clock day/night slot");
+    add(0x6000000, NativeSupport::supported, {}, &native_day_or_night, 0);
     add(0x6000001, NativeSupport::supported, {}, &native_current_hour, 0);
     add(0x6000002, NativeSupport::supported, {}, &native_days_from_beginning, 0);
     add(0x6000003, NativeSupport::unsupported, "requires clock runtime");

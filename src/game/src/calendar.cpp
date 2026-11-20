@@ -121,4 +121,15 @@ std::int32_t days_from_beginning(const GameDatetime &value) {
            ((((previous >> 1) >> 30) - 1 + year) >> 2) - previous / 100 +
            previous / 400 - 1 + static_cast<std::int32_t>(value.day) + offset;
 }
+double day_night_factor(const GameDatetime &value) {
+    const std::int32_t hour = static_cast<std::int32_t>(value.hour);
+    if (hour < 7 || hour >= 22) return 0.0;
+    if (hour >= 8 && hour < 21) return 1.0;
+    if (hour == 12) return 1.0;
+    const double minutes = static_cast<double>(value.minute) +
+                           static_cast<double>(value.second) / 60.0;
+    if (hour < 12) return minutes / 60.0;
+    return 1.0 - minutes / 60.0;
+}
+
 } // namespace gl::game
