@@ -330,9 +330,9 @@ fallback-константа при несовпадении типов — `0.0`
 | 117440514 | RS_QuestEnable | `0x40448` | 2 | `3,3` | 0.0 | `FUN_14059f6c` | supported D-094 (string args, 0.0) |
 | 117440515 | RS_StageComplete | `0x404b4` | 2 | `3,3` | 0.0 | `FUN_14058de0` | supported D-094 (string args, 0.0) |
 | 117440516 | RS_StorylineQuestEnable | `0x40484` | 1 | `3` | 0.0 | `FUN_1405a21c` | supported D-094 (string args, 0.0) |
-| 117440517 | RS_SetEvent | `0x40e2c` | 2 | `0,0` | computed double | `FUN_1405b9b4(time)` — установить событие | unsupported: events/time |
-| 117440518 | RS_GetEvent | `0x40ec8` | 1 | `0` | computed int | `FUN_1405b80c(time,arg0,0)` | unsupported: events |
-| 117440519 | RS_ClearEvent | `0x40f04` | 1 | `0` | 0.0 | `FUN_1405b6c4(time,arg0)` | unsupported: events |
+| 117440517 | RS_SetEvent | `0x40e2c` | 2 | `0,0` | computed double | `FUN_1405b9b4(time)` — установить событие | supported D-096 (handle) |
+| 117440518 | RS_GetEvent | `0x40ec8` | 1 | `0` | computed int | `FUN_1405b80c(time,arg0,0)` | supported D-096 (handle) |
+| 117440519 | RS_ClearEvent | `0x40f04` | 1 | `0` | 0.0 | `FUN_1405b6c4(time,arg0)` | supported D-096 (handle) |
 | 117440520 | RS_SetLocationAccess | `0x41634` | 2 | `3,0` | 0.0 | копирует arg0, добавляет `"_state"`, set через vtable `DAT_1407f9a0+0x1c` | unsupported: world state |
 | 117440521 | RS_EnableTrigger | `0x416e8` | 2 | `3,0` | 0.0 | `FUN_14043030`, поиск объекта/триггера, запись флагов | unsupported: triggers |
 | 117440522 | RS_GetRandMinMaxI | `0x41bf8` | 2 | `0,0` | computed int | `FUN_140061e4(min,max)` | unsupported: RNG |

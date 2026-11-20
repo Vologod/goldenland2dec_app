@@ -18,7 +18,7 @@ disassembly `0x14040e2c..0x14040f34`; decompiled
   `[1..8]` a datetime. The counter increments per append.
 - `RS_GetEvent` (0x7000006, 1 int): `FUN_1405b80c(clock, arg, 0)` scans the
   list; if entry `[0] == arg` it compares the current datetime with the
-  entry datetime and returns `1` when the current time is past it, else `0`.
+  entry datetime and returns `1` when the current time is at/past it, else `0`.
 - `RS_ClearEvent` (0x7000007, 1 int): `FUN_1405b6c4(clock, arg)` removes the
   entry with `[0] == arg`, returning `1` on removal and `0` otherwise.
 - Thunk returns: `SetEvent` computed double (`eax`), `GetEvent` computed int,
@@ -30,24 +30,24 @@ The one-int argument to `GetEvent`/`ClearEvent` is the **handle** returned by
 `SetEvent` (clock counter), not an event id. Events are scheduled timers with
 a due datetime; `GetEvent` is a “due now” predicate, not a value read.
 
-## 3. Blocked
+## 3. Resolved (2026-11-19)
 
-- Clock vtable `+0`: how the current datetime and the `arg0/arg1`
-  descriptor produce the due datetime (date arithmetic, units, clamp).
-- Entry datetime layout vs `GameDatetime` and the `[0]`/`+0x38` counter’s
-  exact role.
-- `SetEvent` return value: `FUN_1405b9b4` is decompiled `void`; the thunk
-  converts `eax`, so the returned handle is inferred, not proven.
+- Clock vtable `+0` is `0x1405b38c`; it adds descriptor `+0x08` to days,
+  `+0x10` to hours, `+0x14` to minutes and `+0x1c` to milliseconds of the
+  supplied datetime. SetEvent writes arg0 at `+0x08` and arg1 at `+0x10`,
+  so **due = now + arg0 days + arg1 hours**.
+- `SetEvent` returns the pre-increment counter (`clock+0x38`) as a double;
+  `GetEvent`/`ClearEvent` consume that handle. Removing the last entry resets
+  the counter to `1`.
+- No opaque event value is stored; only the due datetime.
 
-**Verdict: `blocked (scoped)`.** A faithful implementation needs clock
-vtable `+0` or a user-assisted live capture; a plain handle→value map would
-be wrong.
+**Verdict: `implementable scoped`**, implemented as D-096
+(`TimeEventRuntime`); save/load of timers and a New Game clock base remain
+out of scope.
 
-## 4. Next checks
+## 4. Remaining checks
 
-1. Decompile the `DAT_14088e14` vtable slot `+0` and its argument contract.
-2. Trace `FUN_1405b9b4` callers/register setup for the hidden event descriptor.
-3. Live: at a known calendar time call `SetEvent(a,b)`, record the returned
-   value and `GetEvent` before/after the due time.
-4. Then implement `TimeEventRuntime` on `GameCalendar`; keep `0x5..7`
-   unsupported until then.
+1. Save/load of the timer list (not modeled).
+2. New Game clock base: glgame advances the calendar only when a save
+   initialized it; without that events use a frozen datetime.
+3. Live timing (equality boundary) if a real capture is available.

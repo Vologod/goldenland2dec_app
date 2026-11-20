@@ -33,6 +33,7 @@
 #include <gl/game/npc_loot.hpp>
 #include <gl/game/person_runtime.hpp>
 #include <gl/game/quest_runtime.hpp>
+#include <gl/game/time_event_runtime.hpp>
 #include <gl/game/rginf.hpp>
 #include <gl/game/save_restore.hpp>
 #include <gl/platform/sdl_context.hpp>
@@ -725,6 +726,7 @@ class Game {
         level_name_ = options_.level;
         screenshot_mode_ = !options_.screenshot.empty();
         register_commands();
+        time_events_.set_now([this] { return calendar_.now(); });
     }
 
     int boot() {
@@ -1358,6 +1360,7 @@ class Game {
         context->host.services().person = person_runtime_.access();
         context->host.services().inventory = inventory_runtime_.access();
         context->host.services().quest = quest_runtime_.access();
+        context->host.services().time_event = time_events_.access();
         context->host.services().trade_panel = [this]() { request_trade_panel(); };
         context->path = std::string(virtual_path);
         context->speaker = std::string(speaker);
@@ -2341,6 +2344,7 @@ class Game {
         const std::uint32_t rginf_latch_before = runtime_rginf_latch_;
         const bool has_rginf_latch_before = has_rginf_latch_;
         auto quest_runtime_before = quest_runtime_;
+        auto time_events_before = time_events_;
 
         apply_hero_from_body(hero_body, slot, true);
 
@@ -2376,6 +2380,7 @@ class Game {
             runtime_rginf_latch_ = rginf_latch_before;
             has_rginf_latch_ = has_rginf_latch_before;
             quest_runtime_ = std::move(quest_runtime_before);
+            time_events_ = std::move(time_events_before);
             gl::log(gl::LogLevel::warning,
                     "save: rollback slot=" + std::to_string(slot));
             const std::string message =
@@ -2387,6 +2392,7 @@ class Game {
         }
 
         quest_runtime_.clear();
+        time_events_.clear();
         apply_restored_person_state();
         apply_loaded_equip_save();
 
@@ -2937,6 +2943,7 @@ class Game {
         if (index == 0) {
             if (!load_level(kNewGameLevel)) return;
             quest_runtime_.clear();
+            time_events_.clear();
             if (state_.transition(gl::core::AppState::level)) {
                 mouse_down_ = false;
                 dragging_ = false;
@@ -3334,6 +3341,7 @@ class Game {
     std::optional<gl::game::GameDatetime> runtime_rginf_timestamp_;
     gl::game::PersonRuntime person_runtime_;
     gl::game::QuestRuntime quest_runtime_;
+    gl::game::TimeEventRuntime time_events_;
     gl::game::InventoryRuntime inventory_runtime_;
     std::optional<gl::assets::ItemNameIndex> item_names_;
     bool hero_stats_absent_logged_ = false;

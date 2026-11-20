@@ -2,6 +2,19 @@
 
 Обновлено: 2026-11-19
 
+## P6a2 — Time-event runtime (done 2026-11-19)
+
+- **Задача:** `TimeEventRuntime` на `GameCalendar` + нативы `0x7000005..7`
+  (handle, due = now + арг0 дней + арг1 часов); glgame wiring.
+- **Spec/plan:** `docs/specs/2026-11-19-p6a2-time-event-runtime-design.md`,
+  `docs/plans/2026-11-19-p6a2-time-event-runtime.md`.
+- **Результат (D-096):** `TimeEventRuntime` (now + days + hours, handles),
+  `0x7000005..7` supported (24/65), glgame `now=calendar_.now()`,
+  clear/rollback; counter reset on empty. Residual: timers not saved, New Game clock base not advancing.
+- **Проверка (2026-11-19):** time-event 7/7, 50 assertions; quest 12/12, 93;
+  gl_script 131/131; screenshot 45/45; full ctest 19/19, 1959.21 s.
+- **Статус:** `done`.
+
 ## P6a2 — Time-event natives research (done 2026-11-19)
 
 - **Задача:** `RS_SetEvent/GetEvent/ClearEvent` (0x7000005..7), clock list.

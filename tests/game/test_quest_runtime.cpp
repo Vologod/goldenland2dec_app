@@ -117,11 +117,10 @@ TEST_CASE("quest native registry entries match the server") {
     }
 }
 
-TEST_CASE("time-event natives remain unsupported") {
-    CHECK(NativeRegistry::find(0x7000005)->support ==
-          gl::script::NativeSupport::unsupported);
-    CHECK(NativeRegistry::find(0x7000006)->support ==
-          gl::script::NativeSupport::unsupported);
-    CHECK(NativeRegistry::find(0x7000007)->support ==
-          gl::script::NativeSupport::unsupported);
+TEST_CASE("time-event natives are supported") {
+    for (const std::uint32_t id : {0x7000005u, 0x7000006u, 0x7000007u}) {
+        const auto *info = NativeRegistry::find(id);
+        REQUIRE(info != nullptr);
+        CHECK(info->support == gl::script::NativeSupport::supported);
+    }
 }

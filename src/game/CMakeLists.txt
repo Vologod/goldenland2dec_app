@@ -3,6 +3,7 @@ add_library(gl_game STATIC
     src/diary.cpp
     src/dialog_path.cpp
     src/quest_runtime.cpp
+    src/time_event_runtime.cpp
     src/game_script_host.cpp
     src/hero.cpp
     src/hero_outfit_resolver.cpp
