@@ -2,6 +2,19 @@
 
 Обновлено: 2026-11-19
 
+## P6a3 — Trigger state runtime (done 2026-11-19)
+
+- **Задача:** `TriggerRuntime` (LVL trigger names, enable/disable) + натив
+  `RS_EnableTrigger` (0x7000009); glgame reset на загрузке уровня.
+- **Spec/plan:** `docs/specs/2026-11-19-p6a3-trigger-state-design.md`,
+  `docs/plans/2026-11-19-p6a3-trigger-state.md`; **D-097**.
+- **Результат:** known-name toggle, unknown no-op; native string+int → `0.0`;
+  25/65 supported; `Level::triggers` из LVL; real `l1_1` имена грузятся.
+- **Проверка (2026-11-19):** trigger 5/5, 38 assertions; gl_script 131/131; screenshot 45/45; full ctest 19/19, 2178.64 s.
+- **Residual:** LVL `BLK_TDSC` names vs live `EF_TRIGGER` entity names
+  не сверены; initial disabled — port choice; trigger effects не в scope.
+- **Статус:** `done`.
+
 ## P6a2 — Time-event runtime (done 2026-11-19)
 
 - **Задача:** `TimeEventRuntime` на `GameCalendar` + нативы `0x7000005..7`

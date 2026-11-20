@@ -34,6 +34,7 @@
 #include <gl/game/person_runtime.hpp>
 #include <gl/game/quest_runtime.hpp>
 #include <gl/game/time_event_runtime.hpp>
+#include <gl/game/trigger_runtime.hpp>
 #include <gl/game/rginf.hpp>
 #include <gl/game/save_restore.hpp>
 #include <gl/platform/sdl_context.hpp>
@@ -1361,6 +1362,7 @@ class Game {
         context->host.services().inventory = inventory_runtime_.access();
         context->host.services().quest = quest_runtime_.access();
         context->host.services().time_event = time_events_.access();
+        context->host.services().trigger = triggers_.access();
         context->host.services().trade_panel = [this]() { request_trade_panel(); };
         context->path = std::string(virtual_path);
         context->speaker = std::string(speaker);
@@ -2282,6 +2284,7 @@ class Game {
             return false;
         }
         level_.emplace(std::move(screen.value()));
+        triggers_.reset(level_->level().triggers);
         level_name_ = std::string(name);
         level_animation_ms_ = 0;
         pending_talk_.reset();
@@ -2841,6 +2844,7 @@ class Game {
                 mouse_down_ = false;
                 dragging_ = false;
                 level_.reset();
+                triggers_.clear();
                 state_.transition(gl::core::AppState::menu);
             } else if (symbol == SDLK_HOME) {
                 level_->reset_camera();
@@ -3342,6 +3346,7 @@ class Game {
     gl::game::PersonRuntime person_runtime_;
     gl::game::QuestRuntime quest_runtime_;
     gl::game::TimeEventRuntime time_events_;
+    gl::game::TriggerRuntime triggers_;
     gl::game::InventoryRuntime inventory_runtime_;
     std::optional<gl::assets::ItemNameIndex> item_names_;
     bool hero_stats_absent_logged_ = false;

@@ -91,6 +91,7 @@ Result<Level> load_level(GameVfs &vfs, std::string_view level_name) {
         if (!lvl)
             return contextual(lvl.error(), "cannot parse level LVL", lvl_file);
         level.walkable = build_walk_grid(lvl.value());
+        level.triggers = lvl->triggers;
 
         level.mask_cells.width = static_cast<int>(lvl->chunk_width);
         level.mask_cells.height = static_cast<int>(lvl->chunk_height);

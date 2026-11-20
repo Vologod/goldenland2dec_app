@@ -36,6 +36,11 @@ bool is_string(const Value& value) {
     return std::holds_alternative<std::string>(value);
 }
 
+bool is_integer(const Value& value) {
+    return std::holds_alternative<std::int32_t>(value) ||
+           std::holds_alternative<std::uint32_t>(value);
+}
+
 bool is_numeric(const Value& value) {
     return std::holds_alternative<std::int32_t>(value) ||
            std::holds_alternative<std::uint32_t>(value) ||
@@ -204,22 +209,29 @@ Value native_storyline_quest_enable(std::span<const Value> args,
     return double{0.0};
 }
 Value native_set_event(std::span<const Value> args, NativeServices& services) {
-    if (!services.time_event.set_event || !is_numeric(args[0]) || !is_numeric(args[1]))
+    if (!services.time_event.set_event || !is_integer(args[0]) || !is_integer(args[1]))
         return double{0.0};
     return double{static_cast<double>(
         services.time_event.set_event(as_int(args[0]), as_int(args[1])))};
 }
 
 Value native_get_event(std::span<const Value> args, NativeServices& services) {
-    if (!services.time_event.get_event || !is_numeric(args[0])) return double{0.0};
+    if (!services.time_event.get_event || !is_integer(args[0])) return double{0.0};
     return std::int32_t{services.time_event.get_event(as_int(args[0]))};
 }
 
 Value native_clear_event(std::span<const Value> args, NativeServices& services) {
-    if (!services.time_event.clear_event || !is_numeric(args[0])) return double{0.0};
+    if (!services.time_event.clear_event || !is_integer(args[0])) return double{0.0};
     services.time_event.clear_event(as_int(args[0]));
     return double{0.0};
 }
+Value native_enable_trigger(std::span<const Value> args, NativeServices& services) {
+    if (!services.trigger.set || !is_string(args[0]) || !is_integer(args[1]))
+        return double{0.0};
+    services.trigger.set(as_string(args[0]), as_int(args[1]) != 0);
+    return double{0.0};
+}
+
 Value native_exit(std::span<const Value> args, NativeServices& services) {
     if (args.empty() || std::holds_alternative<std::string>(args.front())) {
         if (services.log) services.log("script native Exit: expected a numeric argument");
@@ -301,7 +313,7 @@ std::vector<NativeInfo> make_entries() {
     add(0x7000006, NativeSupport::supported, {}, &native_get_event, 1);
     add(0x7000007, NativeSupport::supported, {}, &native_clear_event, 1);
     add(0x7000008, NativeSupport::unsupported, "requires world/level runtime");
-    add(0x7000009, NativeSupport::unsupported, "requires trigger runtime");
+    add(0x7000009, NativeSupport::supported, {}, &native_enable_trigger, 2);
     for (std::uint32_t id = 0x700000a; id <= 0x700000c; ++id)
         add(id, NativeSupport::unsupported, "requires world/level runtime");
     add(0x700000d, NativeSupport::supported, {}, &native_pass_to_trade_panel, 0);
