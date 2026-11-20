@@ -2,6 +2,15 @@
 
 Обновлено: 2026-11-19
 
+## P6a4 — Location access research (done 2026-11-19)
+
+- **Задача:** RS_SetLocationAccess (0x7000008), global table/VM-visible bridge.
+- **Research:** docs/research/p6a4-location-access.md; **D-099**.
+- **Результат:** key name + _state, value uint32→double в DAT_1407f9a0; unknown no-op; порт не имеет VM-global bridge, private map не виден скриптам. Verdict blocked (scoped), native остаётся unsupported.
+- **Проверка:** docs-only; disasm 0x14041634, .data1 0x1408fbcc; git diff --check.
+- **Дальше:** map DAT_1407f9a0/vtable + bridge к ScriptVm globals, затем реализация.
+- **Статус:** done (research-only, blocked).
+
 ## P6a3 — Trigger state runtime (done 2026-11-19)
 
 - **Задача:** `TriggerRuntime` (LVL trigger names, enable/disable) + натив
