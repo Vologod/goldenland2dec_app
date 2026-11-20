@@ -4,6 +4,7 @@
 #include "gl/game/person.hpp"
 #include "gl/game/person_runtime.hpp"
 #include "gl/script/person_access.hpp"
+#include "gl/script/native_registry.hpp"
 
 #include <string>
 #include <utility>
@@ -309,4 +310,31 @@ TEST_CASE("person runtime keeps the first duplicate person name") {
     second.def.values["strength"] = "22";
     auto runtime = gl::game::PersonRuntime::create({first, second}, std::nullopt);
     CHECK(runtime.get_parameter("DUP", PersonParameter::strength) == doctest::Approx(11.0));
+}
+
+TEST_CASE("person runtime stores the undead flag") {
+    const std::vector<gl::game::PersonInstance> persons{make_person("L1.P1", "L1.P1")};
+    auto runtime = gl::game::PersonRuntime::create(persons, std::nullopt);
+    CHECK_FALSE(runtime.undead("L1.P1"));
+    runtime.set_undead("L1.P1", true);
+    CHECK(runtime.undead("L1.P1"));
+    runtime.set_undead("missing", true);
+    CHECK_FALSE(runtime.undead("missing"));
+    runtime.set_undead("L1.P1", false);
+    CHECK_FALSE(runtime.undead("L1.P1"));
+}
+
+TEST_CASE("set-undead native dispatches string names") {
+    const std::vector<gl::game::PersonInstance> persons{make_person("L1.P1", "L1.P1")};
+    auto runtime = gl::game::PersonRuntime::create(persons, std::nullopt);
+    gl::script::NativeServices services;
+    services.person = runtime.access();
+    const std::vector<gl::script::Value> args{std::string{"L1.P1"}, double{1.0}};
+    const auto *info = gl::script::NativeRegistry::find(0x700000f);
+    REQUIRE(info != nullptr);
+    CHECK(gl::script::NativeRegistry::call(*info, args, services) ==
+          gl::script::Value{double{0.0}});
+    CHECK(runtime.undead("L1.P1"));
+    CHECK(info->support == gl::script::NativeSupport::supported);
+    CHECK(info->arity == 2);
 }

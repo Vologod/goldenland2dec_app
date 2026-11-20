@@ -233,6 +233,13 @@ Value native_set_weather(std::span<const Value> args, NativeServices& services) 
     return double{0.0};
 }
 
+Value native_set_undead(std::span<const Value> args, NativeServices& services) {
+    if (!services.person.set_undead || !is_string(args[0]) || !is_numeric(args[1]))
+        return double{0.0};
+    services.person.set_undead(as_string(args[0]), as_int(args[1]) != 0);
+    return double{0.0};
+}
+
 Value native_enable_trigger(std::span<const Value> args, NativeServices& services) {
     if (!services.trigger.set || !is_string(args[0]) || !is_numeric(args[1]))
         return double{0.0};
@@ -327,7 +334,7 @@ std::vector<NativeInfo> make_entries() {
     add(0x700000c, NativeSupport::unsupported, "requires world/level runtime");
     add(0x700000d, NativeSupport::supported, {}, &native_pass_to_trade_panel, 0);
     add(0x700000e, NativeSupport::unsupported, "requires dialog/person runtime");
-    add(0x700000f, NativeSupport::unsupported, "requires person runtime state");
+    add(0x700000f, NativeSupport::supported, {}, &native_set_undead, 2);
     add(0x7000010, NativeSupport::unsupported, "requires world/global-map runtime");
     add(0x7000013, NativeSupport::unsupported, "requires person runtime state");
     add(0x7000014, NativeSupport::unsupported, "requires world/level runtime");

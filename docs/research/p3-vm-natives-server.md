@@ -299,8 +299,8 @@ fallback-константа при несовпадении типов — `0.0`
 | 50331654 | C_FINISHED | `0x3fb8c` | 1 | `0` | 0.0 | `FUN_1400607c("ch_finish_game %d")` + console | unsupported: scenario flow |
 | 50331655 | WD_TitlesAndLoadArea | `0x40034` | 3 | `0,3,3` | 0.0 | `FUN_14025a78(level,arg0,arg1,arg2)` | unsupported: world/level |
 | 50331656 | C_TitlesAndFINISHED | `0x3fbd8` | 2 | `0,0` | 0.0 | `FUN_14025b8c(level)` | unsupported: scenario flow |
-| 67108864 | RS_GetPersonParameterI | `0x404f0` | 2 | `3,3` | computed double | поиск персоны + параметр по имени (`EXPERIENCE`, `STRENGTH`, …) | unsupported: persons |
-| 67108865 | RS_SetPersonParameterI | `0x409d4` | 3 | `3,3,0` | 0.0 | поиск персоны; `FUN_14019674`, `FUN_1400aa18`, `FUN_1400b824`; пишет `+0x1500` | unsupported: persons |
+| 67108864 | RS_GetPersonParameterI | `0x404f0` | 2 | `3,3` | computed double | поиск персоны + параметр по имени (`EXPERIENCE`, `STRENGTH`, …) | supported D-050 |
+| 67108865 | RS_SetPersonParameterI | `0x409d4` | 3 | `3,3,0` | 0.0 | поиск персоны; `FUN_14019674`, `FUN_1400aa18`, `FUN_1400b824`; пишет `+0x1500` | supported D-050 |
 | 67108866 | RS_AddPerson_1 | `0x41814` | 5 | `3,3,0,0,0` | 0.0 | заполняет шаблон `DAT_140893c0`; `FUN_1401f9bc`; `_strncpy` | unsupported: persons |
 | 67108867 | RS_AddPerson_2 | `0x41900` | 8 | `3,0,0,3,3,3,3,3` | 0.0 | заполняет шаблон; `FUN_1401fb1c`; `_strncpy` ×2 | unsupported: persons |
 | 67108868 | RS_IsPersonExistsI | `0x41cb4` | 2 | `3,3` | computed int | `FUN_14036b58(level,arg0,arg1)` | unsupported: persons |
@@ -311,7 +311,7 @@ fallback-константа при несовпадении типов — `0.0`
 | 67108873 | RS_TestHeroHasPartyName | `0x41f20` | 1 | `3` | 0.0/1.0 | `FUN_14016c88` — проверка партии | unsupported: party |
 | 67108874 | RS_AllyCmd | `0x42308` | 2 | `3,3` | 0.0 | `FUN_14016c88`, `FUN_140421a8` | unsupported: party/AI |
 | 67108875 | RS_ShowMessage | `0x42434` | 1 | `0` | 0.0 | `FUN_14025c48(level,arg0)` — сообщение | unsupported: UI/dialog |
-| 67108876 | RS_GetPersonSkillI | `0x40944` | 2 | `3,3` | computed double | `FUN_1402914c`, `FUN_1400cb64` — навык персоны | unsupported: persons/skills |
+| 67108876 | RS_GetPersonSkillI | `0x40944` | 2 | `3,3` | computed double | `FUN_1402914c`, `FUN_1400cb64` — навык персоны | supported D-050/skills |
 | 83886080 | RS_TestPersonHasItem | `0x40144` | 2 | `3,3` | 0.0/1.0 | поиск персоны/предмета; `FUN_1404c574` | unsupported: inventory |
 | 83886081 | RS_PersonTransferItemI | `0x401dc` | 4 | `3,3,3,0` | computed double | `FUN_14048790` — передача предмета | unsupported: inventory |
 | 83886082 | RS_GetItemCountI | `0x40d40` | 2 | `3,3` | computed int | `FUN_1404c574` — количество предмета | unsupported: inventory |
@@ -340,9 +340,9 @@ fallback-константа при несовпадении типов — `0.0`
 | 117440524 | RS_SetSpecialPerk | `0x41264` | 1 | `0` | 0.0 | текущая персона; `FUN_14009b38` | unsupported: perks |
 | 117440525 | RS_PassToTradePanel | `0x41558` | 0 | `[]` | 0.0 | `FUN_14028404`, `DAT_14088de8+0x5528=1` | unsupported: trade/UI |
 | 117440526 | RS_GetDialogEnabled | `0x410b4` | 1 | `0` | computed double | `FUN_14009f08`, `FUN_14006288` | unsupported: dialog/persons |
-| 117440527 | RS_SetUndeadState | `0x415e0` | 2 | `3,0` | 0.0 | поиск персоны; пишет `+0xf58` | unsupported: persons |
+| 117440527 | RS_SetUndeadState | `0x415e0` | 2 | `3,0` | 0.0 | поиск персоны; пишет `+0xf58` | supported D-102 |
 | 117440528 | RS_GlobalMap | `0x415a0` | 0 | `[]` | 0.0 | `FUN_140286b0`; `DAT_14088de8+0x5528=1` | unsupported: UI/global map |
-| 117440531 | RS_SetInjured | `0x41c34` | 2 | `3,0` | 0.0 | `FUN_1402914c`, `FUN_14018848` | unsupported: persons |
+| 117440531 | RS_SetInjured | `0x41c34` | 2 | `3,0` | 0.0 | `FUN_1402914c`, `FUN_14018848` | supported D-102 |
 | 117440532 | RS_SetDoorState | `0x41c74` | 2 | `3,0` | 0.0 | `FUN_14029388`, `FUN_14024228` | unsupported: world/doors |
 
 Проверка: 65 строк, ID уникальны и совпадают с `natives.csv`; для всех

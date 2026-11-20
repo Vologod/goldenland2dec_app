@@ -400,6 +400,16 @@ double PersonRuntime::get_skill(std::string_view person, std::string_view skill)
     return clamp_value(skill_value(*state, skill), 0.0, kMaxSkill);
 }
 
+void PersonRuntime::set_undead(std::string_view person, bool undead) {
+    PersonState *state = find(person);
+    if (state != nullptr) state->undead = undead;
+}
+
+bool PersonRuntime::undead(std::string_view person) const {
+    const PersonState *state = find(person);
+    return state != nullptr && state->undead;
+}
+
 gl::script::PersonAccess PersonRuntime::access() {
     gl::script::PersonAccess access;
     access.get_parameter = [this](std::string_view person, PersonParameter parameter) {
@@ -409,6 +419,9 @@ gl::script::PersonAccess PersonRuntime::access() {
                                   double value) { set_parameter(person, parameter, value); };
     access.get_skill = [this](std::string_view person, std::string_view skill) {
         return get_skill(person, skill);
+    };
+    access.set_undead = [this](std::string_view person, bool undead) {
+        set_undead(person, undead);
     };
     return access;
 }

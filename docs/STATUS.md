@@ -2,6 +2,14 @@
 
 Обновлено: 2026-11-19
 
+## P6a7 — Undead state native (done 2026-11-19)
+
+- **Задача:** RS_SetUndeadState (0x700000F) — флаг персонажа.
+- **Spec/plan:** docs/specs/2026-11-19-p6a7-undead-state-design.md, docs/plans/2026-11-19-p6a7-undead-state.md; **D-102**.
+- **Результат:** PersonState.undead / set_undead/undead; native supported (28/65), string+numeric → 0.0; glgame через person access.
+- **Проверка (2026-11-19):** undead 2/2, 9 assertions; gl_script 131/131; screenshot 45/45; full ctest 19/19, 2442.51 s.
+- **Статус:** done.
+
 ## P6a6 — Weather state native (done 2026-11-19)
 
 - **Задача:** RS_SetWeather (0x700000B) — код 1→0x10001, 2→0x10002, иначе 0.
@@ -2078,8 +2086,8 @@
     `inter_kid3.age.cs`/`777` недостижим линейно и климпится в `50`).
   - Ограничения (D-050): identity-кривая модификаторов (рантайм-таблица
     не загружена/не доказана), `gate=0` default (getter силы не прибавляет
-    `strength_bonus`, запись bonus не наблюдаема), `+0xF58` undead-gate не
-    моделируется; engine quirk воспроизведён — все семь stat-setter'ов
+    `strength_bonus`, запись bonus не наблюдаема), `+0xF58` flag хранится
+    (P6a7/D-102), но LIFE-gate не моделируется; engine quirk воспроизведён — все семь stat-setter'ов
     добавляют delta в bonus силы; лимиты захардкожены (primary 30,
     reputation ±50, EXP 500000), reputation half-multiplier опущен,
     NPC life/energy default 0.

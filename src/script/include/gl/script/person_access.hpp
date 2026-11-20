@@ -25,6 +25,7 @@ struct PersonAccess {
     std::function<void(std::string_view person, PersonParameter parameter, double value)>
         set_parameter;
     std::function<double(std::string_view person, std::string_view skill)> get_skill;
+    std::function<void(std::string_view person, bool)> set_undead;
 };
 
 PersonParameter person_parameter_from_name(std::string_view name);
