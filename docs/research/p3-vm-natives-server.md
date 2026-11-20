@@ -342,7 +342,7 @@ fallback-константа при несовпадении типов — `0.0`
 | 117440526 | RS_GetDialogEnabled | `0x410b4` | 1 | `0` | computed double | `FUN_14009f08`, `FUN_14006288` | unsupported: dialog/persons |
 | 117440527 | RS_SetUndeadState | `0x415e0` | 2 | `3,0` | 0.0 | поиск персоны; пишет `+0xf58` | supported D-102 |
 | 117440528 | RS_GlobalMap | `0x415a0` | 0 | `[]` | 0.0 | `FUN_140286b0`; `DAT_14088de8+0x5528=1` | unsupported: UI/global map |
-| 117440531 | RS_SetInjured | `0x41c34` | 2 | `3,0` | 0.0 | `FUN_1402914c`, `FUN_14018848` | supported D-102 |
+| 117440531 | RS_SetInjured | `0x41c34` | 2 | `3,0` | 0.0 | `FUN_1402914c`, `FUN_14018848` | unsupported: persons |
 | 117440532 | RS_SetDoorState | `0x41c74` | 2 | `3,0` | 0.0 | `FUN_14029388`, `FUN_14024228` | unsupported: world/doors |
 
 Проверка: 65 строк, ID уникальны и совпадают с `natives.csv`; для всех

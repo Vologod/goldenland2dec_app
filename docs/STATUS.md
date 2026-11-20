@@ -2,6 +2,15 @@
 
 Обновлено: 2026-11-19
 
+## P6a8 — Person dialog/injury research (done 2026-11-19)
+
+- **Задача:** RS_GetDialogEnabled (0xE), RS_SetInjured (0x13).
+- **Research:** docs/research/p6a8-person-dialog-injury.md; **D-103**.
+- **Результат:** GetDialogEnabled — person dialog-state % + RNG gate; SetInjured — список 0x14f4/0x110c, не bool. Verdict blocked (scoped); обе остаются unsupported.
+- **Проверка:** docs-only; disasm 0x140410b4/0x14041c34; decompile 14009f08/14006288/14018848.
+- **Дальше:** map FUN_14009f08/FUN_14006288 и FUN_14018848 entries, затем runtime.
+- **Статус:** done (research-only, blocked).
+
 ## P6a7 — Undead state native (done 2026-11-19)
 
 - **Задача:** RS_SetUndeadState (0x700000F) — флаг персонажа.
