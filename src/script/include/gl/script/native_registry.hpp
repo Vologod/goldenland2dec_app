@@ -1,4 +1,5 @@
 #pragma once
+#include "gl/script/party_access.hpp"
 #include "gl/script/person_access.hpp"
 #include "gl/script/quest_access.hpp"
 #include "gl/script/time_event_access.hpp"
@@ -45,6 +46,7 @@ struct NativeServices {
     RandomAccess random;
     WeatherAccess weather;
     ClockAccess clock;
+    PartyAccess party;
 };
 
 using NativeHandler = Value (*)(std::span<const Value>, NativeServices&);

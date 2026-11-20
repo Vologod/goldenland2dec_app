@@ -400,6 +400,10 @@ double PersonRuntime::get_skill(std::string_view person, std::string_view skill)
     return clamp_value(skill_value(*state, skill), 0.0, kMaxSkill);
 }
 
+bool PersonRuntime::has_person(std::string_view person) const {
+    return find(person) != nullptr;
+}
+
 void PersonRuntime::set_undead(std::string_view person, bool undead) {
     PersonState *state = find(person);
     if (state != nullptr) state->undead = undead;

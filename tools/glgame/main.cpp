@@ -31,6 +31,7 @@
 #include <gl/game/inventory_runtime.hpp>
 #include <gl/game/live_save.hpp>
 #include <gl/game/npc_loot.hpp>
+#include <gl/game/party_runtime.hpp>
 #include <gl/game/person_runtime.hpp>
 #include <gl/game/quest_runtime.hpp>
 #include <gl/game/time_event_runtime.hpp>
@@ -1361,6 +1362,17 @@ class Game {
         context->host.services().exit = [](std::int32_t code) {
             gl::log(gl::LogLevel::info, "script exit: " + std::to_string(code));
         };
+        context->host.services().party.add = [this](std::string_view name) {
+            if (!person_runtime_.has_person(name)) return -1;
+            return party_.add(name);
+        };
+        context->host.services().party.remove = [this](std::string_view name) {
+            if (!person_runtime_.has_person(name)) return -1;
+            return party_.remove(name);
+        };
+        context->host.services().party.has = [this](std::string_view name) {
+            return party_.has(name);
+        };
         context->host.services().person = person_runtime_.access();
         context->host.services().inventory = inventory_runtime_.access();
         context->host.services().quest = quest_runtime_.access();
@@ -2366,6 +2378,7 @@ class Game {
         auto quest_runtime_before = quest_runtime_;
         auto time_events_before = time_events_;
         auto weather_before = weather_;
+        auto party_before = party_;
 
         apply_hero_from_body(hero_body, slot, true);
 
@@ -2403,6 +2416,7 @@ class Game {
             quest_runtime_ = std::move(quest_runtime_before);
             time_events_ = std::move(time_events_before);
             weather_ = std::move(weather_before);
+            party_ = std::move(party_before);
             gl::log(gl::LogLevel::warning,
                     "save: rollback slot=" + std::to_string(slot));
             const std::string message =
@@ -2416,6 +2430,7 @@ class Game {
         quest_runtime_.clear();
         time_events_.clear();
         weather_.clear();
+        party_.clear();
         apply_restored_person_state();
         apply_loaded_equip_save();
 
@@ -2969,6 +2984,7 @@ class Game {
             quest_runtime_.clear();
             time_events_.clear();
             weather_.clear();
+            party_.clear();
             if (state_.transition(gl::core::AppState::level)) {
                 mouse_down_ = false;
                 dragging_ = false;
@@ -3369,6 +3385,7 @@ class Game {
     gl::game::TimeEventRuntime time_events_;
     gl::game::TriggerRuntime triggers_;
     gl::game::WeatherRuntime weather_;
+    gl::game::PartyRuntime party_;
     gl::game::MsvcRandom fallback_rng_ = gl::game::MsvcRandom(gl::game::MsvcRandom::production_seed());
     gl::game::InventoryRuntime inventory_runtime_;
     std::optional<gl::assets::ItemNameIndex> item_names_;

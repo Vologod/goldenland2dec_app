@@ -242,6 +242,20 @@ Value native_days_from_beginning(std::span<const Value>, NativeServices& service
     return double{static_cast<double>(services.clock.days_from_beginning())};
 }
 
+Value native_add_to_party(std::span<const Value> args, NativeServices& services) {
+    if (!services.party.add || !is_string(args[0])) return double{0.0};
+    return double{static_cast<double>(services.party.add(as_string(args[0])))};
+}
+
+Value native_remove_from_party(std::span<const Value> args, NativeServices& services) {
+    if (!services.party.remove || !is_string(args[0])) return double{0.0};
+    return double{static_cast<double>(services.party.remove(as_string(args[0])))};
+}
+
+Value native_test_party(std::span<const Value> args, NativeServices& services) {
+    if (!services.party.has || !is_string(args[0])) return double{0.0};
+    return double{services.party.has(as_string(args[0])) ? 1.0 : 0.0};
+}
 Value native_set_weather(std::span<const Value> args, NativeServices& services) {
     if (!services.weather.set_weather || !is_numeric(args[0])) return double{0.0};
     services.weather.set_weather(as_int(args[0]));
@@ -317,8 +331,12 @@ std::vector<NativeInfo> make_entries() {
     add(0x4000000, NativeSupport::supported, {}, &native_get_person_parameter, 2);
     add(0x4000001, NativeSupport::supported, {}, &native_set_person_parameter, 3);
     add(0x400000c, NativeSupport::supported, {}, &native_get_person_skill, 2);
+    add(0x4000007, NativeSupport::supported, {}, &native_add_to_party, 1);
+    add(0x4000008, NativeSupport::supported, {}, &native_remove_from_party, 1);
+    add(0x4000009, NativeSupport::supported, {}, &native_test_party, 1);
     for (std::uint32_t id = 0x4000000; id <= 0x400000c; ++id)
-        if (id != 0x4000000 && id != 0x4000001 && id != 0x400000c)
+        if (id != 0x4000000 && id != 0x4000001 && id != 0x400000c &&
+            id != 0x4000007 && id != 0x4000008 && id != 0x4000009)
             add(id, NativeSupport::unsupported, "requires person runtime state");
     add(0x5000000, NativeSupport::supported, {}, &native_test_person_has_item, 2);
     add(0x5000001, NativeSupport::supported, {}, &native_transfer_item, 4);

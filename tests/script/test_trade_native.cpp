@@ -55,11 +55,11 @@ TEST_CASE("trade panel native ignores extra arguments") {
     CHECK(std::get<double>(result) == 0.0);
 }
 
-TEST_CASE("native registry reports 31 supported natives out of 65 after trade panel") {
+TEST_CASE("native registry reports 34 supported natives out of 65 after trade panel") {
     std::size_t supported = 0;
     for (const auto& entry : NativeRegistry::entries())
         if (entry.support == NativeSupport::supported)
             ++supported;
     CHECK(NativeRegistry::size() == 65);
-    CHECK(supported == 31);
+    CHECK(supported == 34);
 }

@@ -33,6 +33,7 @@ class PersonRuntime {
     void set_parameter(std::string_view person, gl::script::PersonParameter parameter,
                        double value);
     double get_skill(std::string_view person, std::string_view skill) const;
+    bool has_person(std::string_view person) const;
     void set_undead(std::string_view person, bool undead);
     bool undead(std::string_view person) const;
     gl::script::PersonAccess access();

@@ -2,6 +2,23 @@
 
 Обновлено: 2026-11-19
 
+## Session checkpoint — 2026-11-19 (остановка по запросу)
+
+- HEAD после коммита: P6a10 (party state), 34/65 нативов supported.
+- Полная проверка: `ctest` 19/19, 1624.82 s; screenshot 45/45.
+- Готово: P6a1..P6a7, P6a9, P6a9b, P6a10; P6a8 (GetDialogEnabled/SetInjured) — research blocked.
+- Остаётся: P6a11 `RS_SetDoorState`/entity party flags; save/DIARY квестов (blocked b4c1a); P7 UI/journal; P8/P9.
+
+
+## P6a10 — Hero party state (done 2026-11-19)
+
+- **Задача:** RS_AddToHeroPartyName (0x4000007), Remove (0x4000008), Test (0x4000009).
+- **Spec/plan:** docs/specs/2026-11-19-p6a10-party-state-design.md, docs/plans/2026-11-19-p6a10-party-state.md; **D-106**.
+- **Результат:** PartyRuntime (4 слота, slots-left возврат), PartyAccess; known-person gate через PersonRuntime; 34/65 supported.
+- **Проверка (2026-11-19):** party 4/4, 42 assertions; gl_script 131/131; screenshot 45/45; full ctest 19/19, 1624.82 s.
+- **Residual:** entity +0x5a8 party flags/AI и save не моделируются.
+- **Статус:** done.
+
 ## P6a9b — Day/night light native (done 2026-11-19)
 
 - **Задача:** RS_GetDayOrNight (0x6000000), clock vtable +0xc.

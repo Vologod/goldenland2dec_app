@@ -306,9 +306,9 @@ fallback-константа при несовпадении типов — `0.0`
 | 67108868 | RS_IsPersonExistsI | `0x41cb4` | 2 | `3,3` | computed int | `FUN_14036b58(level,arg0,arg1)` | unsupported: persons |
 | 67108869 | RS_AddExp | `0x40d04` | 1 | `0` | 0.0 | текущая персона `FUN_14027f7c`; `FUN_140529fc(player,id,arg0)` | unsupported: persons |
 | 67108870 | RS_DelPerson | `0x41cf8` | 1 | `3` | 0.0 | `FUN_14027cf0(level,arg0)` | unsupported: persons |
-| 67108871 | RS_AddToHeroPartyName | `0x41d28` | 1 | `3` | -1.0 или int | `FUN_1402914c`, `FUN_14016fcc` — добавить в партию | unsupported: party |
-| 67108872 | RS_RemoveFromHeroPartyName | `0x41e24` | 1 | `3` | -1.0 или int | `FUN_1402914c`, `FUN_14017134` — удалить из партии | unsupported: party |
-| 67108873 | RS_TestHeroHasPartyName | `0x41f20` | 1 | `3` | 0.0/1.0 | `FUN_14016c88` — проверка партии | unsupported: party |
+| 67108871 | RS_AddToHeroPartyName | `0x41d28` | 1 | `3` | -1.0 или int | `FUN_1402914c`, `FUN_14016fcc` — добавить в партию | supported D-106 |
+| 67108872 | RS_RemoveFromHeroPartyName | `0x41e24` | 1 | `3` | -1.0 или int | `FUN_1402914c`, `FUN_14017134` — удалить из партии | supported D-106 |
+| 67108873 | RS_TestHeroHasPartyName | `0x41f20` | 1 | `3` | 0.0/1.0 | `FUN_14016c88` — проверка партии | supported D-106 |
 | 67108874 | RS_AllyCmd | `0x42308` | 2 | `3,3` | 0.0 | `FUN_14016c88`, `FUN_140421a8` | unsupported: party/AI |
 | 67108875 | RS_ShowMessage | `0x42434` | 1 | `0` | 0.0 | `FUN_14025c48(level,arg0)` — сообщение | unsupported: UI/dialog |
 | 67108876 | RS_GetPersonSkillI | `0x40944` | 2 | `3,3` | computed double | `FUN_1402914c`, `FUN_1400cb64` — навык персоны | supported D-050/skills |
