@@ -176,5 +176,73 @@ TEST_CASE("real data: GetDialogEnabled call sites use the ignored int argument" 
         REQUIRE(arg_index < list.size());
         CHECK(list[arg_index].value == doctest::Approx(2.0));
     }
-    CHECK(calls >= 1);
+    CHECK(calls == 13);
+}
+
+TEST_CASE("real data: GetDialogEnabled honors hero SKILL_TALKING" *
+          doctest::skip(!game_dir_available())) {
+    const char *dir = std::getenv("GL_GAME_DIR");
+    REQUIRE(dir != nullptr);
+    auto vfs = gl::assets::GameVfs::mount(dir);
+    REQUIRE(vfs.has_value());
+    auto script_data =
+        vfs->read("scripts/dialogs/l12_1/l32.p214_feather_girl.d214.age.cs");
+    REQUIRE(script_data.has_value());
+    auto parsed = parse_cs(script_data.value());
+    REQUIRE(parsed.has_value());
+    const auto &list = parsed.value();
+
+    const auto target = [&]() -> std::size_t {
+        for (std::size_t index = 0; index < list.size(); ++index) {
+            const auto &node = list[index];
+            if (node.opcode != 48 || node.value != static_cast<double>(0x700000E))
+                continue;
+            if (node.args[0] > 1) return index;
+        }
+        return list.size();
+    }();
+    REQUIRE(target < list.size());
+
+    const auto run = [&](gl::assets::HeroStats hero) {
+        std::vector<gl::assets::CsNode> nodes = list;
+        nodes[0] = gl::assets::CsNode{};
+        nodes[0].opcode = 50;
+        nodes[0].a = 1;
+        nodes[0].b = static_cast<std::int32_t>(target);
+        nodes[0].d = 2;
+        nodes[1] = gl::assets::CsNode{};
+        nodes[1].opcode = 23;
+        nodes[1].text = "result";
+
+        double probability = -1.0;
+        auto runtime = gl::game::PersonRuntime::create({}, hero);
+        gl::script::NativeServices services;
+        services.person = runtime.access();
+        services.random.coin = [&](double value) {
+            probability = value;
+            return value > 0.0;
+        };
+        gl::game::GameScriptHost host(services);
+        gl::script::ScriptVm vm(std::move(nodes), host);
+        const std::vector<gl::script::ScriptGlobal> globals{
+            {"float", "result", double{0.0}}};
+        vm.set_globals(globals);
+        vm.restart(true);
+        CHECK(vm.step());
+        CHECK_FALSE(vm.failed());
+        const gl::script::Value *result = vm.variable("result");
+        REQUIRE(result != nullptr);
+        REQUIRE(std::holds_alternative<double>(*result));
+        return std::pair<double, double>{std::get<double>(*result), probability};
+    };
+
+    const auto silent = run(gl::assets::HeroStats{});
+    CHECK(silent.first == doctest::Approx(0.0));
+    CHECK(silent.second == doctest::Approx(0.0));
+
+    gl::assets::HeroStats talkative{};
+    talkative.skills[21] = 15;
+    const auto fluent = run(talkative);
+    CHECK(fluent.first == doctest::Approx(1.0));
+    CHECK(fluent.second == doctest::Approx(1.0));
 }
