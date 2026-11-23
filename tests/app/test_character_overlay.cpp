@@ -2,7 +2,9 @@
 #define DOCTEST_CONFIG_IMPLEMENT
 #include <doctest.h>
 #include <gl/app/character_overlay.hpp>
+#include <gl/app/hero_portrait.hpp>
 #include <gl/assets/vfs.hpp>
+#include <gl/game/hero_wear.hpp>
 #include <gl/render/font.hpp>
 #include <gl/render/texture.hpp>
 #include <cstdlib>
@@ -81,7 +83,7 @@ TEST_CASE("character overlay opens, hits tabs and close" *
     auto vfs = gl::assets::GameVfs::mount(dir);
     REQUIRE(vfs.has_value());
     gl::app::CharacterOverlay overlay;
-    CHECK(overlay.open(vfs.value(), make_sheet()));
+    CHECK(overlay.open(nullptr, vfs.value(), make_sheet(), nullptr));
     CHECK(overlay.visible());
     CHECK(overlay.tab() == gl::game::CharacterTab::skills);
     CHECK(overlay.hit_test(5, 10) == gl::app::CharacterRegion::tab);
@@ -111,7 +113,7 @@ TEST_CASE("character overlay renders different tab content" *
     REQUIRE(font.has_value());
 
     gl::app::CharacterOverlay overlay;
-    REQUIRE(overlay.open(vfs.value(), make_sheet()));
+    REQUIRE(overlay.open(software.renderer, vfs.value(), make_sheet(), nullptr));
     overlay.set_tab(gl::game::CharacterTab::skills);
     overlay.render(software.renderer, 1024, 768, &font.value());
     const auto skills = snapshot(software.renderer, software.surface);
@@ -122,4 +124,27 @@ TEST_CASE("character overlay renders different tab content" *
                             software.surface->pitch) > 0);
     CHECK(region_difference(skills, characteristics, 296, 109, 155, 60,
                             software.surface->pitch) > 0);
+}
+
+TEST_CASE("hero portrait composes the equipped idle frame" *
+          doctest::skip(!game_dir_available())) {
+    const char *dir = std::getenv("GL_GAME_DIR");
+    REQUIRE(dir != nullptr);
+    auto vfs = gl::assets::GameVfs::mount(dir);
+    REQUIRE(vfs.has_value());
+    gl::game::HeroOutfit outfit;
+    outfit.wear_set = "noweapon_thrw";
+    SoftwareRenderer software(300, 340);
+    REQUIRE(software.renderer != nullptr);
+    gl::app::HeroPortrait portrait;
+    REQUIRE(portrait.load(software.renderer, vfs.value(), outfit));
+    REQUIRE(portrait.ready());
+    SDL_SetRenderDrawColor(software.renderer, 0, 0, 0, 255);
+    SDL_RenderClear(software.renderer);
+    portrait.render(software.renderer, 0.0f, 0.0f, 300.0f, 340.0f);
+    const auto pixels = snapshot(software.renderer, software.surface);
+    std::size_t non_black = 0;
+    for (std::size_t i = 0; i + 3 < pixels.size(); i += 4)
+        if (pixels[i] != 0 || pixels[i + 1] != 0 || pixels[i + 2] != 0) ++non_black;
+    CHECK(non_black > 100);
 }

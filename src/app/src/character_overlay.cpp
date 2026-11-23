@@ -36,8 +36,9 @@ bool contains(float rx, float ry, float rw, float rh, float x, float y) {
 }
 } // namespace
 
-bool CharacterOverlay::open(const gl::assets::GameVfs &vfs,
-                            gl::game::CharacterSheet sheet) {
+bool CharacterOverlay::open(SDL_Renderer *renderer, const gl::assets::GameVfs &vfs,
+                            gl::game::CharacterSheet sheet,
+                            const gl::game::HeroOutfit *outfit) {
     vfs_ = &vfs;
     sheet_ = std::move(sheet);
     tab_ = gl::game::CharacterTab::skills;
@@ -45,8 +46,10 @@ bool CharacterOverlay::open(const gl::assets::GameVfs &vfs,
     scale_ = 1.0f;
     offset_x_ = 0.0f;
     offset_y_ = 0.0f;
-    update_transform(1024, 768);
-    reset_texture_cache(nullptr);
+    if (renderer != nullptr) {
+        reset_texture_cache(renderer);
+        if (outfit != nullptr) portrait_.load(renderer, vfs, *outfit);
+    }
     return true;
 }
 
@@ -119,6 +122,7 @@ void CharacterOverlay::render(SDL_Renderer *renderer, int screen_w, int screen_h
     draw_background(renderer);
     draw_tabs(renderer);
     draw_content(renderer);
+    portrait_.render(renderer, 8.0f, 296.0f, 270.0f, 320.0f);
     draw_close(renderer);
 
     SDL_SetRenderDrawBlendMode(renderer, old_blend);

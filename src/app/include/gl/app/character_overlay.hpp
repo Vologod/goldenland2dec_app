@@ -1,4 +1,5 @@
 #pragma once
+#include <gl/app/hero_portrait.hpp>
 #include <gl/game/character_sheet.hpp>
 #include <gl/render/font.hpp>
 #include <gl/render/texture.hpp>
@@ -16,7 +17,8 @@ enum class CharacterRegion { none, tab, close };
 
 class CharacterOverlay {
   public:
-    bool open(const gl::assets::GameVfs &vfs, gl::game::CharacterSheet sheet);
+    bool open(SDL_Renderer *renderer, const gl::assets::GameVfs &vfs,
+              gl::game::CharacterSheet sheet, const gl::game::HeroOutfit *outfit);
     void close();
     bool visible() const { return visible_; }
     gl::game::CharacterTab tab() const { return tab_; }
@@ -54,5 +56,6 @@ class CharacterOverlay {
     SDL_Renderer *texture_renderer_ = nullptr;
     std::map<std::string, gl::render::Texture> textures_;
     std::set<std::string> failed_textures_;
+    HeroPortrait portrait_;
 };
 } // namespace gl::app
