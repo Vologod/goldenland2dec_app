@@ -4,6 +4,7 @@
 #include <gl/render/texture.hpp>
 #include <SDL.h>
 #include <map>
+#include <set>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -37,6 +38,8 @@ class CharacterOverlay {
     void draw_rows(SDL_Renderer *renderer, const std::vector<gl::game::CharacterRow> &rows,
                    const int *y_positions, int count, float x, float w, float height,
                    bool right_align);
+    void draw_row(SDL_Renderer *renderer, const gl::game::CharacterRow &row, float x,
+                  float y, float w, float height, bool right_align);
     void draw_content(SDL_Renderer *renderer);
 
     const gl::assets::GameVfs *vfs_ = nullptr;
@@ -50,5 +53,6 @@ class CharacterOverlay {
     float offset_y_ = 0.0f;
     SDL_Renderer *texture_renderer_ = nullptr;
     std::map<std::string, gl::render::Texture> textures_;
+    std::set<std::string> failed_textures_;
 };
 } // namespace gl::app

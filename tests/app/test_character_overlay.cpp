@@ -43,12 +43,13 @@ std::vector<std::uint8_t> snapshot(SDL_Renderer *renderer, SDL_Surface *surface)
 
 std::size_t region_difference(const std::vector<std::uint8_t> &a,
                               const std::vector<std::uint8_t> &b, int x, int y,
-                              int w, int h) {
+                              int w, int h, int stride) {
     std::size_t different = 0;
     for (int py = y; py < y + h; ++py) {
         for (int px = x; px < x + w; ++px) {
             const std::size_t offset =
-                (static_cast<std::size_t>(py) * 1024 + static_cast<std::size_t>(px)) * 4;
+                static_cast<std::size_t>(py) * static_cast<std::size_t>(stride) +
+                static_cast<std::size_t>(px) * 4;
             if (a[offset] != b[offset] || a[offset + 1] != b[offset + 1] ||
                 a[offset + 2] != b[offset + 2])
                 ++different;
@@ -117,5 +118,8 @@ TEST_CASE("character overlay renders different tab content" *
     overlay.set_tab(gl::game::CharacterTab::characteristics);
     overlay.render(software.renderer, 1024, 768, &font.value());
     const auto characteristics = snapshot(software.renderer, software.surface);
-    CHECK(region_difference(skills, characteristics, 289, 126, 140, 80) > 0);
+    CHECK(region_difference(skills, characteristics, 289, 126, 140, 80,
+                            software.surface->pitch) > 0);
+    CHECK(region_difference(skills, characteristics, 296, 109, 155, 60,
+                            software.surface->pitch) > 0);
 }

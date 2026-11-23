@@ -62,20 +62,32 @@ void CharacterOverlay::update_transform(int screen_w, int screen_h) {
 
 void CharacterOverlay::reset_texture_cache(SDL_Renderer *renderer) {
     textures_.clear();
+    failed_textures_.clear();
     texture_renderer_ = renderer;
 }
 
 gl::render::Texture *CharacterOverlay::load_texture(std::string_view path) {
     if (vfs_ == nullptr || texture_renderer_ == nullptr) return nullptr;
-    const auto cached = textures_.find(std::string(path));
+    const std::string key(path);
+    const auto cached = textures_.find(key);
     if (cached != textures_.end()) return &cached->second;
-    auto data = vfs_->read(path);
-    if (!data) return nullptr;
+    if (failed_textures_.count(key) != 0) return nullptr;
+    auto data = vfs_->read(key);
+    if (!data) {
+        failed_textures_.insert(key);
+        return nullptr;
+    }
     auto decoded = gl::assets::decode_image(data.value());
-    if (!decoded) return nullptr;
+    if (!decoded) {
+        failed_textures_.insert(key);
+        return nullptr;
+    }
     auto created = gl::render::Texture::from_image(texture_renderer_, decoded.value());
-    if (!created) return nullptr;
-    return &textures_.emplace(std::string(path), std::move(created.value())).first->second;
+    if (!created) {
+        failed_textures_.insert(key);
+        return nullptr;
+    }
+    return &textures_.emplace(key, std::move(created.value())).first->second;
 }
 
 void CharacterOverlay::render(SDL_Renderer *renderer, int screen_w, int screen_h,
@@ -90,6 +102,9 @@ void CharacterOverlay::render(SDL_Renderer *renderer, int screen_w, int screen_h
     SDL_RenderGetScale(renderer, &old_scale_x, &old_scale_y);
     SDL_Rect old_viewport{};
     SDL_RenderGetViewport(renderer, &old_viewport);
+    SDL_Rect old_clip{};
+    const SDL_bool old_clipping = SDL_RenderIsClipEnabled(renderer);
+    SDL_RenderGetClipRect(renderer, &old_clip);
     SDL_BlendMode old_blend = SDL_BLENDMODE_NONE;
     SDL_GetRenderDrawBlendMode(renderer, &old_blend);
     const SDL_Rect viewport{
@@ -108,6 +123,7 @@ void CharacterOverlay::render(SDL_Renderer *renderer, int screen_w, int screen_h
 
     SDL_SetRenderDrawBlendMode(renderer, old_blend);
     SDL_RenderSetScale(renderer, old_scale_x, old_scale_y);
+    SDL_RenderSetClipRect(renderer, old_clipping ? &old_clip : nullptr);
     SDL_RenderSetViewport(renderer, &old_viewport);
 }
 
@@ -144,23 +160,29 @@ void CharacterOverlay::draw_rows(SDL_Renderer *renderer,
                                  float height, bool right_align) {
     if (font_ == nullptr) return;
     for (int index = 0; index < count && index < static_cast<int>(rows.size()); ++index) {
-        const auto &row = rows[static_cast<std::size_t>(index)];
-        const float y = static_cast<float>(y_positions[index]);
-        const SDL_Rect clip{static_cast<int>(x), static_cast<int>(y),
-                            static_cast<int>(w), static_cast<int>(height)};
-        SDL_RenderSetClipRect(renderer, &clip);
-        font_->draw_text(renderer, row.label, x + 4.0f, y + (height - font_->line_height()) * 0.5f,
-                         kTextColor);
-        if (right_align) {
-            const auto measured = font_->measure(row.value);
-            font_->draw_text(renderer, row.value, x + w - 4.0f - measured.x,
-                             y + (height - font_->line_height()) * 0.5f, kTextColor);
-        } else {
-            font_->draw_text(renderer, row.value, x + 4.0f,
-                             y + (height - font_->line_height()) * 0.5f, kTextColor);
-        }
-        SDL_RenderSetClipRect(renderer, nullptr);
+        draw_row(renderer, rows[static_cast<std::size_t>(index)], x,
+                 static_cast<float>(y_positions[index]), w, height, right_align);
     }
+}
+
+void CharacterOverlay::draw_row(SDL_Renderer *renderer,
+                                const gl::game::CharacterRow &row, float x, float y,
+                                float w, float height, bool right_align) {
+    if (font_ == nullptr) return;
+    const SDL_Rect clip{static_cast<int>(x), static_cast<int>(y),
+                        static_cast<int>(w), static_cast<int>(height)};
+    SDL_RenderSetClipRect(renderer, &clip);
+    font_->draw_text(renderer, row.label, x + 4.0f,
+                     y + (height - font_->line_height()) * 0.5f, kTextColor);
+    if (right_align) {
+        const auto measured = font_->measure(row.value);
+        font_->draw_text(renderer, row.value, x + w - 4.0f - measured.x,
+                         y + (height - font_->line_height()) * 0.5f, kTextColor);
+    } else {
+        font_->draw_text(renderer, row.value, x + 4.0f,
+                         y + (height - font_->line_height()) * 0.5f, kTextColor);
+    }
+    SDL_RenderSetClipRect(renderer, nullptr);
 }
 
 void CharacterOverlay::draw_content(SDL_Renderer *renderer) {
@@ -183,8 +205,12 @@ void CharacterOverlay::draw_content(SDL_Renderer *renderer) {
     switch (tab_) {
     case gl::game::CharacterTab::personality: {
         static constexpr std::array<int, 4> kY{102, 134, 163, 214};
-        draw_rows(renderer, sheet_.personality, kY.data(), 4, 300.0f, 164.0f, 20.0f,
-                  true);
+        static constexpr std::array<float, 4> kW{272.0f, 155.0f, 272.0f, 164.0f};
+        static constexpr std::array<float, 4> kH{24.0f, 23.0f, 24.0f, 20.0f};
+        for (std::size_t index = 0;
+             index < sheet_.personality.size() && index < kY.size(); ++index)
+            draw_row(renderer, sheet_.personality[index], 296.0f,
+                     static_cast<float>(kY[index]), kW[index], kH[index], true);
         break;
     }
     case gl::game::CharacterTab::characteristics: {
@@ -201,17 +227,24 @@ void CharacterOverlay::draw_content(SDL_Renderer *renderer) {
             const float x = kSkillX[index];
             const float y = kSkillY[index];
             const auto &row = sheet_.skills[index];
+            const SDL_Rect clip{static_cast<int>(x), static_cast<int>(y), 140, 20};
+            SDL_RenderSetClipRect(renderer, &clip);
             font_->draw_text(renderer, row.label, x + 4.0f, y + 2.0f, kTextColor);
             const auto measured = font_->measure(row.value);
             font_->draw_text(renderer, row.value, x + 140.0f - 4.0f - measured.x, y + 2.0f,
                              kTextColor);
+            SDL_RenderSetClipRect(renderer, nullptr);
         }
         break;
     }
     case gl::game::CharacterTab::state:
-    case gl::game::CharacterTab::resistance:
-        font_->draw_text(renderer, "Нет данных", 470.0f, 300.0f, kTextColor);
+    case gl::game::CharacterTab::resistance: {
+        constexpr std::string_view kNoData = "Нет данных";
+        const auto measured = font_->measure(kNoData);
+        font_->draw_text(renderer, kNoData, 296.0f + (650.0f - measured.x) * 0.5f, 300.0f,
+                         kTextColor);
         break;
+    }
     }
 }
 
