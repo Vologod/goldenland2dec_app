@@ -1754,14 +1754,65 @@ TEST_CASE("glgame --character --load-save renders the sheet") {
     REQUIRE(game_dir != nullptr);
     TempDir temp;
     const fs::path config = write_test_config(temp.path);
-    const fs::path png = temp.path / "character.png";
-    const int code = run_glgame(screenshot_arguments(
-        game_dir, config, png,
+    const fs::path baseline_png = temp.path / "character_baseline.png";
+    const fs::path equipped_png = temp.path / "character.png";
+    const fs::path none_png = temp.path / "character_none.png";
+    const int baseline_code = run_glgame(screenshot_arguments(
+        game_dir, config, baseline_png,
+        {"--load-save", "0", "--width", "1024", "--height", "768", "--seed", "1"}));
+    const int equipped_code = run_glgame(screenshot_arguments(
+        game_dir, config, equipped_png,
         {"--load-save", "0", "--character", "--width", "1024", "--height", "768",
          "--seed", "1"}));
-    CAPTURE(code);
-    REQUIRE(fs::exists(png));
-    CHECK(fs::file_size(png) > 0);
+    const int none_code = run_glgame(screenshot_arguments(
+        game_dir, config, none_png,
+        {"--load-save", "0", "--character", "--hero-outfit", "none", "--width", "1024",
+         "--height", "768", "--seed", "1"}));
+    CAPTURE(baseline_code);
+    CAPTURE(equipped_code);
+    CAPTURE(none_code);
+    REQUIRE(fs::exists(baseline_png));
+    REQUIRE(fs::exists(equipped_png));
+    REQUIRE(fs::exists(none_png));
+    CHECK(baseline_code == 0);
+    CHECK(equipped_code == 0);
+    CHECK(none_code == 0);
+    check_png(equipped_png, 1024, 768);
+    check_png(none_png, 1024, 768);
+
+    int baseline_width = 0;
+    int baseline_height = 0;
+    int equipped_width = 0;
+    int equipped_height = 0;
+    int none_width = 0;
+    int none_height = 0;
+    const std::vector<unsigned char> baseline =
+        read_png(baseline_png, baseline_width, baseline_height);
+    const std::vector<unsigned char> equipped =
+        read_png(equipped_png, equipped_width, equipped_height);
+    const std::vector<unsigned char> none = read_png(none_png, none_width, none_height);
+    REQUIRE(baseline_width == equipped_width);
+    REQUIRE(baseline_height == equipped_height);
+    REQUIRE(equipped_width == none_width);
+    REQUIRE(equipped_height == none_height);
+    CHECK(equipped_width == 1024);
+    CHECK(equipped_height == 768);
+    CHECK(count_differences(baseline, equipped) > 1000);
+
+    const float scale = std::min(static_cast<float>(equipped_width) / 1024.0f,
+                                 static_cast<float>(equipped_height) / 768.0f);
+    const float offset_x =
+        (static_cast<float>(equipped_width) - 1024.0f * scale) * 0.5f;
+    const float offset_y =
+        (static_cast<float>(equipped_height) - 768.0f * scale) * 0.5f;
+    const int doll_x = static_cast<int>(std::floor(offset_x + 8.0f * scale));
+    const int doll_y = static_cast<int>(std::floor(offset_y + 296.0f * scale));
+    const int doll_w = static_cast<int>(std::ceil(270.0f * scale));
+    const int doll_h = static_cast<int>(std::ceil(320.0f * scale));
+    const std::size_t doll_different = count_region_differences(
+        equipped, none, equipped_width, equipped_height, doll_x, doll_y, doll_w, doll_h);
+    CAPTURE(doll_different);
+    CHECK(doll_different > 100);
 }
 
 TEST_CASE("glgame --inventory with an invalid save opens an empty overlay" *

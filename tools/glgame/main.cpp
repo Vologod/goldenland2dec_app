@@ -1003,6 +1003,54 @@ class Game {
         return inventory_font_ ? &*inventory_font_ : nullptr;
     }
 
+    void load_character_fonts() {
+        constexpr std::string_view kGameFont = "engineres/fonts/ttf/arial.ttf";
+        if (!character_title_font_) {
+            auto bytes = vfs_.read(kGameFont);
+            if (!bytes) {
+                gl::log(gl::LogLevel::warning,
+                        "character font: cannot read " + std::string(kGameFont));
+            } else {
+                auto loaded = gl::render::Font::load_from_memory(
+                    window_.renderer(),
+                    std::span<const std::uint8_t>(bytes->data(), bytes->size()), 18.0f,
+                    kGameFont);
+                if (!loaded) {
+                    gl::log(gl::LogLevel::warning,
+                            "character font: " + loaded.error().message);
+                } else {
+                    character_title_font_.emplace(std::move(loaded.value()));
+                }
+            }
+        }
+        if (!character_font_) {
+            auto bytes = vfs_.read(kGameFont);
+            if (!bytes) {
+                gl::log(gl::LogLevel::warning,
+                        "character font: cannot read " + std::string(kGameFont));
+            } else {
+                auto loaded = gl::render::Font::load_from_memory(
+                    window_.renderer(),
+                    std::span<const std::uint8_t>(bytes->data(), bytes->size()), 16.0f,
+                    kGameFont);
+                if (!loaded) {
+                    gl::log(gl::LogLevel::warning,
+                            "character font: " + loaded.error().message);
+                } else {
+                    character_font_.emplace(std::move(loaded.value()));
+                }
+            }
+        }
+    }
+
+    const gl::render::Font* character_title_font() const {
+        return character_title_font_ ? &*character_title_font_ : inventory_font();
+    }
+
+    const gl::render::Font* character_font() const {
+        return character_font_ ? &*character_font_ : inventory_font();
+    }
+
     void load_diary_font() {
         if (diary_font_ || font_) return;
         constexpr std::string_view kDiaryFont = "engineres/fonts/ttf/pala.ttf";
@@ -1207,12 +1255,27 @@ class Game {
     }
 
     bool open_character() {
-        if (!user_interface_sdb_ || !person_runtime_.has_person("Hero")) return false;
+        if (!user_interface_sdb_ || !person_runtime_.has_person("Hero")) {
+            gl::log(gl::LogLevel::warning,
+                    "character: cannot open (missing user interface sdb or Hero)");
+            return false;
+        }
         auto sheet = gl::game::build_character_sheet(person_runtime_, *user_interface_sdb_,
                                                      "Hero");
-        character_overlay_.set_font(inventory_font());
-        character_overlay_.open(window_.renderer(), vfs_, std::move(sheet),
-                                character_outfit_ ? &*character_outfit_ : nullptr);
+        const std::size_t skill_rows = sheet.skills.size();
+        load_character_fonts();
+        character_overlay_.set_fonts(character_title_font(), character_font());
+        const bool opened =
+            character_overlay_.open(window_.renderer(), vfs_, std::move(sheet),
+                                    character_outfit_ ? &*character_outfit_ : nullptr);
+        if (!opened) {
+            gl::log(gl::LogLevel::warning, "character: cannot open the character sheet");
+            return false;
+        }
+        if (inventory_overlay_.visible()) inventory_overlay_.close();
+        gl::log(gl::LogLevel::info,
+                "character: opened skills=" + std::to_string(skill_rows) +
+                    " outfit=" + (character_outfit_ ? "yes" : "no"));
         return true;
     }
 
@@ -2341,7 +2404,10 @@ class Game {
 
     bool load_level(std::string_view name) {
         diary_overlay_.close();
+        character_overlay_.close();
+        inventory_overlay_.close();
         if (pending_restore_ == nullptr) {
+            character_outfit_.reset();
             save_globals_.clear();
             runtime_globals_.clear();
             loaded_payload_.reset();
@@ -2493,6 +2559,7 @@ class Game {
         auto inventory_state_before = pending_inventory_;
         auto hero_stats_before = pending_hero_stats_;
         auto outfit_before = pending_outfit_;
+        auto character_outfit_before = character_outfit_;
         const bool hero_stats_absent_before = hero_stats_absent_logged_;
         auto save_globals_before = save_globals_;
         auto runtime_globals_before = runtime_globals_;
@@ -2532,6 +2599,7 @@ class Game {
             pending_inventory_ = std::move(inventory_state_before);
             pending_hero_stats_ = std::move(hero_stats_before);
             pending_outfit_ = std::move(outfit_before);
+            character_outfit_ = std::move(character_outfit_before);
             hero_stats_absent_logged_ = hero_stats_absent_before;
             inventory_runtime_ = std::move(inventory_before);
             save_globals_ = std::move(save_globals_before);
@@ -2879,6 +2947,8 @@ class Game {
                     if (event.button.which != SDL_TOUCH_MOUSEID)
                         character_overlay_.handle_mouse(event.button.x, event.button.y,
                                                         event.button.button == SDL_BUTTON_LEFT);
+                    if (character_overlay_.take_inventory_tab_request())
+                        open_inventory();
                     return;
                 }
                 if (trade_overlay_.visible()) {
@@ -2901,7 +2971,6 @@ class Game {
                                                         event.button.button == SDL_BUTTON_LEFT);
                         if (region == gl::app::InventoryRegion::skills_tab &&
                             event.button.button == SDL_BUTTON_LEFT) {
-                            inventory_overlay_.close();
                             open_character();
                         }
                     }
@@ -2954,6 +3023,7 @@ class Game {
                 if (console_visible_ || event.wheel.y == 0) {
                     return;
                 }
+                if (character_overlay_.visible()) return;
                 int mouse_x = 0;
                 int mouse_y = 0;
                 SDL_GetMouseState(&mouse_x, &mouse_y);
@@ -3020,7 +3090,6 @@ class Game {
         if (state_.state() == gl::core::AppState::level && level_ && !dialog_ &&
             !save_slots_ && !console_visible_ &&
             (symbol == SDLK_c || symbol == static_cast<SDL_Keycode>('C'))) {
-            if (inventory_overlay_.visible()) inventory_overlay_.close();
             open_character();
             return;
         }
@@ -3392,7 +3461,7 @@ class Game {
 
         if (character_overlay_.visible()) {
             character_overlay_.render(window_.renderer(), viewport_width_, viewport_height_,
-                                      inventory_font());
+                                      character_font());
         }
 
         if (console_visible_) render_console(now_ms);
@@ -3635,6 +3704,8 @@ class Game {
     std::optional<gl::render::Font> font_;
     std::optional<gl::render::Font> inventory_font_;
     std::optional<gl::render::Font> diary_font_;
+    std::optional<gl::render::Font> character_title_font_;
+    std::optional<gl::render::Font> character_font_;
     std::unique_ptr<DialogContext> dialog_;
     gl::app::DialogOverlay dialog_overlay_;
     gl::app::InventoryOverlay inventory_overlay_;

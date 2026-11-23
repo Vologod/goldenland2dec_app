@@ -58,16 +58,21 @@ TEST_CASE("character sheet maps primary attributes in UI order") {
 }
 
 TEST_CASE("character sheet maps the 27 skills through the original permutation") {
-    const auto runtime = make_runtime();
+    constexpr std::array<std::uint32_t, 27> kPermutation{
+        12, 13, 7,  8,  9,  10, 11, 14, 24, 4,  5,  0,  1,  2,
+        3,  17, 25, 23, 26, 15, 20, 21, 16, 18, 19, 22, 6};
+    gl::assets::HeroStats stats;
+    for (std::uint32_t id = 0; id < 27; ++id)
+        stats.skills[id] = static_cast<double>(id);
+    const auto runtime = gl::game::PersonRuntime::create({}, stats);
     const gl::game::CharacterSheet sheet =
         gl::game::build_character_sheet(runtime, ui_text);
     REQUIRE(sheet.skills.size() == 27);
-    CHECK(sheet.skills[0].label == "L49");
-    CHECK(sheet.skills[0].value == "15");  // SKILL_WPN_SWORD (id 12)
-    CHECK(sheet.skills[20].label == "L69");
-    CHECK(sheet.skills[20].value == "0");   // SKILL_HEALING (id 20)
-    CHECK(sheet.skills[21].label == "L70");
-    CHECK(sheet.skills[21].value == "1");   // SKILL_TALKING (id 21)
+    for (std::size_t index = 0; index < kPermutation.size(); ++index) {
+        CHECK(sheet.skills[index].label == "L" + std::to_string(49 + index));
+        const std::uint32_t expected = kPermutation[index] > 15 ? 15 : kPermutation[index];
+        CHECK(sheet.skills[index].value == std::to_string(expected));
+    }
 }
 
 TEST_CASE("character sheet marks unmodeled characteristics and computes the level") {
@@ -76,8 +81,8 @@ TEST_CASE("character sheet marks unmodeled characteristics and computes the leve
     REQUIRE(sheet.characteristics.size() == 15);
     CHECK(sheet.characteristics[0].label == "L14");
     CHECK(sheet.characteristics[0].modeled);
-    CHECK(sheet.characteristics[0].value ==
-          std::to_string(gl::game::hero_level_from_experience(81099.0)));
+    CHECK(sheet.characteristics[0].value == "40");
+    CHECK(sheet.personality[1].value == "40");
     CHECK(sheet.characteristics[1].label == "L15");
     CHECK(sheet.characteristics[1].value == "81099");
     CHECK(sheet.characteristics[2].label == "L16");

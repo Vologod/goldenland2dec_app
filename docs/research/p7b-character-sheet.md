@@ -12,14 +12,17 @@ image base `0x12000000` (RVA = VA - `0x12000000`). UI strings come from
 | --- | --- |
 | 0–4 | sub-tab labels (personality / characteristics / skills / state / resistance) |
 | 5 | hero/person name |
-| 6–12 | primary attributes (strength, constitution, dexterity, perception, wisdom, intelligence, luck) |
-| 13–17 | characteristics (level, experience, reputation, armor class) |
-| 18–28 | combat / life / energy (action points, damage types, accuracy, crit, life, energy) |
+| 6–12, 16 | primary attributes (strength, constitution, dexterity, perception, wisdom, intelligence, luck; 16 reputation is the 8th left-panel row) |
+| 14, 15, 16, 27, 28, 18–26, 17 | characteristics rows (level, experience, reputation, life, energy, action points, damage, magic, base accuracy, crit chance, armor class) |
+| 13 | unused |
+| 29 | weight |
 | 43–48 | magic immunities |
 | 49–75 | skills (27 rows, UI order) |
 | 76 | skill points |
 
-Missing id -> label `#<id>` (port fallback).
+Missing id -> label `#<id>` (port fallback). The exact characteristics
+order rendered is `14, 15, 16, 27, 28, 18, 19, 20, 21, 22, 23, 24,
+25, 26, 17`; id 13 is not used by the panel.
 
 ## Skill order and screen arrays
 

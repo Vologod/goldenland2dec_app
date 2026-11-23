@@ -3,12 +3,19 @@
 #include <doctest.h>
 #include <gl/app/character_overlay.hpp>
 #include <gl/app/hero_portrait.hpp>
+#include <gl/assets/hero_equipment.hpp>
+#include <gl/assets/herowear.hpp>
+#include <gl/assets/sdb.hpp>
 #include <gl/assets/vfs.hpp>
+#include <gl/game/hero_outfit_resolver.hpp>
 #include <gl/game/hero_wear.hpp>
 #include <gl/render/font.hpp>
 #include <gl/render/texture.hpp>
 #include <cstdlib>
 #include <cstdint>
+#include <filesystem>
+#include <fstream>
+#include <iterator>
 #include <optional>
 #include <span>
 #include <vector>
@@ -74,6 +81,16 @@ gl::game::CharacterSheet make_sheet() {
     for (int i = 0; i < 27; ++i) add(sheet.skills, "SKILL", std::to_string(i).c_str());
     return sheet;
 }
+
+std::optional<gl::render::Font> load_font(SDL_Renderer *renderer,
+                                          const gl::assets::GameVfs &vfs, float size) {
+    auto data = vfs.read("engineres/fonts/ttf/arial.ttf");
+    if (!data) return std::nullopt;
+    auto font = gl::render::Font::load_from_memory(
+        renderer, std::span<const std::uint8_t>(data->data(), data->size()), size, "arial");
+    if (!font) return std::nullopt;
+    return std::optional<gl::render::Font>(std::move(font.value()));
+}
 } // namespace
 
 TEST_CASE("character overlay opens, hits tabs and close" *
@@ -88,11 +105,33 @@ TEST_CASE("character overlay opens, hits tabs and close" *
     CHECK(overlay.tab() == gl::game::CharacterTab::skills);
     CHECK(overlay.hit_test(5, 10) == gl::app::CharacterRegion::tab);
     CHECK(overlay.hit_test(930, 700) == gl::app::CharacterRegion::close);
+    CHECK(overlay.hit_test(680, 20) == gl::app::CharacterRegion::inventory_tab);
     CHECK(overlay.handle_mouse(5, 10, true));
     CHECK(overlay.tab() == gl::game::CharacterTab::personality);
     CHECK(overlay.handle_key(SDLK_3));
     CHECK(overlay.tab() == gl::game::CharacterTab::skills);
-    CHECK(overlay.handle_key(SDLK_ESCAPE));
+    CHECK_FALSE(overlay.take_inventory_tab_request());
+    CHECK(overlay.handle_mouse(680, 20, true));
+    CHECK_FALSE(overlay.visible());
+    CHECK(overlay.take_inventory_tab_request());
+    CHECK_FALSE(overlay.take_inventory_tab_request());
+}
+
+TEST_CASE("character overlay key C and close hit close the sheet" *
+          doctest::skip(!game_dir_available())) {
+    const char *dir = std::getenv("GL_GAME_DIR");
+    REQUIRE(dir != nullptr);
+    auto vfs = gl::assets::GameVfs::mount(dir);
+    REQUIRE(vfs.has_value());
+    gl::app::CharacterOverlay overlay;
+    REQUIRE(overlay.open(nullptr, vfs.value(), make_sheet(), nullptr));
+    REQUIRE(overlay.handle_mouse(930, 700, false));
+    CHECK(overlay.visible());
+    REQUIRE(overlay.handle_mouse(930, 700, true));
+    CHECK_FALSE(overlay.visible());
+
+    REQUIRE(overlay.open(nullptr, vfs.value(), make_sheet(), nullptr));
+    CHECK(overlay.handle_key(SDLK_c));
     CHECK_FALSE(overlay.visible());
 }
 
@@ -104,26 +143,65 @@ TEST_CASE("character overlay renders different tab content" *
     REQUIRE(vfs.has_value());
     SoftwareRenderer software(1024, 768);
     REQUIRE(software.renderer != nullptr);
-    auto font_data = vfs->read("engineres/fonts/ttf/arial.ttf");
-    REQUIRE(font_data.has_value());
-    auto font = gl::render::Font::load_from_memory(
-        software.renderer,
-        std::span<const std::uint8_t>(font_data->data(), font_data->size()), 18.0f,
-        "arial");
-    REQUIRE(font.has_value());
+    auto title = load_font(software.renderer, vfs.value(), 18.0f);
+    auto rows = load_font(software.renderer, vfs.value(), 16.0f);
+    REQUIRE(title.has_value());
+    REQUIRE(rows.has_value());
 
     gl::app::CharacterOverlay overlay;
     REQUIRE(overlay.open(software.renderer, vfs.value(), make_sheet(), nullptr));
+    overlay.set_fonts(&title.value(), &rows.value());
     overlay.set_tab(gl::game::CharacterTab::skills);
-    overlay.render(software.renderer, 1024, 768, &font.value());
+    overlay.render(software.renderer, 1024, 768);
     const auto skills = snapshot(software.renderer, software.surface);
     overlay.set_tab(gl::game::CharacterTab::characteristics);
-    overlay.render(software.renderer, 1024, 768, &font.value());
+    overlay.render(software.renderer, 1024, 768);
     const auto characteristics = snapshot(software.renderer, software.surface);
-    CHECK(region_difference(skills, characteristics, 289, 126, 140, 80,
-                            software.surface->pitch) > 0);
-    CHECK(region_difference(skills, characteristics, 296, 109, 155, 60,
-                            software.surface->pitch) > 0);
+    overlay.set_tab(gl::game::CharacterTab::personality);
+    overlay.render(software.renderer, 1024, 768);
+    const auto personality = snapshot(software.renderer, software.surface);
+    overlay.set_tab(gl::game::CharacterTab::state);
+    overlay.render(software.renderer, 1024, 768);
+    const auto state = snapshot(software.renderer, software.surface);
+    overlay.set_tab(gl::game::CharacterTab::resistance);
+    overlay.render(software.renderer, 1024, 768);
+    const auto resistance = snapshot(software.renderer, software.surface);
+
+    const int stride = software.surface->pitch;
+    CHECK(region_difference(skills, characteristics, 289, 126, 140, 80, stride) > 0);
+    CHECK(region_difference(skills, characteristics, 296, 109, 155, 60, stride) > 0);
+    CHECK(region_difference(personality, skills, 296, 100, 272, 140, stride) > 0);
+    CHECK(region_difference(state, resistance, 296, 290, 650, 40, stride) == 0);
+    CHECK(region_difference(skills, state, 296, 290, 650, 40, stride) > 0);
+    CHECK(region_difference(skills, personality, 20, 60, 130, 80, stride) == 0);
+}
+
+TEST_CASE("character overlay renders the equipped doll in the doll region" *
+          doctest::skip(!game_dir_available())) {
+    const char *dir = std::getenv("GL_GAME_DIR");
+    REQUIRE(dir != nullptr);
+    auto vfs = gl::assets::GameVfs::mount(dir);
+    REQUIRE(vfs.has_value());
+    SoftwareRenderer software(1024, 768);
+    REQUIRE(software.renderer != nullptr);
+    auto title = load_font(software.renderer, vfs.value(), 18.0f);
+    auto rows = load_font(software.renderer, vfs.value(), 16.0f);
+    REQUIRE(title.has_value());
+    REQUIRE(rows.has_value());
+    gl::game::HeroOutfit outfit;
+    outfit.wear_set = "noweapon_thrw";
+
+    gl::app::CharacterOverlay overlay;
+    REQUIRE(overlay.open(software.renderer, vfs.value(), make_sheet(), &outfit));
+    overlay.set_fonts(&title.value(), &rows.value());
+    overlay.render(software.renderer, 1024, 768);
+    const auto with_doll = snapshot(software.renderer, software.surface);
+    REQUIRE(overlay.open(software.renderer, vfs.value(), make_sheet(), nullptr));
+    overlay.set_fonts(&title.value(), &rows.value());
+    overlay.render(software.renderer, 1024, 768);
+    const auto without_doll = snapshot(software.renderer, software.surface);
+    CHECK(region_difference(with_doll, without_doll, 8, 296, 270, 320,
+                            software.surface->pitch) > 100);
 }
 
 TEST_CASE("hero portrait composes the equipped idle frame" *
@@ -139,6 +217,7 @@ TEST_CASE("hero portrait composes the equipped idle frame" *
     gl::app::HeroPortrait portrait;
     REQUIRE(portrait.load(software.renderer, vfs.value(), outfit));
     REQUIRE(portrait.ready());
+    CHECK(portrait.animation_type() == gl::assets::PadAnimationType::tb_stay);
     SDL_SetRenderDrawColor(software.renderer, 0, 0, 0, 255);
     SDL_RenderClear(software.renderer);
     portrait.render(software.renderer, 0.0f, 0.0f, 300.0f, 340.0f);
@@ -147,4 +226,42 @@ TEST_CASE("hero portrait composes the equipped idle frame" *
     for (std::size_t i = 0; i + 3 < pixels.size(); i += 4)
         if (pixels[i] != 0 || pixels[i + 1] != 0 || pixels[i + 2] != 0) ++non_black;
     CHECK(non_black > 100);
+
+    portrait.clear();
+    CHECK_FALSE(portrait.ready());
+}
+
+TEST_CASE("hero portrait loads the real slot0 outfit" *
+          doctest::skip(!game_dir_available())) {
+    const char *dir = std::getenv("GL_GAME_DIR");
+    REQUIRE(dir != nullptr);
+    auto vfs = gl::assets::GameVfs::mount(dir);
+    REQUIRE(vfs.has_value());
+    const std::filesystem::path path =
+        std::filesystem::path(dir) / "Saves" / "slot0.sav";
+    std::ifstream in(path, std::ios::binary);
+    REQUIRE(in);
+    const std::vector<std::uint8_t> bytes((std::istreambuf_iterator<char>(in)),
+                                          std::istreambuf_iterator<char>());
+    auto body = gl::assets::decode_save_body(bytes);
+    REQUIRE(body.has_value());
+    auto equipment = gl::assets::parse_hero_equipment(body.value());
+    REQUIRE(equipment.has_value());
+    auto tech_data = vfs->read("sdb/items/tech_names.sdb");
+    REQUIRE(tech_data.has_value());
+    auto tech = gl::assets::Sdb::parse(tech_data.value());
+    REQUIRE(tech.has_value());
+    auto wear_data = vfs->read("scripts/herowear.scr");
+    REQUIRE(wear_data.has_value());
+    auto wear = gl::assets::parse_herowear(wear_data.value());
+    REQUIRE(wear.has_value());
+    auto outfit = gl::game::resolve_hero_outfit(equipment.value(), tech.value(), wear.value());
+    REQUIRE(outfit.has_value());
+
+    SoftwareRenderer software(300, 340);
+    REQUIRE(software.renderer != nullptr);
+    gl::app::HeroPortrait portrait;
+    REQUIRE(portrait.load(software.renderer, vfs.value(), outfit.value()));
+    CHECK(portrait.ready());
+    CHECK(portrait.animation_type() == gl::assets::PadAnimationType::tb_stay);
 }

@@ -5,6 +5,7 @@
 #include <gl/render/texture.hpp>
 #include <SDL.h>
 #include <map>
+#include <optional>
 #include <set>
 #include <string>
 #include <string_view>
@@ -13,7 +14,7 @@
 namespace gl::assets { class GameVfs; }
 
 namespace gl::app {
-enum class CharacterRegion { none, tab, close };
+enum class CharacterRegion { none, tab, inventory_tab, close };
 
 class CharacterOverlay {
   public:
@@ -22,8 +23,21 @@ class CharacterOverlay {
     void close();
     bool visible() const { return visible_; }
     gl::game::CharacterTab tab() const { return tab_; }
-    void set_tab(gl::game::CharacterTab tab) { tab_ = tab; }
+    void set_tab(gl::game::CharacterTab tab) {
+        const int value = static_cast<int>(tab);
+        tab_ = static_cast<gl::game::CharacterTab>(value < 0 ? 0 : (value > 4 ? 4 : value));
+    }
     void set_font(const gl::render::Font *font) { font_ = font; }
+    void set_title_font(const gl::render::Font *font) { title_font_ = font; }
+    void set_fonts(const gl::render::Font *title, const gl::render::Font *rows) {
+        set_title_font(title);
+        set_font(rows);
+    }
+    bool take_inventory_tab_request() {
+        const bool requested = inventory_tab_request_;
+        inventory_tab_request_ = false;
+        return requested;
+    }
     void render(SDL_Renderer *renderer, int screen_w, int screen_h,
                 const gl::render::Font *font = nullptr);
     bool handle_mouse(int x, int y, bool click);
@@ -31,21 +45,27 @@ class CharacterOverlay {
     CharacterRegion hit_test(int x, int y) const;
 
   private:
+    const gl::render::Font *title_font() const {
+        return title_font_ != nullptr ? title_font_ : font_;
+    }
     void update_transform(int screen_w, int screen_h);
     void reset_texture_cache(SDL_Renderer *renderer);
     gl::render::Texture *load_texture(std::string_view path);
     void draw_background(SDL_Renderer *renderer);
     void draw_tabs(SDL_Renderer *renderer);
     void draw_close(SDL_Renderer *renderer);
-    void draw_rows(SDL_Renderer *renderer, const std::vector<gl::game::CharacterRow> &rows,
+    void draw_rows(SDL_Renderer *renderer, const gl::render::Font *font,
+                   const std::vector<gl::game::CharacterRow> &rows,
                    const int *y_positions, int count, float x, float w, float height,
                    bool right_align);
-    void draw_row(SDL_Renderer *renderer, const gl::game::CharacterRow &row, float x,
-                  float y, float w, float height, bool right_align);
+    void draw_row(SDL_Renderer *renderer, const gl::render::Font *font,
+                  const gl::game::CharacterRow &row, float x, float y, float w,
+                  float height, bool right_align);
     void draw_content(SDL_Renderer *renderer);
 
     const gl::assets::GameVfs *vfs_ = nullptr;
     const gl::render::Font *font_ = nullptr;
+    const gl::render::Font *title_font_ = nullptr;
     gl::game::CharacterSheet sheet_;
     gl::game::CharacterTab tab_ = gl::game::CharacterTab::skills;
     bool visible_ = false;
@@ -57,5 +77,7 @@ class CharacterOverlay {
     std::map<std::string, gl::render::Texture> textures_;
     std::set<std::string> failed_textures_;
     HeroPortrait portrait_;
+    std::optional<gl::game::HeroOutfit> portrait_outfit_;
+    bool inventory_tab_request_ = false;
 };
 } // namespace gl::app

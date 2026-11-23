@@ -46,6 +46,10 @@ bool CharacterOverlay::open(SDL_Renderer *renderer, const gl::assets::GameVfs &v
     scale_ = 1.0f;
     offset_x_ = 0.0f;
     offset_y_ = 0.0f;
+    inventory_tab_request_ = false;
+    portrait_.clear();
+    portrait_outfit_.reset();
+    if (outfit != nullptr) portrait_outfit_ = *outfit;
     if (renderer != nullptr) {
         reset_texture_cache(renderer);
         if (outfit != nullptr) portrait_.load(renderer, vfs, *outfit);
@@ -96,7 +100,13 @@ gl::render::Texture *CharacterOverlay::load_texture(std::string_view path) {
 void CharacterOverlay::render(SDL_Renderer *renderer, int screen_w, int screen_h,
                               const gl::render::Font *font) {
     if (renderer == nullptr || !visible_ || screen_w <= 0 || screen_h <= 0) return;
-    if (texture_renderer_ != renderer) reset_texture_cache(renderer);
+    if (texture_renderer_ != renderer) {
+        reset_texture_cache(renderer);
+        if (portrait_outfit_ && vfs_ != nullptr)
+            portrait_.load(renderer, *vfs_, *portrait_outfit_);
+        else
+            portrait_.clear();
+    }
     if (font != nullptr) font_ = font;
     update_transform(screen_w, screen_h);
 
@@ -110,6 +120,11 @@ void CharacterOverlay::render(SDL_Renderer *renderer, int screen_w, int screen_h
     SDL_RenderGetClipRect(renderer, &old_clip);
     SDL_BlendMode old_blend = SDL_BLENDMODE_NONE;
     SDL_GetRenderDrawBlendMode(renderer, &old_blend);
+    std::uint8_t old_color_r = 0;
+    std::uint8_t old_color_g = 0;
+    std::uint8_t old_color_b = 0;
+    std::uint8_t old_color_a = 255;
+    SDL_GetRenderDrawColor(renderer, &old_color_r, &old_color_g, &old_color_b, &old_color_a);
     const SDL_Rect viewport{
         static_cast<int>(std::lround(offset_x_)),
         static_cast<int>(std::lround(offset_y_)),
@@ -126,6 +141,7 @@ void CharacterOverlay::render(SDL_Renderer *renderer, int screen_w, int screen_h
     draw_close(renderer);
 
     SDL_SetRenderDrawBlendMode(renderer, old_blend);
+    SDL_SetRenderDrawColor(renderer, old_color_r, old_color_g, old_color_b, old_color_a);
     SDL_RenderSetScale(renderer, old_scale_x, old_scale_y);
     SDL_RenderSetClipRect(renderer, old_clipping ? &old_clip : nullptr);
     SDL_RenderSetViewport(renderer, &old_viewport);
@@ -158,52 +174,49 @@ void CharacterOverlay::draw_close(SDL_Renderer *renderer) {
     }
 }
 
-void CharacterOverlay::draw_rows(SDL_Renderer *renderer,
+void CharacterOverlay::draw_rows(SDL_Renderer *renderer, const gl::render::Font *font,
                                  const std::vector<gl::game::CharacterRow> &rows,
                                  const int *y_positions, int count, float x, float w,
                                  float height, bool right_align) {
-    if (font_ == nullptr) return;
+    if (font == nullptr) return;
     for (int index = 0; index < count && index < static_cast<int>(rows.size()); ++index) {
-        draw_row(renderer, rows[static_cast<std::size_t>(index)], x,
+        draw_row(renderer, font, rows[static_cast<std::size_t>(index)], x,
                  static_cast<float>(y_positions[index]), w, height, right_align);
     }
 }
 
-void CharacterOverlay::draw_row(SDL_Renderer *renderer,
+void CharacterOverlay::draw_row(SDL_Renderer *renderer, const gl::render::Font *font,
                                 const gl::game::CharacterRow &row, float x, float y,
                                 float w, float height, bool right_align) {
-    if (font_ == nullptr) return;
+    if (font == nullptr) return;
     const SDL_Rect clip{static_cast<int>(x), static_cast<int>(y),
                         static_cast<int>(w), static_cast<int>(height)};
     SDL_RenderSetClipRect(renderer, &clip);
-    font_->draw_text(renderer, row.label, x + 4.0f,
-                     y + (height - font_->line_height()) * 0.5f, kTextColor);
+    font->draw_text(renderer, row.label, x + 4.0f,
+                    y + (height - font->line_height()) * 0.5f, kTextColor);
     if (right_align) {
-        const auto measured = font_->measure(row.value);
-        font_->draw_text(renderer, row.value, x + w - 4.0f - measured.x,
-                         y + (height - font_->line_height()) * 0.5f, kTextColor);
+        const auto measured = font->measure(row.value);
+        font->draw_text(renderer, row.value, x + w - 4.0f - measured.x,
+                        y + (height - font->line_height()) * 0.5f, kTextColor);
     } else {
-        font_->draw_text(renderer, row.value, x + 4.0f,
-                         y + (height - font_->line_height()) * 0.5f, kTextColor);
+        font->draw_text(renderer, row.value, x + 4.0f,
+                        y + (height - font->line_height()) * 0.5f, kTextColor);
     }
     SDL_RenderSetClipRect(renderer, nullptr);
 }
 
 void CharacterOverlay::draw_content(SDL_Renderer *renderer) {
     if (font_ == nullptr) return;
+    const gl::render::Font *title = title_font();
     std::array<int, 7> primary_y{};
     for (std::size_t index = 0; index < primary_y.size(); ++index)
         primary_y[index] = static_cast<int>(kPrimaryY[index]);
-    draw_rows(renderer, sheet_.primary, primary_y.data(), 7, 20.0f, 130.0f, 23.0f,
+    draw_rows(renderer, title, sheet_.primary, primary_y.data(), 7, 20.0f, 130.0f, 23.0f,
               true);
     if (sheet_.primary.size() == 8) {
-        const auto &reputation = sheet_.primary[7];
-        font_->draw_text(renderer, reputation.label, 24.0f, 264.0f, kTextColor);
-        const auto measured = font_->measure(reputation.value);
-        font_->draw_text(renderer, reputation.value, 181.0f - 4.0f - measured.x + 20.0f,
-                         264.0f, kTextColor);
+        draw_row(renderer, title, sheet_.primary[7], 20.0f, 262.0f, 181.0f, 23.0f, true);
     }
-    font_->draw_text(renderer, std::to_string(sheet_.skill_points), 526.0f, 634.0f,
+    font_->draw_text(renderer, std::to_string(sheet_.skill_points), 526.0f, 632.0f,
                      kTextColor);
 
     switch (tab_) {
@@ -213,7 +226,7 @@ void CharacterOverlay::draw_content(SDL_Renderer *renderer) {
         static constexpr std::array<float, 4> kH{24.0f, 23.0f, 24.0f, 20.0f};
         for (std::size_t index = 0;
              index < sheet_.personality.size() && index < kY.size(); ++index)
-            draw_row(renderer, sheet_.personality[index], 296.0f,
+            draw_row(renderer, title, sheet_.personality[index], 296.0f,
                      static_cast<float>(kY[index]), kW[index], kH[index], true);
         break;
     }
@@ -221,8 +234,8 @@ void CharacterOverlay::draw_content(SDL_Renderer *renderer) {
         std::array<int, 15> y{};
         for (std::size_t index = 0; index < y.size(); ++index)
             y[index] = static_cast<int>(kCharacteristicsY[index]);
-        draw_rows(renderer, sheet_.characteristics, y.data(), 15, 296.0f, 155.0f, 20.0f,
-                  true);
+        draw_rows(renderer, font_, sheet_.characteristics, y.data(), 15, 296.0f, 155.0f,
+                  20.0f, true);
         break;
     }
     case gl::game::CharacterTab::skills: {
@@ -266,6 +279,11 @@ bool CharacterOverlay::handle_mouse(int x, int y, bool click) {
             return true;
         }
     }
+    if (contains(654.0f, 4.0f, 360.0f, 40.0f, logical_x, logical_y)) {
+        inventory_tab_request_ = true;
+        close();
+        return true;
+    }
     if (on_close) {
         close();
         return true;
@@ -293,6 +311,8 @@ CharacterRegion CharacterOverlay::hit_test(int x, int y) const {
     for (const float tab_x : kTabX)
         if (contains(tab_x, kTabY, kTabW, kTabH, logical_x, logical_y))
             return CharacterRegion::tab;
+    if (contains(654.0f, 4.0f, 360.0f, 40.0f, logical_x, logical_y))
+        return CharacterRegion::inventory_tab;
     if (contains(920.0f, 694.0f, 75.0f, 68.0f, logical_x, logical_y))
         return CharacterRegion::close;
     return CharacterRegion::none;
