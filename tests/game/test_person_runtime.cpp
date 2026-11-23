@@ -6,6 +6,8 @@
 #include "gl/script/person_access.hpp"
 #include "gl/script/native_registry.hpp"
 
+#include <array>
+#include <cstdint>
 #include <string>
 #include <utility>
 #include <vector>
@@ -346,4 +348,62 @@ TEST_CASE("person party role updates known persons only") {
     CHECK(runtime.party_role("Hero") == 1);
     runtime.set_party_role("missing", 2);
     CHECK(runtime.party_role("missing") == 0);
+}
+
+TEST_CASE("injury records use the fixed SetInjured key") {
+    const std::array<std::int32_t, 5> key{22, -49, 129, 0, -1};
+    std::vector<gl::game::PersonEffect> records{{1, 2, 3, 4, 5}};
+
+    gl::game::set_injured_records(records, true);
+    REQUIRE(records.size() == 2);
+    CHECK(records.back().words == key);
+
+    gl::game::set_injured_records(records, true);
+    REQUIRE(records.size() == 2);
+    CHECK(records.back().words == key);
+
+    gl::game::set_injured_records(records, false);
+    REQUIRE(records.size() == 1);
+    CHECK(records.front().words == std::array<std::int32_t, 5>{1, 2, 3, 4, 5});
+}
+
+TEST_CASE("person runtime set-injured toggles known persons only") {
+    const std::vector<gl::game::PersonInstance> persons{make_person("L1.P1", "L1.P1")};
+    auto runtime = gl::game::PersonRuntime::create(persons, std::nullopt);
+
+    CHECK_FALSE(runtime.injured("L1.P1"));
+    runtime.set_injured("L1.P1", true);
+    CHECK(runtime.injured("L1.P1"));
+    runtime.set_injured("missing", true);
+    CHECK_FALSE(runtime.injured("missing"));
+    runtime.set_injured("L1.P1", false);
+    CHECK_FALSE(runtime.injured("L1.P1"));
+}
+
+TEST_CASE("dialog percent reproduces the talking formula") {
+    const auto hero = [](std::int32_t intelligence, std::int32_t talking,
+                         std::int32_t trade) {
+        gl::assets::HeroStats stats;
+        stats.intelligence = intelligence;
+        stats.skills[21] = talking;
+        stats.skills[16] = trade;
+        return stats;
+    };
+
+    auto silent = gl::game::PersonRuntime::create({}, hero(8, 0, 10));
+    CHECK(silent.dialog_percent("Hero") == 0);
+
+    auto maxed = gl::game::PersonRuntime::create({}, hero(0, 15, 0));
+    CHECK(maxed.dialog_percent("Hero") == 100);
+
+    auto base = gl::game::PersonRuntime::create({}, hero(7, 5, 0));
+    CHECK(base.dialog_percent("Hero") == 37);
+
+    auto trader = gl::game::PersonRuntime::create({}, hero(7, 5, 10));
+    CHECK(trader.dialog_percent("Hero") == 57);
+
+    auto talking_bonus = gl::game::PersonRuntime::create({}, hero(5, 10, 9));
+    CHECK(talking_bonus.dialog_percent("Hero") == 57);
+
+    CHECK(base.dialog_percent("missing") == 0);
 }

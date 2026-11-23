@@ -15,6 +15,12 @@
 namespace gl::game {
 int hero_level_from_experience(double experience);
 
+struct PersonEffect {
+    std::array<std::int32_t, 5> words{};
+};
+
+void set_injured_records(std::vector<PersonEffect> &records, bool injured);
+
 struct PersonState {
     std::string name;
     std::array<double, 12> values{};
@@ -24,6 +30,7 @@ struct PersonState {
     std::map<std::string, double, std::less<>> skills;
     bool undead = false;
     std::int32_t party_role = 0;
+    std::vector<PersonEffect> effects;
 };
 
 class PersonRuntime {
@@ -40,6 +47,9 @@ class PersonRuntime {
     bool undead(std::string_view person) const;
     void set_party_role(std::string_view person, std::int32_t role);
     std::int32_t party_role(std::string_view person) const;
+    void set_injured(std::string_view person, bool injured);
+    bool injured(std::string_view person) const;
+    std::int32_t dialog_percent(std::string_view person) const;
     gl::script::PersonAccess access();
 
   private:

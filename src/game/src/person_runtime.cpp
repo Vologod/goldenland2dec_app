@@ -2,6 +2,7 @@
 
 #include "gl/assets/log.hpp"
 
+#include <algorithm>
 #include <charconv>
 #include <cmath>
 #include <cstdint>
@@ -17,6 +18,7 @@ constexpr double kMaxSkill = 15.0;
 constexpr double kReputationMinimum = -50.0;
 constexpr double kReputationMaximum = 50.0;
 constexpr double kMaxExperience = 500000.0;
+constexpr std::array<std::int32_t, 5> kInjuryRecord{22, -49, 129, 0, -1};
 
 constexpr std::array<std::string_view, 27> kHeroSkillNames{
     "SKILL_GODSMAG", "SKILL_ELEMMAG",  "SKILL_LGHTMAG", "SKILL_DARKMAG", "SKILL_SHADMAG",
@@ -210,6 +212,15 @@ void set_reputation(PersonState &state, double value) {
 } // namespace
 
 int hero_level_from_experience(double experience) { return level_from_experience(experience); }
+
+void set_injured_records(std::vector<PersonEffect> &records, bool injured) {
+    records.erase(std::remove_if(records.begin(), records.end(),
+                                 [](const PersonEffect &record) {
+                                     return record.words == kInjuryRecord;
+                                 }),
+                  records.end());
+    if (injured) records.push_back(PersonEffect{kInjuryRecord});
+}
 
 PersonRuntime PersonRuntime::create(const std::vector<PersonInstance> &persons,
                                     const std::optional<gl::assets::HeroStats> &hero) {
@@ -422,6 +433,37 @@ void PersonRuntime::set_party_role(std::string_view person, std::int32_t role) {
 std::int32_t PersonRuntime::party_role(std::string_view person) const {
     const PersonState *state = find(person);
     return state == nullptr ? 0 : state->party_role;
+}
+
+void PersonRuntime::set_injured(std::string_view person, bool injured) {
+    PersonState *state = find(person);
+    if (state != nullptr) set_injured_records(state->effects, injured);
+}
+
+bool PersonRuntime::injured(std::string_view person) const {
+    const PersonState *state = find(person);
+    if (state == nullptr) return false;
+    return std::any_of(state->effects.begin(), state->effects.end(),
+                       [](const PersonEffect &record) {
+                           return record.words == kInjuryRecord;
+                       });
+}
+
+std::int32_t PersonRuntime::dialog_percent(std::string_view person) const {
+    const PersonState *state = find(person);
+    if (state == nullptr) return 0;
+    const auto clamped_skill = [state](std::string_view name) {
+        return static_cast<std::int32_t>(clamp_value(skill_value(*state, name), 0.0, kMaxSkill));
+    };
+    const std::int32_t talking = clamped_skill("SKILL_TALKING");
+    if (talking == 0) return 0;
+    if (talking > 14) return 100;
+    const std::int32_t intelligence =
+        static_cast<std::int32_t>(intelligence_value(*state));
+    float value = static_cast<float>(intelligence + 10 + talking * 4);
+    if (clamped_skill("SKILL_TRADE") > 9) value += 20.0f;
+    return static_cast<std::int32_t>(
+        round_half_away_from_zero(static_cast<double>(value)));
 }
 
 gl::script::PersonAccess PersonRuntime::access() {
