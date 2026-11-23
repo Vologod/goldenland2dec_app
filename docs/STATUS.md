@@ -16,16 +16,31 @@
   labels из `sdb/user_interface.sdb`, `#id` fallback, значения из
   `PersonRuntime`, level из EXP); `CharacterOverlay` (canvas 1024x768,
   5 вкладок, клип строк, close/hover, `Нет данных` на state/resistance);
-  `HeroPortrait` (equipped `rt_stay` idle из P4d/P5a);
+  `HeroPortrait` (equipped `tb_stay` idle из P4d/P5a);
   `level_input_enabled` + `character_active`; `glgame`
   skills-tab/`C`/`--character`.
 - **Проверка (2026-11-23):** `gl_game_tests --test-case="*character
   sheet*"` 6/6 (64 assertions); `character_overlay_tests` 3/3 (27
   assertions); `glgame_screenshot_tests --test-case="*character*"` 1/1
-  (5 assertions); полный `ctest` 21/21, 2860.42 s.
+  (5 assertions); полный `ctest` 21/21, 2860.42 s (before the final fix
+  wave; rerun pending).
 - **Residual:** skill-point spending/save write, state/resistance data,
   remaining combat columns, tooltips/animation, touch (P9), crafting.
-- **Статус:** automated done; manual visual gate open.
+- **Статус:** automated done; final fix wave 75cb2d5 awaiting scoped
+  re-review + full ctest; manual visual gate open.
+
+## Session checkpoint (2026-11-23 21:44)
+
+- P7b реализован и закоммичен: задачи 1-5 + final-review fix wave `75cb2d5`.
+- Проверено после fix wave (focused): `gl_game_tests *character sheet*`
+  6/6 (113 assertions), `character_overlay_tests` 6/6 (69),
+  `glgame_screenshot_tests *character*` 1/1 (30). Полный `ctest` на
+  финальном дереве ещё не прогонялся (до fix wave было 21/21,
+  2860.42 s).
+- Осталось: scoped re-review `75cb2d5`, полный `ctest`, manual visual
+  gate (пользователь), затем финализировать `STATUS/PROJECT/DECISIONS`
+  и push по указанию.
+- SDD ledger: `.superpowers/sdd/2026-11-23-p7b-character-sheet/progress.md`.
 
 ## P6a8 — Dialog/injury natives (done 2026-11-23)
 
