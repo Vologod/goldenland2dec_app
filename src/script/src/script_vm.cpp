@@ -217,6 +217,18 @@ void ScriptVm::set_globals(std::span<const ScriptGlobal> globals) {
     rebuild_variables();
 }
 
+bool ScriptVm::set_global(std::string_view name, Value value) {
+    const std::string key(name);
+    auto global = globals_.find(key);
+    if (global == globals_.end())
+        return false;
+    global->second = value;
+    auto variable = variables_.find(key);
+    if (variable != variables_.end())
+        variable->second = value;
+    return true;
+}
+
 ScriptVm::GlobalApplyCounts ScriptVm::apply_saved_globals(
     std::span<const ScriptGlobal> saved) {
     GlobalApplyCounts counts;

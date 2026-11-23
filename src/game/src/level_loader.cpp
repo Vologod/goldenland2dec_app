@@ -4,6 +4,7 @@
 #include "gl/assets/log.hpp"
 #include "gl/assets/lvl.hpp"
 #include "gl/assets/sef.hpp"
+#include "gl/game/door_runtime.hpp"
 #include "gl/game/level.hpp"
 #include "gl/game/person.hpp"
 #include <algorithm>
@@ -92,6 +93,18 @@ Result<Level> load_level(GameVfs &vfs, std::string_view level_name) {
             return contextual(lvl.error(), "cannot parse level LVL", lvl_file);
         level.walkable = build_walk_grid(lvl.value());
         level.triggers = lvl->triggers;
+
+        level.doors.reserve(sef->doors.size());
+        for (const SefDoor& sef_door : sef->doors) {
+            auto door = resolve_level_door(sef_door, lvl->doors, lvl->cell_groups);
+            if (!door) {
+                warn("level '" + level.name + "': door '" + sef_door.name +
+                     "' has no matching LVL BLK_DOOR cell group");
+                continue;
+            }
+            apply_door_state(*door, level.walkable);
+            level.doors.push_back(std::move(*door));
+        }
 
         level.mask_cells.width = static_cast<int>(lvl->chunk_width);
         level.mask_cells.height = static_cast<int>(lvl->chunk_height);

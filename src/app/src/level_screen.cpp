@@ -181,6 +181,7 @@ LevelScreen::LevelScreen(LevelScreen&& other) noexcept
       person_keys_(std::move(other.person_keys_)),
       person_order_(std::move(other.person_order_)),
       simulation_(std::move(other.simulation_)),
+      doors_(std::move(other.doors_)),
       simulated_ms_(other.simulated_ms_),
       last_simulation_ms_(other.last_simulation_ms_),
       camera_(other.camera_),
@@ -191,6 +192,19 @@ LevelScreen::LevelScreen(LevelScreen&& other) noexcept
         hero_.emplace(level_, &simulation_);
         hero_->controller.spawn_at_first_entrance();
     }
+}
+
+bool LevelScreen::set_door_state(std::string_view name, std::int32_t state) {
+    if (!doors_.set(name, state, level_.walkable))
+        return false;
+    for (gl::game::LevelDoor &door : level_.doors) {
+        if (door.name == name) {
+            door.state = state;
+            break;
+        }
+    }
+    simulation_.refresh_walk_grid(level_.walkable);
+    return true;
 }
 
 float LevelScreen::world_width() const { return static_cast<float>(level_.width); }
@@ -223,6 +237,7 @@ Result<LevelScreen> LevelScreen::load(SDL_Renderer* renderer, gl::assets::GameVf
     LevelScreen screen(std::move(level.value()), std::move(background.value()));
     screen.renderer_ = renderer;
     screen.vfs_ = &vfs;
+    screen.doors_.reset(screen.level_.doors);
 
     screen.statics_.reserve(screen.level_.statics.size());
     for (const auto& object : screen.level_.statics) {

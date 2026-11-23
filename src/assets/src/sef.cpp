@@ -416,6 +416,100 @@ Result<std::vector<SefEntrance>> parse_entrances(Lexer& lexer) {
     }
 }
 
+VoidResult parse_door_fields(Lexer& lexer, SefDoor& door) {
+    while (true) {
+        const Token key = next_non_semicolon(lexer);
+        if (lexer.failed())
+            return format_error_at("unterminated SEF door", key.line);
+        if (key.kind == TokenKind::end)
+            return format_error_at("unterminated SEF door", key.line);
+        if (key.kind == TokenKind::rbrace)
+            return VoidResult{std::monostate{}};
+        if (key.kind != TokenKind::word)
+            return format_error_at("unexpected token in SEF door", key.line);
+
+        Token value = lexer.next();
+        if (lexer.failed())
+            return format_error_at("unterminated SEF door", key.line);
+        if (value.kind == TokenKind::colon) {
+            value = lexer.next();
+            if (lexer.failed())
+                return format_error_at("unterminated SEF door", key.line);
+        }
+        if (value.kind == TokenKind::end)
+            return format_error_at("truncated SEF door field", value.line);
+
+        if (key.text == "literary_name_open") {
+            if (!token_int(value, door.literary_name_open))
+                return format_error_at("bad SEF door literary_name_open", value.line);
+        } else if (key.text == "literary_name_close") {
+            if (!token_int(value, door.literary_name_close))
+                return format_error_at("bad SEF door literary_name_close", value.line);
+        } else if (key.text == "is_opened") {
+            if (!token_int(value, door.is_opened))
+                return format_error_at("bad SEF door is_opened", value.line);
+        } else if (key.text == "is_inversed") {
+            if (!token_int(value, door.is_inversed))
+                return format_error_at("bad SEF door is_inversed", value.line);
+        } else if (key.text == "script_name") {
+            if (!token_text(value, door.script_name))
+                return format_error_at("bad SEF door script_name", value.line);
+        } else if (key.text == "cells_name") {
+            if (!token_text(value, door.cells_name))
+                return format_error_at("bad SEF door cells_name", value.line);
+        } else if (value.kind == TokenKind::lbrace) {
+            lexer.skip_balanced();
+            if (lexer.failed())
+                return format_error_at("unterminated SEF door block", value.line);
+        }
+    }
+}
+
+Result<std::vector<SefDoor>> parse_doors(Lexer& lexer) {
+    const Token open = next_non_semicolon(lexer);
+    if (lexer.failed())
+        return format_error_at("unterminated SEF doors", open.line);
+    if (open.kind != TokenKind::lbrace)
+        return format_error_at("SEF doors has no opening brace", open.line);
+
+    std::vector<SefDoor> doors;
+    while (true) {
+        const Token key = next_non_semicolon(lexer);
+        if (lexer.failed())
+            return format_error_at("unterminated SEF doors", key.line);
+        if (key.kind == TokenKind::end)
+            return format_error_at("truncated SEF doors section", key.line);
+        if (key.kind == TokenKind::rbrace)
+            return doors;
+        if (key.kind != TokenKind::word || key.text != "name")
+            return format_error_at("SEF door entry has no name", key.line);
+
+        Token name = lexer.next();
+        if (lexer.failed())
+            return format_error_at("unterminated SEF doors", name.line);
+        if (name.kind == TokenKind::colon) {
+            name = lexer.next();
+            if (lexer.failed())
+                return format_error_at("unterminated SEF doors", name.line);
+        }
+
+        SefDoor door;
+        if (!token_text(name, door.name))
+            return format_error_at("SEF door name is not a string", name.line);
+
+        const Token block = next_non_semicolon(lexer);
+        if (lexer.failed())
+            return format_error_at("unterminated SEF doors", block.line);
+        if (block.kind != TokenKind::lbrace)
+            return format_error_at("SEF door entry has no block", block.line);
+
+        auto status = parse_door_fields(lexer, door);
+        if (!status)
+            return status.error();
+        doors.push_back(std::move(door));
+    }
+}
+
 VoidResult parse_cell_group_fields(Lexer& lexer, SefCellGroup& group) {
     while (true) {
         const Token key = next_non_semicolon(lexer);
@@ -558,6 +652,14 @@ Result<SefData> parse_sef(std::span<const std::uint8_t> data) {
                 if (!entrances)
                     return entrances.error();
                 sef.entrances = std::move(entrances.value());
+                continue;
+            }
+
+            if (key.text == "doors") {
+                auto doors = parse_doors(lexer);
+                if (!doors)
+                    return doors.error();
+                sef.doors = std::move(doors.value());
                 continue;
             }
 

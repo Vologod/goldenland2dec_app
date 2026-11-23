@@ -5,6 +5,7 @@
 
 #include <array>
 #include <cstddef>
+#include <cstdint>
 #include <map>
 #include <optional>
 #include <string>
@@ -22,6 +23,7 @@ struct PersonState {
     bool modifier_gate = false;
     std::map<std::string, double, std::less<>> skills;
     bool undead = false;
+    std::int32_t party_role = 0;
 };
 
 class PersonRuntime {
@@ -36,6 +38,8 @@ class PersonRuntime {
     bool has_person(std::string_view person) const;
     void set_undead(std::string_view person, bool undead);
     bool undead(std::string_view person) const;
+    void set_party_role(std::string_view person, std::int32_t role);
+    std::int32_t party_role(std::string_view person) const;
     gl::script::PersonAccess access();
 
   private:

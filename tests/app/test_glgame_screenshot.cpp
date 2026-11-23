@@ -1630,6 +1630,42 @@ TEST_CASE("glgame --level l1_1 --click-npc opens the circus worker dialog" *
     check_png(png, 1280, 720);
 }
 
+TEST_CASE("glgame --diary opens the loaded save quest journal" *
+          doctest::skip(!font_available())) {
+    const char* game_dir = std::getenv("GL_GAME_DIR");
+    REQUIRE(game_dir != nullptr);
+
+    TempDir temp;
+    const fs::path config = write_test_config(temp.path);
+    const fs::path level_png = temp.path / "diary_level.png";
+    const fs::path diary_png = temp.path / "diary_slot0.png";
+
+    std::string output;
+    const int level_code = run_glgame(
+        screenshot_arguments(game_dir, config, level_png, {"--load-save", "0"}));
+    const int diary_code = run_glgame_capture(
+        screenshot_arguments(game_dir, config, diary_png,
+                             {"--load-save", "0", "--diary"}),
+        output);
+    CAPTURE(level_code);
+    CAPTURE(diary_code);
+    CAPTURE(output);
+    REQUIRE(fs::exists(level_png));
+    REQUIRE(fs::exists(diary_png));
+    CHECK(level_code == 0);
+    CHECK(diary_code == 0);
+    CHECK(output.find("diary: opened entries=20") != std::string::npos);
+    check_png(level_png, 1280, 720);
+    check_png(diary_png, 1280, 720);
+
+    int level_width = 0, level_height = 0, diary_width = 0, diary_height = 0;
+    const std::vector<unsigned char> level = read_png(level_png, level_width, level_height);
+    const std::vector<unsigned char> diary = read_png(diary_png, diary_width, diary_height);
+    REQUIRE(level_width == diary_width);
+    REQUIRE(level_height == diary_height);
+    CHECK(count_differences(level, diary) > 100000);
+}
+
 TEST_CASE("glgame --inventory opens the selected save inventory" *
           doctest::skip(!font_available())) {
     const char* game_dir = std::getenv("GL_GAME_DIR");

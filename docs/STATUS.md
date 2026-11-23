@@ -1,6 +1,136 @@
 # STATUS
 
-Обновлено: 2026-11-19
+Обновлено: 2026-11-22
+
+## P7a — Quest journal overlay (automated passed; manual gate open)
+
+- **Задача:** read-only журнал квестов из DIARY загруженного сейва,
+  текст из `sdb/diary/single_quest_lit.sdb`; оригинальная рамка
+  `engineres/diary/main.bmp`+`page1.bmp`, close; `J`/Esc, `--diary`.
+- **Spec/plan:** `docs/specs/2026-11-22-p7a-diary-overlay-design.md`,
+  `docs/plans/2026-11-22-p7a-diary-overlay.md`; **D-110**.
+- **Результат:** `DiaryRow` (title=key; description = все stage-записи
+  `+0x04`; only `status==1` storyline; активные сверху, выполненные
+  снизу; newest-first внутри групп; completed по `end` зачёркнуты);
+  `DiaryOverlay` (оригинальные 5 labels, одна строка `дата+title`,
+  правая деталь со stage-зачёркиванием и scroll, pala 18px,
+  scroll/keys/click, нижние 4 стрелки листают список/описание,
+  close/hover); `level_input_enabled` diary gate;
+  `--diary` + `J`; real slot0: 76 entries → 20 storyline rows,
+  text/title из lit SDB, stage paragraphs видны.
+- **Проверка (2026-11-22):** diary view 3/3; diary overlay 4/4 (60);
+  level click 23/23 (96); `gl_game_tests` 468/468 (406,107);
+  `glgame_screenshot_tests` diary case pass; полный `ctest` 20/20,
+  1946.60 s.
+- **Residual:** live-журнал, вкладки monsters/statistics/countries/perks,
+  точная оригинальная сортировка/лейблы/page-turn анимация, DIARY write.
+- **Дальше:** P6a8 (dialog/injury research), save/DIARY-квесты, P7b UI,
+  P8/P9.
+- **Manual gate:** OPEN (2026-11-22 feedback был исправлен): нужен
+  повторный запуск после P7a-follow-up; агент manual pass не
+  подтверждает.
+- **P7a follow-up (manual feedback 2026-11-22, implemented):**
+  1. Сортировка: активные (`end` нет) сверху, выполненные (`end` есть)
+     снизу; внутри групп newest-first — реализовано.
+  2. Описание: stage-записи (`record+0x04`, completed=`record+0x08`)
+     зачёркиваются; все параграфы доступны через scroll (колесо
+     natural direction, max scroll), подчёркивание выбранной строки
+     убрано — реализовано.
+  3. Шапка: labels центрированы по `page1.bmp` (vertical center) —
+     реализовано.
+  4. Нижние кнопки листания (`diary.scr` 6–9): левая пара листает
+     список, правая — описание; pressed-картинки `but/1..4` при
+     нажатии, close_p при hover — реализовано.
+  - **Проверка:** diary view 3/3, overlay 4/4 (60), screenshot, full
+    ctest.
+- **Статус:** automated acceptance passed; manual visual gate open
+  (нужен повторный просмотр пользователя).
+
+## P6a13 — Entity party flags (done 2026-11-21)
+
+- **Задача:** смоделировать `entity+0x5a8` (0 = вне партии, 1 = в партии,
+  2 = удалён) для `RS_Add/RemoveToHeroPartyName`; AI/follow и save — вне
+  scope.
+- **Spec/plan:** `docs/specs/2026-11-21-p6a13-party-flags-design.md`,
+  `docs/plans/2026-11-21-p6a13-party-flags.md`; research
+  `docs/research/p6a10-party-runtime.md`; **D-109**.
+- **Результат:** `PersonState.party_role` и accessors; `PartyRuntime`
+  attach/clear и роли: add → 1 после проверки слотов, remove → 2 при
+  непустой партии (в т.ч. known unlisted), empty remove не трогает;
+  clear сбрасывает текущих членов в 0; attach повторно ставит 1
+  участникам после rebuild PersonRuntime; glgame attach.
+- **Проверка (2026-11-21):** party 9/9 (81 assertions); party role 3/3
+  (20); `gl_game_tests` 464/464 (406,070); `gl_script_tests` 132/132
+  (1011); полный `ctest` 19/19, 2660.92 s.
+- **Residual:** hero id `+0xf28`, `+0x44`, `+0x5c0`, копия имени,
+  AI/follow, death cleanup и save/load не моделируются.
+- **Minor debt:** `PartyRuntime` остаётся копируемым с raw-указателем
+  (безопасность держится на стабильном адресе `person_runtime_`,
+  D-109); `attach` повторно ставит 1 дубликату, оставшемуся в списке
+  после частичного remove (нет оригинального аналога reattach).
+- **Дальше:** P6a8 (dialog/injury research), save/DIARY, P7 UI/journal,
+  P8/P9.
+- **Статус:** done.
+
+## P6a12 — Location access native (done 2026-11-21)
+
+- **Задача:** разблокировать `RS_SetLocationAccess` (0x7000008, 68
+  вызовов в 37 `.cs`): запись `name_state` в script-global таблицу
+  через VM-мост.
+- **Spec/plan:** `docs/specs/2026-11-21-p6a12-location-access-design.md`,
+  `docs/plans/2026-11-21-p6a12-location-access.md`; research
+  `docs/research/p6a12-location-access-unblock.md`; **D-108**.
+- **Результат:** `GlobalAccess` + `NativeServices.global`;
+  `ScriptVm::set_global` обновляет только объявленный global (как
+  оригинальный lookup `-1`) и текущую variables_; `0x7000008`
+  supported (36/65), `name_state`, unsigned int32 → double,
+  type failure/no service — no-op; glgame хранит успешные записи в
+  `runtime_globals_` между диалогами (New Game/load очищают),
+  glscript wiring.
+- **Проверка (2026-11-21):** location 3/3 (35 assertions);
+  `gl_script_tests` 132/132 (1011); `gl_game_tests` 459/459
+  (406,031); полный `ctest` 19/19, 2547.71 s.
+- **Residual:** global-map/location UI consumer не моделируется;
+  необъявленные имена (например `L96_state`) — no-op, как в оригинале
+  на свежей сессии (объявлены только globals из `zlato_vars.scr`/save);
+  оригинальный 0x104-буфер и его переполнение не воспроизводятся;
+  `runtime_globals_` может перекрыть последующее script-присваивание
+  (в shipped `.cs` не наблюдаемо); lifecycle persistence/rollback
+  покрыт только кодом glgame, без unit-теста.
+- **Дальше:** P6a8/P6a4-остатки (dialog/injury), save/DIARY,
+  entity party flags, P7 UI/journal, P8/P9.
+- **Статус:** done.
+
+## P6a11 — Door state native (done 2026-11-21)
+
+- **Задача:** `RS_SetDoorState` (0x7000014): SEF doors + LVL
+  `BLK_DOOR`/`BLK_CGRP`, `DoorRuntime`, динамическая проходимость,
+  native supported.
+- **Spec/plan:** `docs/specs/2026-11-21-p6a11-door-state-design.md`,
+  `docs/plans/2026-11-21-p6a11-door-state.md`; research
+  `docs/research/p6a11-door-state.md`; **D-107**.
+- **Результат:** SefDoor/LvlDoor/LevelDoor; `load_level` применяет
+  `is_opened` к `WalkGrid`; `DoorRuntime::set` (0 — блокировать группу,
+  !=0 — очистить), `LevelSimulation::refresh_walk_grid`;
+  `DoorAccess` + `NativeServices.door`; `0x7000014` supported
+  (35/65); glgame wiring.
+- **Проверка (2026-11-21):** `gl_assets_tests` 282/282 (6678);
+  `gl_assets_real_tests` 55/55 (3,337,944); `gl_game_tests` 456/456
+  (405,996; `l10_1` closed, runtime open/close, `l10_1_2` open,
+  resolution skip-path, in-flight path parity); `gl_script_tests`
+  131/131 (1004); полный `ctest` 19/19, 1433.43 s.
+- **Residual:** sight-бит `0x1000`, рендер/взаимодействие дверей
+  (event 0x14/`bOpenDoor`), save/load состояния; неизвестное имя —
+  no-op (оригинал AV); уже проложенные пути не пересчитываются при
+  смене двери (оригинал на шаге проверяет только occupancy, D-107);
+  `entity+0x5a8` party flags остаются открытыми.
+- **Minor debt:** предупреждение о skip-path не различает missing LVL
+  record и missing group; `refresh_walk_grid` предполагает те же
+  размеры; `docs/research/parity-matrix.md` всё ещё пишет 34/65
+  (историческая сводка).
+- **Дальше:** P6a8/P6a4 (blocked research), save/DIARY квестов,
+  P7 UI/journal, P8/P9.
+- **Статус:** done.
 
 ## Session checkpoint — 2026-11-19 (остановка по запросу)
 

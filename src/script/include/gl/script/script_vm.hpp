@@ -24,6 +24,7 @@ public:
 
     ScriptVm(std::vector<gl::assets::CsNode> nodes, ScriptHost& host);
     void set_globals(std::span<const ScriptGlobal> globals);
+    bool set_global(std::string_view name, Value value);
     GlobalApplyCounts apply_saved_globals(std::span<const ScriptGlobal> saved);
     const std::map<std::string, Value> &globals() const { return globals_; }
     void restart(bool reset_all);

@@ -106,7 +106,10 @@ weight_x10   : uint32
 - `BLK_SENV`: минимум 32 байта; заголовок `i32`, `float×3`, `u32 soundCount`, затем
   3 строки; далее звуки (в P1 не моделируются).
 - `BLK_WTHR`: ровно 4 байта (`u16 type`, `u16 intensity`).
-- `BLK_DOOR`: `u32 count`, затем `count*6` строк; payload расходуется ровно.
+- `BLK_DOOR`: `u32 count`, затем `count*6` строк (`name`, open trigger,
+  close trigger, cell group, пятая строка (`default`), static object);
+  порт хранит `name` и cell group; payload расходуется ровно.
+  cell group ссылается на `BLK_CGRP`.
 - `BLK_LFLS`: ровно 4 байта (`u32 levelFloors`).
 
 ## LAO и SEF (метаданные уровня)
@@ -122,6 +125,13 @@ weight_x10   : uint32
   `exit_to_globalmap` (без `_map`); парсер принимает оба написания. `pack` нормализуется
   в нижний регистр (`L1_1` → `l1_1`), т.к. VFS регистронезависим. Комментарии `//`
   до конца строки, CRLF и табы допускаются; блок-комментариев в файле нет.
+- SEF `doors:` (97 файлов, 201 запись): запись `name: "<door>" { ... }`
+  с полями `literary_name_open` (int), `literary_name_close` (int),
+  `script_name` (string), `cells_name` (string), `is_opened` (int,
+  отсутствует = 0), `is_inversed` (int, отсутствует = 0). Имена дверей
+  совпадают с `BLK_DOOR`; `cells_name` — группа SEF `cell_groups`
+  (маршруты/редактор), а проходимость использует cell group из
+  `BLK_DOOR`/`BLK_CGRP` (см. `p6a11-door-state.md`).
 
 ### Person-скрипты и SEF `persons:` (P4a, 2026-10-21)
 
@@ -142,6 +152,19 @@ weight_x10   : uint32
   `scripts/persons/<lower(name)>.scr`; все найдены и разобраны. Первый:
   `L1_1.P387_Poison_Plotnik` → `L0.P1131_Inhabitans03`; последний:
   `L1.P620_Svet_3CircusWorker2` → `L0.P1158_Clowns_Male01`.
+
+## Diary UI (P7a, 2026-11-22)
+
+- Экран: `scripts/ui/diary.scr` (GUI_CHECK_BUTTON x5: killed monsters,
+  storyline, non-storyline, countries, role perks; four page arrows;
+  close), фон `engineres/diary/main.bmp` 1024x768, верхняя полоса
+  `page1..page5.bmp` 1024x80, кнопки `but/1..4.bmp` 41x61 и
+  `but/close_l|close_p.bmp` 71x65.
+- Текст: `sdb/diary/single_quest_lit.sdb` (555 записей) по
+  `DiaryEntry.text_id` (180..510 в корпусе); `single_quest_tech.sdb` —
+  технические ключи.
+- P7a использует только quest-записи из DIARY загруженного сейва,
+  оригинальную рамку и close; остальные вкладки не рисуются.
 
 ## PAD (анимационные листы персонажей)
 

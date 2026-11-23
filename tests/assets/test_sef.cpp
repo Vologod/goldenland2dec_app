@@ -194,6 +194,48 @@ TEST_CASE("SEF parses cell_groups") {
     CHECK(sef->cell_groups[1].cells.empty());
 }
 
+TEST_CASE("SEF parses doors and defaults") {
+    const std::string text =
+        "pack: \"l10_1\"\n"
+        "doors:\n{\n"
+        "  name: \"door_storozhka\"\n  {\n"
+        "    literary_name_open 38\n"
+        "    literary_name_close 39\n"
+        "    script_name \"\"\n"
+        "    cells_name \"door3\"\n"
+        "    unknown_key 7\n"
+        "  }\n"
+        "  name: \"door_open\"\n  {\n"
+        "    literary_name_open 1\n"
+        "    literary_name_close 2\n"
+        "    cells_name \"door1\"\n"
+        "    is_opened 1\n"
+        "    is_inversed 1\n"
+        "  }\n"
+        "}\n";
+    auto sef = gl::assets::parse_sef(as_bytes(text));
+    REQUIRE(sef.has_value());
+    REQUIRE(sef->doors.size() == 2);
+    CHECK(sef->doors[0].name == "door_storozhka");
+    CHECK(sef->doors[0].literary_name_open == 38);
+    CHECK(sef->doors[0].literary_name_close == 39);
+    CHECK(sef->doors[0].script_name.empty());
+    CHECK(sef->doors[0].cells_name == "door3");
+    CHECK(sef->doors[0].is_opened == 0);
+    CHECK(sef->doors[0].is_inversed == 0);
+    CHECK(sef->doors[1].cells_name == "door1");
+    CHECK(sef->doors[1].is_opened == 1);
+    CHECK(sef->doors[1].is_inversed == 1);
+}
+
+TEST_CASE("SEF rejects a non-numeric door state") {
+    const std::string text = "pack: \"l\"\n"
+                             "doors: { name: \"d\" { is_opened open } }\n";
+    auto sef = gl::assets::parse_sef(as_bytes(text));
+    REQUIRE_FALSE(sef.has_value());
+    CHECK(sef.error().code == gl::ErrorCode::format);
+}
+
 TEST_CASE("sef points_entrance parses names, positions, directions") {
     const std::string text =
         "pack: \"l1_1\"\n"

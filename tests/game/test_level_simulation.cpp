@@ -1172,3 +1172,17 @@ TEST_CASE("RANDOM resamples after repeated unreachable goals") {
     CHECK(saw_moving);
     CHECK(std::fabs(sim.persons()[0].x - start_x) > 1.0f);
 }
+
+TEST_CASE("grid refresh keeps in-flight paths (occupancy-only movement parity)") {
+    Level level = make_walled_level();
+    auto sim = LevelSimulation::create(level, 1);
+    const auto before = sim.persons()[0].path;
+    REQUIRE(before.size() >= 2);
+    for (const Tile &tile : before) level.walkable.set_walkable(tile.x, tile.y, false);
+    sim.refresh_walk_grid(level.walkable);
+    CHECK(sim.persons()[0].path == before);
+    const float x = sim.persons()[0].x;
+    const float y = sim.persons()[0].y;
+    sim.advance(0.1);
+    CHECK((sim.persons()[0].x != x || sim.persons()[0].y != y));
+}

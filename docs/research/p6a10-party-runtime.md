@@ -18,7 +18,29 @@ Scope: docs; Server.dll SHA-256 418E2560...CC837.
 - Party list is four person indices; the port stores script names and gates
   adds/removes on PersonRuntime::has_person, preserving exact-name behaviour.
 
+## Entity party flag `+0x5a8` (2026-11-21)
+
+- `FUN_14016fcc` (RVA `0x16fcc`; AddToParty) checks the 4-slot party,
+  resolves the target person, appends its id and sets `person+0x5a8 = 1`,
+  `person+0xf28 = hero id`, `+0x5c0 = 0`, `+0x44 = 2` and copies the name
+  into `+0x40`.
+- `FUN_14017134` (RVA `0x17134`; Remove) returns 4 without touching the
+  person when the party is empty. Otherwise it sets `person+0x5a8 = 2` and
+  `person+0xf28 = -1` before removing the first matching slot; a known
+  person that was not listed therefore still gets role 2.
+- `FUN_14016b94` (RVA `0x16b94`) and other consumers treat `0` as
+  outside the party, `1` as an active member and `2` as removed.
+  The hero is not specially excluded by Add/Remove; the built-in `"Hero"`
+  PersonState is just a normal known person in port tests. Tooling:
+  `llvm-objdump`/Ghidra decompiled Server.dll (SHA-256 `418E2560…CC837`).
+- Port models the role only: `PersonState.party_role` (0/1/2),
+  `PersonRuntime::set_party_role/party_role`, `PartyRuntime` updates it
+  when a `PersonRuntime` is attached. `+0xf28` (hero id), `+0x44`,
+  `+0x5c0`, name copy, AI/follow, death cleanup and save/load are not
+  modelled.
+
 ## Deviations
 
 - Type failure returns 0.0, unknown person returns -1.0 (port/gate contract).
-- Entity +0x5a8 party flags, AI/follow and save/load are not modelled.
+- Entity `+0x5a8` role is modelled; hero id `+0xf28`, AI/follow and
+  save/load are not.

@@ -3,7 +3,9 @@ add_executable(gl_game_tests
     test_calendar.cpp
     test_diary.cpp
     test_diary_real.cpp
+    test_diary_view.cpp
     test_dialog_path.cpp
+    test_door_runtime.cpp
     test_game_script_host.cpp
     test_hero.cpp
     test_hero_outfit_resolver.cpp
@@ -14,6 +16,7 @@ add_executable(gl_game_tests
     test_inventory_view.cpp
     test_level_simulation.cpp
     test_live_save_real.cpp
+    test_location_access.cpp
     test_mask_selection.cpp
     test_msvc_random.cpp
     test_npc_loot.cpp
@@ -34,6 +37,7 @@ add_executable(gl_game_tests
     test_save_person_real.cpp
     test_person_runtime_real.cpp
     test_person_rng.cpp
+    test_real_doors.cpp
     test_real_person_loader.cpp
     test_rginf.cpp
     test_rginf_real.cpp

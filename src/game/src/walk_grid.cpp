@@ -7,6 +7,12 @@ bool WalkGrid::is_walkable(std::int32_t x, std::int32_t y) const {
     return walkable[static_cast<std::size_t>(y) * width + x] != 0;
 }
 
+void WalkGrid::set_walkable(std::int32_t x, std::int32_t y, bool value) {
+    if (x < 0 || y < 0 || x >= width || y >= height)
+        return;
+    walkable[static_cast<std::size_t>(y) * width + x] = value ? 1 : 0;
+}
+
 WalkGrid build_walk_grid(const gl::assets::LvlData &level) {
     WalkGrid grid;
     if (level.chunk_width == 0 || level.chunk_height == 0)

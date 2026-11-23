@@ -414,6 +414,16 @@ bool PersonRuntime::undead(std::string_view person) const {
     return state != nullptr && state->undead;
 }
 
+void PersonRuntime::set_party_role(std::string_view person, std::int32_t role) {
+    PersonState *state = find(person);
+    if (state != nullptr) state->party_role = role;
+}
+
+std::int32_t PersonRuntime::party_role(std::string_view person) const {
+    const PersonState *state = find(person);
+    return state == nullptr ? 0 : state->party_role;
+}
+
 gl::script::PersonAccess PersonRuntime::access() {
     gl::script::PersonAccess access;
     access.get_parameter = [this](std::string_view person, PersonParameter parameter) {

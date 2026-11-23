@@ -30,6 +30,14 @@ gl_enable_warnings(dialog_overlay_tests)
 
 add_test(NAME dialog_overlay_tests COMMAND dialog_overlay_tests)
 
+add_executable(diary_overlay_tests test_diary_overlay.cpp)
+target_include_directories(diary_overlay_tests PRIVATE ${CMAKE_SOURCE_DIR}/third_party/doctest)
+target_link_libraries(diary_overlay_tests PRIVATE gl_app)
+gl_enable_warnings(diary_overlay_tests)
+
+add_test(NAME diary_overlay_tests COMMAND diary_overlay_tests)
+set_tests_properties(diary_overlay_tests PROPERTIES SKIP_RETURN_CODE 77)
+
 add_executable(inventory_overlay_tests test_inventory_overlay.cpp)
 target_include_directories(inventory_overlay_tests PRIVATE ${CMAKE_SOURCE_DIR}/third_party/doctest)
 target_link_libraries(inventory_overlay_tests PRIVATE gl_app)

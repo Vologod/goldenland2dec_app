@@ -1,4 +1,5 @@
 #include <gl/app/click_actions.hpp>
+#include <gl/app/diary_overlay.hpp>
 #include <gl/app/dialog_overlay.hpp>
 #include <gl/app/input_gate.hpp>
 #include <gl/app/inventory_overlay.hpp>
@@ -64,6 +65,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iterator>
+#include <map>
 #include <memory>
 #include <optional>
 #include <span>
@@ -133,6 +135,7 @@ struct Options {
     std::optional<int> write_save_slot;
     std::string save_title = "Quick save";
     bool inventory = false;
+    bool diary = false;
     std::optional<int> inventory_select;
     std::string trade_npc;
     bool has_trade_npc = false;
@@ -182,6 +185,7 @@ void print_usage() {
         "  --load-save <slot>   Load the save level and hero (--level is ignored)\n"
         "  --inventory          Open the inventory overlay for the selected save\n"
         "  --inventory-select <n> Select bottom-strip slot <n> when the inventory opens\n"
+        "  --diary              Open the quest journal for the loaded save\n"
         "  --trade-npc <name>   Open the trade overlay for person <name> after loading\n"
         "  --trade-buy <tech>   Headless: stage the whole NPC stack for item <tech>\n"
         "  --trade-sell <tech>  Headless: stage the whole Hero stack for item <tech>\n"
@@ -386,6 +390,8 @@ ParseStatus parse_args(int argc, char** argv, Options& options) {
             options.load_save = slot;
         } else if (arg == "--inventory") {
             options.inventory = true;
+        } else if (arg == "--diary") {
+            options.diary = true;
         } else if (arg == "--inventory-select") {
             if (!next_value(arg, value)) return ParseStatus::error;
             int slot = 0;
@@ -814,6 +820,7 @@ class Game {
         }
 
         if (options_.inventory) open_inventory();
+        if (options_.diary) open_diary();
 
         gl::log(gl::LogLevel::info,
                 "glgame: boot complete, state=" + std::string(state_name(state_.state())) +
@@ -898,7 +905,8 @@ class Game {
                 gl::app::level_input_enabled(dialog_ != nullptr || dialog_overlay_.active(),
                                              save_slots_, console_visible_,
                                              inventory_overlay_.visible(),
-                                             trade_overlay_.visible())) {
+                                             trade_overlay_.visible(),
+                                             diary_overlay_.visible())) {
                 int move_x = 0;
                 int move_y = 0;
                 const Uint8* keys = SDL_GetKeyboardState(nullptr);
@@ -978,6 +986,30 @@ class Game {
     const gl::render::Font* inventory_font() const {
         if (font_) return &*font_;
         return inventory_font_ ? &*inventory_font_ : nullptr;
+    }
+
+    void load_diary_font() {
+        if (diary_font_ || font_) return;
+        constexpr std::string_view kDiaryFont = "engineres/fonts/ttf/pala.ttf";
+        auto bytes = vfs_.read(kDiaryFont);
+        if (!bytes) {
+            gl::log(gl::LogLevel::warning,
+                    "diary font: cannot read " + std::string(kDiaryFont));
+            return;
+        }
+        auto loaded = gl::render::Font::load_from_memory(
+            window_.renderer(),
+            std::span<const std::uint8_t>(bytes->data(), bytes->size()), 18.0f, kDiaryFont);
+        if (!loaded) {
+            gl::log(gl::LogLevel::warning, "diary font: " + loaded.error().message);
+            return;
+        }
+        diary_font_.emplace(std::move(loaded.value()));
+    }
+
+    const gl::render::Font* diary_font() const {
+        if (font_) return &*font_;
+        return diary_font_ ? &*diary_font_ : inventory_font();
     }
 
     void load_item_catalog() {
@@ -1156,6 +1188,53 @@ class Game {
             gl::log(gl::LogLevel::info, "inventory: closed");
         } else {
             open_inventory();
+        }
+    }
+
+    void open_diary() {
+        if (!loaded_payload_) {
+            gl::log(gl::LogLevel::warning, "diary: no loaded save");
+            return;
+        }
+        auto entries = gl::game::decode_diary_entries(*loaded_payload_);
+        if (!entries) {
+            gl::log(gl::LogLevel::warning,
+                    "diary: cannot decode save diary: " + entries.error().message);
+            return;
+        }
+        if (entries->empty()) {
+            gl::log(gl::LogLevel::warning, "diary: the loaded save has no entries");
+            return;
+        }
+        if (!diary_texts_) {
+            auto data = vfs_.read("sdb/diary/single_quest_lit.sdb");
+            if (!data) {
+                gl::log(gl::LogLevel::warning,
+                        "diary: cannot read lit SDB: " + data.error().message);
+                return;
+            }
+            auto parsed = gl::assets::Sdb::parse(data.value());
+            if (!parsed) {
+                gl::log(gl::LogLevel::warning,
+                        "diary: cannot parse lit SDB: " + parsed.error().message);
+                return;
+            }
+            diary_texts_ = std::move(parsed.value());
+        }
+        diary_rows_ = gl::game::build_diary_rows(entries.value(), *diary_texts_);
+        load_diary_font();
+        diary_overlay_.open(vfs_, diary_rows_);
+        diary_overlay_.set_font(diary_font());
+        gl::log(gl::LogLevel::info,
+                "diary: opened entries=" + std::to_string(diary_rows_.size()));
+    }
+
+    void toggle_diary() {
+        if (diary_overlay_.visible()) {
+            diary_overlay_.close();
+            gl::log(gl::LogLevel::info, "diary: closed");
+        } else {
+            open_diary();
         }
     }
 
@@ -1378,6 +1457,9 @@ class Game {
         context->host.services().quest = quest_runtime_.access();
         context->host.services().time_event = time_events_.access();
         context->host.services().trigger = triggers_.access();
+        context->host.services().door.set = [this](std::string_view name, std::int32_t state) {
+            return level_ && level_->set_door_state(name, state);
+        };
         context->host.services().weather = weather_.access();
         context->host.services().clock.current_hour = [this] {
             return static_cast<std::int32_t>(calendar_.now().hour);
@@ -1398,8 +1480,17 @@ class Game {
         context->sdb = std::move(sdb.value());
         context->vm =
             std::make_unique<gl::script::ScriptVm>(std::move(nodes.value()), context->host);
+        gl::script::ScriptVm* active_vm = context->vm.get();
+        context->host.services().global.set_double =
+            [this, active_vm](std::string_view name, double value) {
+                const gl::script::Value written{double{value}};
+                if (active_vm->set_global(name, written))
+                    runtime_globals_[std::string(name)] = written;
+            };
         context->vm->set_globals(globals.value());
         context->vm->apply_saved_globals(save_globals_);
+        for (const auto &[name, value] : runtime_globals_)
+            context->vm->set_global(name, value);
         context->session = std::make_unique<gl::script::DialogSession>(*context->vm, context->sdb);
 
         dialog_ = std::move(context);
@@ -1748,7 +1839,7 @@ class Game {
     }
 
     void run_headless_click() {
-        if (!level_ || dialog_ || trade_overlay_.visible()) return;
+        if (!level_ || dialog_ || trade_overlay_.visible() || diary_overlay_.visible()) return;
         const std::uint64_t limit_ms =
             options_.sim_ms > 0 ? options_.sim_ms : 60'000;
         std::uint64_t elapsed_ms = 0;
@@ -1759,7 +1850,8 @@ class Game {
             const std::uint64_t delta_ms = elapsed_ms - last_tick_ms;
             last_tick_ms = elapsed_ms;
             advance_scene(static_cast<double>(delta_ms) / 1000.0);
-            if (dialog_ || trade_overlay_.visible() || !level_->hero().hero().has_goal) break;
+            if (dialog_ || trade_overlay_.visible() || diary_overlay_.visible() ||
+                !level_->hero().hero().has_goal) break;
         }
     }
 
@@ -2188,6 +2280,7 @@ class Game {
 
     void rebuild_person_runtime(const std::vector<gl::game::PersonInstance>& persons) {
         person_runtime_ = gl::game::PersonRuntime::create(persons, pending_hero_stats_);
+        party_.attach(&person_runtime_);
         if (!pending_hero_stats_ && !hero_stats_absent_logged_) {
             hero_stats_absent_logged_ = true;
             gl::log(gl::LogLevel::info,
@@ -2218,8 +2311,10 @@ class Game {
     }
 
     bool load_level(std::string_view name) {
+        diary_overlay_.close();
         if (pending_restore_ == nullptr) {
             save_globals_.clear();
+            runtime_globals_.clear();
             loaded_payload_.reset();
             has_calendar_ = false;
             runtime_rginf_timestamp_.reset();
@@ -2368,6 +2463,7 @@ class Game {
         auto outfit_before = pending_outfit_;
         const bool hero_stats_absent_before = hero_stats_absent_logged_;
         auto save_globals_before = save_globals_;
+        auto runtime_globals_before = runtime_globals_;
         auto live_vars_before = live_save_vars_;
         auto restore_result_before = restore_result_;
         auto calendar_before = calendar_;
@@ -2383,6 +2479,7 @@ class Game {
         apply_hero_from_body(hero_body, slot, true);
 
         save_globals_ = gl::script::save_globals_from_vars(payload->vars);
+        runtime_globals_.clear();
         live_save_vars_ = payload->vars;
         calendar_ = gl::game::GameCalendar(
             gl::game::GameDatetime::from_time_bytes(payload->info.time));
@@ -2406,6 +2503,7 @@ class Game {
             hero_stats_absent_logged_ = hero_stats_absent_before;
             inventory_runtime_ = std::move(inventory_before);
             save_globals_ = std::move(save_globals_before);
+            runtime_globals_ = std::move(runtime_globals_before);
             live_save_vars_ = std::move(live_vars_before);
             restore_result_ = std::move(restore_result_before);
             calendar_ = calendar_before;
@@ -2623,7 +2721,9 @@ class Game {
                 return;
             case SDL_FINGERDOWN: {
                 if (finger_id_ != -1) return;
-                if (!inventory_overlay_.visible() && !trade_overlay_.visible()) return;
+                if (!inventory_overlay_.visible() && !trade_overlay_.visible() &&
+                    !diary_overlay_.visible())
+                    return;
                 finger_id_ = event.tfinger.fingerId;
                 finger_start_x_ = static_cast<int>(
                     std::lround(event.tfinger.x * static_cast<float>(viewport_width_)));
@@ -2635,13 +2735,17 @@ class Game {
                 finger_dragged_ = false;
                 if (trade_overlay_.visible())
                     trade_overlay_.handle_mouse(finger_start_x_, finger_start_y_, false);
+                else if (diary_overlay_.visible())
+                    diary_overlay_.handle_mouse(finger_start_x_, finger_start_y_, false);
                 else
                     inventory_overlay_.handle_mouse(finger_start_x_, finger_start_y_, false);
                 return;
             }
             case SDL_FINGERMOTION: {
                 if (finger_id_ != event.tfinger.fingerId) return;
-                if (!inventory_overlay_.visible() && !trade_overlay_.visible()) return;
+                if (!inventory_overlay_.visible() && !trade_overlay_.visible() &&
+                    !diary_overlay_.visible())
+                    return;
                 const int x = static_cast<int>(
                     std::lround(event.tfinger.x * static_cast<float>(viewport_width_)));
                 const int y = static_cast<int>(
@@ -2654,9 +2758,12 @@ class Game {
                 finger_last_y_ = y;
                 constexpr float kFingerScrollStep = 24.0f;
                 const bool trade = trade_overlay_.visible();
+                const bool diary = diary_overlay_.visible();
                 while (finger_scroll_accum_ >= kFingerScrollStep) {
                     if (trade)
                         trade_overlay_.handle_wheel(1, finger_start_x_, finger_start_y_);
+                    else if (diary)
+                        diary_overlay_.handle_wheel(1);
                     else
                         inventory_overlay_.handle_wheel(1, finger_start_x_, finger_start_y_);
                     finger_scroll_accum_ -= kFingerScrollStep;
@@ -2664,6 +2771,8 @@ class Game {
                 while (finger_scroll_accum_ <= -kFingerScrollStep) {
                     if (trade)
                         trade_overlay_.handle_wheel(-1, finger_start_x_, finger_start_y_);
+                    else if (diary)
+                        diary_overlay_.handle_wheel(-1);
                     else
                         inventory_overlay_.handle_wheel(-1, finger_start_x_, finger_start_y_);
                     finger_scroll_accum_ += kFingerScrollStep;
@@ -2672,7 +2781,8 @@ class Game {
             }
             case SDL_FINGERUP: {
                 if (finger_id_ != event.tfinger.fingerId) return;
-                if ((inventory_overlay_.visible() || trade_overlay_.visible()) &&
+                if ((inventory_overlay_.visible() || trade_overlay_.visible() ||
+                     diary_overlay_.visible()) &&
                     !finger_dragged_) {
                     const int x = static_cast<int>(
                         std::lround(event.tfinger.x * static_cast<float>(viewport_width_)));
@@ -2680,8 +2790,11 @@ class Game {
                         std::lround(event.tfinger.y * static_cast<float>(viewport_height_)));
                     if (trade_overlay_.visible())
                         trade_overlay_.handle_mouse(x, y, true);
+                    else if (diary_overlay_.visible())
+                        diary_overlay_.handle_mouse(x, y, true);
                     else
                         inventory_overlay_.handle_mouse(x, y, true);
+                    if (diary_overlay_.visible()) diary_overlay_.release();
                 }
                 finger_id_ = -1;
                 finger_dragged_ = false;
@@ -2693,6 +2806,11 @@ class Game {
                 if (trade_overlay_.visible()) {
                     if (event.motion.which != SDL_TOUCH_MOUSEID)
                         trade_overlay_.handle_mouse(event.motion.x, event.motion.y, false);
+                    return;
+                }
+                if (diary_overlay_.visible()) {
+                    if (event.motion.which != SDL_TOUCH_MOUSEID)
+                        diary_overlay_.handle_mouse(event.motion.x, event.motion.y, false);
                     return;
                 }
                 if (inventory_overlay_.visible()) {
@@ -2726,6 +2844,12 @@ class Game {
                                                     event.button.button == SDL_BUTTON_LEFT);
                     return;
                 }
+                if (diary_overlay_.visible()) {
+                    if (event.button.which != SDL_TOUCH_MOUSEID)
+                        diary_overlay_.handle_mouse(event.button.x, event.button.y,
+                                                    event.button.button == SDL_BUTTON_LEFT);
+                    return;
+                }
                 if (inventory_overlay_.visible()) {
                     if (event.button.which != SDL_TOUCH_MOUSEID)
                         inventory_overlay_.handle_mouse(event.button.x, event.button.y,
@@ -2756,7 +2880,9 @@ class Game {
                 }
                 return;
             case SDL_MOUSEBUTTONUP:
-                if (trade_overlay_.visible() || inventory_overlay_.visible()) {
+                if (trade_overlay_.visible() || inventory_overlay_.visible() ||
+                    diary_overlay_.visible()) {
+                    if (diary_overlay_.visible()) diary_overlay_.release();
                     mouse_down_ = false;
                     dragging_ = false;
                     return;
@@ -2784,6 +2910,10 @@ class Game {
                     trade_overlay_.handle_wheel(event.wheel.y, mouse_x, mouse_y);
                     return;
                 }
+                if (diary_overlay_.visible()) {
+                    diary_overlay_.handle_wheel(event.wheel.y);
+                    return;
+                }
                 if (state_.state() != gl::core::AppState::level || !level_) return;
                 if (inventory_overlay_.visible()) {
                     inventory_overlay_.handle_wheel(event.wheel.y, mouse_x, mouse_y);
@@ -2792,7 +2922,8 @@ class Game {
                 if (!gl::app::level_input_enabled(dialog_ != nullptr || dialog_overlay_.active(),
                                                   save_slots_, console_visible_,
                                                   inventory_overlay_.visible(),
-                                                  trade_overlay_.visible())) {
+                                                  trade_overlay_.visible(),
+                                                  diary_overlay_.visible())) {
                     return;
                 }
                 const float factor = event.wheel.y > 0 ? kZoomStep : 1.0f / kZoomStep;
@@ -2826,6 +2957,10 @@ class Game {
             if (key.repeat == 0) trade_overlay_.handle_key(symbol);
             return;
         }
+        if (diary_overlay_.visible()) {
+            if (key.repeat == 0) diary_overlay_.handle_key(symbol);
+            return;
+        }
         if (inventory_overlay_.visible()) {
             if (key.repeat == 0) inventory_overlay_.handle_key(symbol);
             return;
@@ -2839,6 +2974,13 @@ class Game {
         if (state_.state() == gl::core::AppState::level && level_ &&
             (symbol == SDLK_i || symbol == static_cast<SDL_Keycode>('I'))) {
             toggle_inventory();
+            return;
+        }
+
+        if (state_.state() == gl::core::AppState::level && level_ && !dialog_ &&
+            !save_slots_ && !console_visible_ &&
+            (symbol == SDLK_j || symbol == static_cast<SDL_Keycode>('J'))) {
+            toggle_diary();
             return;
         }
 
@@ -3180,6 +3322,11 @@ class Game {
                                   inventory_font());
         }
 
+        if (diary_overlay_.visible()) {
+            diary_overlay_.render(window_.renderer(), viewport_width_, viewport_height_,
+                                  diary_font());
+        }
+
         if (console_visible_) render_console(now_ms);
     }
 
@@ -3374,6 +3521,7 @@ class Game {
     std::optional<std::array<std::uint8_t, 0x20>> pending_save_time_;
     gl::game::RestoreResult restore_result_;
     std::vector<gl::script::ScriptGlobal> save_globals_;
+    std::map<std::string, gl::script::Value> runtime_globals_;
     std::vector<gl::assets::SaveVar> live_save_vars_;
     gl::game::GameCalendar calendar_;
     bool has_calendar_ = false;
@@ -3418,9 +3566,13 @@ class Game {
     std::string save_message_;
     std::optional<gl::render::Font> font_;
     std::optional<gl::render::Font> inventory_font_;
+    std::optional<gl::render::Font> diary_font_;
     std::unique_ptr<DialogContext> dialog_;
     gl::app::DialogOverlay dialog_overlay_;
     gl::app::InventoryOverlay inventory_overlay_;
+    gl::app::DiaryOverlay diary_overlay_;
+    std::vector<gl::game::DiaryRow> diary_rows_;
+    std::optional<gl::assets::Sdb> diary_texts_;
     gl::app::TradeOverlay trade_overlay_;
     std::string current_trade_npc_;
     bool trade_hooks_run_ = false;

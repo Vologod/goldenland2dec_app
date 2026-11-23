@@ -1,4 +1,5 @@
 #include "gl/game/party_runtime.hpp"
+#include "gl/game/person_runtime.hpp"
 #include "gl/script/native_registry.hpp"
 
 #include <doctest/doctest.h>
@@ -70,4 +71,78 @@ TEST_CASE("party natives are registered with server arities") {
         CHECK(info->support == gl::script::NativeSupport::supported);
         CHECK(info->arity == 1);
     }
+}
+
+TEST_CASE("party runtime updates entity roles") {
+    auto persons = gl::game::PersonRuntime::create({}, std::nullopt);
+    PartyRuntime party;
+    party.attach(&persons);
+    CHECK(party.add("Hero") == 3);
+    CHECK(persons.party_role("Hero") == 1);
+    party.clear();
+    CHECK(persons.party_role("Hero") == 0);
+    CHECK(party.add("Hero") == 3);
+    CHECK(persons.party_role("Hero") == 1);
+    CHECK(party.remove("Hero") == 4);
+    CHECK(persons.party_role("Hero") == 2);
+    CHECK(party.remove("Hero") == 4);
+    CHECK(persons.party_role("Hero") == 2);
+    party.clear();
+    CHECK(persons.party_role("Hero") == 2);
+    CHECK(party.add("Hero") == 3);
+    CHECK(persons.party_role("Hero") == 1);
+}
+
+TEST_CASE("party role edge cases follow server party flags") {
+    auto persons = gl::game::PersonRuntime::create({}, std::nullopt);
+    PartyRuntime party;
+    party.attach(&persons);
+
+    CHECK(party.remove("Hero") == 4);
+    CHECK(persons.party_role("Hero") == 0);
+
+    for (int i = 0; i < 4; ++i) CHECK(party.add("member" + std::to_string(i)) >= 0);
+    persons.set_party_role("Hero", 2);
+    CHECK(party.add("Hero") == -1);
+    CHECK(persons.party_role("Hero") == 2);
+
+    CHECK(party.remove("Hero") == 0);
+    CHECK(persons.party_role("Hero") == 2);
+
+    PartyRuntime detached;
+    detached.attach(nullptr);
+    CHECK(detached.add("X") == 3);
+
+    PartyRuntime single;
+    auto members = gl::game::PersonRuntime::create({}, std::nullopt);
+    single.attach(&members);
+    CHECK(single.add("Hero") == 3);
+    CHECK(single.remove("missing") == 3);
+    CHECK(members.party_role("Hero") == 1);
+}
+
+TEST_CASE("duplicate party members are re-promoted on attach") {
+    auto persons = gl::game::PersonRuntime::create({}, std::nullopt);
+    PartyRuntime party;
+    party.attach(&persons);
+    CHECK(party.add("Hero") == 3);
+    CHECK(party.add("Hero") == 2);
+    CHECK(party.remove("Hero") == 3);
+    CHECK(party.has("Hero"));
+    CHECK(persons.party_role("Hero") == 2);
+    party.attach(&persons);
+    CHECK(persons.party_role("Hero") == 1);
+}
+
+TEST_CASE("party roles are restored after a person runtime rebuild") {
+    auto persons = gl::game::PersonRuntime::create({}, std::nullopt);
+    PartyRuntime party;
+    party.attach(&persons);
+    CHECK(party.add("Hero") == 3);
+
+    auto rebuilt = gl::game::PersonRuntime::create({}, std::nullopt);
+    CHECK(rebuilt.party_role("Hero") == 0);
+    party.attach(&rebuilt);
+    CHECK(rebuilt.party_role("Hero") == 1);
+    CHECK(party.size() == 1);
 }

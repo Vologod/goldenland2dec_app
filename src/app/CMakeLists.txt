@@ -1,4 +1,5 @@
 add_library(gl_app STATIC
+    src/diary_overlay.cpp
     src/dialog_overlay.cpp
     src/inventory_overlay.cpp
     src/level_screen.cpp

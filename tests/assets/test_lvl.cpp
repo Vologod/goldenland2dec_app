@@ -166,8 +166,11 @@ Block make_wthr() {
 
 Block make_door() {
     Bytes p;
-    put_u32(p, 1);
-    for (int i = 0; i < 6; ++i) put_string(p, "");
+    put_u32(p, 2);
+    for (const char* field : {"door_a", "open_a", "close_a", "grp_a", "default", "static_a"})
+        put_string(p, field);
+    for (const char* field : {"door_b", "open_b", "close_b", "grp_b", "default", "static_b"})
+        put_string(p, field);
     return {"BLK_DOOR", p};
 }
 
@@ -256,6 +259,12 @@ TEST_CASE("LVL: parses all 12 blocks") {
     REQUIRE(lvl.cell_groups[1].cells.size() == 2);
     CHECK(lvl.cell_groups[1].cells[0] == std::pair<std::uint16_t, std::uint16_t>{1, 2});
     CHECK(lvl.cell_groups[1].cells[1] == std::pair<std::uint16_t, std::uint16_t>{3, 4});
+
+    REQUIRE(lvl.doors.size() == 2);
+    CHECK(lvl.doors[0].name == "door_a");
+    CHECK(lvl.doors[0].cell_group == "grp_a");
+    CHECK(lvl.doors[1].name == "door_b");
+    CHECK(lvl.doors[1].cell_group == "grp_b");
     CHECK(lvl.level_floors == 5);
 }
 
@@ -428,6 +437,13 @@ TEST_CASE("LVL: rejects invalid environment, weather and door payloads") {
         const std::size_t payload = find_block_payload(data, "BLK_DOOR");
         set_u32(data, payload + 4, 0xFFFFFFFFu);
         auto result = parse_lvl(data);
+        REQUIRE_FALSE(result.has_value());
+        CHECK(result.error().code == gl::ErrorCode::format);
+    }
+    SUBCASE("DOOR trailing bytes") {
+        auto blocks = valid_blocks();
+        blocks[10].payload.push_back(0);
+        auto result = parse_lvl(assemble(blocks));
         REQUIRE_FALSE(result.has_value());
         CHECK(result.error().code == gl::ErrorCode::format);
     }

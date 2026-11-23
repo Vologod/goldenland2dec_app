@@ -34,6 +34,16 @@ struct SefEntrance {
     std::uint8_t direction = 0;
 };
 
+struct SefDoor {
+    std::string name;
+    std::int32_t literary_name_open = 0;
+    std::int32_t literary_name_close = 0;
+    std::string script_name;
+    std::string cells_name;
+    std::int32_t is_opened = 0;
+    std::int32_t is_inversed = 0;
+};
+
 struct SefData {
     std::string pack;
     bool internal_location = false;
@@ -42,6 +52,7 @@ struct SefData {
     std::vector<SefPerson> persons;
     std::vector<SefCellGroup> cell_groups;
     std::vector<SefEntrance> entrances;
+    std::vector<SefDoor> doors;
 };
 
 Result<SefData> parse_sef(std::span<const std::uint8_t> data);

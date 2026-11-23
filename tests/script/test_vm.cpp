@@ -1171,3 +1171,17 @@ TEST_CASE("vm: opcode 0x12 truncates modulo like Server.dll 0x3a279") {
         CHECK(std::get<double>(*h.vm.variable("x")) == doctest::Approx(1e10));
     }
 }
+
+TEST_CASE("vm: set_global updates globals and current variables") {
+    std::vector<CsNode> nodes{make_str_var("x"), make_jmp(-1, -1)};
+    VmHarness h(std::move(nodes), {global_int("x", 1)});
+    REQUIRE(h.vm.variable("x") != nullptr);
+
+    CHECK(h.vm.set_global("x", Value{double{2.5}}));
+    REQUIRE(h.vm.globals().count("x") == 1);
+    CHECK(std::get<double>(h.vm.globals().at("x")) == doctest::Approx(2.5));
+    CHECK(std::get<double>(*h.vm.variable("x")) == doctest::Approx(2.5));
+
+    CHECK_FALSE(h.vm.set_global("new_state", Value{double{3.0}}));
+    CHECK(h.vm.globals().count("new_state") == 0);
+}

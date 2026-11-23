@@ -32,6 +32,8 @@ class LevelSimulation {
     MsvcRandom &rng() { return rng_; }
     const MsvcRandom &rng() const { return rng_; }
     const std::vector<PersonMovement> &persons() const { return persons_; }
+    const WalkGrid &grid() const { return grid_; }
+    void refresh_walk_grid(const WalkGrid &grid) { grid_ = grid; }
     // Test/utility seam: teleports the person and resets movement/goal only.
     void place_person(std::size_t index, Tile tile);
     void restore_person(std::size_t index, Tile current, std::uint8_t direction,

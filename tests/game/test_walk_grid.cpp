@@ -103,6 +103,20 @@ TEST_CASE("empty lvl produces empty grid") {
     CHECK(build_walk_grid(lvl).empty());
 }
 
+TEST_CASE("walk grid can set and clear a cell") {
+    WalkGrid grid;
+    grid.width = 2;
+    grid.height = 1;
+    grid.walkable = {1, 1};
+    grid.set_walkable(1, 0, false);
+    CHECK_FALSE(grid.is_walkable(1, 0));
+    CHECK(grid.is_walkable(0, 0));
+    grid.set_walkable(1, 0, true);
+    CHECK(grid.is_walkable(1, 0));
+    grid.set_walkable(-1, 0, false);
+    grid.set_walkable(5, 0, false);
+}
+
 TEST_CASE("real data: l1_1 walk grid" * doctest::skip(!game_dir_available())) {
     auto vfs = gl::assets::GameVfs::mount(std::getenv("GL_GAME_DIR"));
     REQUIRE(vfs.has_value());

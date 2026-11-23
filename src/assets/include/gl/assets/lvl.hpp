@@ -30,6 +30,10 @@ struct LvlCellGroup {
     std::string name;
     std::vector<std::pair<std::uint16_t, std::uint16_t>> cells;
 };
+struct LvlDoor {
+    std::string name;
+    std::string cell_group;
+};
 struct LvlData {
     LvlVersion version;
     LvlMapSize map_size;
@@ -38,6 +42,7 @@ struct LvlData {
     std::vector<LvlMask> masks;
     std::vector<LvlDescription> statics, animations, triggers;
     std::vector<LvlCellGroup> cell_groups;
+    std::vector<LvlDoor> doors;
     std::uint32_t level_floors = 0;
 };
 Result<LvlData> parse_lvl(std::span<const std::uint8_t> data);

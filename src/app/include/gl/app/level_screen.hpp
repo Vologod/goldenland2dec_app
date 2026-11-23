@@ -5,6 +5,7 @@
 #include <gl/app/person_render.hpp>
 #include <gl/assets/result.hpp>
 #include <gl/assets/vfs.hpp>
+#include <gl/game/door_runtime.hpp>
 #include <gl/game/hero.hpp>
 #include <gl/game/hero_wear.hpp>
 #include <gl/game/level.hpp>
@@ -110,6 +111,7 @@ public:
     const gl::render::Camera& camera() const { return camera_; }
     const gl::game::Level& level() const { return level_; }
     gl::game::LevelSimulation& simulation() { return simulation_; }
+    bool set_door_state(std::string_view name, std::int32_t state);
 
     ClickTarget click_target(int sx, int sy) const;
     std::optional<std::size_t> person_at_screen(int sx, int sy) const;
@@ -201,6 +203,7 @@ private:
     std::vector<PersonDrawKey> person_keys_;
     std::vector<std::size_t> person_order_;
     gl::game::LevelSimulation simulation_;
+    gl::game::DoorRuntime doors_;
     mutable std::optional<HeroBinding> hero_;
     std::uint64_t simulated_ms_ = 0;
     std::uint64_t last_simulation_ms_ = 0;

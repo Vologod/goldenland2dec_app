@@ -1,7 +1,13 @@
 # P6a4 — Location access research
 
-Status: complete (2026-11-19)
+Status: complete (2026-11-19; unblocked 2026-11-21)
 Scope: `docs/`; no code.
+
+**Unblock (2026-11-21, P6a12/D-108):** `DAT_1407f9a0` is the
+script-global table (`FUN_14038958`/`FUN_14038904` use it during script
+execution). The port maps it to `ScriptVm::globals_` through
+`GlobalAccess`; `RS_SetLocationAccess` is now supported (36/65). See
+`p6a12-location-access-unblock.md`.
 
 ## 1. Evidence
 
@@ -14,7 +20,7 @@ via vtable `+0x1c`. The value is converted with `fildl` / unsigned fixup
 (`0x140914f8/0x140914fc`) and stored as a **double** in the global table.
 Unknown names are no-ops; the native returns `0.0` on every path.
 
-## 2. Why it is blocked
+## 2. Why it was blocked (historical)
 
 - The port has no object/table equivalent to `DAT_1407f9a0`, and no mapping
   of its keys (`name + "_state"`) to `BT_VARS` globals.
@@ -26,7 +32,9 @@ Unknown names are no-ops; the native returns `0.0` on every path.
 - The value is stored as an unsigned 32-bit bit pattern widened to double,
   not as `int32`.
 
-**Verdict: `blocked (scoped)`.** Keep `0x7000008` unsupported.
+**Historical verdict: `blocked (scoped)`.** Superseded by P6a12/D-108:
+`DAT_1407f9a0` is the script-global table and the port bridges it to
+`ScriptVm`; `0x7000008` is supported (36/65).
 
 ## 3. Exact next checks
 

@@ -1,4 +1,6 @@
 #pragma once
+#include "gl/script/door_access.hpp"
+#include "gl/script/global_access.hpp"
 #include "gl/script/party_access.hpp"
 #include "gl/script/person_access.hpp"
 #include "gl/script/quest_access.hpp"
@@ -47,6 +49,8 @@ struct NativeServices {
     WeatherAccess weather;
     ClockAccess clock;
     PartyAccess party;
+    DoorAccess door;
+    GlobalAccess global;
 };
 
 using NativeHandler = Value (*)(std::span<const Value>, NativeServices&);

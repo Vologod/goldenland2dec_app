@@ -42,6 +42,11 @@ bool is_numeric(const Value& value) {
            std::holds_alternative<double>(value);
 }
 
+bool is_int(const Value& value) {
+    return std::holds_alternative<std::int32_t>(value) ||
+           std::holds_alternative<std::uint32_t>(value);
+}
+
 void warn_native(std::string_view text, NativeServices& services) {
     if (services.log)
         services.log(text);
@@ -276,6 +281,23 @@ Value native_enable_trigger(std::span<const Value> args, NativeServices& service
     return double{0.0};
 }
 
+Value native_set_door_state(std::span<const Value> args, NativeServices& services) {
+    if (!services.door.set || !is_string(args[0]) || !is_numeric(args[1]))
+        return double{0.0};
+    services.door.set(as_string(args[0]), as_int(args[1]));
+    return double{0.0};
+}
+
+Value native_set_location_access(std::span<const Value> args, NativeServices& services) {
+    if (!services.global.set_double || !is_string(args[0]) || !is_int(args[1]))
+        return double{0.0};
+    std::string key(as_string(args[0]));
+    key += "_state";
+    const auto raw = static_cast<std::uint32_t>(as_int(args[1]));
+    services.global.set_double(key, static_cast<double>(raw));
+    return double{0.0};
+}
+
 Value native_exit(std::span<const Value> args, NativeServices& services) {
     if (args.empty() || std::holds_alternative<std::string>(args.front())) {
         if (services.log) services.log("script native Exit: expected a numeric argument");
@@ -362,7 +384,7 @@ std::vector<NativeInfo> make_entries() {
     add(0x7000005, NativeSupport::supported, {}, &native_set_event, 2);
     add(0x7000006, NativeSupport::supported, {}, &native_get_event, 1);
     add(0x7000007, NativeSupport::supported, {}, &native_clear_event, 1);
-    add(0x7000008, NativeSupport::unsupported, "requires world/level runtime");
+    add(0x7000008, NativeSupport::supported, {}, &native_set_location_access, 2);
     add(0x7000009, NativeSupport::supported, {}, &native_enable_trigger, 2);
     add(0x700000a, NativeSupport::supported, {}, &native_get_rand_min_max, 2);
     add(0x700000b, NativeSupport::supported, {}, &native_set_weather, 1);
@@ -372,7 +394,7 @@ std::vector<NativeInfo> make_entries() {
     add(0x700000f, NativeSupport::supported, {}, &native_set_undead, 2);
     add(0x7000010, NativeSupport::unsupported, "requires world/global-map runtime");
     add(0x7000013, NativeSupport::unsupported, "requires person runtime state");
-    add(0x7000014, NativeSupport::unsupported, "requires world/level runtime");
+    add(0x7000014, NativeSupport::supported, {}, &native_set_door_state, 2);
 
 #ifndef NDEBUG
     for (std::size_t i = 0; i < entries.size(); ++i)

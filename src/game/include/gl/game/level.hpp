@@ -32,6 +32,12 @@ struct LevelMask {
     gl::assets::Image image;
 };
 
+struct LevelDoor {
+    std::string name;
+    std::int32_t state = 0;
+    std::vector<std::pair<std::int32_t, std::int32_t>> cells;
+};
+
 struct MaskSubcell {
     std::uint32_t flags = 0;
     std::uint16_t mask = 0xFFFF;
@@ -60,6 +66,7 @@ struct Level {
     std::vector<PersonInstance> persons;
     std::vector<gl::assets::SefEntrance> entrances;
     std::vector<gl::assets::LvlDescription> triggers;
+    std::vector<LevelDoor> doors;
     WalkGrid walkable;
 };
 

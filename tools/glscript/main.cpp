@@ -244,6 +244,9 @@ int run(int argc, char** argv) {
     };
     gl::game::GameScriptHost host(services);
     gl::script::ScriptVm vm(std::move(nodes.value()), host);
+    host.services().global.set_double = [&vm](std::string_view name, double value) {
+        vm.set_global(name, gl::script::Value{double{value}});
+    };
     vm.set_globals(globals.value());
 
     const gl::assets::Sdb* sdb_ptr = sdb ? &*sdb : nullptr;

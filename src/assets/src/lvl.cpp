@@ -170,26 +170,29 @@ VoidResult validate_environment(std::span<const std::uint8_t> payload) {
     return std::monostate{};
 }
 
-VoidResult validate_doors(std::span<const std::uint8_t> payload) {
+Result<std::vector<LvlDoor>> parse_doors(std::span<const std::uint8_t> payload) {
     ByteReader reader(payload);
     std::uint32_t count = 0;
     if (!reader.read_u32le(count))
         return format_error("truncated BLK_DOOR count at offset 0");
     if (count > (payload.size() - 4) / 24)
         return format_error("BLK_DOOR count exceeds payload");
-    std::string ignored;
+    std::vector<LvlDoor> doors;
+    doors.reserve(count);
     for (std::uint32_t i = 0; i < count; ++i) {
-        for (int j = 0; j < 6; ++j) {
+        std::array<std::string, 6> fields;
+        for (std::string& field : fields) {
             const std::size_t offset = reader.position();
-            if (!read_lvl_string(reader, ignored))
+            if (!read_lvl_string(reader, field))
                 return format_error("truncated BLK_DOOR string at offset " +
                                     std::to_string(offset));
         }
+        doors.push_back(LvlDoor{std::move(fields[0]), std::move(fields[3])});
     }
     if (!reader.at_end())
         return format_error("BLK_DOOR has trailing bytes at offset " +
                             std::to_string(reader.position()));
-    return std::monostate{};
+    return doors;
 }
 } // namespace
 
@@ -286,8 +289,9 @@ Result<LvlData> parse_lvl(std::span<const std::uint8_t> data) {
                     break;
                 }
                 case 10: {
-                    auto doors = validate_doors(payload);
+                    auto doors = parse_doors(payload);
                     if (!doors.has_value()) return doors.error();
+                    lvl.doors = std::move(doors.value());
                     break;
                 }
                 case 11: {

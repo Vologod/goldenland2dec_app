@@ -338,3 +338,12 @@ TEST_CASE("set-undead native dispatches string names") {
     CHECK(info->support == gl::script::NativeSupport::supported);
     CHECK(info->arity == 2);
 }
+
+TEST_CASE("person party role updates known persons only") {
+    auto runtime = gl::game::PersonRuntime::create({}, std::nullopt);
+    CHECK(runtime.party_role("Hero") == 0);
+    runtime.set_party_role("Hero", 1);
+    CHECK(runtime.party_role("Hero") == 1);
+    runtime.set_party_role("missing", 2);
+    CHECK(runtime.party_role("missing") == 0);
+}
