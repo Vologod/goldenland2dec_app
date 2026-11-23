@@ -38,7 +38,8 @@ TEST_CASE("native registry classifies dialog and host natives") {
         CHECK(NativeRegistry::find(id)->support == NativeSupport::supported);
     CHECK(NativeRegistry::find(0x700000d)->support == NativeSupport::supported);
     CHECK(NativeRegistry::find(0x700000c)->support == NativeSupport::unsupported);
-    CHECK(NativeRegistry::find(0x700000e)->support == NativeSupport::unsupported);
+    CHECK(NativeRegistry::find(0x700000e)->support == NativeSupport::supported);
+    CHECK(NativeRegistry::find(0x7000013)->support == NativeSupport::supported);
     CHECK(NativeRegistry::find(0xDEADBEEF) == nullptr);
 }
 

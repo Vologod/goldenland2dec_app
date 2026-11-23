@@ -274,6 +274,28 @@ Value native_set_undead(std::span<const Value> args, NativeServices& services) {
     return double{0.0};
 }
 
+Value native_get_dialog_enabled(std::span<const Value> args, NativeServices& services) {
+    if (args.size() < 1 || !is_numeric(args[0])) {
+        warn_native("script native RS_GetDialogEnabled: invalid arguments", services);
+        return double{0.0};
+    }
+    if (!services.person.dialog_percent || !services.random.coin) return double{0.0};
+    const float probability =
+        static_cast<float>(services.person.dialog_percent()) * 0.01f;
+    return services.random.coin(static_cast<double>(probability)) ? double{1.0}
+                                                                 : double{0.0};
+}
+
+Value native_set_injured(std::span<const Value> args, NativeServices& services) {
+    if (args.size() < 2 || !is_string(args[0]) || !is_numeric(args[1])) {
+        warn_native("script native RS_SetInjured: invalid arguments", services);
+        return double{0.0};
+    }
+    if (services.person.set_injured)
+        services.person.set_injured(as_string(args[0]), as_int(args[1]) != 0);
+    return double{0.0};
+}
+
 Value native_enable_trigger(std::span<const Value> args, NativeServices& services) {
     if (!services.trigger.set || !is_string(args[0]) || !is_numeric(args[1]))
         return double{0.0};
@@ -390,10 +412,10 @@ std::vector<NativeInfo> make_entries() {
     add(0x700000b, NativeSupport::supported, {}, &native_set_weather, 1);
     add(0x700000c, NativeSupport::unsupported, "requires world/level runtime");
     add(0x700000d, NativeSupport::supported, {}, &native_pass_to_trade_panel, 0);
-    add(0x700000e, NativeSupport::unsupported, "requires dialog/person runtime");
+    add(0x700000e, NativeSupport::supported, {}, &native_get_dialog_enabled, 1);
     add(0x700000f, NativeSupport::supported, {}, &native_set_undead, 2);
     add(0x7000010, NativeSupport::unsupported, "requires world/global-map runtime");
-    add(0x7000013, NativeSupport::unsupported, "requires person runtime state");
+    add(0x7000013, NativeSupport::supported, {}, &native_set_injured, 2);
     add(0x7000014, NativeSupport::supported, {}, &native_set_door_state, 2);
 
 #ifndef NDEBUG

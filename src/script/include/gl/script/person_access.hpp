@@ -26,6 +26,8 @@ struct PersonAccess {
         set_parameter;
     std::function<double(std::string_view person, std::string_view skill)> get_skill;
     std::function<void(std::string_view person, bool)> set_undead;
+    std::function<void(std::string_view person, bool)> set_injured;
+    std::function<std::int32_t()> dialog_percent;
 };
 
 PersonParameter person_parameter_from_name(std::string_view name);

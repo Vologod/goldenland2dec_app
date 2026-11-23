@@ -70,3 +70,20 @@ TEST_CASE("rand-min-max is registered with the server arity") {
     CHECK(info->support == gl::script::NativeSupport::supported);
     CHECK(info->arity == 2);
 }
+
+TEST_CASE("dialog-enabled coin matches the shared MsvcRandom stream") {
+    MsvcRandom expected(7);
+    MsvcRandom actual(7);
+    NativeServices services;
+    services.person.dialog_percent = [] { return std::int32_t{50}; };
+    services.random.coin = [&actual](double probability) {
+        return actual.coin(probability);
+    };
+
+    for (int index = 0; index < 20; ++index) {
+        const bool expected_result = expected.coin(0.5);
+        const Value result = call(0x700000e, {double{2.0}}, services);
+        REQUIRE(std::holds_alternative<double>(result));
+        CHECK(std::get<double>(result) == (expected_result ? 1.0 : 0.0));
+    }
+}

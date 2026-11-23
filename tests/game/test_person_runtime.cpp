@@ -416,3 +416,85 @@ TEST_CASE("dialog percent reproduces the talking formula") {
 
     CHECK(base.dialog_percent("missing") == 0);
 }
+
+TEST_CASE("dialog-enabled native gates the percent with the shared coin") {
+    gl::assets::HeroStats stats;
+    stats.intelligence = 7;
+    stats.skills[21] = 5;
+    auto runtime = gl::game::PersonRuntime::create({}, stats);
+
+    gl::script::NativeServices services;
+    services.person = runtime.access();
+    bool gate = true;
+    double probability = -1.0;
+    services.random.coin = [&](double value) {
+        probability = value;
+        return gate;
+    };
+
+    const auto *info = gl::script::NativeRegistry::find(0x700000e);
+    REQUIRE(info != nullptr);
+    CHECK(info->support == gl::script::NativeSupport::supported);
+    CHECK(info->arity == 1);
+
+    const std::vector<gl::script::Value> args{double{2.0}};
+    CHECK(gl::script::NativeRegistry::call(*info, args, services) ==
+          gl::script::Value{double{1.0}});
+    CHECK(probability == doctest::Approx(0.37));
+
+    gate = false;
+    CHECK(gl::script::NativeRegistry::call(*info, args, services) ==
+          gl::script::Value{double{0.0}});
+}
+
+TEST_CASE("dialog-enabled native rejects invalid arguments and missing services") {
+    const auto *info = gl::script::NativeRegistry::find(0x700000e);
+    REQUIRE(info != nullptr);
+    gl::script::NativeServices services;
+
+    const std::vector<gl::script::Value> string_arg{std::string{"Hero"}};
+    CHECK(gl::script::NativeRegistry::call(*info, string_arg, services) ==
+          gl::script::Value{double{0.0}});
+
+    const std::vector<gl::script::Value> empty;
+    CHECK(gl::script::NativeRegistry::call(*info, empty, services) ==
+          gl::script::Value{std::int32_t{0}});
+
+    const std::vector<gl::script::Value> args{double{2.0}};
+    CHECK(gl::script::NativeRegistry::call(*info, args, services) ==
+          gl::script::Value{double{0.0}});
+}
+
+TEST_CASE("set-injured native forwards the person and flag") {
+    const std::vector<gl::game::PersonInstance> persons{make_person("L1.P1", "L1.P1")};
+    auto runtime = gl::game::PersonRuntime::create(persons, std::nullopt);
+    gl::script::NativeServices services;
+    services.person = runtime.access();
+
+    const auto *info = gl::script::NativeRegistry::find(0x7000013);
+    REQUIRE(info != nullptr);
+    CHECK(info->support == gl::script::NativeSupport::supported);
+    CHECK(info->arity == 2);
+
+    const std::vector<gl::script::Value> on{std::string{"L1.P1"}, double{1.0}};
+    const std::vector<gl::script::Value> off{std::string{"L1.P1"}, double{0.0}};
+    CHECK(gl::script::NativeRegistry::call(*info, on, services) ==
+          gl::script::Value{double{0.0}});
+    CHECK(runtime.injured("L1.P1"));
+    CHECK(gl::script::NativeRegistry::call(*info, off, services) ==
+          gl::script::Value{double{0.0}});
+    CHECK_FALSE(runtime.injured("L1.P1"));
+}
+
+TEST_CASE("person access exposes dialog percent and set-injured") {
+    gl::assets::HeroStats stats;
+    stats.intelligence = 7;
+    stats.skills[21] = 5;
+    auto runtime = gl::game::PersonRuntime::create({}, stats);
+    auto access = runtime.access();
+    REQUIRE(access.dialog_percent);
+    CHECK(access.dialog_percent() == 37);
+    REQUIRE(access.set_injured);
+    access.set_injured("Hero", true);
+    CHECK(runtime.injured("Hero"));
+}

@@ -479,6 +479,10 @@ gl::script::PersonAccess PersonRuntime::access() {
     access.set_undead = [this](std::string_view person, bool undead) {
         set_undead(person, undead);
     };
+    access.set_injured = [this](std::string_view person, bool injured) {
+        set_injured(person, injured);
+    };
+    access.dialog_percent = [this] { return dialog_percent("Hero"); };
     return access;
 }
 } // namespace gl::game
