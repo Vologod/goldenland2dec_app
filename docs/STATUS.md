@@ -1,6 +1,27 @@
 # STATUS
 
-Обновлено: 2026-11-22
+Обновлено: 2026-11-23
+
+## P6a8 — Dialog/injury natives (done 2026-11-23)
+
+- **Задача:** `RS_GetDialogEnabled` (0x700000E) и `RS_SetInjured`
+  (0x7000013): runtime, нативы, wiring, real/synthetic тесты.
+- **Spec/plan:** `docs/specs/2026-11-23-p6a8-dialog-injury-runtime-design.md`,
+  `docs/plans/2026-11-23-p6a8-dialog-injury-runtime.md`; **D-111**;
+  research `docs/research/p6a8-person-dialog-injury.md`.
+- **Результат:** `PersonEffect`/`set_injured_records` (ключ
+  `{22,-49,129,0,-1}`); `PersonRuntime::{set_injured,injured,dialog_percent}`
+  (формула `INT_eff+10+TALKING*4`, `TRADE>9 ? +20`);
+  `PersonAccess::{dialog_percent,set_injured}`, `RandomAccess::coin`;
+  registry 38/65; glgame/glscript wiring; synthetic VM E2E и real `.cs`
+  call-site/toggle проверки.
+- **Проверка:** focused 27 cases / 496 assertions (8/100 injury+dialog,
+  2/11 VM E2E, 14/298 native registry, 3/87 real `.cs`); полный `ctest`
+  20/20 passed, 2129.19 s.
+- **Residual:** `FUN_14007fb0` при непустой таблице модификаторов,
+  `manager+0xC`/`gv_addon`, потребители эффектов, save-интерпретация,
+  компаньоны, capacity `+0x14f8`.
+- **Статус:** done.
 
 ## P7a — Quest journal overlay (automated passed; manual gate open)
 
