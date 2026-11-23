@@ -1,6 +1,7 @@
 add_executable(gl_game_tests
     test_main.cpp
     test_calendar.cpp
+    test_character_sheet.cpp
     test_diary.cpp
     test_diary_real.cpp
     test_diary_view.cpp
