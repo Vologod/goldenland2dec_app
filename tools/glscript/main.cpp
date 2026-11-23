@@ -239,6 +239,9 @@ int run(int argc, char** argv) {
     services.random.range = [&rng](std::int32_t low, std::int32_t high) {
         return rng.range(low, high);
     };
+    services.random.coin = [&rng](double probability) {
+        return rng.coin(probability);
+    };
     services.console = [](std::string_view text) {
         gl::log(gl::LogLevel::info, "script console: " + std::string(text));
     };

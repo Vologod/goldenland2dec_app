@@ -1474,6 +1474,10 @@ class Game {
             return level_ ? level_->simulation().rng().range(low, high)
                           : fallback_rng_.range(low, high);
         };
+        context->host.services().random.coin = [this](double probability) {
+            return level_ ? level_->simulation().rng().coin(probability)
+                          : fallback_rng_.coin(probability);
+        };
         context->host.services().trade_panel = [this]() { request_trade_panel(); };
         context->path = std::string(virtual_path);
         context->speaker = std::string(speaker);
