@@ -77,7 +77,8 @@ CharacterSheet build_character_sheet(const PersonRuntime &persons,
   SCOUT, HEALING, TALKING, TRADE, STEAL, HACK, SMITH, ATHLETIC`.
 - `skill_points` = 0 (read-only; allocation out of scope).
 - Missing UI string -> label `#<id>`; missing person -> all values 0/`-`
-  and name `Hero`.
+  and name = the requested person string (`Hero` in normal use; the test
+  passes `missing`).
 
 ## UI (`gl::app::CharacterOverlay`, SDL only here)
 

@@ -2,6 +2,31 @@
 
 Обновлено: 2026-11-23
 
+## P7b — Character sheet (automated done 2026-11-23)
+
+- **Задача:** read-only лист персонажа из `engineres/newinv/
+  inventory_skills.bmp`: пять sub-tabs, 8 левых атрибутов, 27 навыков в
+  оригинальном порядке `0x1212e0a0`, 15 строк характеристик,
+  экипированная idle-кукла героя; открытие из вкладки skills инвентаря
+  и `C`; `--character` для скриншотов.
+- **Spec/plan:** `docs/specs/2026-11-23-p7b-character-sheet-design.md`,
+  `docs/plans/2026-11-23-p7b-character-sheet.md`; **D-112**; research
+  `docs/research/p7b-character-sheet.md`.
+- **Результат:** `CharacterSheet`/`build_character_sheet` (SDL-free;
+  labels из `sdb/user_interface.sdb`, `#id` fallback, значения из
+  `PersonRuntime`, level из EXP); `CharacterOverlay` (canvas 1024x768,
+  5 вкладок, клип строк, close/hover, `Нет данных` на state/resistance);
+  `HeroPortrait` (equipped `rt_stay` idle из P4d/P5a);
+  `level_input_enabled` + `character_active`; `glgame`
+  skills-tab/`C`/`--character`.
+- **Проверка (2026-11-23):** `gl_game_tests --test-case="*character
+  sheet*"` 6/6 (64 assertions); `character_overlay_tests` 3/3 (27
+  assertions); `glgame_screenshot_tests --test-case="*character*"` 1/1
+  (5 assertions); полный `ctest` 21/21, 2860.42 s.
+- **Residual:** skill-point spending/save write, state/resistance data,
+  remaining combat columns, tooltips/animation, touch (P9), crafting.
+- **Статус:** automated done; manual visual gate open.
+
 ## P6a8 — Dialog/injury natives (done 2026-11-23)
 
 - **Задача:** `RS_GetDialogEnabled` (0x700000E) и `RS_SetInjured`
