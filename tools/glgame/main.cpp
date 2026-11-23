@@ -1,3 +1,4 @@
+#include <gl/app/character_overlay.hpp>
 #include <gl/app/click_actions.hpp>
 #include <gl/app/diary_overlay.hpp>
 #include <gl/app/dialog_overlay.hpp>
@@ -24,6 +25,7 @@
 #include <gl/core/save_manager.hpp>
 #include <gl/core/server.hpp>
 #include <gl/core/state.hpp>
+#include <gl/game/character_sheet.hpp>
 #include <gl/game/dialog_path.hpp>
 #include <gl/game/game_script_host.hpp>
 #include <gl/game/calendar.hpp>
@@ -136,6 +138,7 @@ struct Options {
     std::string save_title = "Quick save";
     bool inventory = false;
     bool diary = false;
+    bool character = false;
     std::optional<int> inventory_select;
     std::string trade_npc;
     bool has_trade_npc = false;
@@ -185,6 +188,7 @@ void print_usage() {
         "  --load-save <slot>   Load the save level and hero (--level is ignored)\n"
         "  --inventory          Open the inventory overlay for the selected save\n"
         "  --inventory-select <n> Select bottom-strip slot <n> when the inventory opens\n"
+        "  --character          Open the character sheet for the loaded save\n"
         "  --diary              Open the quest journal for the loaded save\n"
         "  --trade-npc <name>   Open the trade overlay for person <name> after loading\n"
         "  --trade-buy <tech>   Headless: stage the whole NPC stack for item <tech>\n"
@@ -390,6 +394,8 @@ ParseStatus parse_args(int argc, char** argv, Options& options) {
             options.load_save = slot;
         } else if (arg == "--inventory") {
             options.inventory = true;
+        } else if (arg == "--character") {
+            options.character = true;
         } else if (arg == "--diary") {
             options.diary = true;
         } else if (arg == "--inventory-select") {
@@ -758,6 +764,13 @@ class Game {
         load_font();
         load_inventory_font();
         load_item_catalog();
+        if (auto data = vfs_.read("sdb/user_interface.sdb"); data.has_value()) {
+            if (auto parsed = gl::assets::Sdb::parse(data.value()); parsed.has_value())
+                user_interface_sdb_ = std::move(parsed.value());
+            else
+                gl::log(gl::LogLevel::warning,
+                        "user interface sdb: " + parsed.error().message);
+        }
         load_item_name_index();
         load_specials();
         rebuild_inventory_runtime();
@@ -820,6 +833,7 @@ class Game {
         }
 
         if (options_.inventory) open_inventory();
+        if (options_.character) open_character();
         if (options_.diary) open_diary();
 
         gl::log(gl::LogLevel::info,
@@ -906,7 +920,8 @@ class Game {
                                              save_slots_, console_visible_,
                                              inventory_overlay_.visible(),
                                              trade_overlay_.visible(),
-                                             diary_overlay_.visible())) {
+                                             diary_overlay_.visible(),
+                                             character_overlay_.visible())) {
                 int move_x = 0;
                 int move_y = 0;
                 const Uint8* keys = SDL_GetKeyboardState(nullptr);
@@ -1189,6 +1204,16 @@ class Game {
         } else {
             open_inventory();
         }
+    }
+
+    bool open_character() {
+        if (!user_interface_sdb_ || !person_runtime_.has_person("Hero")) return false;
+        auto sheet = gl::game::build_character_sheet(person_runtime_, *user_interface_sdb_,
+                                                     "Hero");
+        character_overlay_.set_font(inventory_font());
+        character_overlay_.open(window_.renderer(), vfs_, std::move(sheet),
+                                character_outfit_ ? &*character_outfit_ : nullptr);
+        return true;
     }
 
     void open_diary() {
@@ -2328,16 +2353,19 @@ class Game {
         gl::game::HeroOutfit hero_outfit;
         if (options_.hero_outfit_none) {
             hero_outfit = make_naked_outfit();
+            character_outfit_ = hero_outfit;
         } else if (pending_equipment_) {
             std::string error;
             auto resolved = resolve_outfit_from_equipment(*pending_equipment_, error);
             if (resolved) {
                 hero_outfit = *resolved;
+                character_outfit_ = hero_outfit;
             } else {
                 const std::string message = "outfit: naked: " + error;
                 gl::log(gl::LogLevel::warning, message);
                 console_print(message);
                 hero_outfit = make_naked_outfit();
+                character_outfit_ = hero_outfit;
             }
         }
         auto screen = gl::app::LevelScreen::load(
@@ -2807,6 +2835,11 @@ class Game {
             }
             case SDL_MOUSEMOTION:
                 if (console_visible_) return;
+                if (character_overlay_.visible()) {
+                    if (event.motion.which != SDL_TOUCH_MOUSEID)
+                        character_overlay_.handle_mouse(event.motion.x, event.motion.y, false);
+                    return;
+                }
                 if (trade_overlay_.visible()) {
                     if (event.motion.which != SDL_TOUCH_MOUSEID)
                         trade_overlay_.handle_mouse(event.motion.x, event.motion.y, false);
@@ -2842,6 +2875,12 @@ class Game {
                 return;
             case SDL_MOUSEBUTTONDOWN:
                 if (console_visible_) return;
+                if (character_overlay_.visible()) {
+                    if (event.button.which != SDL_TOUCH_MOUSEID)
+                        character_overlay_.handle_mouse(event.button.x, event.button.y,
+                                                        event.button.button == SDL_BUTTON_LEFT);
+                    return;
+                }
                 if (trade_overlay_.visible()) {
                     if (event.button.which != SDL_TOUCH_MOUSEID)
                         trade_overlay_.handle_mouse(event.button.x, event.button.y,
@@ -2855,9 +2894,17 @@ class Game {
                     return;
                 }
                 if (inventory_overlay_.visible()) {
-                    if (event.button.which != SDL_TOUCH_MOUSEID)
+                    if (event.button.which != SDL_TOUCH_MOUSEID) {
+                        const gl::app::InventoryRegion region =
+                            inventory_overlay_.hit_test(event.button.x, event.button.y);
                         inventory_overlay_.handle_mouse(event.button.x, event.button.y,
                                                         event.button.button == SDL_BUTTON_LEFT);
+                        if (region == gl::app::InventoryRegion::skills_tab &&
+                            event.button.button == SDL_BUTTON_LEFT) {
+                            inventory_overlay_.close();
+                            open_character();
+                        }
+                    }
                     return;
                 }
                 if (event.button.button == SDL_BUTTON_RIGHT) {
@@ -2884,8 +2931,8 @@ class Game {
                 }
                 return;
             case SDL_MOUSEBUTTONUP:
-                if (trade_overlay_.visible() || inventory_overlay_.visible() ||
-                    diary_overlay_.visible()) {
+                if (character_overlay_.visible() || trade_overlay_.visible() ||
+                    inventory_overlay_.visible() || diary_overlay_.visible()) {
                     if (diary_overlay_.visible()) diary_overlay_.release();
                     mouse_down_ = false;
                     dragging_ = false;
@@ -2927,7 +2974,8 @@ class Game {
                                                   save_slots_, console_visible_,
                                                   inventory_overlay_.visible(),
                                                   trade_overlay_.visible(),
-                                                  diary_overlay_.visible())) {
+                                                  diary_overlay_.visible(),
+                                                  character_overlay_.visible())) {
                     return;
                 }
                 const float factor = event.wheel.y > 0 ? kZoomStep : 1.0f / kZoomStep;
@@ -2963,6 +3011,17 @@ class Game {
         }
         if (diary_overlay_.visible()) {
             if (key.repeat == 0) diary_overlay_.handle_key(symbol);
+            return;
+        }
+        if (character_overlay_.visible()) {
+            if (key.repeat == 0) character_overlay_.handle_key(symbol);
+            return;
+        }
+        if (state_.state() == gl::core::AppState::level && level_ && !dialog_ &&
+            !save_slots_ && !console_visible_ &&
+            (symbol == SDLK_c || symbol == static_cast<SDL_Keycode>('C'))) {
+            if (inventory_overlay_.visible()) inventory_overlay_.close();
+            open_character();
             return;
         }
         if (inventory_overlay_.visible()) {
@@ -3331,6 +3390,11 @@ class Game {
                                   diary_font());
         }
 
+        if (character_overlay_.visible()) {
+            character_overlay_.render(window_.renderer(), viewport_width_, viewport_height_,
+                                      inventory_font());
+        }
+
         if (console_visible_) render_console(now_ms);
     }
 
@@ -3577,6 +3641,9 @@ class Game {
     gl::app::DiaryOverlay diary_overlay_;
     std::vector<gl::game::DiaryRow> diary_rows_;
     std::optional<gl::assets::Sdb> diary_texts_;
+    std::optional<gl::assets::Sdb> user_interface_sdb_;
+    gl::app::CharacterOverlay character_overlay_;
+    std::optional<gl::game::HeroOutfit> character_outfit_;
     gl::app::TradeOverlay trade_overlay_;
     std::string current_trade_npc_;
     bool trade_hooks_run_ = false;

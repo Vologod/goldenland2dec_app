@@ -1749,6 +1749,21 @@ TEST_CASE("glgame --inventory opens the selected save inventory" *
     CHECK(empty_vs_none > 1000);
 }
 
+TEST_CASE("glgame --character --load-save renders the sheet") {
+    const char *game_dir = std::getenv("GL_GAME_DIR");
+    REQUIRE(game_dir != nullptr);
+    TempDir temp;
+    const fs::path config = write_test_config(temp.path);
+    const fs::path png = temp.path / "character.png";
+    const int code = run_glgame(screenshot_arguments(
+        game_dir, config, png,
+        {"--load-save", "0", "--character", "--width", "1024", "--height", "768",
+         "--seed", "1"}));
+    CAPTURE(code);
+    REQUIRE(fs::exists(png));
+    CHECK(fs::file_size(png) > 0);
+}
+
 TEST_CASE("glgame --inventory with an invalid save opens an empty overlay" *
           doctest::skip(!font_available())) {
     const char* game_dir = std::getenv("GL_GAME_DIR");

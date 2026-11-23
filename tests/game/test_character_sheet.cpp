@@ -2,10 +2,19 @@
 #include "gl/game/character_sheet.hpp"
 #include "gl/game/person_runtime.hpp"
 #include "gl/script/person_access.hpp"
+#include "gl/assets/hero_equipment.hpp"
+#include "gl/assets/hero_stats.hpp"
+#include "gl/assets/save_payload.hpp"
+#include "gl/assets/vfs.hpp"
 #include <array>
 #include <cstdint>
+#include <cstdlib>
+#include <filesystem>
+#include <fstream>
+#include <iterator>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace {
 gl::game::PersonRuntime make_runtime() {
@@ -102,4 +111,40 @@ TEST_CASE("character sheet falls back to #id for missing UI text") {
         runtime, [](std::uint32_t) { return std::string{}; });
     CHECK(sheet.primary[0].label == "#6");
     CHECK(sheet.skills[0].label == "#49");
+}
+
+TEST_CASE("character sheet reads real slot0" * doctest::skip(std::getenv("GL_GAME_DIR") == nullptr)) {
+    const char *dir = std::getenv("GL_GAME_DIR");
+    REQUIRE(dir != nullptr);
+    auto vfs = gl::assets::GameVfs::mount(dir);
+    REQUIRE(vfs.has_value());
+    const std::filesystem::path path =
+        std::filesystem::path(dir) / "Saves" / "slot0.sav";
+    std::ifstream in(path, std::ios::binary);
+    REQUIRE(in);
+    const std::vector<std::uint8_t> bytes((std::istreambuf_iterator<char>(in)),
+                                          std::istreambuf_iterator<char>());
+    auto body = gl::assets::decode_save_body(bytes);
+    REQUIRE(body.has_value());
+    auto stats = gl::assets::parse_hero_stats(body.value());
+    REQUIRE(stats.has_value());
+    auto sdb_data = vfs->read("sdb/user_interface.sdb");
+    REQUIRE(sdb_data.has_value());
+    auto sdb = gl::assets::Sdb::parse(sdb_data.value());
+    REQUIRE(sdb.has_value());
+    auto runtime = gl::game::PersonRuntime::create({}, stats.value());
+    const auto sheet = gl::game::build_character_sheet(runtime, sdb.value());
+    CHECK(sheet.primary[0].value == "30");
+    CHECK(sheet.primary[1].value == "25");
+    CHECK(sheet.primary[2].value == "18");
+    CHECK(sheet.primary[3].value == "12");
+    CHECK(sheet.primary[4].value == "7");
+    CHECK(sheet.primary[5].value == "5");
+    CHECK(sheet.primary[6].value == "9");
+    CHECK(sheet.primary[7].value == "-40");
+    CHECK(sheet.characteristics[1].value == "81099");
+    CHECK(sheet.skills[0].value == "0");   // SWORD
+    CHECK(sheet.skills[1].value == "15");  // AXE
+    CHECK(sheet.skills[6].value == "0");   // THROW
+    CHECK(sheet.skills[21].value == "0");  // TALKING
 }
