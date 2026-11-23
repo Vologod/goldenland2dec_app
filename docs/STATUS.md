@@ -15,9 +15,9 @@
   `PersonAccess::{dialog_percent,set_injured}`, `RandomAccess::coin`;
   registry 38/65; glgame/glscript wiring; synthetic VM E2E и real `.cs`
   call-site/toggle проверки.
-- **Проверка:** focused 27 cases / 496 assertions (8/100 injury+dialog,
-  2/11 VM E2E, 14/298 native registry, 3/87 real `.cs`); полный `ctest`
-  20/20 passed, 2129.19 s.
+- **Проверка:** focused: injury/dialog 8/100, VM E2E 2/11, native
+  registry 14/298, real `.cs` 4/104; полный `ctest` 20/20 passed,
+  2024.88 s (final tree, 2026-11-23).
 - **Residual:** `FUN_14007fb0` при непустой таблице модификаторов,
   `manager+0xC`/`gv_addon`, потребители эффектов, save-интерпретация,
   компаньоны, capacity `+0x14f8`.
