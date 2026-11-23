@@ -405,5 +405,14 @@ TEST_CASE("dialog percent reproduces the talking formula") {
     auto talking_bonus = gl::game::PersonRuntime::create({}, hero(5, 10, 9));
     CHECK(talking_bonus.dialog_percent("Hero") == 57);
 
+    auto negative = gl::game::PersonRuntime::create({}, hero(7, -3, 10));
+    CHECK(negative.dialog_percent("Hero") == 0);
+
+    auto low_int = gl::game::PersonRuntime::create({}, hero(0, 5, 0));
+    CHECK(low_int.dialog_percent("Hero") == 31);
+
+    auto high_int = gl::game::PersonRuntime::create({}, hero(99, 5, 0));
+    CHECK(high_int.dialog_percent("Hero") == 60);
+
     CHECK(base.dialog_percent("missing") == 0);
 }
