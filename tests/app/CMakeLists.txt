@@ -53,3 +53,10 @@ gl_enable_warnings(trade_overlay_tests)
 
 add_test(NAME trade_overlay_tests COMMAND trade_overlay_tests)
 set_tests_properties(trade_overlay_tests PROPERTIES SKIP_RETURN_CODE 77)
+
+add_executable(character_overlay_tests test_character_overlay.cpp)
+target_include_directories(character_overlay_tests PRIVATE ${CMAKE_SOURCE_DIR}/third_party/doctest)
+target_link_libraries(character_overlay_tests PRIVATE gl_app)
+gl_enable_warnings(character_overlay_tests)
+add_test(NAME character_overlay_tests COMMAND character_overlay_tests)
+set_tests_properties(character_overlay_tests PROPERTIES SKIP_RETURN_CODE 77)
