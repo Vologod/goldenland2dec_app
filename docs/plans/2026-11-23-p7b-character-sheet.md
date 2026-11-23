@@ -1121,20 +1121,28 @@ Place this before the inventory key handling.
 
 Append to `tests/game/test_character_sheet.cpp`:
 ```cpp
+#include "gl/assets/hero_stats.hpp"
 #include "gl/assets/save_payload.hpp"
 #include "gl/assets/vfs.hpp"
+#include <cstdint>
 #include <cstdlib>
+#include <filesystem>
 #include <fstream>
 #include <iterator>
+#include <vector>
 
 TEST_CASE("character sheet reads real slot0" * doctest::skip(std::getenv("GL_GAME_DIR") == nullptr)) {
     const char *dir = std::getenv("GL_GAME_DIR");
     REQUIRE(dir != nullptr);
     auto vfs = gl::assets::GameVfs::mount(dir);
     REQUIRE(vfs.has_value());
-    auto save = vfs->read("Saves/slot0.sav");
-    REQUIRE(save.has_value());
-    auto body = gl::assets::decode_save_body(save.value());
+    const std::filesystem::path path =
+        std::filesystem::path(dir) / "Saves" / "slot0.sav";
+    std::ifstream in(path, std::ios::binary);
+    REQUIRE(in);
+    const std::vector<std::uint8_t> bytes((std::istreambuf_iterator<char>(in)),
+                                          std::istreambuf_iterator<char>());
+    auto body = gl::assets::decode_save_body(bytes);
     REQUIRE(body.has_value());
     auto stats = gl::assets::parse_hero_stats(body.value());
     REQUIRE(stats.has_value());
@@ -1153,11 +1161,12 @@ TEST_CASE("character sheet reads real slot0" * doctest::skip(std::getenv("GL_GAM
     CHECK(sheet.primary[6].value == "9");
     CHECK(sheet.primary[7].value == "-40");
     CHECK(sheet.characteristics[1].value == "81099");
-    CHECK(sheet.skills[0].value == "0");   // SWORD in slot0
+    CHECK(sheet.skills[0].value == "0");   // SWORD
+    CHECK(sheet.skills[1].value == "15");  // AXE
     CHECK(sheet.skills[6].value == "0");   // THROW
+    CHECK(sheet.skills[21].value == "0");  // TALKING
 }
 ```
-(Adjust the skill assertions to the actual slot0 values: `SKILL_WPN_SWORD` 0, `SKILL_WPN_AXE` 15; use those from `p3b1` §7.2 if different.)
 
 - [ ] **Step 4: Add the screenshot case**
 
@@ -1202,6 +1211,8 @@ Expected: all pass with `GL_GAME_DIR`.
 - [ ] **Step 1: Write research**
 
 Create `docs/research/p7b-character-sheet.md` with: `Client.dll` SHA/base; `user_interface.sdb` id map (0–4 tabs, 5 name, 6–12 attributes, 13–17 characteristics, 18–28 combat/life, 43–48 immunities, 49–75 skills, 76 points); `inv_gui.scr` rects; skill permutation `0x1212e0a0`; screen arrays `0x120f8520`/`0x120f85a0`/`0x120f8620`/`0x120f8738`/`0x120f8774`; real slot0 values; residual.
+
+Also update `docs/specs/2026-11-23-p7b-character-sheet-design.md` where it says a missing person yields `name Hero`: align it with the implementation (name = the requested person string, `Hero` in normal use; test uses `missing`).
 
 - [ ] **Step 2: Add the decision**
 
