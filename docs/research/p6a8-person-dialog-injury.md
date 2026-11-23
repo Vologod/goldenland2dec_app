@@ -1,6 +1,6 @@
 # P6a8 - Person dialog/injury natives research
 
-Status: complete (2026-11-19)
+Status: complete (2026-11-19); resolved 2026-11-23
 Scope: docs only; Server.dll SHA-256 418E2560...CC837.
 
 ## RS_GetDialogEnabled (0x700000E, 0x140410b4)
