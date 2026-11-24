@@ -110,6 +110,25 @@
   для каждого пункта — есть ли подтверждение из оригинала; расхождения
   заводятся в `docs/STATUS.md` как отдельные задачи.
 
+### Бинарники (32-bit PE): `Client.dll`, `Server.dll`, `GoldenLand.exe`
+
+- Все три — **32-bit PE (coff-i386)**. `ImageBase` у каждой свой: у
+  `Client.dll` — `0x12000000`, поэтому имена вида `FUN_120683a8` = **VA**,
+  а `RVA = VA − ImageBase` (`0x683a8`). Перед разбором проверять
+  `ImageBase` фактически, не хардкодить.
+- Декомпиляция: дампы `.local/decomp/{client,server}/decompiled.c`
+  (`ExportDecomp.java`), RVA — в шапке `/* rva=... size=... */`.
+- Декомпилятор **ненадёжен для регистровых аргументов** (`unaff_EDI`,
+  `unaff_retaddr`), «склеенных» rect-структур и вызовов с pushes:
+  такие места обязательно подтверждать дизассемблером
+  (`llvm-objdump`), а не догадкой.
+- Соглашения: `__thiscall` — `ECX = this`, остальные аргументы в стеке,
+  эпилог `ret N`; при чтении помнить про сдвиг `esp` от `push`.
+- Скриншоты/композиция — только **проверка** гипотезы, выведенной из
+  кода; не заменяют дизассемблер.
+- В `research` писать файл, SHA-256, `VA`/`RVA`, инструмент и
+  наблюдение (в т.ч. каким дизассемблером подтверждено).
+
 ## Команды (обновлять по мере появления)
 
 ```powershell
@@ -132,6 +151,12 @@ $proj="$env:TEMP\ghidra_proj"
 & .local\toolchains\ghidra_12.1.4_PUBLIC\support\analyzeHeadless.bat `
   $proj glclient -process Client.dll -noanalysis `
   -scriptPath "$env:TEMP" -postScript "DecompileAt.java"
+
+# Дизассемблер (проверка VA/RVA и регистровых аргументов)
+$od=".local\toolchains\llvm-mingw-20261006-ucrt-x86_64\bin\llvm-objdump.exe"
+& $od -p "I:\Games\Златогорье-2\Client.dll" | Select-String ImageBase
+& $od -d --x86-asm-syntax=intel --no-show-raw-insn `
+  --start-address=0x120683a8 --stop-address=0x120688f0 "I:\Games\Златогорье-2\Client.dll"
 ```
 
 ## Запрещено
