@@ -7,7 +7,6 @@
 #include <set>
 #include <string>
 #include <string_view>
-#include <vector>
 
 namespace gl::assets {
 class GameVfs;
@@ -54,16 +53,9 @@ class CharacterOverlay {
     void draw_background(SDL_Renderer *renderer);
     void draw_tabs(SDL_Renderer *renderer);
     void draw_close(SDL_Renderer *renderer);
-    void draw_centered(SDL_Renderer *renderer, const gl::render::Font *font,
-                       std::string_view text, float center_x, float box_y,
-                       float box_h, gl::render::Color color);
-    void draw_rows(SDL_Renderer *renderer, const gl::render::Font *font,
-                   const std::vector<gl::game::CharacterRow> &rows,
-                   const int *y_positions, const int *heights, int count,
-                   float label_x, float label_w, float value_right);
-    void draw_row(SDL_Renderer *renderer, const gl::render::Font *font,
-                  const gl::game::CharacterRow &row, float label_x, float label_w,
-                  float value_right, float y, float height);
+    void draw_text_rect(SDL_Renderer *renderer, const gl::render::Font *font,
+                        std::string_view text, float x, float y, float w, float h,
+                        gl::render::Color color);
     void draw_item(SDL_Renderer *renderer, const gl::assets::ItemCatalogEntry *entry,
                    float x, float y, float w, float h);
     void draw_doll_overlays(SDL_Renderer *renderer);

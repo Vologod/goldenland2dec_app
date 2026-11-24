@@ -22,39 +22,77 @@ constexpr std::string_view kBackgroundCharacteristics =
 constexpr std::string_view kBackgroundSkills =
     "engineres/newinv/inventory_skills.bmp";
 constexpr std::string_view kFallbackIcon = "engineres/interface/bag.csx";
-constexpr std::array<float, 7> kPrimaryY{62.0f, 89.0f, 117.0f, 144.0f,
-                                         172.0f, 199.0f, 227.0f};
-constexpr std::array<int, 7> kPrimaryH{21, 21, 20, 21, 20, 21, 20};
-constexpr float kExperienceY = 263.0f;
-constexpr int kExperienceH = 21;
-constexpr std::array<float, 6> kStateY{103.0f, 134.0f, 163.0f, 214.0f,
-                                       240.0f, 267.0f};
-constexpr std::array<int, 6> kStateH{23, 22, 22, 19, 19, 19};
-constexpr std::array<float, 10> kCombatY{349.0f, 376.0f, 403.0f, 431.0f,
-                                         458.0f, 485.0f, 512.0f, 539.0f,
-                                         566.0f, 598.0f};
-constexpr std::array<int, 10> kCombatH{19, 19, 19, 18, 18, 18, 18, 18, 18, 21};
-constexpr std::array<float, 12> kResistanceY{105.0f, 137.0f, 169.0f, 222.0f,
-                                             253.0f, 283.0f, 314.0f, 344.0f,
-                                             375.0f, 431.0f, 457.0f, 484.0f};
-constexpr std::array<int, 12> kResistanceH{20, 20, 20, 20, 19, 19, 19,
-                                           19, 19, 19, 19, 19};
-constexpr std::array<float, 3> kImmunityY{571.0f, 597.0f, 624.0f};
-constexpr std::array<int, 3> kImmunityH{19, 19, 18};
-constexpr std::array<float, 3> kSkillColumnX{291.0f, 537.0f, 783.0f};
-constexpr float kSkillLabelW = 160.0f;
-constexpr std::array<float, 3> kSkillValueRight{488.0f, 733.0f, 978.0f};
-constexpr std::array<float, 9> kSkillRowY{126.0f, 159.0f, 191.0f, 312.0f,
-                                          345.0f, 377.0f, 497.0f, 529.0f,
-                                          561.0f};
-constexpr std::array<int, 9> kSkillRowH{19, 18, 19, 19, 18, 19, 18, 19, 19};
-constexpr std::array<float, 3> kSkillGroupY{74.0f, 260.0f, 445.0f};
-constexpr std::array<int, 3> kSkillGroupH{29, 28, 28};
-constexpr float kSkillPointsY = 628.0f;
-constexpr int kSkillPointsH = 22;
-constexpr float kSkillPointsLabelX = 517.0f;
-constexpr float kSkillPointsLabelW = 194.0f;
-constexpr float kSkillPointsValueRight = 779.0f;
+struct TextRect {
+    float x;
+    float y;
+    float w;
+    float h;
+};
+
+constexpr float kPrimaryLabelX = 30.0f;
+constexpr std::array<float, 7> kPrimaryY{61.0f, 87.0f, 114.0f, 142.0f,
+                                         169.0f, 197.0f, 224.0f};
+constexpr float kPrimaryValueX = 197.0f;
+constexpr float kPrimaryValueW = 30.0f;
+constexpr std::array<float, 7> kPrimaryValueY{60.0f, 87.0f, 115.0f, 143.0f,
+                                              171.0f, 198.0f, 225.0f};
+constexpr float kExperienceLabelX = 30.0f;
+constexpr float kExperienceY = 261.0f;
+constexpr float kExperienceValueX = 216.0f;
+constexpr float kExperienceValueW = 38.0f;
+constexpr float kRowValueH = 18.0f;
+constexpr float kCenterLabelX = 308.0f;
+constexpr std::array<float, 6> kStateY{103.0f, 134.0f, 162.0f, 212.0f,
+                                       238.0f, 265.0f};
+constexpr std::array<TextRect, 6> kStateValueRect{{
+    {588.0f, 103.0f, 41.0f, 18.0f}, {471.0f, 133.0f, 159.0f, 18.0f},
+    {588.0f, 161.0f, 41.0f, 18.0f}, {480.0f, 212.0f, 150.0f, 16.0f},
+    {480.0f, 238.0f, 150.0f, 16.0f}, {572.0f, 265.0f, 56.0f, 16.0f}}};
+constexpr std::array<float, 10> kCombatY{348.0f, 375.0f, 402.0f, 429.0f,
+                                         456.0f, 483.0f, 510.0f, 537.0f,
+                                         564.0f, 598.0f};
+constexpr std::array<TextRect, 10> kCombatValueRect{{
+    {582.0f, 348.0f, 46.0f, 15.0f}, {582.0f, 375.0f, 46.0f, 15.0f},
+    {582.0f, 402.0f, 46.0f, 15.0f}, {582.0f, 430.0f, 46.0f, 15.0f},
+    {582.0f, 456.0f, 46.0f, 15.0f}, {582.0f, 483.0f, 46.0f, 15.0f},
+    {582.0f, 510.0f, 46.0f, 15.0f}, {582.0f, 537.0f, 46.0f, 15.0f},
+    {582.0f, 565.0f, 46.0f, 15.0f}, {497.0f, 597.0f, 130.0f, 18.0f}}};
+constexpr float kWeightLabelX = 300.0f;
+constexpr float kResistanceLabelX = 673.0f;
+constexpr std::array<float, 12> kResistanceY{104.0f, 136.0f, 168.0f, 221.0f,
+                                             251.0f, 282.0f, 312.0f, 343.0f,
+                                             373.0f, 430.0f, 455.0f, 482.0f};
+constexpr std::array<float, 12> kResistanceValueY{103.0f, 136.0f, 168.0f,
+                                                  220.0f, 251.0f, 282.0f,
+                                                  312.0f, 343.0f, 373.0f,
+                                                  430.0f, 456.0f, 482.0f};
+constexpr float kResistanceValueX = 950.0f;
+constexpr float kResistanceValueW = 47.0f;
+constexpr float kResistanceValueH = 17.0f;
+constexpr float kImmunityLeftLabelX = 673.0f;
+constexpr float kImmunityRightLabelX = 850.0f;
+constexpr std::array<float, 3> kImmunityY{570.0f, 596.0f, 622.0f};
+constexpr float kImmunityLeftValueX = 774.0f;
+constexpr float kImmunityRightValueX = 950.0f;
+constexpr float kImmunityValueW = 43.0f;
+constexpr float kImmunityValueH = 16.0f;
+constexpr std::array<float, 3> kSkillColumnX{295.0f, 544.0f, 790.0f};
+constexpr std::array<float, 9> kSkillRowY{124.0f, 156.0f, 188.0f, 309.0f,
+                                          342.0f, 375.0f, 494.0f, 526.0f,
+                                          558.0f};
+constexpr std::array<float, 3> kSkillValueX{460.0f, 706.0f, 952.0f};
+constexpr std::array<float, 9> kSkillValueY{123.0f, 156.0f, 188.0f, 310.0f,
+                                            342.0f, 374.0f, 494.0f, 527.0f,
+                                            559.0f};
+constexpr float kSkillValueW = 31.0f;
+constexpr float kSkillValueH = 18.0f;
+constexpr std::array<float, 3> kSkillGroupY{78.0f, 264.0f, 449.0f};
+constexpr float kSkillPointsLabelX = 526.0f;
+constexpr float kSkillPointsY = 626.0f;
+constexpr float kSkillPointsValueX = 739.0f;
+constexpr float kSkillPointsValueY = 623.0f;
+constexpr float kSkillPointsValueW = 45.0f;
+constexpr float kSkillPointsValueH = 23.0f;
 constexpr gl::render::Color kTextColor{20, 18, 16, 255};
 constexpr gl::render::Color kActiveTab{238, 232, 214, 255};
 constexpr gl::render::Color kInactiveTab{68, 63, 52, 255};
@@ -280,31 +318,35 @@ void CharacterOverlay::draw_background(SDL_Renderer *renderer) {
     SDL_RenderFillRectF(renderer, &rect);
 }
 
-void CharacterOverlay::draw_centered(SDL_Renderer *renderer,
-                                     const gl::render::Font *font,
-                                     std::string_view text, float center_x,
-                                     float box_y, float box_h,
-                                     gl::render::Color color) {
+void CharacterOverlay::draw_text_rect(SDL_Renderer *renderer,
+                                      const gl::render::Font *font,
+                                      std::string_view text, float x, float y,
+                                      float w, float h, gl::render::Color color) {
     if (font == nullptr || text.empty()) return;
-    const auto measured = font->measure(text);
-    const float y = box_y + (box_h - font->text_height()) * 0.5f;
-    font->draw_text(renderer, text, center_x - measured.x * 0.5f, y, color);
+    if (w >= 0.0f) {
+        const float text_w = font->measure(text).x;
+        if (text_w < w) x += (w - text_w) * 0.5f;
+    }
+    if (h >= 0.0f) {
+        const float cell_h = font->text_height();
+        if (cell_h < h) y += (h - cell_h) * 0.5f;
+    }
+    y += (font->line_height() - font->text_height()) * 0.5f;
+    font->draw_text(renderer, text, x, y, color);
 }
 
 void CharacterOverlay::draw_tabs(SDL_Renderer *renderer) {
     const gl::render::Font *title = title_font();
     if (title == nullptr) return;
-    draw_centered(renderer, title, sheet_.name, 132.0f, 0.0f, 35.0f, kNameColor);
     const bool characteristics =
         tab_ == gl::game::CharacterTab::characteristics;
-    draw_centered(renderer, title, sheet_.characteristics_title, 440.0f, 0.0f, 35.0f,
-                  characteristics ? kActiveTab : kInactiveTab);
-    draw_centered(renderer, title, sheet_.skills_title, 819.0f, 0.0f, 35.0f,
-                  characteristics ? kInactiveTab : kActiveTab);
-    SDL_SetRenderDrawColor(renderer, 216, 200, 154, 220);
-    const SDL_FRect underline{characteristics ? 265.0f : 615.0f, 32.0f,
-                              characteristics ? 350.0f : 409.0f, 2.0f};
-    SDL_RenderFillRectF(renderer, &underline);
+    draw_text_rect(renderer, title, sheet_.name, 15.0f, 10.0f, 250.0f, 26.0f,
+                   kNameColor);
+    draw_text_rect(renderer, title, sheet_.characteristics_title, 292.0f, 16.0f,
+                   344.0f, -1.0f,
+                   characteristics ? kActiveTab : kInactiveTab);
+    draw_text_rect(renderer, title, sheet_.skills_title, 661.0f, 16.0f, 344.0f,
+                   -1.0f, characteristics ? kInactiveTab : kActiveTab);
 }
 
 void CharacterOverlay::draw_close(SDL_Renderer *renderer) {
@@ -314,35 +356,6 @@ void CharacterOverlay::draw_close(SDL_Renderer *renderer) {
         const SDL_FRect rect{920.0f, 694.0f, 75.0f, 68.0f};
         SDL_RenderCopyF(renderer, texture->get(), nullptr, &rect);
     }
-}
-
-void CharacterOverlay::draw_rows(SDL_Renderer *renderer,
-                                 const gl::render::Font *font,
-                                 const std::vector<gl::game::CharacterRow> &rows,
-                                 const int *y_positions, const int *heights, int count,
-                                 float label_x, float label_w, float value_right) {
-    if (font == nullptr) return;
-    for (int index = 0; index < count && index < static_cast<int>(rows.size()); ++index) {
-        draw_row(renderer, font, rows[static_cast<std::size_t>(index)], label_x,
-                 label_w, value_right, static_cast<float>(y_positions[index]),
-                 static_cast<float>(heights[index]));
-    }
-}
-
-void CharacterOverlay::draw_row(SDL_Renderer *renderer,
-                                const gl::render::Font *font,
-                                const gl::game::CharacterRow &row, float label_x,
-                                float label_w, float value_right, float y,
-                                float height) {
-    if (font == nullptr) return;
-    const float text_y = y + (height - font->text_height()) * 0.5f;
-    const SDL_Rect label_clip{static_cast<int>(label_x), static_cast<int>(y),
-                              static_cast<int>(label_w), static_cast<int>(height)};
-    SDL_RenderSetClipRect(renderer, &label_clip);
-    font->draw_text(renderer, row.label, label_x + 4.0f, text_y, kTextColor);
-    SDL_RenderSetClipRect(renderer, nullptr);
-    const auto measured = font->measure(row.value);
-    font->draw_text(renderer, row.value, value_right - measured.x, text_y, kTextColor);
 }
 
 void CharacterOverlay::draw_item(SDL_Renderer *renderer,
@@ -450,88 +463,97 @@ void CharacterOverlay::draw_inventory_items(SDL_Renderer *renderer) {
 void CharacterOverlay::draw_content(SDL_Renderer *renderer) {
     if (font_ == nullptr) return;
     const gl::render::Font *title = title_font();
-    std::array<int, 7> primary_y{};
-    for (std::size_t index = 0; index < primary_y.size(); ++index)
-        primary_y[index] = static_cast<int>(kPrimaryY[index]);
-    draw_rows(renderer, font_, sheet_.primary, primary_y.data(), kPrimaryH.data(), 7,
-              20.0f, 132.0f, 221.0f);
-    draw_row(renderer, font_, sheet_.experience_points, 20.0f, 182.0f, 251.0f,
-             kExperienceY, static_cast<float>(kExperienceH));
+    for (std::size_t i = 0; i < sheet_.primary.size() && i < 7; ++i) {
+        draw_text_rect(renderer, font_, sheet_.primary[i].label, kPrimaryLabelX,
+                       kPrimaryY[i], -1.0f, -1.0f, kTextColor);
+        draw_text_rect(renderer, font_, sheet_.primary[i].value, kPrimaryValueX,
+                       kPrimaryValueY[i], kPrimaryValueW, kRowValueH, kTextColor);
+    }
+    draw_text_rect(renderer, font_, sheet_.experience_points.label,
+                   kExperienceLabelX, kExperienceY, -1.0f, -1.0f, kTextColor);
+    draw_text_rect(renderer, font_, sheet_.experience_points.value,
+                   kExperienceValueX, kExperienceY, kExperienceValueW, kRowValueH,
+                   kTextColor);
 
     if (tab_ == gl::game::CharacterTab::characteristics) {
-        draw_centered(renderer, title, sheet_.state_title, 466.0f, 55.0f, 24.0f,
-                      kTextColor);
-        std::array<int, 6> state_y{};
-        for (std::size_t index = 0; index < state_y.size(); ++index)
-            state_y[index] = static_cast<int>(kStateY[index]);
-        draw_rows(renderer, font_, sheet_.state, state_y.data(), kStateH.data(), 6,
-                  298.0f, 282.0f, 627.0f);
+        draw_text_rect(renderer, title, sheet_.state_title, 352.0f, 57.0f, 228.0f,
+                       -1.0f, kTextColor);
+        for (std::size_t i = 0; i < 6 && i < sheet_.state.size(); ++i) {
+            draw_text_rect(renderer, font_, sheet_.state[i].label, kCenterLabelX,
+                           kStateY[i], -1.0f, -1.0f, kTextColor);
+            const TextRect &value = kStateValueRect[i];
+            draw_text_rect(renderer, font_, sheet_.state[i].value, value.x,
+                           value.y, value.w, value.h, kTextColor);
+        }
 
-        draw_centered(renderer, title, sheet_.combat_title, 466.0f, 305.0f, 24.0f,
-                      kTextColor);
-        std::array<int, 10> combat_y{};
-        for (std::size_t index = 0; index < combat_y.size(); ++index)
-            combat_y[index] = static_cast<int>(kCombatY[index]);
-        draw_rows(renderer, font_, sheet_.combat, combat_y.data(), kCombatH.data(), 10,
-                  298.0f, 282.0f, 627.0f);
+        draw_text_rect(renderer, title, sheet_.combat_title, 352.0f, 307.0f,
+                       228.0f, -1.0f, kTextColor);
+        for (std::size_t i = 0; i < 10 && i < sheet_.combat.size(); ++i) {
+            const float label_x = (i == 9) ? kWeightLabelX : kCenterLabelX;
+            draw_text_rect(renderer, font_, sheet_.combat[i].label, label_x,
+                           kCombatY[i], -1.0f, -1.0f, kTextColor);
+            const TextRect &value = kCombatValueRect[i];
+            draw_text_rect(renderer, font_, sheet_.combat[i].value, value.x,
+                           value.y, value.w, value.h, kTextColor);
+        }
 
-        draw_centered(renderer, title, sheet_.resistance_title, 822.0f, 55.0f, 25.0f,
-                      kTextColor);
-        std::array<int, 12> resistance_y{};
-        for (std::size_t index = 0; index < resistance_y.size(); ++index)
-            resistance_y[index] = static_cast<int>(kResistanceY[index]);
-        draw_rows(renderer, font_, sheet_.resistance, resistance_y.data(),
-                  kResistanceH.data(), 12, 665.0f, 278.0f, 995.0f);
+        draw_text_rect(renderer, title, sheet_.resistance_title, 709.0f, 57.0f,
+                       228.0f, -1.0f, kTextColor);
+        for (std::size_t i = 0; i < 12 && i < sheet_.resistance.size(); ++i) {
+            draw_text_rect(renderer, font_, sheet_.resistance[i].label,
+                           kResistanceLabelX, kResistanceY[i], -1.0f, -1.0f,
+                           kTextColor);
+            draw_text_rect(renderer, font_, sheet_.resistance[i].value,
+                           kResistanceValueX, kResistanceValueY[i],
+                           kResistanceValueW, kResistanceValueH, kTextColor);
+        }
 
-        draw_centered(renderer, title, sheet_.immunity_title, 828.0f, 525.0f, 25.0f,
-                      kTextColor);
-        std::array<int, 3> immunity_y{};
-        for (std::size_t index = 0; index < immunity_y.size(); ++index)
-            immunity_y[index] = static_cast<int>(kImmunityY[index]);
+        draw_text_rect(renderer, title, sheet_.immunity_title, 713.0f, 527.0f,
+                       228.0f, -1.0f, kTextColor);
         for (std::size_t column = 0; column < 2; ++column) {
-            std::vector<gl::game::CharacterRow> rows;
-            for (std::size_t row = 0; row < 3; ++row)
-                rows.push_back(sheet_.immunity[column * 3 + row]);
-            draw_rows(renderer, font_, rows, immunity_y.data(), kImmunityH.data(), 3,
-                      column == 0 ? 667.0f : 842.0f, column == 0 ? 101.0f : 96.0f,
-                      column == 0 ? 816.0f : 991.0f);
+            const float label_x =
+                column == 0 ? kImmunityLeftLabelX : kImmunityRightLabelX;
+            const float value_x =
+                column == 0 ? kImmunityLeftValueX : kImmunityRightValueX;
+            for (std::size_t row = 0; row < 3; ++row) {
+                const std::size_t index = column * 3 + row;
+                if (index >= sheet_.immunity.size()) continue;
+                draw_text_rect(renderer, font_, sheet_.immunity[index].label,
+                               label_x, kImmunityY[row], -1.0f, -1.0f,
+                               kTextColor);
+                draw_text_rect(renderer, font_, sheet_.immunity[index].value,
+                               value_x, kImmunityY[row], kImmunityValueW,
+                               kImmunityValueH, kTextColor);
+            }
         }
     } else {
-        for (std::size_t group = 0; group < sheet_.skill_groups.size() && group < 3;
-             ++group) {
+        for (std::size_t group = 0;
+             group < sheet_.skill_groups.size() && group < 3; ++group) {
             const auto &entry = sheet_.skill_groups[group];
-            draw_centered(renderer, title, entry.title, 652.0f, kSkillGroupY[group],
-                          static_cast<float>(kSkillGroupH[group]), kTextColor);
-            std::array<int, 3> row_y{};
-            std::array<int, 3> row_h{};
-            for (std::size_t row = 0; row < 3; ++row) {
-                row_y[row] = static_cast<int>(kSkillRowY[group * 3 + row]);
-                row_h[row] = kSkillRowH[group * 3 + row];
-            }
+            draw_text_rect(renderer, title, entry.title, 535.0f,
+                           kSkillGroupY[group], 230.0f, -1.0f, kTextColor);
             for (std::size_t column = 0; column < 3; ++column) {
-                std::vector<gl::game::CharacterRow> rows;
                 for (std::size_t row = 0; row < 3; ++row) {
                     const std::size_t index = column * 3 + row;
                     if (index >= entry.rows.size()) break;
-                    rows.push_back(entry.rows[index]);
+                    const auto &item = entry.rows[index];
+                    draw_text_rect(renderer, font_, item.label,
+                                   kSkillColumnX[column],
+                                   kSkillRowY[group * 3 + row], -1.0f, -1.0f,
+                                   kTextColor);
+                    draw_text_rect(renderer, font_, item.value,
+                                   kSkillValueX[column],
+                                   kSkillValueY[group * 3 + row], kSkillValueW,
+                                   kSkillValueH, kTextColor);
                 }
-                draw_rows(renderer, font_, rows, row_y.data(), row_h.data(),
-                          static_cast<int>(rows.size()), kSkillColumnX[column],
-                          kSkillLabelW, kSkillValueRight[column]);
             }
         }
-        const gl::game::CharacterRow points{sheet_.skill_points_label,
-                                            std::to_string(sheet_.skill_points),
-                                            true};
-        draw_centered(renderer, font_, points.label,
-                      kSkillPointsLabelX + kSkillPointsLabelW * 0.5f, kSkillPointsY,
-                      static_cast<float>(kSkillPointsH), kTextColor);
-        const auto measured = font_->measure(points.value);
-        font_->draw_text(renderer, points.value,
-                         kSkillPointsValueRight - measured.x,
-                         kSkillPointsY +
-                             (kSkillPointsH - font_->text_height()) * 0.5f,
-                         kTextColor);
+        draw_text_rect(renderer, font_, sheet_.skill_points_label,
+                       kSkillPointsLabelX, kSkillPointsY, -1.0f, -1.0f,
+                       kTextColor);
+        draw_text_rect(renderer, font_, std::to_string(sheet_.skill_points),
+                       kSkillPointsValueX, kSkillPointsValueY, kSkillPointsValueW,
+                       kSkillPointsValueH, kTextColor);
     }
 }
 

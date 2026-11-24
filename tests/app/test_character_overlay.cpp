@@ -283,7 +283,10 @@ void render_and_lock(SDL_Renderer *renderer, SDL_Surface *surface) {
     REQUIRE(SDL_LockSurface(surface) == 0);
 }
 
-TEST_CASE("character overlay centers row text in the baked boxes" *
+int box_center(const DiffBox &box) { return (box.x0 + box.x1) / 2; }
+int box_center_y(const DiffBox &box) { return (box.y0 + box.y1) / 2; }
+
+TEST_CASE("character overlay centers text in the original boxes" *
           doctest::skip(!game_dir_available())) {
     const char *dir = std::getenv("GL_GAME_DIR");
     REQUIRE(dir != nullptr);
@@ -301,39 +304,79 @@ TEST_CASE("character overlay centers row text in the baked boxes" *
     auto secondary = gl::assets::decode_image(secondary_data.value());
     REQUIRE(secondary.has_value());
 
+    auto sheet = make_sheet();
+    sheet.name = "NAME";
+    sheet.characteristics_title = "TAB1";
+    sheet.skills_title = "TAB2";
+    sheet.state_title = "STATE";
+    sheet.combat_title = "COMBAT";
+    sheet.resistance_title = "RESIST";
+    sheet.immunity_title = "IMMUNE";
+    sheet.skill_points_label = "POINTS";
+
     gl::app::CharacterOverlay overlay;
-    REQUIRE(overlay.open(software.renderer, vfs.value(), make_sheet(), nullptr, nullptr));
+    REQUIRE(overlay.open(software.renderer, vfs.value(), sheet, nullptr, nullptr));
     overlay.set_fonts(&title.value(), &rows.value());
     overlay.render(software.renderer, 1024, 768);
     render_and_lock(software.renderer, software.surface);
 
-    auto primary_label = diff_bbox(software.surface, secondary.value(), 22, 55, 152, 92);
-    auto primary_value = diff_bbox(software.surface, secondary.value(), 200, 55, 230, 92);
-    auto state_value = diff_bbox(software.surface, secondary.value(), 580, 96, 640, 130);
-    auto resistance_value = diff_bbox(software.surface, secondary.value(), 940, 96, 1005, 130);
-    auto immunity1_value = diff_bbox(software.surface, secondary.value(), 760, 562, 830, 595);
-    auto immunity2_value = diff_bbox(software.surface, secondary.value(), 935, 562, 1005, 595);
+    auto name = diff_bbox(software.surface, secondary.value(), 0, 4, 265, 32);
+    auto tab1 = diff_bbox(software.surface, secondary.value(), 265, 4, 615, 32);
+    auto tab2 = diff_bbox(software.surface, secondary.value(), 615, 4, 1020, 32);
+    auto state_hdr = diff_bbox(software.surface, secondary.value(), 352, 52, 580, 80);
+    auto combat_hdr = diff_bbox(software.surface, secondary.value(), 352, 302, 580, 330);
+    auto resist_hdr = diff_bbox(software.surface, secondary.value(), 709, 52, 937, 80);
+    auto immune_hdr = diff_bbox(software.surface, secondary.value(), 713, 522, 941, 550);
+    auto primary_label = diff_bbox(software.surface, secondary.value(), 22, 55, 152, 85);
+    auto primary_value = diff_bbox(software.surface, secondary.value(), 196, 58, 228, 80);
+    auto exp_value = diff_bbox(software.surface, secondary.value(), 214, 258, 256, 282);
+    auto state_value = diff_bbox(software.surface, secondary.value(), 585, 98, 631, 124);
+    auto combat_value = diff_bbox(software.surface, secondary.value(), 578, 342, 628, 368);
+    auto resistance_value = diff_bbox(software.surface, secondary.value(), 946, 98, 999, 124);
+    auto immunity1_value = diff_bbox(software.surface, secondary.value(), 772, 566, 818, 592);
+    auto immunity2_value = diff_bbox(software.surface, secondary.value(), 946, 566, 996, 592);
+    auto weight_value = diff_bbox(software.surface, secondary.value(), 497, 595, 627, 618);
+    auto underline = diff_bbox(software.surface, secondary.value(), 265, 33, 1020, 36);
     SDL_UnlockSurface(software.surface);
 
+    REQUIRE(name.has_value());
+    CHECK(std::abs(box_center(*name) - 140) <= 6);
+    REQUIRE(tab1.has_value());
+    CHECK(std::abs(box_center(*tab1) - 464) <= 6);
+    REQUIRE(tab2.has_value());
+    CHECK(std::abs(box_center(*tab2) - 833) <= 6);
+    REQUIRE(state_hdr.has_value());
+    CHECK(std::abs(box_center(*state_hdr) - 466) <= 6);
+    REQUIRE(combat_hdr.has_value());
+    CHECK(std::abs(box_center(*combat_hdr) - 466) <= 6);
+    REQUIRE(resist_hdr.has_value());
+    CHECK(std::abs(box_center(*resist_hdr) - 823) <= 6);
+    REQUIRE(immune_hdr.has_value());
+    CHECK(std::abs(box_center(*immune_hdr) - 827) <= 6);
     REQUIRE(primary_label.has_value());
+    CHECK(primary_label->x0 >= 26);
+    CHECK(primary_label->x0 <= 34);
     CHECK(primary_label->y0 >= 63);
-    CHECK(primary_label->y0 <= 68);
-    CHECK(primary_label->y1 <= 82);
+    CHECK(primary_label->y0 <= 66);
     REQUIRE(primary_value.has_value());
-    CHECK(primary_value->x1 >= 216);
-    CHECK(primary_value->x1 <= 222);
+    CHECK(std::abs(box_center(*primary_value) - 212) <= 6);
+    CHECK(std::abs(box_center_y(*primary_value) - 69) <= 3);
+    REQUIRE(exp_value.has_value());
+    CHECK(std::abs(box_center(*exp_value) - 235) <= 8);
     REQUIRE(state_value.has_value());
-    CHECK(state_value->x1 >= 618);
-    CHECK(state_value->x1 <= 630);
+    CHECK(std::abs(box_center(*state_value) - 608) <= 8);
+    CHECK(std::abs(box_center_y(*state_value) - 112) <= 3);
+    REQUIRE(combat_value.has_value());
+    CHECK(std::abs(box_center(*combat_value) - 605) <= 8);
     REQUIRE(resistance_value.has_value());
-    CHECK(resistance_value->x1 >= 988);
-    CHECK(resistance_value->x1 <= 999);
+    CHECK(std::abs(box_center(*resistance_value) - 974) <= 8);
     REQUIRE(immunity1_value.has_value());
-    CHECK(immunity1_value->x1 >= 809);
-    CHECK(immunity1_value->x1 <= 820);
+    CHECK(std::abs(box_center(*immunity1_value) - 796) <= 8);
     REQUIRE(immunity2_value.has_value());
-    CHECK(immunity2_value->x1 >= 985);
-    CHECK(immunity2_value->x1 <= 995);
+    CHECK(std::abs(box_center(*immunity2_value) - 972) <= 8);
+    REQUIRE(weight_value.has_value());
+    CHECK(std::abs(box_center(*weight_value) - 562) <= 8);
+    CHECK_FALSE(underline.has_value());
 
     auto skills_data = vfs.value().read("engineres/newinv/inventory_skills.bmp");
     REQUIRE(skills_data.has_value());
@@ -342,16 +385,39 @@ TEST_CASE("character overlay centers row text in the baked boxes" *
     overlay.set_tab(gl::game::CharacterTab::skills);
     overlay.render(software.renderer, 1024, 768);
     render_and_lock(software.renderer, software.surface);
-    auto skill_label = diff_bbox(software.surface, skills.value(), 285, 118, 440, 150);
-    auto skill_value = diff_bbox(software.surface, skills.value(), 450, 118, 500, 150);
+    auto group_hdr = diff_bbox(software.surface, skills.value(), 529, 70, 781, 106);
+    auto skill_label = diff_bbox(software.surface, skills.value(), 289, 120, 435, 150);
+    auto skill_value = diff_bbox(software.surface, skills.value(), 454, 118, 500, 150);
+    auto points_label = diff_bbox(software.surface, skills.value(), 515, 622, 720, 650);
+    auto points_value = diff_bbox(software.surface, skills.value(), 735, 620, 790, 652);
+    auto skill_value_col2 = diff_bbox(software.surface, skills.value(), 700, 118, 745, 150);
+    auto skill_value_col3 = diff_bbox(software.surface, skills.value(), 947, 118, 990, 150);
+    auto skill_value_group2 = diff_bbox(software.surface, skills.value(), 454, 305, 500, 335);
+    auto skill_value_group3 = diff_bbox(software.surface, skills.value(), 454, 490, 500, 520);
     SDL_UnlockSurface(software.surface);
 
+    REQUIRE(group_hdr.has_value());
+    CHECK(std::abs(box_center(*group_hdr) - 650) <= 8);
     REQUIRE(skill_label.has_value());
-    CHECK(skill_label->y0 >= 127);
-    CHECK(skill_label->y0 <= 131);
+    CHECK(skill_label->x0 >= 291);
+    CHECK(skill_label->x0 <= 299);
+    CHECK(skill_label->y0 >= 126);
+    CHECK(skill_label->y0 <= 129);
     REQUIRE(skill_value.has_value());
-    CHECK(skill_value->x1 >= 482);
-    CHECK(skill_value->x1 <= 492);
+    CHECK(std::abs(box_center(*skill_value) - 476) <= 8);
+    REQUIRE(points_label.has_value());
+    CHECK(points_label->x0 >= 522);
+    CHECK(points_label->x0 <= 530);
+    REQUIRE(points_value.has_value());
+    CHECK(std::abs(box_center(*points_value) - 762) <= 10);
+    REQUIRE(skill_value_col2.has_value());
+    CHECK(std::abs(box_center(*skill_value_col2) - 722) <= 8);
+    REQUIRE(skill_value_col3.has_value());
+    CHECK(std::abs(box_center(*skill_value_col3) - 968) <= 8);
+    REQUIRE(skill_value_group2.has_value());
+    CHECK(std::abs(box_center(*skill_value_group2) - 476) <= 8);
+    REQUIRE(skill_value_group3.has_value());
+    CHECK(std::abs(box_center(*skill_value_group3) - 476) <= 8);
 }
 
 std::optional<DiffBox> snapshot_diff_bbox(const std::vector<std::uint8_t> &a,

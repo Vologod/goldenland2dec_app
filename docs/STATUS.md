@@ -2,6 +2,53 @@
 
 Обновлено: 2026-11-24
 
+## P7b3 — Character sheet text layout parity (automated done 2026-11-24)
+
+- **Задача:** закрыть «надписи поехали» из P7b2 — воспроизвести точные
+  прямоугольники/центрирование текста `FUN_120661cc` (значения
+  центрируются в полях, а не право-выравниваются).
+- **Spec/plan/research:**
+  `docs/specs/2026-11-24-p7b3-character-sheet-text-layout-design.md`,
+  `docs/plans/2026-11-24-p7b3-character-sheet-text-layout.md`,
+  `docs/research/p7b3-character-sheet-text-layout.md`.
+- **Evidence:** `FUN_12030a88/b4c/a04` (RVA `0x30a88/0x30b4c/0x30a04`)
+  — `(x,y,textId,widthBox,heightBox)`, центрирование
+  `(box-text)>>1`, `-1` = лево/верх; `FUN_12030980` — `TextOutA`
+  (y=верх клетки); `FUN_12030a88` имеет 6 стек-аргументов (`ret 0x18`),
+  декомпилятор показал 4. Массивы `.data` (`DAT_120f8520/85a0/8620/
+  8690/86a8/86c0/86d8/8708/8738/8774`) сняты из PE.
+- **Результат:** `CharacterOverlay::draw_text_rect` (центр-в-прямоугольнике);
+  все секции (атрибуты/опыт, state, combat+вес, resistance, immunity
+  две колонки, навыки три колонки, очки) используют точные поля;
+  вкладки/заголовки/имя — по оригинальным координатам; удалено
+  подчёркивание вкладок (порт-девиация).
+- **Вертикальная доработка (manual feedback 2026-11-24):** текст был
+  «прижат к верху» на 2–5 px. Причина — GDI `TextOutA` ставит baseline
+  на `cell_top+tmAscent`, а `Font::draw_text` — на `y+hhea_ascent`
+  (без line leading). Фикс: `y += (Font::line_height()-
+  Font::text_height())/2` в `draw_text_rect`. Замер против
+  `.local/p7b2/characteristics.png`/`skills.png` (diff по фоновому BMP,
+  извлечён через `glpak extract`): было на 2–5 px выше, стало ±1 px
+  (заголовки 1 px ниже).
+- **Проверка (2026-11-24):** скриншоты `--character`/`--character-tab
+  skills` — Level `cx=608`, Опыт `cx=550`, Жизнь `cx=554`,
+  Immunity `cx=795`, Skill `cx=475` (центры полей);
+  `character_overlay_tests` 9/9 (154, вкл. вертикальные центры);
+  `gl_game_tests --test-case="*character sheet*"` 6/6 (135);
+  `glgame_screenshot_tests --test-case="*character*"` 1/1 (30);
+  полный `ctest` с `GL_GAME_DIR` (final tree) —
+  **21/21 passed, 2595.25 s**.
+- **Residual:** начертание (pala.ttf vs Palatino Linotype, weight
+  500/600); вертикаль ±1 px (строки 1 px выше, заголовки 1 px ниже);
+  значения данных не менялись; wear-оверлеи P5b2-1.
+- **Manual gate feedback (2026-11-24, открыто):** (1) шрифт/размер
+  местами отличается от оригинала; (2) в отдельных «полях» текст всё
+  ещё слегка прижат к верху — уточняется (вероятно ячейки с
+  `h < text_height`, где вертикальное центрирование не применяется).
+- **Статус:** implemented, automated green; закоммичено
+  (`feat: p7b3 character sheet text layout parity`); manual visual gate
+  open, два пункта выше — открыты.
+
 ## P5b2-1 — Paper-doll wear overlays (automated done 2026-11-24)
 
 - **Задача:** рисовать надетую экипировку на кукле листа персонажа
@@ -70,6 +117,8 @@
   (позиционирование/вид текста в строках листа). Фикс по замерам не
   закрывает вопрос; нужен отдельный разбор. Оставлено как есть по
   просьбе пользователя, не коммитить как готовое.
+  → **закрыто в P7b3** (2026-11-24): точные поля/центрирование из
+  `FUN_120661cc`; automated green, manual gate open.
 - **Известное расхождение:** wear-оверлеи `puppet_name` на кукле
   (P5b2-1) не реализованы — поэтому герой на листе без одежды:
   в фоне BMP нарисовано только тело, а оригинал рисует поверх него
