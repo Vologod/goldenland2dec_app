@@ -66,6 +66,7 @@ class CharacterOverlay {
                   float value_right, float y, float height);
     void draw_item(SDL_Renderer *renderer, const gl::assets::ItemCatalogEntry *entry,
                    float x, float y, float w, float h);
+    void draw_doll_overlays(SDL_Renderer *renderer);
     void draw_inventory_items(SDL_Renderer *renderer);
     void draw_content(SDL_Renderer *renderer);
 

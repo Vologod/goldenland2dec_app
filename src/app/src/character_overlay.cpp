@@ -1,4 +1,5 @@
 #include "gl/app/character_overlay.hpp"
+#include "gl/assets/cp1251.hpp"
 #include "gl/assets/csx.hpp"
 #include "gl/assets/hero_equipment.hpp"
 #include "gl/assets/image.hpp"
@@ -70,6 +71,33 @@ struct PuppetSpec {
     int x;
     int y;
 };
+
+constexpr std::array<std::uint32_t, 6> kDollLayerMasks{
+    0x200000u, 0x100000u, 0x0F8000u, 0x004000u, 0xC00000u, 0x003000u};
+constexpr float kDollLeft = 5.0f;
+constexpr float kDollBottom = 622.0f;
+constexpr int kDollHalfWidth = 135;
+constexpr int kDollHalfSlice = 30;
+
+std::uint32_t equippable_mask(std::uint32_t flags) { return flags & 0x00FFF000u; }
+
+bool doll_layer_skipped(std::uint32_t mask, bool use_b_set) {
+    if (use_b_set) return mask == 0x001000u || mask == 0x400000u;
+    return mask == 0x002000u || mask == 0x800000u;
+}
+
+bool doll_half_canvas(std::uint32_t mask) { return (mask & 0x000F0000u) != 0; }
+
+bool doll_left_half(std::uint32_t mask) { return (mask & 0x00050000u) != 0; }
+
+std::string doll_puppet_path(std::string_view puppet_name) {
+    std::string path =
+        "items/res/" + gl::assets::normalize_virtual_path(puppet_name);
+    const bool has_extension =
+        path.size() >= 4 && path.compare(path.size() - 4, 4, ".bmp") == 0;
+    if (!has_extension) path += ".bmp";
+    return path;
+}
 constexpr std::array<PuppetSpec, 12> kPuppetSlots{{
     {0x004000u, 67, 307},  {0x008000u, 168, 308}, {0x010000u, 0, 354},
     {0x020000u, 233, 354}, {0x040000u, 4, 402},   {0x080000u, 229, 402},
@@ -223,6 +251,7 @@ void CharacterOverlay::render(SDL_Renderer *renderer, int screen_w, int screen_h
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
 
     draw_background(renderer);
+    draw_doll_overlays(renderer);
     draw_tabs(renderer);
     draw_content(renderer);
     draw_inventory_items(renderer);
@@ -350,6 +379,45 @@ void CharacterOverlay::draw_item(SDL_Renderer *renderer,
         dest.y = y + (h - dest.h) * 0.5f;
     }
     SDL_RenderCopyF(renderer, texture->get(), nullptr, &dest);
+}
+
+void CharacterOverlay::draw_doll_overlays(SDL_Renderer *renderer) {
+    if (inventory_ == nullptr || catalog_ == nullptr) return;
+    for (const std::uint32_t group : kDollLayerMasks) {
+        for (const gl::assets::InventoryItem &item : inventory_->equipped) {
+            const std::uint32_t mask = equippable_mask(item.flags);
+            if ((mask & group) == 0) continue;
+            if (doll_layer_skipped(mask, use_b_set_)) continue;
+            const gl::assets::ItemCatalogEntry *entry =
+                catalog_->find(item.item_id);
+            if (entry == nullptr || entry->item.puppet_name.empty()) continue;
+            gl::render::Texture *texture =
+                load_texture(doll_puppet_path(entry->item.puppet_name), true);
+            if (texture == nullptr) continue;
+            int width = 0;
+            int height = 0;
+            SDL_QueryTexture(texture->get(), nullptr, nullptr, &width, &height);
+            if (width <= 0 || height <= 0) continue;
+            SDL_Rect source{0, 0, width, height};
+            float x = kDollLeft;
+            if (doll_half_canvas(mask)) {
+                if (doll_left_half(mask)) {
+                    source.w = std::min(width, kDollHalfWidth);
+                } else {
+                    const int x0 = width < kDollHalfWidth
+                                       ? std::max(0, width - kDollHalfSlice)
+                                       : kDollHalfWidth;
+                    source.x = x0;
+                    source.w = width - x0;
+                    x = static_cast<float>(x0) + kDollLeft;
+                }
+            }
+            const SDL_FRect destination{
+                x, kDollBottom - static_cast<float>(height),
+                static_cast<float>(source.w), static_cast<float>(source.h)};
+            SDL_RenderCopyF(renderer, texture->get(), &source, &destination);
+        }
+    }
 }
 
 void CharacterOverlay::draw_inventory_items(SDL_Renderer *renderer) {

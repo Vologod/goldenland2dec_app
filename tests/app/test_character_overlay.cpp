@@ -353,3 +353,139 @@ TEST_CASE("character overlay centers row text in the baked boxes" *
     CHECK(skill_value->x1 >= 482);
     CHECK(skill_value->x1 <= 492);
 }
+
+std::optional<DiffBox> snapshot_diff_bbox(const std::vector<std::uint8_t> &a,
+                                          const std::vector<std::uint8_t> &b, int x0,
+                                          int y0, int x1, int y1, int stride) {
+    std::optional<DiffBox> box;
+    for (int py = y0; py < y1; ++py) {
+        for (int px = x0; px < x1; ++px) {
+            const std::size_t offset = static_cast<std::size_t>(py) * stride + px * 4;
+            if (a[offset] == b[offset] && a[offset + 1] == b[offset + 1] &&
+                a[offset + 2] == b[offset + 2])
+                continue;
+            if (!box) box = DiffBox{px, py, px, py};
+            box->x0 = std::min(box->x0, px);
+            box->y0 = std::min(box->y0, py);
+            box->x1 = std::max(box->x1, px);
+            box->y1 = std::max(box->y1, py);
+        }
+    }
+    return box;
+}
+
+gl::assets::HeroInventory equipped_inventory() {
+    gl::assets::HeroInventory inventory;
+    inventory.equipped.push_back({318, 1, 0x100000, 12, 0});
+    inventory.equipped.push_back({280, 1, 0x4000, 11, 0});
+    inventory.equipped.push_back({397, 1, 0x200000, 14, 0});
+    return inventory;
+}
+
+TEST_CASE("character overlay draws paper-doll equipment overlays" *
+          doctest::skip(!game_dir_available())) {
+    const char *dir = std::getenv("GL_GAME_DIR");
+    REQUIRE(dir != nullptr);
+    auto vfs = gl::assets::GameVfs::mount(dir);
+    REQUIRE(vfs.has_value());
+    auto catalog = gl::assets::ItemCatalog::load(vfs.value());
+    REQUIRE(catalog.has_value());
+    SoftwareRenderer software(1024, 768);
+    REQUIRE(software.renderer != nullptr);
+    auto title = load_font(software.renderer, vfs.value(), 17.0f);
+    auto rows = load_font(software.renderer, vfs.value(), 16.0f);
+    REQUIRE(title.has_value());
+    REQUIRE(rows.has_value());
+
+    gl::assets::HeroInventory bare_inventory;
+    gl::app::CharacterOverlay overlay;
+    REQUIRE(overlay.open(software.renderer, vfs.value(), make_sheet(), &bare_inventory,
+                         &catalog.value()));
+    overlay.set_fonts(&title.value(), &rows.value());
+    overlay.render(software.renderer, 1024, 768);
+    const auto bare = snapshot(software.renderer, software.surface);
+
+    gl::assets::HeroInventory inventory = equipped_inventory();
+    REQUIRE(overlay.open(software.renderer, vfs.value(), make_sheet(), &inventory,
+                         &catalog.value()));
+    overlay.set_fonts(&title.value(), &rows.value());
+    overlay.render(software.renderer, 1024, 768);
+    const auto dressed = snapshot(software.renderer, software.surface);
+
+    const int stride = software.surface->pitch;
+    CHECK(region_difference(dressed, bare, 90, 395, 110, 100, stride) > 500);
+    CHECK(region_difference(dressed, bare, 125, 355, 50, 45, stride) > 50);
+}
+
+TEST_CASE("character overlay clips accessory overlays to the left half" *
+          doctest::skip(!game_dir_available())) {
+    const char *dir = std::getenv("GL_GAME_DIR");
+    REQUIRE(dir != nullptr);
+    auto vfs = gl::assets::GameVfs::mount(dir);
+    REQUIRE(vfs.has_value());
+    auto catalog = gl::assets::ItemCatalog::load(vfs.value());
+    REQUIRE(catalog.has_value());
+    SoftwareRenderer software(1024, 768);
+    REQUIRE(software.renderer != nullptr);
+    auto title = load_font(software.renderer, vfs.value(), 17.0f);
+    auto rows = load_font(software.renderer, vfs.value(), 16.0f);
+    REQUIRE(title.has_value());
+    REQUIRE(rows.has_value());
+
+    gl::assets::HeroInventory bare_inventory;
+    gl::app::CharacterOverlay overlay;
+    REQUIRE(overlay.open(software.renderer, vfs.value(), make_sheet(), &bare_inventory,
+                         &catalog.value()));
+    overlay.set_fonts(&title.value(), &rows.value());
+    overlay.render(software.renderer, 1024, 768);
+    const auto bare = snapshot(software.renderer, software.surface);
+
+    gl::assets::HeroInventory inventory;
+    inventory.equipped.push_back({233, 1, 0x10000, 17, 0});
+    REQUIRE(overlay.open(software.renderer, vfs.value(), make_sheet(), &inventory,
+                         &catalog.value()));
+    overlay.set_fonts(&title.value(), &rows.value());
+    overlay.render(software.renderer, 1024, 768);
+    const auto ring = snapshot(software.renderer, software.surface);
+
+    const auto box = snapshot_diff_bbox(ring, bare, 8, 480, 200, 505,
+                                        software.surface->pitch);
+    REQUIRE(box.has_value());
+    CHECK(box->x0 >= 5);
+    CHECK(box->x1 <= 141);
+}
+
+TEST_CASE("character overlay skips missing puppet assets" *
+          doctest::skip(!game_dir_available())) {
+    const char *dir = std::getenv("GL_GAME_DIR");
+    REQUIRE(dir != nullptr);
+    auto vfs = gl::assets::GameVfs::mount(dir);
+    REQUIRE(vfs.has_value());
+    auto catalog = gl::assets::ItemCatalog::load(vfs.value());
+    REQUIRE(catalog.has_value());
+    SoftwareRenderer software(1024, 768);
+    REQUIRE(software.renderer != nullptr);
+    auto title = load_font(software.renderer, vfs.value(), 17.0f);
+    auto rows = load_font(software.renderer, vfs.value(), 16.0f);
+    REQUIRE(title.has_value());
+    REQUIRE(rows.has_value());
+
+    gl::assets::HeroInventory bare_inventory;
+    gl::app::CharacterOverlay overlay;
+    REQUIRE(overlay.open(software.renderer, vfs.value(), make_sheet(), &bare_inventory,
+                         &catalog.value()));
+    overlay.set_fonts(&title.value(), &rows.value());
+    overlay.render(software.renderer, 1024, 768);
+    const auto bare = snapshot(software.renderer, software.surface);
+
+    gl::assets::HeroInventory inventory;
+    inventory.equipped.push_back({999999, 1, 0x100000, 12, 0});
+    REQUIRE(overlay.open(software.renderer, vfs.value(), make_sheet(), &inventory,
+                         &catalog.value()));
+    overlay.set_fonts(&title.value(), &rows.value());
+    overlay.render(software.renderer, 1024, 768);
+    const auto missing = snapshot(software.renderer, software.surface);
+
+    CHECK(region_difference(missing, bare, 90, 395, 110, 100,
+                            software.surface->pitch) <= 8);
+}

@@ -2,6 +2,34 @@
 
 Обновлено: 2026-11-24
 
+## P5b2-1 — Paper-doll wear overlays (automated done 2026-11-24)
+
+- **Задача:** рисовать надетую экипировку на кукле листа персонажа
+  (`puppet_name`), а не только иконки слотов.
+- **Spec/plan/research:** `docs/specs/2026-11-24-p5b2-puppet-overlays-design.md`,
+  `docs/plans/2026-11-24-p5b2-puppet-overlays.md`,
+  `docs/research/p5b2-puppet-overlays.md`.
+- **Evidence:** `FUN_120683a8` (RVA `0x683a8`); не-аксессуары — левый
+  край `x=5`, низ `y=622` (`H=768`, `−146`), полный спрайт; аксессуары
+  (`mask & 0xF0000`) — половинный холст 135 px (левый/правый срез);
+  порядок масок `0x200000 → 0x100000 → 0xF8000 → 0x4000 → 0xC00000 →
+  0x3000`; кадры проверены композицией на `inventory_secondary.bmp`.
+- **Результат:** `CharacterOverlay::draw_doll_overlays` (путь
+  `items/res/<puppet_name>`, magenta key, активный набор A/B,
+  skip пустых/отсутствующих ассетов), вызывается после фона, перед
+  иконками слотов.
+- **Проверка:** `character_overlay_tests` 9/9 (119 assertions);
+  `glgame_screenshot_tests --test-case="*character*"` 1/1 (30);
+  полный `ctest` с `GL_GAME_DIR` — **21/21 passed, 2164.53 s**
+  (2026-11-24); скриншот slot0 — одетая кукла
+  (шлем/броня/наручи/поножи/оружие A).
+- **Residual:** `InventoryOverlay` (P5b1) — тот же механизм, отдельная
+  задача; активный набор из сейва (`local_player+0x6E4`) не
+  моделируется — по умолчанию A (как иконки слотов); анимации
+  attack/idle оверлеев и подсветка активной руки.
+- **Статус:** implemented (automated green); manual visual gate open;
+  не закоммичено.
+
 ## P7b2 — Character sheet original layout (in progress 2026-11-24)
 
 - **Задача:** заменить пять выдуманных sub-tabs на оригинальные две
