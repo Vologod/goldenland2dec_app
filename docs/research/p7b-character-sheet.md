@@ -43,6 +43,8 @@ order rendered is `14, 15, 16, 27, 28, 18, 19, 20, 21, 22, 23, 24,
 - 27 skill rows: objects `100:126`.
 - Secondary rows (state/resistance): objects `160:170`.
 - Inventory tabs: objects `5:6`; close: object `7`.
+- Inventory tab rects: `(280,4,368x40)` (skills, opens the sheet) and
+  `(654,4,360x40)` (secondary; closes the sheet back to inventory).
 - Overlay rects (1024x768 canvas, background
   `engineres/newinv/inventory_skills.bmp`):
   - tabs `(3,4)`, `(62,4)`, `(121,4)`, `(179,4)`, `(239,4)`, each `56x25`;

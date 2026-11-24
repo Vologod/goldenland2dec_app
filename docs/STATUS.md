@@ -19,27 +19,26 @@
   `HeroPortrait` (equipped `tb_stay` idle из P4d/P5a);
   `level_input_enabled` + `character_active`; `glgame`
   skills-tab/`C`/`--character`.
-- **Проверка (2026-11-23):** `gl_game_tests --test-case="*character
-  sheet*"` 6/6 (64 assertions); `character_overlay_tests` 3/3 (27
-  assertions); `glgame_screenshot_tests --test-case="*character*"` 1/1
-  (5 assertions); полный `ctest` 21/21, 2860.42 s (before the final fix
-  wave; rerun pending).
+- **Проверка (2026-11-24, final):** focused after fix wave:
+  `gl_game_tests --test-case="*character sheet*"` 6/6 (113 assertions);
+  `character_overlay_tests` 6/6 (69); `glgame_screenshot_tests
+  --test-case="*character*"` 1/1 (30); полный `ctest` 21/21, 1584.82 s.
 - **Residual:** skill-point spending/save write, state/resistance data,
-  remaining combat columns, tooltips/animation, touch (P9), crafting.
-- **Статус:** automated done; final fix wave 75cb2d5 awaiting scoped
-  re-review + full ctest; manual visual gate open.
+  remaining combat columns, tooltips/animation, doll shadow/anchor,
+  original tab-art highlight, touch (P9), crafting.
+- **Статус:** done (automated; scoped re-review clean; full ctest
+  21/21); manual visual gate open.
 
 ## Session checkpoint (2026-11-23 21:44)
 
 - P7b реализован и закоммичен: задачи 1-5 + final-review fix wave `75cb2d5`.
 - Проверено после fix wave (focused): `gl_game_tests *character sheet*`
   6/6 (113 assertions), `character_overlay_tests` 6/6 (69),
-  `glgame_screenshot_tests *character*` 1/1 (30). Полный `ctest` на
-  финальном дереве ещё не прогонялся (до fix wave было 21/21,
-  2860.42 s).
-- Осталось: scoped re-review `75cb2d5`, полный `ctest`, manual visual
-  gate (пользователь), затем финализировать `STATUS/PROJECT/DECISIONS`
-  и push по указанию.
+  `glgame_screenshot_tests *character*` 1/1 (30).
+- Scoped re-review `75cb2d5`: все finding-и addressed, нового
+  Critical/Important нет. Полный `ctest` на финальном дереве: 21/21,
+  1584.82 s (2026-11-24).
+- Осталось: manual visual gate (пользователь), затем push по указанию.
 - SDD ledger: `.superpowers/sdd/2026-11-23-p7b-character-sheet/progress.md`.
 
 ## P6a8 — Dialog/injury natives (done 2026-11-23)
