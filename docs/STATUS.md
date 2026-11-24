@@ -43,11 +43,24 @@
   значения данных не менялись; wear-оверлеи P5b2-1.
 - **Manual gate feedback (2026-11-24, открыто):** (1) шрифт/размер
   местами отличается от оригинала; (2) в отдельных «полях» текст всё
-  ещё слегка прижат к верху — уточняется (вероятно ячейки с
-  `h < text_height`, где вертикальное центрирование не применяется).
+  ещё слегка прижат к верху.
+  - **Гипотеза (2):** поля с `h < text_height` (combat-значения `h=15`)
+    не получают вертикального центрирования и после half-leading
+    остаются у верхней кромки; также в высоких боксах (`name h=26`,
+    `Очки распределения h=23`) GDI-центрирование по `tmHeight` (с
+    internal leading) может отличаться от порта по `text_height`.
+  - **Метод проверки:** diff оригинальных скриншотов
+    `.local/p7b2/characteristics.png`/`skills.png` и порт-рендера по
+    фоновому BMP (`glpak extract <game> --file
+    engineres/newinv/inventory_secondary.bmp|inventory_skills.bmp`),
+    y-диапазон пикселей текста (diff RGB > 60) для каждого поля.
+    Скрипт-замер: `%TEMP%\opencode\diff_fields.ps1` (временный).
+  - **Точка правки:** `CharacterOverlay::draw_text_rect` в
+    `src/app/src/character_overlay.cpp` (half-leading уже там).
 - **Статус:** implemented, automated green; закоммичено
-  (`feat: p7b3 character sheet text layout parity`); manual visual gate
-  open, два пункта выше — открыты.
+  `20258ee` (`feat: p7b3 character sheet text layout parity`);
+  paused 2026-11-24 до завтра; manual visual gate open, два пункта
+  выше — открыты (следующий шаг — замер полей из «Гипотезы (2)»).
 
 ## P5b2-1 — Paper-doll wear overlays (automated done 2026-11-24)
 
