@@ -355,6 +355,11 @@ double PersonRuntime::get_parameter(std::string_view person, PersonParameter par
     return 0.0;
 }
 
+double PersonRuntime::maximum_energy(std::string_view person) const {
+    const PersonState *state = find(person);
+    return state == nullptr ? 0.0 : maximum_energy_value(*state);
+}
+
 bool PersonRuntime::has_parameter(std::string_view person,
                                   PersonParameter parameter) const {
     const PersonState *state = find(person);

@@ -1,6 +1,68 @@
 # STATUS
 
-Обновлено: 2026-11-23
+Обновлено: 2026-11-24
+
+## P7b2 — Character sheet original layout (in progress 2026-11-24)
+
+- **Задача:** заменить пять выдуманных sub-tabs на оригинальные две
+  вкладки (`ХАРАКТЕРИСТИКИ` / `НАВЫКИ`), исправить содержимое страниц,
+  имя, нижний инвентарь и куклу.
+- **Spec:** `docs/specs/2026-11-24-p7b2-character-sheet-original-layout-design.md`
+  (approved 2026-11-24). Плана нет — реализация шла напрямую по spec.
+- **Состояние на диске (не закоммичено):** `CharacterTab{characteristics,
+  skills}`; `CharacterSheet` primary(7)/experience_points/state(6)/
+  combat(10)/resistance(12)/immunity(6)/`skill_groups`(3) +
+  `experience_max`; `maximum_energy`; `--character --character-tab`;
+  `CharacterOverlay` (два фона, табы, запечённая кукла, read-only
+  иконки из `HeroInventory`/`ItemCatalog`, боксы строк по BMP);
+  `Font::text_height()`; `HeroPortrait` удалён.
+- **Проверка (2026-11-24):** `cmake --build build` — ok;
+  `gl_game_tests --test-case="*character sheet*"` 6/6 (135 assertions,
+  вкл. real slot0); `character_overlay_tests` 6/6 (89);
+  `glgame_screenshot_tests --test-case="*character*"` 1/1 (30);
+  полный `ctest` с `GL_GAME_DIR` — **21/21 passed, 2258.46 s**
+  (2026-11-24).
+- **Research закрыт:** `docs/research/p7b2-character-sheet-doll-fonts.md`
+  — кукла уже в фоне BMP (`inv_gui.scr` id2 `(8,296,270x320)`,
+  пустой образ), шрифты вкладок/строк — `pala.ttf` (`main_interface`
+  12 pt / `heads_interface` 14 pt, `MulDiv(...,LOGPIXELSY,72)`),
+  Arial не используется.
+- **Сделано после research:** `HeroPortrait` удалён (кукла из фона);
+  шрифт листа → `pala.ttf` 17/16; откат `resolve_hero_outfit(prefer_b)`.
+- **Фикс «надписи поехали» (2026-11-24):** вертикальное центрирование
+  по `Font::text_height()` (GDI-клетка) вместо `line_height`
+  (`line_gap` Palatino ~5 px сдвигал текст вверх/под clip); боксы
+  строк заменены на замеренные по BMP (атрибуты value `196..225`,
+  «Очки опыта» `214..255`, skills value `457..492/703..737/950..982`,
+  resistance `948..999`, immunity `773..817/949..994`), высоты строк
+  и y — по фонам. Тест `character overlay centers row text in the
+  baked boxes`.
+- **Открытая проблема (2026-11-24, подтверждена пользователем):**
+  надписи всё ещё «поехали» — текстовый layout не финальный
+  (позиционирование/вид текста в строках листа). Фикс по замерам не
+  закрывает вопрос; нужен отдельный разбор. Оставлено как есть по
+  просьбе пользователя, не коммитить как готовое.
+- **Известное расхождение:** wear-оверлеи `puppet_name` на кукле
+  (P5b2-1) не реализованы — поэтому герой на листе без одежды:
+  в фоне BMP нарисовано только тело, а оригинал рисует поверх него
+  спрайты надетой экипировки (`FUN_120683a8`, маски `0x200000,
+  0x100000,0xF8000,0x4000,0xC00000,0x3000`); слот-иконки предметов
+  при этом рисуются.
+- **Дальше:** отдельная задача на текстовый layout листа
+  (позиционирование/вид надписей), затем manual visual gate и коммит.
+- **Статус:** implemented, automated green (full ctest 21/21);
+  открыта проблема с надписями; manual visual gate open; не
+  закоммичено.
+
+## Session checkpoint (2026-11-24)
+
+- Соседняя сессия упала на лимите тела запроса (48 MiB): в контексте
+  накопились гигантские tool-выводы (один файл 233 MB, `opencode.db`
+  ~4 GB). Ту сессию не продолжать; состояние восстановлено по
+  `git status`/`git diff` и spec.
+- P7b2 зафиксирован выше; research куклы/шрифтов выполнен
+  (`docs/research/p7b2-character-sheet-doll-fonts.md`). Открытая
+  проблема — текстовый layout листа (см. P7b2 выше).
 
 ## P7b — Character sheet (automated done 2026-11-23)
 

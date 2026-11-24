@@ -2,20 +2,15 @@
 #define DOCTEST_CONFIG_IMPLEMENT
 #include <doctest.h>
 #include <gl/app/character_overlay.hpp>
-#include <gl/app/hero_portrait.hpp>
 #include <gl/assets/hero_equipment.hpp>
-#include <gl/assets/herowear.hpp>
-#include <gl/assets/sdb.hpp>
+#include <gl/assets/image.hpp>
+#include <gl/assets/item_catalog.hpp>
 #include <gl/assets/vfs.hpp>
-#include <gl/game/hero_outfit_resolver.hpp>
-#include <gl/game/hero_wear.hpp>
 #include <gl/render/font.hpp>
 #include <gl/render/texture.hpp>
 #include <cstdlib>
 #include <cstdint>
-#include <filesystem>
-#include <fstream>
-#include <iterator>
+#include <algorithm>
 #include <optional>
 #include <span>
 #include <vector>
@@ -69,52 +64,63 @@ std::size_t region_difference(const std::vector<std::uint8_t> &a,
 
 gl::game::CharacterSheet make_sheet() {
     gl::game::CharacterSheet sheet;
-    sheet.name = "Hero";
+    sheet.name = "Р’РµСЂС‚Р°СЃ";
+    sheet.characteristics_title = "РҐРђР РђРљРўР•Р РРЎРўРРљР";
+    sheet.skills_title = "РќРђР’Р«РљР";
+    sheet.state_title = "РЎРћРЎРўРћРЇРќРР•";
+    sheet.combat_title = "Р‘РћР•Р’Р«Р• РҐРђР РђРљРўР•Р РРЎРўРРљР";
+    sheet.resistance_title = "РЎРћРџР РћРўРР’Р›Р•РќРР•";
+    sheet.immunity_title = "РРњРњРЈРќРРўР•Рў Рљ РњРђР“РР";
+    sheet.skill_points_label = "РћС‡РєРё СЂР°СЃРїСЂРµРґРµР»РµРЅРёСЏ";
     auto add = [](std::vector<gl::game::CharacterRow> &rows, const char *label,
                   const char *value, bool modeled = true) {
         rows.push_back(gl::game::CharacterRow{label, value, modeled});
     };
-    for (int i = 0; i < 8; ++i) add(sheet.primary, "PRIMARY", std::to_string(i + 1).c_str());
-    for (int i = 0; i < 4; ++i) add(sheet.personality, "PERSON", std::to_string(i).c_str());
-    for (int i = 0; i < 15; ++i)
-        add(sheet.characteristics, "CHAR", i < 5 ? "1" : "-", i < 5);
-    for (int i = 0; i < 27; ++i) add(sheet.skills, "SKILL", std::to_string(i).c_str());
+    for (int i = 0; i < 7; ++i) add(sheet.primary, "PRIMARY", "1");
+    sheet.experience_points = gl::game::CharacterRow{"РћС‡РєРё РѕРїС‹С‚Р°", "0", true};
+    for (int i = 0; i < 6; ++i) add(sheet.state, "STATE", i < 5 ? "1" : "вЂ”", i < 5);
+    for (int i = 0; i < 10; ++i) add(sheet.combat, "COMBAT", "вЂ”", false);
+    for (int i = 0; i < 12; ++i) add(sheet.resistance, "RESIST", "вЂ”", false);
+    for (int i = 0; i < 6; ++i) add(sheet.immunity, "IMMUNE", "вЂ”", false);
+    for (int group = 0; group < 3; ++group) {
+        gl::game::CharacterGroup entry;
+        entry.title = "GROUP";
+        for (int i = 0; i < 9; ++i) add(entry.rows, "SKILL", "1");
+        sheet.skill_groups.push_back(std::move(entry));
+    }
     return sheet;
 }
 
 std::optional<gl::render::Font> load_font(SDL_Renderer *renderer,
                                           const gl::assets::GameVfs &vfs, float size) {
-    auto data = vfs.read("engineres/fonts/ttf/arial.ttf");
+    auto data = vfs.read("engineres/fonts/ttf/pala.ttf");
     if (!data) return std::nullopt;
     auto font = gl::render::Font::load_from_memory(
-        renderer, std::span<const std::uint8_t>(data->data(), data->size()), size, "arial");
+        renderer, std::span<const std::uint8_t>(data->data(), data->size()), size, "pala");
     if (!font) return std::nullopt;
     return std::optional<gl::render::Font>(std::move(font.value()));
 }
 } // namespace
 
-TEST_CASE("character overlay opens, hits tabs and close" *
+TEST_CASE("character overlay opens, hits both tabs and close" *
           doctest::skip(!game_dir_available())) {
     const char *dir = std::getenv("GL_GAME_DIR");
     REQUIRE(dir != nullptr);
     auto vfs = gl::assets::GameVfs::mount(dir);
     REQUIRE(vfs.has_value());
     gl::app::CharacterOverlay overlay;
-    CHECK(overlay.open(nullptr, vfs.value(), make_sheet(), nullptr));
+    CHECK(overlay.open(nullptr, vfs.value(), make_sheet(), nullptr, nullptr));
     CHECK(overlay.visible());
-    CHECK(overlay.tab() == gl::game::CharacterTab::skills);
-    CHECK(overlay.hit_test(5, 10) == gl::app::CharacterRegion::tab);
+    CHECK(overlay.tab() == gl::game::CharacterTab::characteristics);
+    CHECK(overlay.hit_test(300, 10) == gl::app::CharacterRegion::tab);
+    CHECK(overlay.hit_test(700, 10) == gl::app::CharacterRegion::tab);
     CHECK(overlay.hit_test(930, 700) == gl::app::CharacterRegion::close);
-    CHECK(overlay.hit_test(680, 20) == gl::app::CharacterRegion::inventory_tab);
-    CHECK(overlay.handle_mouse(5, 10, true));
-    CHECK(overlay.tab() == gl::game::CharacterTab::personality);
-    CHECK(overlay.handle_key(SDLK_3));
+    CHECK(overlay.handle_mouse(700, 10, true));
     CHECK(overlay.tab() == gl::game::CharacterTab::skills);
-    CHECK_FALSE(overlay.take_inventory_tab_request());
-    CHECK(overlay.handle_mouse(680, 20, true));
-    CHECK_FALSE(overlay.visible());
-    CHECK(overlay.take_inventory_tab_request());
-    CHECK_FALSE(overlay.take_inventory_tab_request());
+    CHECK(overlay.handle_key(SDLK_1));
+    CHECK(overlay.tab() == gl::game::CharacterTab::characteristics);
+    CHECK(overlay.handle_key(SDLK_2));
+    CHECK(overlay.tab() == gl::game::CharacterTab::skills);
 }
 
 TEST_CASE("character overlay key C and close hit close the sheet" *
@@ -124,18 +130,18 @@ TEST_CASE("character overlay key C and close hit close the sheet" *
     auto vfs = gl::assets::GameVfs::mount(dir);
     REQUIRE(vfs.has_value());
     gl::app::CharacterOverlay overlay;
-    REQUIRE(overlay.open(nullptr, vfs.value(), make_sheet(), nullptr));
+    REQUIRE(overlay.open(nullptr, vfs.value(), make_sheet(), nullptr, nullptr));
     REQUIRE(overlay.handle_mouse(930, 700, false));
     CHECK(overlay.visible());
     REQUIRE(overlay.handle_mouse(930, 700, true));
     CHECK_FALSE(overlay.visible());
 
-    REQUIRE(overlay.open(nullptr, vfs.value(), make_sheet(), nullptr));
+    REQUIRE(overlay.open(nullptr, vfs.value(), make_sheet(), nullptr, nullptr));
     CHECK(overlay.handle_key(SDLK_c));
     CHECK_FALSE(overlay.visible());
 }
 
-TEST_CASE("character overlay renders different tab content" *
+TEST_CASE("character overlay renders the two original pages" *
           doctest::skip(!game_dir_available())) {
     const char *dir = std::getenv("GL_GAME_DIR");
     REQUIRE(dir != nullptr);
@@ -149,34 +155,58 @@ TEST_CASE("character overlay renders different tab content" *
     REQUIRE(rows.has_value());
 
     gl::app::CharacterOverlay overlay;
-    REQUIRE(overlay.open(software.renderer, vfs.value(), make_sheet(), nullptr));
+    REQUIRE(overlay.open(software.renderer, vfs.value(), make_sheet(), nullptr, nullptr));
     overlay.set_fonts(&title.value(), &rows.value());
-    overlay.set_tab(gl::game::CharacterTab::skills);
-    overlay.render(software.renderer, 1024, 768);
-    const auto skills = snapshot(software.renderer, software.surface);
     overlay.set_tab(gl::game::CharacterTab::characteristics);
     overlay.render(software.renderer, 1024, 768);
     const auto characteristics = snapshot(software.renderer, software.surface);
-    overlay.set_tab(gl::game::CharacterTab::personality);
+    overlay.set_tab(gl::game::CharacterTab::skills);
     overlay.render(software.renderer, 1024, 768);
-    const auto personality = snapshot(software.renderer, software.surface);
-    overlay.set_tab(gl::game::CharacterTab::state);
-    overlay.render(software.renderer, 1024, 768);
-    const auto state = snapshot(software.renderer, software.surface);
-    overlay.set_tab(gl::game::CharacterTab::resistance);
-    overlay.render(software.renderer, 1024, 768);
-    const auto resistance = snapshot(software.renderer, software.surface);
+    const auto skills = snapshot(software.renderer, software.surface);
 
     const int stride = software.surface->pitch;
-    CHECK(region_difference(skills, characteristics, 289, 126, 140, 80, stride) > 0);
-    CHECK(region_difference(skills, characteristics, 296, 109, 155, 60, stride) > 0);
-    CHECK(region_difference(personality, skills, 296, 100, 272, 140, stride) > 0);
-    CHECK(region_difference(state, resistance, 296, 290, 650, 40, stride) == 0);
-    CHECK(region_difference(skills, state, 296, 290, 650, 40, stride) > 0);
-    CHECK(region_difference(skills, personality, 20, 60, 130, 80, stride) == 0);
+    CHECK(region_difference(characteristics, skills, 265, 0, 759, 35, stride) > 0);
+    CHECK(region_difference(characteristics, skills, 285, 100, 360, 220, stride) > 0);
+    CHECK(region_difference(characteristics, skills, 285, 120, 500, 460, stride) > 0);
 }
 
-TEST_CASE("character overlay renders the equipped doll in the doll region" *
+TEST_CASE("character overlay draws bottom inventory icons" *
+          doctest::skip(!game_dir_available())) {
+    const char *dir = std::getenv("GL_GAME_DIR");
+    REQUIRE(dir != nullptr);
+    auto vfs = gl::assets::GameVfs::mount(dir);
+    REQUIRE(vfs.has_value());
+    auto catalog = gl::assets::ItemCatalog::load(vfs.value());
+    REQUIRE(catalog.has_value());
+    SoftwareRenderer software(1024, 768);
+    REQUIRE(software.renderer != nullptr);
+    auto title = load_font(software.renderer, vfs.value(), 18.0f);
+    auto rows = load_font(software.renderer, vfs.value(), 16.0f);
+    REQUIRE(title.has_value());
+    REQUIRE(rows.has_value());
+
+    gl::assets::HeroInventory inventory;
+    gl::assets::InventoryItem item;
+    item.item_id = 953;
+    item.type = 19;
+    item.count = 1;
+    inventory.items.push_back(item);
+
+    gl::app::CharacterOverlay overlay;
+    REQUIRE(overlay.open(software.renderer, vfs.value(), make_sheet(), &inventory,
+                         &catalog.value()));
+    overlay.set_fonts(&title.value(), &rows.value());
+    overlay.render(software.renderer, 1024, 768);
+    const auto with_items = snapshot(software.renderer, software.surface);
+    REQUIRE(overlay.open(software.renderer, vfs.value(), make_sheet(), nullptr, nullptr));
+    overlay.set_fonts(&title.value(), &rows.value());
+    overlay.render(software.renderer, 1024, 768);
+    const auto without_items = snapshot(software.renderer, software.surface);
+    CHECK(region_difference(with_items, without_items, 140, 703, 670, 55,
+                            software.surface->pitch) > 0);
+}
+
+TEST_CASE("character overlay keeps the baked doll from the background" *
           doctest::skip(!game_dir_available())) {
     const char *dir = std::getenv("GL_GAME_DIR");
     REQUIRE(dir != nullptr);
@@ -188,80 +218,138 @@ TEST_CASE("character overlay renders the equipped doll in the doll region" *
     auto rows = load_font(software.renderer, vfs.value(), 16.0f);
     REQUIRE(title.has_value());
     REQUIRE(rows.has_value());
-    gl::game::HeroOutfit outfit;
-    outfit.wear_set = "noweapon_thrw";
 
     gl::app::CharacterOverlay overlay;
-    REQUIRE(overlay.open(software.renderer, vfs.value(), make_sheet(), &outfit));
+    REQUIRE(overlay.open(software.renderer, vfs.value(), make_sheet(), nullptr, nullptr));
     overlay.set_fonts(&title.value(), &rows.value());
+    SDL_FillRect(software.surface, nullptr, 0);
     overlay.render(software.renderer, 1024, 768);
-    const auto with_doll = snapshot(software.renderer, software.surface);
-    REQUIRE(overlay.open(software.renderer, vfs.value(), make_sheet(), nullptr));
-    overlay.set_fonts(&title.value(), &rows.value());
-    overlay.render(software.renderer, 1024, 768);
-    const auto without_doll = snapshot(software.renderer, software.surface);
-    CHECK(region_difference(with_doll, without_doll, 8, 296, 270, 320,
-                            software.surface->pitch) > 100);
+    (void)snapshot(software.renderer, software.surface);
+
+    auto background = vfs.value().read("engineres/newinv/inventory_secondary.bmp");
+    REQUIRE(background.has_value());
+    auto image = gl::assets::decode_image(background.value());
+    REQUIRE(image.has_value());
+
+    SDL_Surface *surface = software.surface;
+    REQUIRE(SDL_LockSurface(surface) == 0);
+    std::size_t different = 0;
+    for (int py = 296; py < 616; ++py) {
+        const auto *row = reinterpret_cast<const std::uint32_t *>(
+            static_cast<const std::uint8_t *>(surface->pixels) + py * surface->pitch);
+        for (int px = 8; px < 278; ++px) {
+            std::uint8_t r = 0, g = 0, b = 0, a = 0;
+            SDL_GetRGBA(row[px], surface->format, &r, &g, &b, &a);
+            const auto &pixel = image->rgba[static_cast<std::size_t>(py) * image->width +
+                                           static_cast<std::size_t>(px)];
+            if (r != pixel.r || g != pixel.g || b != pixel.b) ++different;
+        }
+    }
+    SDL_UnlockSurface(surface);
+    CHECK(different <= 8);
 }
 
-TEST_CASE("hero portrait composes the equipped idle frame" *
+struct DiffBox {
+    int x0 = 0;
+    int y0 = 0;
+    int x1 = 0;
+    int y1 = 0;
+};
+
+std::optional<DiffBox> diff_bbox(SDL_Surface *surface, const gl::assets::Image &image,
+                                 int x0, int y0, int x1, int y1) {
+    std::optional<DiffBox> box;
+    for (int py = y0; py < y1; ++py) {
+        const auto *row = reinterpret_cast<const std::uint32_t *>(
+            static_cast<const std::uint8_t *>(surface->pixels) + py * surface->pitch);
+        for (int px = x0; px < x1; ++px) {
+            std::uint8_t r = 0, g = 0, b = 0, a = 0;
+            SDL_GetRGBA(row[px], surface->format, &r, &g, &b, &a);
+            const auto &pixel = image.rgba[static_cast<std::size_t>(py) * image.width +
+                                           static_cast<std::size_t>(px)];
+            if (r == pixel.r && g == pixel.g && b == pixel.b) continue;
+            if (!box) box = DiffBox{px, py, px, py};
+            box->x0 = std::min(box->x0, px);
+            box->y0 = std::min(box->y0, py);
+            box->x1 = std::max(box->x1, px);
+            box->y1 = std::max(box->y1, py);
+        }
+    }
+    return box;
+}
+
+void render_and_lock(SDL_Renderer *renderer, SDL_Surface *surface) {
+    (void)snapshot(renderer, surface);
+    REQUIRE(SDL_LockSurface(surface) == 0);
+}
+
+TEST_CASE("character overlay centers row text in the baked boxes" *
           doctest::skip(!game_dir_available())) {
     const char *dir = std::getenv("GL_GAME_DIR");
     REQUIRE(dir != nullptr);
     auto vfs = gl::assets::GameVfs::mount(dir);
     REQUIRE(vfs.has_value());
-    gl::game::HeroOutfit outfit;
-    outfit.wear_set = "noweapon_thrw";
-    SoftwareRenderer software(300, 340);
+    SoftwareRenderer software(1024, 768);
     REQUIRE(software.renderer != nullptr);
-    gl::app::HeroPortrait portrait;
-    REQUIRE(portrait.load(software.renderer, vfs.value(), outfit));
-    REQUIRE(portrait.ready());
-    CHECK(portrait.animation_type() == gl::assets::PadAnimationType::tb_stay);
-    SDL_SetRenderDrawColor(software.renderer, 0, 0, 0, 255);
-    SDL_RenderClear(software.renderer);
-    portrait.render(software.renderer, 0.0f, 0.0f, 300.0f, 340.0f);
-    const auto pixels = snapshot(software.renderer, software.surface);
-    std::size_t non_black = 0;
-    for (std::size_t i = 0; i + 3 < pixels.size(); i += 4)
-        if (pixels[i] != 0 || pixels[i + 1] != 0 || pixels[i + 2] != 0) ++non_black;
-    CHECK(non_black > 100);
+    auto title = load_font(software.renderer, vfs.value(), 17.0f);
+    auto rows = load_font(software.renderer, vfs.value(), 16.0f);
+    REQUIRE(title.has_value());
+    REQUIRE(rows.has_value());
 
-    portrait.clear();
-    CHECK_FALSE(portrait.ready());
-}
+    auto secondary_data = vfs.value().read("engineres/newinv/inventory_secondary.bmp");
+    REQUIRE(secondary_data.has_value());
+    auto secondary = gl::assets::decode_image(secondary_data.value());
+    REQUIRE(secondary.has_value());
 
-TEST_CASE("hero portrait loads the real slot0 outfit" *
-          doctest::skip(!game_dir_available())) {
-    const char *dir = std::getenv("GL_GAME_DIR");
-    REQUIRE(dir != nullptr);
-    auto vfs = gl::assets::GameVfs::mount(dir);
-    REQUIRE(vfs.has_value());
-    const std::filesystem::path path =
-        std::filesystem::path(dir) / "Saves" / "slot0.sav";
-    std::ifstream in(path, std::ios::binary);
-    REQUIRE(in);
-    const std::vector<std::uint8_t> bytes((std::istreambuf_iterator<char>(in)),
-                                          std::istreambuf_iterator<char>());
-    auto body = gl::assets::decode_save_body(bytes);
-    REQUIRE(body.has_value());
-    auto equipment = gl::assets::parse_hero_equipment(body.value());
-    REQUIRE(equipment.has_value());
-    auto tech_data = vfs->read("sdb/items/tech_names.sdb");
-    REQUIRE(tech_data.has_value());
-    auto tech = gl::assets::Sdb::parse(tech_data.value());
-    REQUIRE(tech.has_value());
-    auto wear_data = vfs->read("scripts/herowear.scr");
-    REQUIRE(wear_data.has_value());
-    auto wear = gl::assets::parse_herowear(wear_data.value());
-    REQUIRE(wear.has_value());
-    auto outfit = gl::game::resolve_hero_outfit(equipment.value(), tech.value(), wear.value());
-    REQUIRE(outfit.has_value());
+    gl::app::CharacterOverlay overlay;
+    REQUIRE(overlay.open(software.renderer, vfs.value(), make_sheet(), nullptr, nullptr));
+    overlay.set_fonts(&title.value(), &rows.value());
+    overlay.render(software.renderer, 1024, 768);
+    render_and_lock(software.renderer, software.surface);
 
-    SoftwareRenderer software(300, 340);
-    REQUIRE(software.renderer != nullptr);
-    gl::app::HeroPortrait portrait;
-    REQUIRE(portrait.load(software.renderer, vfs.value(), outfit.value()));
-    CHECK(portrait.ready());
-    CHECK(portrait.animation_type() == gl::assets::PadAnimationType::tb_stay);
+    auto primary_label = diff_bbox(software.surface, secondary.value(), 22, 55, 152, 92);
+    auto primary_value = diff_bbox(software.surface, secondary.value(), 200, 55, 230, 92);
+    auto state_value = diff_bbox(software.surface, secondary.value(), 580, 96, 640, 130);
+    auto resistance_value = diff_bbox(software.surface, secondary.value(), 940, 96, 1005, 130);
+    auto immunity1_value = diff_bbox(software.surface, secondary.value(), 760, 562, 830, 595);
+    auto immunity2_value = diff_bbox(software.surface, secondary.value(), 935, 562, 1005, 595);
+    SDL_UnlockSurface(software.surface);
+
+    REQUIRE(primary_label.has_value());
+    CHECK(primary_label->y0 >= 63);
+    CHECK(primary_label->y0 <= 68);
+    CHECK(primary_label->y1 <= 82);
+    REQUIRE(primary_value.has_value());
+    CHECK(primary_value->x1 >= 216);
+    CHECK(primary_value->x1 <= 222);
+    REQUIRE(state_value.has_value());
+    CHECK(state_value->x1 >= 618);
+    CHECK(state_value->x1 <= 630);
+    REQUIRE(resistance_value.has_value());
+    CHECK(resistance_value->x1 >= 988);
+    CHECK(resistance_value->x1 <= 999);
+    REQUIRE(immunity1_value.has_value());
+    CHECK(immunity1_value->x1 >= 809);
+    CHECK(immunity1_value->x1 <= 820);
+    REQUIRE(immunity2_value.has_value());
+    CHECK(immunity2_value->x1 >= 985);
+    CHECK(immunity2_value->x1 <= 995);
+
+    auto skills_data = vfs.value().read("engineres/newinv/inventory_skills.bmp");
+    REQUIRE(skills_data.has_value());
+    auto skills = gl::assets::decode_image(skills_data.value());
+    REQUIRE(skills.has_value());
+    overlay.set_tab(gl::game::CharacterTab::skills);
+    overlay.render(software.renderer, 1024, 768);
+    render_and_lock(software.renderer, software.surface);
+    auto skill_label = diff_bbox(software.surface, skills.value(), 285, 118, 440, 150);
+    auto skill_value = diff_bbox(software.surface, skills.value(), 450, 118, 500, 150);
+    SDL_UnlockSurface(software.surface);
+
+    REQUIRE(skill_label.has_value());
+    CHECK(skill_label->y0 >= 127);
+    CHECK(skill_label->y0 <= 131);
+    REQUIRE(skill_value.has_value());
+    CHECK(skill_value->x1 >= 482);
+    CHECK(skill_value->x1 <= 492);
 }

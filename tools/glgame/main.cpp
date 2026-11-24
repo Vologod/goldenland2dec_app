@@ -139,6 +139,7 @@ struct Options {
     bool inventory = false;
     bool diary = false;
     bool character = false;
+    std::string character_tab;
     std::optional<int> inventory_select;
     std::string trade_npc;
     bool has_trade_npc = false;
@@ -189,6 +190,7 @@ void print_usage() {
         "  --inventory          Open the inventory overlay for the selected save\n"
         "  --inventory-select <n> Select bottom-strip slot <n> when the inventory opens\n"
         "  --character          Open the character sheet for the loaded save\n"
+        "  --character-tab <characteristics|skills> Initial character sheet tab\n"
         "  --diary              Open the quest journal for the loaded save\n"
         "  --trade-npc <name>   Open the trade overlay for person <name> after loading\n"
         "  --trade-buy <tech>   Headless: stage the whole NPC stack for item <tech>\n"
@@ -396,6 +398,14 @@ ParseStatus parse_args(int argc, char** argv, Options& options) {
             options.inventory = true;
         } else if (arg == "--character") {
             options.character = true;
+        } else if (arg == "--character-tab") {
+            if (!next_value(arg, value)) return ParseStatus::error;
+            if (value != "characteristics" && value != "skills") {
+                std::fprintf(stderr, "glgame: invalid --character-tab: %.*s\n",
+                             static_cast<int>(value.size()), value.data());
+                return ParseStatus::error;
+            }
+            options.character_tab = std::string(value);
         } else if (arg == "--diary") {
             options.diary = true;
         } else if (arg == "--inventory-select") {
@@ -1004,7 +1014,7 @@ class Game {
     }
 
     void load_character_fonts() {
-        constexpr std::string_view kGameFont = "engineres/fonts/ttf/arial.ttf";
+        constexpr std::string_view kGameFont = "engineres/fonts/ttf/pala.ttf";
         if (!character_title_font_) {
             auto bytes = vfs_.read(kGameFont);
             if (!bytes) {
@@ -1013,7 +1023,7 @@ class Game {
             } else {
                 auto loaded = gl::render::Font::load_from_memory(
                     window_.renderer(),
-                    std::span<const std::uint8_t>(bytes->data(), bytes->size()), 18.0f,
+                    std::span<const std::uint8_t>(bytes->data(), bytes->size()), 17.0f,
                     kGameFont);
                 if (!loaded) {
                     gl::log(gl::LogLevel::warning,
@@ -1261,21 +1271,24 @@ class Game {
             return false;
         }
         auto sheet = gl::game::build_character_sheet(person_runtime_, *user_interface_sdb_,
-                                                     "Hero");
-        const std::size_t skill_rows = sheet.skills.size();
+                                                     "Вертас");
         load_character_fonts();
         character_overlay_.set_fonts(character_title_font(), character_font());
-        const bool opened =
-            character_overlay_.open(window_.renderer(), vfs_, std::move(sheet),
-                                    character_outfit_ ? &*character_outfit_ : nullptr);
+        const bool opened = character_overlay_.open(
+            window_.renderer(), vfs_, std::move(sheet),
+            &inventory_runtime_.hero_inventory(), &item_catalog_);
         if (!opened) {
             gl::log(gl::LogLevel::warning, "character: cannot open the character sheet");
             return false;
         }
+        if (options_.character_tab == "skills")
+            character_overlay_.set_tab(gl::game::CharacterTab::skills);
+        else
+            character_overlay_.set_tab(gl::game::CharacterTab::characteristics);
         if (inventory_overlay_.visible()) inventory_overlay_.close();
         gl::log(gl::LogLevel::info,
-                "character: opened skills=" + std::to_string(skill_rows) +
-                    " outfit=" + (character_outfit_ ? "yes" : "no"));
+                "character: opened groups=" +
+                    std::to_string(person_runtime_.has_person("Hero") ? 3 : 0));
         return true;
     }
 
@@ -2242,7 +2255,8 @@ class Game {
             return std::nullopt;
         }
 
-        auto outfit = gl::game::resolve_hero_outfit(equipment, tech_names.value(), wear.value());
+        auto outfit = gl::game::resolve_hero_outfit(equipment, tech_names.value(),
+                                                    wear.value());
         if (!outfit) {
             error = outfit.error().message;
             return std::nullopt;
@@ -2947,8 +2961,6 @@ class Game {
                     if (event.button.which != SDL_TOUCH_MOUSEID)
                         character_overlay_.handle_mouse(event.button.x, event.button.y,
                                                         event.button.button == SDL_BUTTON_LEFT);
-                    if (character_overlay_.take_inventory_tab_request())
-                        open_inventory();
                     return;
                 }
                 if (trade_overlay_.visible()) {

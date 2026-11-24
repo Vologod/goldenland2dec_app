@@ -38,6 +38,7 @@ class PersonRuntime {
     static PersonRuntime create(const std::vector<PersonInstance> &persons,
                                 const std::optional<gl::assets::HeroStats> &hero);
     double get_parameter(std::string_view person, gl::script::PersonParameter parameter) const;
+    double maximum_energy(std::string_view person) const;
     bool has_parameter(std::string_view person, gl::script::PersonParameter parameter) const;
     void set_parameter(std::string_view person, gl::script::PersonParameter parameter,
                        double value);

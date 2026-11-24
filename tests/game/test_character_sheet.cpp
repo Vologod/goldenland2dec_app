@@ -36,28 +36,37 @@ gl::game::PersonRuntime make_runtime() {
 }
 
 std::string ui_text(std::uint32_t id) { return "L" + std::to_string(id); }
+
+const gl::game::CharacterRow &skill_at(const gl::game::CharacterSheet &sheet,
+                                       std::size_t index) {
+    return sheet.skill_groups[index / 9].rows[index % 9];
+}
 } // namespace
 
 TEST_CASE("character sheet maps primary attributes in UI order") {
     const auto runtime = make_runtime();
     const gl::game::CharacterSheet sheet =
-        gl::game::build_character_sheet(runtime, ui_text);
-    REQUIRE(sheet.primary.size() == 8);
+        gl::game::build_character_sheet(runtime, ui_text, "Вертас");
+    REQUIRE(sheet.primary.size() == 7);
     CHECK(sheet.primary[0].label == "L6");
     CHECK(sheet.primary[0].value == "30");
     CHECK(sheet.primary[1].label == "L7");
     CHECK(sheet.primary[1].value == "25");
+    CHECK(sheet.primary[2].label == "L8");
+    CHECK(sheet.primary[2].value == "18");
     CHECK(sheet.primary[3].label == "L9");
     CHECK(sheet.primary[3].value == "12");
     CHECK(sheet.primary[4].label == "L10");
     CHECK(sheet.primary[4].value == "7");
     CHECK(sheet.primary[5].label == "L11");
     CHECK(sheet.primary[5].value == "5");
-    CHECK(sheet.primary[7].label == "L16");
-    CHECK(sheet.primary[7].value == "-40");
+    CHECK(sheet.primary[6].label == "L12");
+    CHECK(sheet.primary[6].value == "9");
+    CHECK(sheet.experience_points.label == "L13");
+    CHECK(sheet.experience_points.value == "0");
 }
 
-TEST_CASE("character sheet maps the 27 skills through the original permutation") {
+TEST_CASE("character sheet maps 3 skill groups through the original permutation") {
     constexpr std::array<std::uint32_t, 27> kPermutation{
         12, 13, 7,  8,  9,  10, 11, 14, 24, 4,  5,  0,  1,  2,
         3,  17, 25, 23, 26, 15, 20, 21, 16, 18, 19, 22, 6};
@@ -65,57 +74,67 @@ TEST_CASE("character sheet maps the 27 skills through the original permutation")
     for (std::uint32_t id = 0; id < 27; ++id)
         stats.skills[id] = static_cast<double>(id);
     const auto runtime = gl::game::PersonRuntime::create({}, stats);
-    const gl::game::CharacterSheet sheet =
-        gl::game::build_character_sheet(runtime, ui_text);
-    REQUIRE(sheet.skills.size() == 27);
+    const auto sheet = gl::game::build_character_sheet(runtime, ui_text, "Вертас");
+    REQUIRE(sheet.skill_groups.size() == 3);
+    for (const auto &group : sheet.skill_groups)
+        REQUIRE(group.rows.size() == 9);
+    CHECK(sheet.skill_groups[0].title == "L83");
+    CHECK(sheet.skill_groups[1].title == "L84");
+    CHECK(sheet.skill_groups[2].title == "L85");
     for (std::size_t index = 0; index < kPermutation.size(); ++index) {
-        CHECK(sheet.skills[index].label == "L" + std::to_string(49 + index));
+        const auto &row = skill_at(sheet, index);
+        CHECK(row.label == "L" + std::to_string(49 + index));
         const std::uint32_t expected = kPermutation[index] > 15 ? 15 : kPermutation[index];
-        CHECK(sheet.skills[index].value == std::to_string(expected));
+        CHECK(row.value == std::to_string(expected));
     }
 }
 
-TEST_CASE("character sheet marks unmodeled characteristics and computes the level") {
+TEST_CASE("character sheet state, sections and level") {
     const auto runtime = make_runtime();
-    const auto sheet = gl::game::build_character_sheet(runtime, ui_text);
-    REQUIRE(sheet.characteristics.size() == 15);
-    CHECK(sheet.characteristics[0].label == "L14");
-    CHECK(sheet.characteristics[0].modeled);
-    CHECK(sheet.characteristics[0].value == "40");
-    CHECK(sheet.personality[1].value == "40");
-    CHECK(sheet.characteristics[1].label == "L15");
-    CHECK(sheet.characteristics[1].value == "81099");
-    CHECK(sheet.characteristics[2].label == "L16");
-    CHECK(sheet.characteristics[2].value == "-40");
-    CHECK(sheet.characteristics[3].label == "L27");
-    CHECK(sheet.characteristics[4].label == "L28");
-    CHECK_FALSE(sheet.characteristics[5].modeled);
-    CHECK(sheet.characteristics[5].value == "-");
-    CHECK(sheet.characteristics[14].label == "L17");
+    const auto sheet = gl::game::build_character_sheet(runtime, ui_text, "Вертас");
+    REQUIRE(sheet.state.size() == 6);
+    CHECK(sheet.state[0].label == "L14");
+    CHECK(sheet.state[0].value == "40");
+    CHECK(sheet.state[1].label == "L15");
+    CHECK(sheet.state[1].value == "81099/82000");
+    CHECK(sheet.state[2].label == "L16");
+    CHECK(sheet.state[2].value == "-40");
+    CHECK(sheet.state[3].label == "L27");
+    CHECK(sheet.state[3].value == "200/216");
+    CHECK(sheet.state[4].label == "L28");
+    CHECK(sheet.state[4].value == "11/38");
+    CHECK_FALSE(sheet.state[5].modeled);
+    CHECK(sheet.state[5].value == "—");
+    CHECK(sheet.experience_max == 82000);
+    REQUIRE(sheet.combat.size() == 10);
+    REQUIRE(sheet.resistance.size() == 12);
+    REQUIRE(sheet.immunity.size() == 6);
+    for (const auto &row : sheet.combat)
+        CHECK_FALSE(row.modeled);
+    CHECK(sheet.combat[0].label == "L19");
+    CHECK(sheet.resistance[0].label == "L30");
+    CHECK(sheet.immunity[0].label == "L43");
     CHECK(sheet.skill_points == 0);
 }
 
-TEST_CASE("character sheet personality rows and unknown person") {
+TEST_CASE("character sheet name and unknown person") {
     const auto runtime = make_runtime();
-    const auto hero = gl::game::build_character_sheet(runtime, ui_text);
-    REQUIRE(hero.personality.size() == 4);
-    CHECK(hero.name == "Hero");
-    CHECK(hero.personality[0].label == "L5");
-    CHECK(hero.personality[0].value == "Hero");
-    CHECK(hero.personality[1].label == "L14");
+    const auto hero = gl::game::build_character_sheet(runtime, ui_text, "Вертас");
+    CHECK(hero.name == "Вертас");
 
-    const auto missing = gl::game::build_character_sheet(runtime, ui_text, "missing");
+    const auto missing =
+        gl::game::build_character_sheet(runtime, ui_text, "", "missing");
     CHECK(missing.name == "missing");
     CHECK(missing.primary[0].value == "0");
-    CHECK(missing.skills[0].value == "0");
+    CHECK(missing.skill_groups[0].rows[0].value == "0");
 }
 
 TEST_CASE("character sheet falls back to #id for missing UI text") {
     const auto runtime = make_runtime();
     const auto sheet = gl::game::build_character_sheet(
-        runtime, [](std::uint32_t) { return std::string{}; });
+        runtime, [](std::uint32_t) { return std::string{}; }, "Вертас");
     CHECK(sheet.primary[0].label == "#6");
-    CHECK(sheet.skills[0].label == "#49");
+    CHECK(sheet.skill_groups[0].rows[0].label == "#49");
 }
 
 TEST_CASE("character sheet reads real slot0" * doctest::skip(std::getenv("GL_GAME_DIR") == nullptr)) {
@@ -138,7 +157,8 @@ TEST_CASE("character sheet reads real slot0" * doctest::skip(std::getenv("GL_GAM
     auto sdb = gl::assets::Sdb::parse(sdb_data.value());
     REQUIRE(sdb.has_value());
     auto runtime = gl::game::PersonRuntime::create({}, stats.value());
-    const auto sheet = gl::game::build_character_sheet(runtime, sdb.value());
+    const auto sheet = gl::game::build_character_sheet(runtime, sdb.value(), "Вертас");
+    CHECK(sheet.name == "Вертас");
     CHECK(sheet.primary[0].value == "30");
     CHECK(sheet.primary[1].value == "25");
     CHECK(sheet.primary[2].value == "18");
@@ -146,10 +166,9 @@ TEST_CASE("character sheet reads real slot0" * doctest::skip(std::getenv("GL_GAM
     CHECK(sheet.primary[4].value == "7");
     CHECK(sheet.primary[5].value == "5");
     CHECK(sheet.primary[6].value == "9");
-    CHECK(sheet.primary[7].value == "-40");
-    CHECK(sheet.characteristics[1].value == "81099");
-    CHECK(sheet.skills[0].value == "0");   // SWORD
-    CHECK(sheet.skills[1].value == "15");  // AXE
-    CHECK(sheet.skills[6].value == "0");   // THROW
-    CHECK(sheet.skills[21].value == "0");  // TALKING
+    CHECK(sheet.state[1].value == "81099/82000");
+    CHECK(skill_at(sheet, 0).value == "0");
+    CHECK(skill_at(sheet, 1).value == "15");
+    CHECK(skill_at(sheet, 6).value == "0");
+    CHECK(skill_at(sheet, 21).value == "0");
 }

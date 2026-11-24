@@ -1812,7 +1812,7 @@ TEST_CASE("glgame --character --load-save renders the sheet") {
     const std::size_t doll_different = count_region_differences(
         equipped, none, equipped_width, equipped_height, doll_x, doll_y, doll_w, doll_h);
     CAPTURE(doll_different);
-    CHECK(doll_different > 100);
+    CHECK(doll_different == 0);
 }
 
 TEST_CASE("glgame --inventory with an invalid save opens an empty overlay" *

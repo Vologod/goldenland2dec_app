@@ -102,6 +102,7 @@ struct Font::Impl {
     float scale = 1.0f;
     float ascent = 0.0f;
     float line_height = 0.0f;
+    float text_height = 0.0f;
     SDL_Texture* texture = nullptr;
     std::unordered_map<char32_t, Glyph> glyphs;
 
@@ -220,6 +221,7 @@ Result<Font> Font::load_from_memory(SDL_Renderer* renderer, std::span<const std:
     impl->scale = stbtt_ScaleForPixelHeight(&impl->info, pixel_height);
     impl->ascent = static_cast<float>(ascent) * impl->scale;
     impl->line_height = static_cast<float>(ascent - descent + line_gap) * impl->scale;
+    impl->text_height = static_cast<float>(ascent - descent) * impl->scale;
 
     static constexpr std::array<std::pair<char32_t, char32_t>, 6> kRanges = {
         {{0x20u, 0x7Eu},
@@ -454,6 +456,8 @@ Vec2 Font::measure(std::string_view utf8) const {
 }
 
 float Font::line_height() const { return impl_ != nullptr ? impl_->line_height : 0.0f; }
+
+float Font::text_height() const { return impl_ != nullptr ? impl_->text_height : 0.0f; }
 
 bool Font::has_glyph(char32_t codepoint) const {
     return impl_ != nullptr && impl_->glyphs.find(codepoint) != impl_->glyphs.end();
