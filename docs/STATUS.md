@@ -51,8 +51,8 @@
 - **Дальше:** отдельная задача на текстовый layout листа
   (позиционирование/вид надписей), затем manual visual gate и коммит.
 - **Статус:** implemented, automated green (full ctest 21/21);
-  открыта проблема с надписями; manual visual gate open; не
-  закоммичено.
+  открыта проблема с надписями; manual visual gate open; коммит
+  cb6bee2.
 
 ## Session checkpoint (2026-11-24)
 
@@ -62,7 +62,8 @@
   `git status`/`git diff` и spec.
 - P7b2 зафиксирован выше; research куклы/шрифтов выполнен
   (`docs/research/p7b2-character-sheet-doll-fonts.md`). Открытая
-  проблема — текстовый layout листа (см. P7b2 выше).
+  проблема — текстовый layout листа (см. P7b2 выше). Коммит P7b2 —
+  `cb6bee2`.
 
 ## P7b — Character sheet (automated done 2026-11-23)
 
