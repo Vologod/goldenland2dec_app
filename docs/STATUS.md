@@ -22,56 +22,33 @@
   две колонки, навыки три колонки, очки) используют точные поля;
   вкладки/заголовки/имя — по оригинальным координатам; удалено
   подчёркивание вкладок (порт-девиация).
-- **Вертикальная доработка (manual feedback 2026-11-24):** текст был
-  «прижат к верху» на 2–5 px. Причина — GDI `TextOutA` ставит baseline
-  на `cell_top+tmAscent`, а `Font::draw_text` — на `y+hhea_ascent`
-  (без line leading). Фикс: `y += (Font::line_height()-
-  Font::text_height())/2` в `draw_text_rect`. Замер против
-  `.local/p7b2/characteristics.png`/`skills.png` (diff по фоновому BMP,
-  извлечён через `glpak extract`): было на 2–5 px выше, стало ±1 px
-  (заголовки 1 px ниже).
-- **Проверка (2026-11-24):** скриншоты `--character`/`--character-tab
-  skills` — Level `cx=608`, Опыт `cx=550`, Жизнь `cx=554`,
-  Immunity `cx=795`, Skill `cx=475` (центры полей);
-  `character_overlay_tests` 9/9 (154, вкл. вертикальные центры);
-  `gl_game_tests --test-case="*character sheet*"` 6/6 (135);
+- **Вертикальная доработка (2026-11-25):** текст был «прижат к верху».
+  Причина — GDI `TextOutA` ставит baseline на `cell_top+tmAscent`, а
+  `Font::draw_text` — на `y+hhea_ascent` (без internal leading). Важно:
+  `.local/p7b2/*` — это рендер **порта** (все combat/resistance = `—`,
+  включая «Класс брони»/«Вес»/«Базовую точность»), не оригинал; первый
+  фикс (half leading) калибровался по нему и был мал. Настоящий оракул —
+  `.local/p7b3/original_characteristics.png`/`original_skills.png`.
+  Фикс: `y += Font::line_height() - Font::text_height()` (полный
+  internal leading ~5.2 px при 16 px). Против настоящего оригинала —
+  ±1 px (метки, значения, имя, заголовки, навыки).
+- **Выравнивание значений (2026-11-25):** по новому оригиналу
+  подтверждено — значения центрируются в полях (не вправо):
+  `30`→204..218 в 197..227; `64%`→960..986 в 950..997;
+  `132/204.6`→531..592 в 497..627. Модель порта верна.
+- **Проверка (2026-11-25):** скриншоты `--character`/`--character-tab
+  skills`; `character_overlay_tests` 9/9 (154, вкл. вертикальные
+  центры); `gl_game_tests --test-case="*character sheet*"` 6/6 (135);
   `glgame_screenshot_tests --test-case="*character*"` 1/1 (30);
   полный `ctest` с `GL_GAME_DIR` (final tree) —
-  **21/21 passed, 2595.25 s**.
-- **Residual:** начертание (pala.ttf vs Palatino Linotype, weight
-  500/600); вертикаль ±1 px (строки 1 px выше, заголовки 1 px ниже);
-  значения данных не менялись; wear-оверлеи P5b2-1.
-- **Manual gate feedback (2026-11-24, открыто):** (1) шрифт/размер
-  местами отличается от оригинала; (2) в отдельных «полях» текст всё
-  ещё слегка прижат к верху.
-  - **Гипотеза (2):** поля с `h < text_height` (combat-значения `h=15`)
-    не получают вертикального центрирования и после half-leading
-    остаются у верхней кромки; также в высоких боксах (`name h=26`,
-    `Очки распределения h=23`) GDI-центрирование по `tmHeight` (с
-    internal leading) может отличаться от порта по `text_height`.
-  - **Метод проверки:** diff оригинальных скриншотов
-    `.local/p7b2/characteristics.png`/`skills.png` и порт-рендера по
-    фоновому BMP (`glpak extract <game> --file
-    engineres/newinv/inventory_secondary.bmp|inventory_skills.bmp`),
-    y-диапазон пикселей текста (diff RGB > 60) для каждого поля.
-    Скрипт-замер: `%TEMP%\opencode\diff_fields.ps1` (временный).
-  - **Точка правки:** `CharacterOverlay::draw_text_rect` в
-    `src/app/src/character_overlay.cpp` (half-leading уже там).
-- **Новые оригиналы (2026-11-24, от пользователя):** скриншоты с
-  реальными значениями — характеристики (атрибуты `30/30/20/13/10/5/9`,
-  `Очки опыта 33`, state, combat, сопротивления `64%…`, вес
-  `132/204.6`) и навыки (значения `0/15/…`, `-/+`, «Очки
-  распределения» 15). Сохранить в
-  `.local/p7b3/original_characteristics.png` и
-  `.local/p7b3/original_skills.png`. По ним завтра — точный diff
-  выравнивания значений (центр-в-поле vs право), т.к. старые
-  `.local/p7b2/*` были с `—` и это не проверяли.
-- **Статус:** implemented, automated green; закоммичено
-  `20258ee` (`feat: p7b3 character sheet text layout parity`);
-  paused 2026-11-24 до завтра; manual visual gate open, два пункта
-  выше — открыты (следующие шаги: залить новые оригиналы в
-  `.local/p7b3/`, затем замер полей из «Гипотезы (2)» и выравнивания
-  значений по реальным данным).
+  **21/21 passed, 1613.56 s**.
+- **Residual:** (1) **шрифт/размер** — `pala.ttf` 17 px шире оригинала
+  на ~6% для строк/заголовков, но вкладки/имя в оригинале шире на ~19%
+  (heads_interface weight 600; stb_truetype вес не синтезирует) —
+  отдельная задача; (2) вертикаль ±1 px; значения данных не менялись;
+  wear-оверлеи P5b2-1.
+- **Статус:** implemented, automated green; manual visual gate open;
+  шрифт/размер — открыт. Готово к коммиту.
 
 ## P5b2-1 — Paper-doll wear overlays (automated done 2026-11-24)
 

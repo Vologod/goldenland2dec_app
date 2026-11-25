@@ -336,7 +336,7 @@ TEST_CASE("character overlay centers text in the original boxes" *
     auto immunity1_value = diff_bbox(software.surface, secondary.value(), 772, 566, 818, 592);
     auto immunity2_value = diff_bbox(software.surface, secondary.value(), 946, 566, 996, 592);
     auto weight_value = diff_bbox(software.surface, secondary.value(), 497, 595, 627, 618);
-    auto underline = diff_bbox(software.surface, secondary.value(), 265, 33, 1020, 36);
+    auto underline = diff_bbox(software.surface, secondary.value(), 270, 32, 430, 35);
     SDL_UnlockSurface(software.surface);
 
     REQUIRE(name.has_value());
@@ -356,16 +356,16 @@ TEST_CASE("character overlay centers text in the original boxes" *
     REQUIRE(primary_label.has_value());
     CHECK(primary_label->x0 >= 26);
     CHECK(primary_label->x0 <= 34);
-    CHECK(primary_label->y0 >= 63);
-    CHECK(primary_label->y0 <= 66);
+    CHECK(primary_label->y0 >= 64);
+    CHECK(primary_label->y0 <= 68);
     REQUIRE(primary_value.has_value());
     CHECK(std::abs(box_center(*primary_value) - 212) <= 6);
-    CHECK(std::abs(box_center_y(*primary_value) - 69) <= 3);
+    CHECK(std::abs(box_center_y(*primary_value) - 72) <= 2);
     REQUIRE(exp_value.has_value());
     CHECK(std::abs(box_center(*exp_value) - 235) <= 8);
     REQUIRE(state_value.has_value());
     CHECK(std::abs(box_center(*state_value) - 608) <= 8);
-    CHECK(std::abs(box_center_y(*state_value) - 112) <= 3);
+    CHECK(std::abs(box_center_y(*state_value) - 115) <= 2);
     REQUIRE(combat_value.has_value());
     CHECK(std::abs(box_center(*combat_value) - 605) <= 8);
     REQUIRE(resistance_value.has_value());
@@ -401,8 +401,8 @@ TEST_CASE("character overlay centers text in the original boxes" *
     REQUIRE(skill_label.has_value());
     CHECK(skill_label->x0 >= 291);
     CHECK(skill_label->x0 <= 299);
-    CHECK(skill_label->y0 >= 126);
-    CHECK(skill_label->y0 <= 129);
+    CHECK(skill_label->y0 >= 127);
+    CHECK(skill_label->y0 <= 131);
     REQUIRE(skill_value.has_value());
     CHECK(std::abs(box_center(*skill_value) - 476) <= 8);
     REQUIRE(points_label.has_value());

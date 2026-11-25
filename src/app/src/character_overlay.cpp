@@ -331,7 +331,7 @@ void CharacterOverlay::draw_text_rect(SDL_Renderer *renderer,
         const float cell_h = font->text_height();
         if (cell_h < h) y += (h - cell_h) * 0.5f;
     }
-    y += (font->line_height() - font->text_height()) * 0.5f;
+    y += font->line_height() - font->text_height();
     font->draw_text(renderer, text, x, y, color);
 }
 

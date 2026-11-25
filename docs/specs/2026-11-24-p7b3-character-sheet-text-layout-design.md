@@ -66,12 +66,14 @@ void draw_text_rect(SDL_Renderer*, const Font*, std::string_view,
   `x += (w - textW) / 2`.
 - `cellH = font->text_height()`; if `h >= 0 && cellH < h`:
   `y += (h - cellH) / 2`.
-- **GDI baseline correction:** `y += (font->line_height() -
-  font->text_height()) / 2`. GDI `TextOutA` puts the baseline at
-  `cell_top + tmAscent`, which is lower than stb_truetype's `hhea`
-  ascent by the line leading; without this the sheet text sits ~2–5 px
-  high ("прижат к верху"). Measured against the original capture this
-  brings labels/values/headers to ~±1 px.
+- **GDI baseline correction:** `y += font->line_height() -
+  font->text_height()` (the **full** internal leading, ~5.2 px at
+  16 px). GDI `TextOutA` puts the baseline at `cell_top + tmAscent`,
+  which is lower than stb_truetype's `hhea` ascent by the internal
+  leading; without this the sheet text sits ~2.5–3.5 px high ("прижат к
+  верху"). Measured against the true original capture this brings
+  labels/values/headers/skills to ~±1 px. (Half-leading was tried first
+  against a port render mistaken for the original — too small.)
 - Draw at `(x, y)`, matching `TextOutA`.
 - Replaces `draw_row`/`draw_rows`/`draw_centered`. Row **labels** are
   called with `w=-1,h=-1`; **values** with their measured box; tabs and
@@ -186,7 +188,10 @@ column-major cell as label row `i`.
   `БОЕВЫЕ ХАРАКТЕРИСТИКИ` at 17 px measures ~239 px > `widthBox` 228, so
   it is left-aligned at `x=352` (~+5 px vs centre 466) instead of
   centred — a font-width residual, not a coordinate error.
-- Vertical anchor: resolved by the half-leading GDI correction above;
-  remaining bias ~±1 px (rows 1 px high, headers 1 px low) — within
-  anti-aliasing.
+- Vertical anchor: resolved by the full-leding GDI correction above;
+  remaining bias ~±1 px — within anti-aliasing.
+- Font/size (separate task): `pala.ttf` at 17 px is ~6% wider than the
+  original for rows/headers, while the original tabs/name are ~19%
+  wider (heads_interface weight 600, not synthesised by stb_truetype).
+  This is typeface/size, not coordinates.
 - `puppet_name` wear overlays (P5b2-1); touch layout (P9).
