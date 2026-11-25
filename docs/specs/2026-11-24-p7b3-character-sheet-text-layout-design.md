@@ -196,4 +196,10 @@ column-major cell as label row `i`.
   groups +12% — residual `pala.ttf` vs system Palatino Linotype face
   (both width and cap height cannot be matched simultaneously). At
   16 px `БОЕВЫЕ ХАРАКТЕРИСТИКИ` fits `widthBox` 228 and centres.
+- Text rasterization (implemented): the glyph-atlas UV used a half-texel
+  inset (`+0.5/-0.5`), which at 1:1 caused a systematic half-pixel shift
+  → bilinear blur and lost top strokes on `Т`/`Б`. Removed the inset
+  (`u0=x/W`, `u1=(x+w)/W`) and added `Font::draw_text(..., snap)`
+  (integer glyph quads); the sheet passes `snap=true`. Global renderer
+  change, tests green (only the sheet opts into snap).
 - `puppet_name` wear overlays (P5b2-1); touch layout (P9).

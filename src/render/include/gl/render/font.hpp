@@ -40,7 +40,7 @@ public:
     Font& operator=(const Font&) = delete;
 
     void draw_text(SDL_Renderer* renderer, std::string_view utf8, float x, float y,
-                   Color color) const;
+                   Color color, bool snap = false) const;
     Vec2 measure(std::string_view utf8) const;
     float line_height() const;
     // Ascent + descent at the requested pixel height (GDI text height).

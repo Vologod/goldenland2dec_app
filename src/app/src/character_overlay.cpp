@@ -333,8 +333,8 @@ void CharacterOverlay::draw_text_rect(SDL_Renderer *renderer,
         if (cell_h < h) y += (h - cell_h) * 0.5f;
     }
     y += font->line_height() - font->text_height();
-    font->draw_text(renderer, text, x, y, color);
-    if (bold) font->draw_text(renderer, text, x + 1.0f, y, color);
+    font->draw_text(renderer, text, x, y, color, true);
+    if (bold) font->draw_text(renderer, text, x + 1.0f, y, color, true);
 }
 
 void CharacterOverlay::draw_tabs(SDL_Renderer *renderer) {

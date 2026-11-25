@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstddef>
 #include <cstdlib>
 #include <fstream>
@@ -336,10 +337,10 @@ Result<Font> Font::load_from_memory(SDL_Renderer* renderer, std::span<const std:
         Glyph& target = found->second;
         const float atlas_width_f = static_cast<float>(atlas_width);
         const float atlas_height_f = static_cast<float>(atlas_height);
-        target.u0 = (static_cast<float>(glyph.x) + 0.5f) / atlas_width_f;
-        target.v0 = (static_cast<float>(glyph.y) + 0.5f) / atlas_height_f;
-        target.u1 = (static_cast<float>(glyph.x + glyph.width) - 0.5f) / atlas_width_f;
-        target.v1 = (static_cast<float>(glyph.y + glyph.height) - 0.5f) / atlas_height_f;
+        target.u0 = static_cast<float>(glyph.x) / atlas_width_f;
+        target.v0 = static_cast<float>(glyph.y) / atlas_height_f;
+        target.u1 = static_cast<float>(glyph.x + glyph.width) / atlas_width_f;
+        target.v1 = static_cast<float>(glyph.y + glyph.height) / atlas_height_f;
     }
 
     impl->texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_STATIC,
@@ -360,7 +361,7 @@ Result<Font> Font::load_from_memory(SDL_Renderer* renderer, std::span<const std:
 }
 
 void Font::draw_text(SDL_Renderer* renderer, std::string_view utf8, float x, float y,
-                     Color color) const {
+                     Color color, bool snap) const {
     if (renderer == nullptr || impl_ == nullptr || impl_->texture == nullptr || utf8.empty()) {
         return;
     }
@@ -387,8 +388,12 @@ void Font::draw_text(SDL_Renderer* renderer, std::string_view utf8, float x, flo
         const Glyph* glyph = impl_->glyph_for(codepoint);
         if (glyph != nullptr) {
             if (glyph->visible) {
-                const float left = pen_x + glyph->xoff;
-                const float top = baseline + glyph->yoff;
+                float left = pen_x + glyph->xoff;
+                float top = baseline + glyph->yoff;
+                if (snap) {
+                    left = std::round(left);
+                    top = std::round(top);
+                }
                 const float right = left + glyph->width;
                 const float bottom = top + glyph->height;
 
