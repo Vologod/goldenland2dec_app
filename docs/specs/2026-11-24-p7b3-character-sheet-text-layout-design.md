@@ -151,9 +151,11 @@ column-major cell as label row `i`.
 
 ## Non-text parity notes
 
-- The active/inactive tab colour observed on the manual screenshot
-  (bright active / dark inactive) is kept from P7b2 (D-112); the
-  decomp `0x14=0` vs `0x464646` is not treated as a black/white claim.
+- Tab/name colour (decomp `FUN_120661cc`): name and active tab use
+  `*(DAT_121106a4+0x14)=0` (black), inactive `0x464646` (70,70,70).
+  The port was **inverted** (light name/active) — the P7b2 "bright
+  active" note came from a port capture, not the game. Fixed to
+  dark/gray.
 - Remove the port-only tab **underline** rect (the original only changes
   text colour).
 - Row label clipping: **dropped**. The original `TextOutA` path does not
@@ -168,8 +170,8 @@ column-major cell as label row `i`.
   - each value glyph run's horizontal centre within +-2 px of the box
     centre (attributes, experience, state, combat, weight, resistance,
     immunity two columns, skills three columns, skill points);
-  - each label's top within +-1 px of `arrayY-6`; value vertical centre
-    within +-1 px of `y + (h - text_height)/2`;
+  - label/value vertical position matches the original within +-2 px
+    (after the full-leading GDI correction);
   - tabs centred at 464/833, y=16; headers centred at 466/823/466/827;
     group headers centred at 650;
   - no port underline (tab strip pixels unchanged vs background except
@@ -183,15 +185,15 @@ column-major cell as label row `i`.
 ## Non-goals / residual
 
 - Effective stats with equipment/special bonuses; real point pools.
-- Exact Palatino weight 500/600 (stb_truetype no synthetic weight);
-  `pala.ttf` vs system Palatino Linotype. Consequence:
-  `БОЕВЫЕ ХАРАКТЕРИСТИКИ` at 17 px measures ~239 px > `widthBox` 228, so
-  it is left-aligned at `x=352` (~+5 px vs centre 466) instead of
-  centred — a font-width residual, not a coordinate error.
-- Vertical anchor: resolved by the full-leding GDI correction above;
+- Font weight: no bold TTF ships; GDI's synthetic weight 600 is
+  approximated by a 2-pass draw (`x`, `x+1`) for the top strip.
+- Vertical anchor: resolved by the full-leading GDI correction above;
   remaining bias ~±1 px — within anti-aliasing.
-- Font/size (separate task): `pala.ttf` at 17 px is ~6% wider than the
-  original for rows/headers, while the original tabs/name are ~19%
-  wider (heads_interface weight 600, not synthesised by stb_truetype).
-  This is typeface/size, not coordinates.
+- Font/size (implemented): top strip `pala.ttf` **20 px** + synthetic
+  bold; section/group headers **16 px**; rows 16 px. Measured vs the
+  original: headers exact (`СОСТОЯНИЕ` 102/103, `СОПРОТИВЛЕНИЕ`
+  147/147), top strip −4% (`ХАРАКТЕРИСТИКИ` 204/196), rows +6%, skill
+  groups +12% — residual `pala.ttf` vs system Palatino Linotype face
+  (both width and cap height cannot be matched simultaneously). At
+  16 px `БОЕВЫЕ ХАРАКТЕРИСТИКИ` fits `widthBox` 228 and centres.
 - `puppet_name` wear overlays (P5b2-1); touch layout (P9).

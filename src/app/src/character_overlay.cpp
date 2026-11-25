@@ -94,9 +94,9 @@ constexpr float kSkillPointsValueY = 623.0f;
 constexpr float kSkillPointsValueW = 45.0f;
 constexpr float kSkillPointsValueH = 23.0f;
 constexpr gl::render::Color kTextColor{20, 18, 16, 255};
-constexpr gl::render::Color kActiveTab{238, 232, 214, 255};
-constexpr gl::render::Color kInactiveTab{68, 63, 52, 255};
-constexpr gl::render::Color kNameColor{250, 248, 240, 255};
+constexpr gl::render::Color kActiveTab{20, 18, 16, 255};
+constexpr gl::render::Color kInactiveTab{70, 70, 70, 255};
+constexpr gl::render::Color kNameColor{20, 18, 16, 255};
 
 constexpr int kBottomY = 703;
 constexpr int kHotY = 624;
@@ -321,7 +321,8 @@ void CharacterOverlay::draw_background(SDL_Renderer *renderer) {
 void CharacterOverlay::draw_text_rect(SDL_Renderer *renderer,
                                       const gl::render::Font *font,
                                       std::string_view text, float x, float y,
-                                      float w, float h, gl::render::Color color) {
+                                      float w, float h, gl::render::Color color,
+                                      bool bold) {
     if (font == nullptr || text.empty()) return;
     if (w >= 0.0f) {
         const float text_w = font->measure(text).x;
@@ -333,20 +334,21 @@ void CharacterOverlay::draw_text_rect(SDL_Renderer *renderer,
     }
     y += font->line_height() - font->text_height();
     font->draw_text(renderer, text, x, y, color);
+    if (bold) font->draw_text(renderer, text, x + 1.0f, y, color);
 }
 
 void CharacterOverlay::draw_tabs(SDL_Renderer *renderer) {
-    const gl::render::Font *title = title_font();
+    const gl::render::Font *title = top_font();
     if (title == nullptr) return;
     const bool characteristics =
         tab_ == gl::game::CharacterTab::characteristics;
     draw_text_rect(renderer, title, sheet_.name, 15.0f, 10.0f, 250.0f, 26.0f,
-                   kNameColor);
+                   kNameColor, true);
     draw_text_rect(renderer, title, sheet_.characteristics_title, 292.0f, 16.0f,
                    344.0f, -1.0f,
-                   characteristics ? kActiveTab : kInactiveTab);
+                   characteristics ? kActiveTab : kInactiveTab, true);
     draw_text_rect(renderer, title, sheet_.skills_title, 661.0f, 16.0f, 344.0f,
-                   -1.0f, characteristics ? kInactiveTab : kActiveTab);
+                   -1.0f, characteristics ? kInactiveTab : kActiveTab, true);
 }
 
 void CharacterOverlay::draw_close(SDL_Renderer *renderer) {

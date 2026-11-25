@@ -37,6 +37,7 @@ class CharacterOverlay {
         set_title_font(title);
         set_font(rows);
     }
+    void set_top_font(const gl::render::Font *font) { top_font_ = font; }
     void render(SDL_Renderer *renderer, int screen_w, int screen_h,
                 const gl::render::Font *font = nullptr);
     bool handle_mouse(int x, int y, bool click);
@@ -47,6 +48,9 @@ class CharacterOverlay {
     const gl::render::Font *title_font() const {
         return title_font_ != nullptr ? title_font_ : font_;
     }
+    const gl::render::Font *top_font() const {
+        return top_font_ != nullptr ? top_font_ : title_font();
+    }
     void update_transform(int screen_w, int screen_h);
     void reset_texture_cache(SDL_Renderer *renderer);
     gl::render::Texture *load_texture(std::string_view path, bool magenta_key = false);
@@ -55,7 +59,7 @@ class CharacterOverlay {
     void draw_close(SDL_Renderer *renderer);
     void draw_text_rect(SDL_Renderer *renderer, const gl::render::Font *font,
                         std::string_view text, float x, float y, float w, float h,
-                        gl::render::Color color);
+                        gl::render::Color color, bool bold = false);
     void draw_item(SDL_Renderer *renderer, const gl::assets::ItemCatalogEntry *entry,
                    float x, float y, float w, float h);
     void draw_doll_overlays(SDL_Renderer *renderer);
@@ -67,6 +71,7 @@ class CharacterOverlay {
     const gl::assets::ItemCatalog *catalog_ = nullptr;
     const gl::render::Font *font_ = nullptr;
     const gl::render::Font *title_font_ = nullptr;
+    const gl::render::Font *top_font_ = nullptr;
     gl::game::CharacterSheet sheet_;
     gl::game::CharacterTab tab_ = gl::game::CharacterTab::characteristics;
     bool visible_ = false;

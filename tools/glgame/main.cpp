@@ -1023,7 +1023,7 @@ class Game {
             } else {
                 auto loaded = gl::render::Font::load_from_memory(
                     window_.renderer(),
-                    std::span<const std::uint8_t>(bytes->data(), bytes->size()), 17.0f,
+                    std::span<const std::uint8_t>(bytes->data(), bytes->size()), 16.0f,
                     kGameFont);
                 if (!loaded) {
                     gl::log(gl::LogLevel::warning,
@@ -1051,10 +1051,32 @@ class Game {
                 }
             }
         }
+        if (!character_top_font_) {
+            auto bytes = vfs_.read(kGameFont);
+            if (!bytes) {
+                gl::log(gl::LogLevel::warning,
+                        "character font: cannot read " + std::string(kGameFont));
+            } else {
+                auto loaded = gl::render::Font::load_from_memory(
+                    window_.renderer(),
+                    std::span<const std::uint8_t>(bytes->data(), bytes->size()), 20.0f,
+                    kGameFont);
+                if (!loaded) {
+                    gl::log(gl::LogLevel::warning,
+                            "character font: " + loaded.error().message);
+                } else {
+                    character_top_font_.emplace(std::move(loaded.value()));
+                }
+            }
+        }
     }
 
     const gl::render::Font* character_title_font() const {
         return character_title_font_ ? &*character_title_font_ : inventory_font();
+    }
+
+    const gl::render::Font* character_top_font() const {
+        return character_top_font_ ? &*character_top_font_ : character_title_font();
     }
 
     const gl::render::Font* character_font() const {
@@ -1274,6 +1296,7 @@ class Game {
                                                      "Вертас");
         load_character_fonts();
         character_overlay_.set_fonts(character_title_font(), character_font());
+        character_overlay_.set_top_font(character_top_font());
         const bool opened = character_overlay_.open(
             window_.renderer(), vfs_, std::move(sheet),
             &inventory_runtime_.hero_inventory(), &item_catalog_);
@@ -3718,6 +3741,7 @@ class Game {
     std::optional<gl::render::Font> diary_font_;
     std::optional<gl::render::Font> character_title_font_;
     std::optional<gl::render::Font> character_font_;
+    std::optional<gl::render::Font> character_top_font_;
     std::unique_ptr<DialogContext> dialog_;
     gl::app::DialogOverlay dialog_overlay_;
     gl::app::InventoryOverlay inventory_overlay_;
