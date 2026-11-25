@@ -1,6 +1,6 @@
 # STATUS
 
-Обновлено: 2026-11-24
+Обновлено: 2026-11-25
 
 ## P7b3 — Character sheet text layout parity (automated done 2026-11-24)
 
@@ -65,8 +65,8 @@
   — фейс `pala.ttf` vs системный Palatino Linotype; (2) вертикаль ±1 px;
   значения данных (combat/resistance/immunity = `—`) не менялись;
   wear-оверлеи P5b2-1; HUD `outfit: slot 0` (glgame, не оверлей).
-- **Статус:** implemented, automated green; manual visual gate open;
-  готово к коммиту.
+- **Статус:** done (automated green; manual visual gate **PASSED** —
+  пользователь, 2026-11-25); закоммичено (`d7363a0`).
 
 ## P5b2-1 — Paper-doll wear overlays (automated done 2026-11-24)
 
