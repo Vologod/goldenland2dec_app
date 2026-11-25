@@ -2,6 +2,27 @@
 
 Обновлено: 2026-11-25
 
+## P5c — Character sheet combat/resistance values (scoping done 2026-11-25)
+
+- **Задача:** реальные значения combat(10)/resistance(12)/immunity(6) и
+  `Очки действия` в листе (сейчас `—`). Значения навыков уже
+  моделируются (`persons.get_skill`), P5c7 не нужен.
+- **Research (scoping):** `docs/research/p5c-combat-stats-scoping.md` —
+  карта UI-поле → геттер `Client.dll`, формулы `FUN_1201f7a0` (броня)
+  и `FUN_1201e92c` (вес), RVA хелперов.
+- **Блокер:** `FUN_1201b1c4` (RVA `0x1b1c4`, VA `0x1201b1c4`, size
+  **2267**, 39 вызовов) — центральный числовой примитив (`float10`,
+  float-таблицы `DAT_12123f14/0c/10/08/18`, `DAT_12123e80/e90`), плюс
+  item/person vtable (`+0x18/+0x28/+0x2c/+0x3c`) и флаги
+  `DAT_12106ab8+0x8c`, `DAT_12106bc0+0x8c`, `this+0xf8&0x2000`.
+- **Следующая (focused) сессия:** дизассемблировать `FUN_1201b1c4`
+  (`llvm-objdump -d --x86-asm-syntax=intel --start-address=0x1201b1c4`);
+  снять float/double константы из `.data` (`llvm-objdump -s`); найти
+  vtable item/person; затем spec `P5c2` (броня/вес) → реализация →
+  real-тест. Ориентир из оригинала пользователя: `Класс брони 15`,
+  `Вес 132/204.6` (сейв неизвестен — сверить на доступном сейве).
+- **Статус:** scoping done; реализация не начата; committed scoping doc.
+
 ## P7b3 — Character sheet text layout parity (automated done 2026-11-24)
 
 - **Задача:** закрыть «надписи поехали» из P7b2 — воспроизвести точные
