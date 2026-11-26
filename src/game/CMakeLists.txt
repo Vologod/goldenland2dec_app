@@ -6,6 +6,7 @@ add_library(gl_game STATIC
     src/diary_view.cpp
     src/dialog_path.cpp
     src/door_runtime.cpp
+    src/effect.cpp
     src/quest_runtime.cpp
     src/time_event_runtime.cpp
     src/trigger_runtime.cpp

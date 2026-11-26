@@ -1,5 +1,6 @@
 #pragma once
 #include "gl/assets/hero_stats.hpp"
+#include "gl/game/effect.hpp"
 #include "gl/game/person.hpp"
 #include "gl/script/person_access.hpp"
 
@@ -14,10 +15,6 @@
 
 namespace gl::game {
 int hero_level_from_experience(double experience);
-
-struct PersonEffect {
-    std::array<std::int32_t, 5> words{};
-};
 
 void set_injured_records(std::vector<PersonEffect> &records, bool injured);
 
