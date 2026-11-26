@@ -41,6 +41,7 @@ struct StatInputs {
     StatCondition condition;
     std::array<std::int32_t, 27> skills{};
     std::vector<EquippedStatItem> equipped;
+    std::vector<gl::assets::SpecialMod> effect_mods;
     std::vector<CarriedItem> carried;
 };
 

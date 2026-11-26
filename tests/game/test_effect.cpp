@@ -151,3 +151,30 @@ TEST_CASE("PersonRuntime set_effects and set_effect_clock replace state") {
     REQUIRE(runtime.effect_clock("Hero").has_value());
     CHECK(runtime.effect_clock("Hero")->year == 1124);
 }
+
+#include "gl/game/combat_stats.hpp"
+
+TEST_CASE("compute_armor_weight applies effect mods") {
+    gl::game::StatInputs inputs;
+    inputs.strength = 10;
+    inputs.constitution = 15;
+    inputs.dexterity = 10;
+    inputs.perception = 21;
+    inputs.luck = 10;
+    inputs.wisdom = 5;
+    inputs.intelligence = 11;
+    inputs.experience = 14155;
+    inputs.skills.fill(0);
+
+    const auto without = gl::game::compute_armor_weight(inputs);
+    gl::assets::SpecialMod effect;
+    effect.id = 9;
+    effect.value = -3;
+    effect.flags = 0x60;
+    effect.word3 = 0x23000000;
+    inputs.effect_mods.push_back(effect);
+    const auto with = gl::game::compute_armor_weight(inputs);
+
+    CHECK(without.primary[2] == 10);
+    CHECK(with.primary[2] == 7);
+}
