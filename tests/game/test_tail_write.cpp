@@ -1,6 +1,8 @@
 #include "gl/game/tail_write.hpp"
 
 #include "gl/assets/save_item_convert.hpp"
+#include "gl/game/effect.hpp"
+#include "gl/game/rginf.hpp"
 #include "gl/game/save_person.hpp"
 
 #include <array>
@@ -301,4 +303,66 @@ TEST_CASE("build_selected_tail rejects mismatched live flags") {
         loaded, level, simulation, inventory, make_restore(0, 0), live, {}, loaded.rginf, nullptr);
     REQUIRE_FALSE(rebuilt.has_value());
     CHECK(rebuilt.error().code == gl::ErrorCode::format);
+}
+
+TEST_CASE("build_selected_tail writes live effects and clock") {
+    const auto record = make_person("A", 10, 10, 0);
+    gl::assets::SaveTailEntry loaded;
+    loaded.name = "test";
+    loaded.rginf.latch = 1;
+    loaded.entities.push_back(person_entity(record));
+    const auto level = make_level({make_instance("A", 10, 10, 0)});
+    const auto simulation = gl::game::LevelSimulation::create(level, 1);
+    const auto inventory = make_inventory(record);
+    std::array<gl::game::TailPersonLive, 1> live{};
+    gl::game::PersonEffect effect;
+    effect.words = {9, -3, 0x60, 0x23000000, -1};
+    live[0].effects = std::vector<gl::game::PersonEffect>{effect};
+    gl::game::GameDatetime clock;
+    clock.year = 1124;
+    clock.month = 11;
+    clock.day = 27;
+    clock.hour = 4;
+    clock.minute = 31;
+    live[0].effect_clock = clock;
+
+    const auto rebuilt = gl::game::build_selected_tail(
+        loaded, level, simulation, inventory, make_restore(0, 0), live, {}, loaded.rginf,
+        nullptr);
+    REQUIRE(rebuilt.has_value());
+    REQUIRE(rebuilt->entities.size() == 1);
+    const auto decoded = gl::game::decode_save_person(rebuilt->entities[0]);
+    REQUIRE(decoded.has_value());
+    REQUIRE(decoded->extra.size() == 1);
+    CHECK(decoded->tail_count == 1);
+    std::int32_t words[5];
+    for (std::size_t i = 0; i < 5; ++i) {
+        words[i] = static_cast<std::int32_t>(
+            static_cast<std::uint32_t>(decoded->extra[0][4 * i]) |
+            (static_cast<std::uint32_t>(decoded->extra[0][4 * i + 1]) << 8) |
+            (static_cast<std::uint32_t>(decoded->extra[0][4 * i + 2]) << 16) |
+            (static_cast<std::uint32_t>(decoded->extra[0][4 * i + 3]) << 24));
+    }
+    CHECK(words[0] == 9);
+    CHECK(words[1] == -3);
+    CHECK(static_cast<std::uint32_t>(words[3]) == 0x23000000);
+    const auto clock_back = gl::game::GameDatetime::from_time_bytes(
+        std::array<std::uint8_t, 0x20>{decoded->tail80[0x40], decoded->tail80[0x41],
+                                        decoded->tail80[0x42], decoded->tail80[0x43],
+                                        decoded->tail80[0x44], decoded->tail80[0x45],
+                                        decoded->tail80[0x46], decoded->tail80[0x47],
+                                        decoded->tail80[0x48], decoded->tail80[0x49],
+                                        decoded->tail80[0x4A], decoded->tail80[0x4B],
+                                        decoded->tail80[0x4C], decoded->tail80[0x4D],
+                                        decoded->tail80[0x4E], decoded->tail80[0x4F],
+                                        decoded->tail80[0x50], decoded->tail80[0x51],
+                                        decoded->tail80[0x52], decoded->tail80[0x53],
+                                        decoded->tail80[0x54], decoded->tail80[0x55],
+                                        decoded->tail80[0x56], decoded->tail80[0x57],
+                                        decoded->tail80[0x58], decoded->tail80[0x59],
+                                        decoded->tail80[0x5A], decoded->tail80[0x5B],
+                                        decoded->tail80[0x5C], decoded->tail80[0x5D],
+                                        decoded->tail80[0x5E], decoded->tail80[0x5F]});
+    CHECK(clock_back.year == 1124);
+    CHECK(clock_back.minute == 31);
 }

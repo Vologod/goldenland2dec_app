@@ -83,6 +83,10 @@ Result<gl::assets::SavePayload> apply_live_save(gl::assets::SavePayload payload,
                     person.energy = static_cast<std::int32_t>(
                         input.persons->get_parameter(name, gl::script::PersonParameter::energy));
                 }
+                if (input.persons != nullptr && name_counts[name] == 1) {
+                    person.effects = input.persons->effects(name);
+                    person.effect_clock = input.persons->effect_clock(name);
+                }
                 live.push_back(person);
             }
             gl::assets::SaveRginf rginf = loaded.rginf;

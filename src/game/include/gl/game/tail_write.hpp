@@ -1,5 +1,6 @@
 #pragma once
 #include "gl/assets/save_payload.hpp"
+#include "gl/game/effect.hpp"
 #include "gl/game/inventory_runtime.hpp"
 #include "gl/game/level.hpp"
 #include "gl/game/level_simulation.hpp"
@@ -9,6 +10,7 @@
 #include <cstdint>
 #include <optional>
 #include <span>
+#include <vector>
 
 namespace gl::game {
 struct TailPersonLive {
@@ -16,6 +18,8 @@ struct TailPersonLive {
     std::optional<std::int32_t> hp;
     std::optional<std::int32_t> energy;
     std::optional<std::int32_t> ap;
+    std::optional<std::vector<PersonEffect>> effects;
+    std::optional<GameDatetime> effect_clock;
 };
 
 Result<gl::assets::SaveTailEntry> build_selected_tail(

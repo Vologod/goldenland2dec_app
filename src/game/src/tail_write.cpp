@@ -1,9 +1,12 @@
 #include "gl/game/tail_write.hpp"
 
 #include "gl/assets/save_item_convert.hpp"
+#include "gl/game/effect.hpp"
 #include "gl/game/person_movement.hpp"
 #include "gl/game/save_person.hpp"
 
+#include <algorithm>
+#include <array>
 #include <cstddef>
 #include <limits>
 #include <map>
@@ -48,6 +51,18 @@ live_items(const InventoryRuntime &inventory, std::string_view person, bool trad
     for (const gl::assets::InventoryItem &item : items)
         records.push_back(gl::assets::save_item_from_inventory(item));
     return records;
+}
+
+std::array<std::uint8_t, 0x14> pack_effect(const PersonEffect &effect) {
+    std::array<std::uint8_t, 0x14> out{};
+    for (std::size_t i = 0; i < effect.words.size(); ++i) {
+        const auto value = static_cast<std::uint32_t>(effect.words[i]);
+        out[4 * i] = static_cast<std::uint8_t>(value & 0xFF);
+        out[4 * i + 1] = static_cast<std::uint8_t>((value >> 8) & 0xFF);
+        out[4 * i + 2] = static_cast<std::uint8_t>((value >> 16) & 0xFF);
+        out[4 * i + 3] = static_cast<std::uint8_t>((value >> 24) & 0xFF);
+    }
+    return out;
 }
 
 void apply_live_containers(SavePersonRecord &record, const InventoryRuntime &inventory,
@@ -178,6 +193,17 @@ Result<gl::assets::SaveTailEntry> build_selected_tail(
             record.energy = *live[restore_index].energy;
         if (live[restore_index].ap)
             record.ap = *live[restore_index].ap;
+        if (live[restore_index].effects) {
+            record.extra.clear();
+            record.extra.reserve(live[restore_index].effects->size());
+            for (const PersonEffect &effect : *live[restore_index].effects)
+                record.extra.push_back(pack_effect(effect));
+            record.tail_count = static_cast<std::uint32_t>(record.extra.size());
+        }
+        if (live[restore_index].effect_clock) {
+            const auto bytes = live[restore_index].effect_clock->to_time_bytes();
+            std::copy(bytes.begin(), bytes.end(), record.tail80.begin() + 0x40);
+        }
         if (name_counts[level.persons[level_index].name] == 1)
             apply_live_containers(record, inventory, level.persons[level_index].name);
         names.push_back(record.name);

@@ -2,13 +2,17 @@
 
 #include "gl/assets/log.hpp"
 #include "gl/assets/save_item_convert.hpp"
+#include "gl/game/effect.hpp"
 #include "gl/game/inventory_runtime.hpp"
+#include "gl/game/rginf.hpp"
 #include "gl/game/save_person.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cctype>
 #include <deque>
 #include <map>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -55,6 +59,13 @@ const gl::assets::SaveTribeEntry *find_tribe(const gl::assets::SaveTribeTable &t
             return &entry;
     }
     return nullptr;
+}
+
+std::int32_t read_i32_le(const std::uint8_t *bytes) {
+    return static_cast<std::int32_t>(static_cast<std::uint32_t>(bytes[0]) |
+                                     (static_cast<std::uint32_t>(bytes[1]) << 8) |
+                                     (static_cast<std::uint32_t>(bytes[2]) << 16) |
+                                     (static_cast<std::uint32_t>(bytes[3]) << 24));
 }
 
 std::vector<gl::assets::InventoryItem> to_inventory_items(const SaveContainer &container) {
@@ -106,6 +117,19 @@ void apply_record(PersonInstance &person, const SavePersonRecord &record,
                                            person.route + "'; keeping SEF route cells");
     }
     person.route = record.route_name;
+
+    person.saved_effects.clear();
+    person.saved_effects.reserve(record.extra.size());
+    for (const auto &raw : record.extra) {
+        PersonEffect effect;
+        for (std::size_t i = 0; i < effect.words.size(); ++i)
+            effect.words[i] = read_i32_le(raw.data() + 4 * i);
+        person.saved_effects.push_back(effect);
+    }
+    std::array<std::uint8_t, 0x20> clock_bytes{};
+    std::copy_n(record.tail80.begin() + 0x40, 0x20, clock_bytes.begin());
+    const GameDatetime clock = GameDatetime::from_time_bytes(clock_bytes);
+    person.effect_clock = clock.year == 0 ? std::nullopt : std::optional<GameDatetime>(clock);
 }
 } // namespace
 
