@@ -2673,6 +2673,8 @@ class Game {
         auto equipment_before = pending_equipment_;
         auto inventory_state_before = pending_inventory_;
         auto hero_stats_before = pending_hero_stats_;
+        auto hero_effects_before = pending_hero_effects_;
+        auto hero_effect_clock_before = pending_hero_effect_clock_;
         auto outfit_before = pending_outfit_;
         auto character_outfit_before = character_outfit_;
         const bool hero_stats_absent_before = hero_stats_absent_logged_;
@@ -2713,6 +2715,8 @@ class Game {
             pending_equipment_ = std::move(equipment_before);
             pending_inventory_ = std::move(inventory_state_before);
             pending_hero_stats_ = std::move(hero_stats_before);
+            pending_hero_effects_ = std::move(hero_effects_before);
+            pending_hero_effect_clock_ = std::move(hero_effect_clock_before);
             pending_outfit_ = std::move(outfit_before);
             character_outfit_ = std::move(character_outfit_before);
             hero_stats_absent_logged_ = hero_stats_absent_before;
