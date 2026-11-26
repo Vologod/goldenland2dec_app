@@ -18,13 +18,16 @@
   `build\bin\gl_game_tests.exe --test-case="*effect*,*combat stats*,*character sheet*,*real saves: hero effects*,*real slot16*"`;
   `build\bin\glgame_screenshot_tests.exe --test-case="*character*"`;
   `ctest --test-dir build --output-on-failure`.
-- **Проверка (2026-11-26):** `gl_game_tests` → **65 cases / 541 assertions
-  passed** (475 skipped, SUCCESS); `glgame_screenshot_tests --test-case="*character*"`
-  → **1 case / 30 assertions passed** (46 skipped), `character: armor=15
-  weight=132/204.6 ap=43 crit=7 acc=90`; полный `ctest` с `GL_GAME_DIR` →
-  **21/21 passed**, 0 failed, `Total Test time (real) = 1541.09 sec`.
-- **Статус:** done (2026-11-26): зелёный полный `ctest` 21/21; D-115.
-  Продюсеры (зелья/магия) — отдельные подпроекты.
+- **Проверка (2026-11-26):** `gl_game_tests` focused
+  effect/combat/sheet/real → **65 cases / 541 assertions passed** (SUCCESS);
+  `glgame_screenshot_tests --test-case="*character*"` → **1 case / 30
+  assertions passed**, `character: armor=15 weight=132/204.6 ap=43 crit=7
+  acc=90`; полный `ctest` с `GL_GAME_DIR` на финальном дереве (`f4f3ce5`) →
+  **21/21 passed**, 0 failed, `Total Test time (real) = 1543.29 sec`.
+- **Статус:** done (2026-11-26): финальное ревью + fix wave (guard
+  невалидных часов, тест combined `0x10|0x20`, очистка pending при New Game,
+  синхронизация spec); полный `ctest` 21/21; D-115. Продюсеры
+  (зелья/магия/`LE_CastMagic`) — отдельные подпроекты.
 
 ## P5c2b — Day/night stat modifiers in the sheet (done 2026-11-26)
 
