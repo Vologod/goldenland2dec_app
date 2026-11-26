@@ -27,6 +27,7 @@
 #include <gl/core/state.hpp>
 #include <gl/game/character_sheet.hpp>
 #include <gl/game/dialog_path.hpp>
+#include <gl/game/effect.hpp>
 #include <gl/game/game_script_host.hpp>
 #include <gl/game/calendar.hpp>
 #include <gl/game/hero_outfit_resolver.hpp>
@@ -54,6 +55,7 @@
 #include <stb_image_write.h>
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <charconv>
 #include <climits>
@@ -913,6 +915,8 @@ class Game {
             previous = now;
             if (has_calendar_)
                 calendar_.advance(now);
+            if (has_calendar_)
+                person_runtime_.age_effects(calendar_.now());
 
             const float delta_seconds = static_cast<float>(delta_ms) / 1000.0f;
             SDL_Event event;
@@ -1329,6 +1333,7 @@ class Game {
                     inputs.carried.push_back(
                         gl::game::CarriedItem{static_cast<std::int32_t>(item.count),
                                               item.weight_x10});
+            inputs.effect_mods = person_runtime_.active_effect_mods("Hero");
             armor_weight_values = gl::game::compute_armor_weight(inputs);
             armor_weight = &armor_weight_values;
         }
@@ -2345,6 +2350,8 @@ class Game {
         pending_equipment_.reset();
         pending_inventory_.reset();
         pending_hero_stats_.reset();
+        pending_hero_effects_.clear();
+        pending_hero_effect_clock_.reset();
         pending_outfit_.reset();
     }
 
@@ -2382,6 +2389,27 @@ class Game {
                         inventory.error().message);
         }
         if (rebuild_inventory) rebuild_inventory_runtime();
+
+        if (auto save_body = gl::assets::parse_hero_save_body(body)) {
+            pending_hero_effects_.clear();
+            for (const auto &raw : save_body->extra) {
+                gl::game::PersonEffect effect;
+                for (std::size_t i = 0; i < effect.words.size(); ++i) {
+                    effect.words[i] = static_cast<std::int32_t>(
+                        static_cast<std::uint32_t>(raw[4 * i]) |
+                        (static_cast<std::uint32_t>(raw[4 * i + 1]) << 8) |
+                        (static_cast<std::uint32_t>(raw[4 * i + 2]) << 16) |
+                        (static_cast<std::uint32_t>(raw[4 * i + 3]) << 24));
+                }
+                pending_hero_effects_.push_back(effect);
+            }
+            std::array<std::uint8_t, 0x20> clock_bytes{};
+            std::copy_n(save_body->tail80.begin() + 0x40, 0x20, clock_bytes.begin());
+            const gl::game::GameDatetime clock =
+                gl::game::GameDatetime::from_time_bytes(clock_bytes);
+            pending_hero_effect_clock_ =
+                clock.year == 0 ? std::nullopt : std::optional<gl::game::GameDatetime>(clock);
+        }
 
         auto equipment = gl::assets::parse_hero_equipment(body);
         if (!equipment) {
@@ -2457,6 +2485,8 @@ class Game {
 
     void rebuild_person_runtime(const std::vector<gl::game::PersonInstance>& persons) {
         person_runtime_ = gl::game::PersonRuntime::create(persons, pending_hero_stats_);
+        person_runtime_.set_effects("Hero", pending_hero_effects_);
+        person_runtime_.set_effect_clock("Hero", pending_hero_effect_clock_);
         party_.attach(&person_runtime_);
         if (!pending_hero_stats_ && !hero_stats_absent_logged_) {
             hero_stats_absent_logged_ = true;
@@ -2767,6 +2797,9 @@ class Game {
                 hero.containers[2] = inventory_runtime_.hero_inventory().equipped;
                 for (std::size_t index = 0; index < 3; ++index)
                     hero.present[index] = body->containers[index].flag != 0;
+                hero.has_effects = true;
+                hero.effects = person_runtime_.effects("Hero");
+                hero.effect_clock = person_runtime_.effect_clock("Hero");
                 if (level_.has_value()) {
                     hero.tile_x = static_cast<std::uint32_t>(level_->hero().hero().tile.x);
                     hero.tile_y = static_cast<std::uint32_t>(level_->hero().hero().tile.y);
@@ -3734,6 +3767,8 @@ class Game {
     std::optional<gl::assets::HeroEquipment> pending_equipment_;
     std::optional<gl::assets::HeroInventory> pending_inventory_;
     std::optional<gl::assets::HeroStats> pending_hero_stats_;
+    std::vector<gl::game::PersonEffect> pending_hero_effects_;
+    std::optional<gl::game::GameDatetime> pending_hero_effect_clock_;
     std::optional<gl::game::HeroOutfit> pending_outfit_;
     std::optional<gl::assets::SavePayload> loaded_payload_;
     const gl::assets::SaveTailEntry* pending_restore_ = nullptr;
