@@ -1,6 +1,7 @@
 add_library(gl_game STATIC
     src/calendar.cpp
     src/character_sheet.cpp
+    src/combat_stats.cpp
     src/diary.cpp
     src/diary_view.cpp
     src/dialog_path.cpp

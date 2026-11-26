@@ -1292,8 +1292,44 @@ class Game {
                     "character: cannot open (missing user interface sdb or Hero)");
             return false;
         }
+        gl::game::ArmorWeight armor_weight_values;
+        const gl::game::ArmorWeight *armor_weight = nullptr;
+        if (pending_hero_stats_) {
+            gl::game::StatInputs inputs;
+            inputs.strength = pending_hero_stats_->strength;
+            inputs.constitution = pending_hero_stats_->constitution;
+            inputs.dexterity = pending_hero_stats_->dexterity;
+            inputs.perception = pending_hero_stats_->perception;
+            inputs.luck = pending_hero_stats_->luck;
+            inputs.wisdom = pending_hero_stats_->wisdom;
+            inputs.intelligence = pending_hero_stats_->intelligence;
+            inputs.experience = pending_hero_stats_->experience;
+            inputs.person_flags = pending_hero_stats_->flags;
+            for (std::size_t id = 0; id < inputs.skills.size(); ++id)
+                inputs.skills[id] = pending_hero_stats_->skills[id];
+            const gl::assets::HeroInventory &inventory = inventory_runtime_.hero_inventory();
+            for (const auto &item : inventory.equipped) {
+                gl::game::EquippedStatItem equipped;
+                equipped.type = item.type;
+                equipped.flags = item.flags;
+                equipped.durability = item.durability;
+                equipped.mods = item.mods;
+                if (const auto *entry = item_catalog_.find(item.item_id)) {
+                    equipped.unknown_b = entry->item.unknown_b;
+                    equipped.damage = entry->item.damage;
+                }
+                inputs.equipped.push_back(equipped);
+            }
+            for (const auto *list : {&inventory.hot, &inventory.items, &inventory.equipped})
+                for (const auto &item : *list)
+                    inputs.carried.push_back(
+                        gl::game::CarriedItem{static_cast<std::int32_t>(item.count),
+                                              item.weight_x10});
+            armor_weight_values = gl::game::compute_armor_weight(inputs);
+            armor_weight = &armor_weight_values;
+        }
         auto sheet = gl::game::build_character_sheet(person_runtime_, *user_interface_sdb_,
-                                                     "Вертас");
+                                                     "Вертас", "Hero", armor_weight);
         load_character_fonts();
         character_overlay_.set_fonts(character_title_font(), character_font());
         character_overlay_.set_top_font(character_top_font());
@@ -1309,6 +1345,14 @@ class Game {
         else
             character_overlay_.set_tab(gl::game::CharacterTab::characteristics);
         if (inventory_overlay_.visible()) inventory_overlay_.close();
+        if (armor_weight != nullptr)
+            gl::log(gl::LogLevel::info,
+                    "character: armor=" + gl::game::format_armor(armor_weight->armor_class) +
+                        " weight=" + gl::game::format_weight(armor_weight->weight_cur_x10,
+                                                             armor_weight->weight_max_x10) +
+                        " ap=" + std::to_string(armor_weight->action_points) +
+                        " crit=" + std::to_string(armor_weight->crit_chance) +
+                        " acc=" + std::to_string(armor_weight->accuracy));
         gl::log(gl::LogLevel::info,
                 "character: opened groups=" +
                     std::to_string(person_runtime_.has_person("Hero") ? 3 : 0));

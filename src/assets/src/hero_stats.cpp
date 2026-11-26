@@ -38,6 +38,7 @@ Result<HeroStats> parse_hero_stats(std::span<const std::uint8_t> body) {
     stats.life = read_i32(body, kLifeOffset);
     stats.energy = read_i32(body, kEnergyOffset);
     stats.extra = read_i32(body, kExtraOffset);
+    stats.flags = static_cast<std::uint32_t>(read_i32(body, kPersonRecordOffset + 0xA8));
     for (std::size_t id = 0; id < kSkillCount; ++id)
         stats.skills[id] = read_i32(body, kPersonRecordOffset + kSkillOffset + 4 * id);
     return stats;

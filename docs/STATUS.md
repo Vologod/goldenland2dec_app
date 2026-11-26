@@ -2,6 +2,83 @@
 
 Обновлено: 2026-11-25
 
+## P5c2 — Character sheet combat values (done 2026-11-25)
+
+- **Задача:** показывать в листе реальные `Класс брони` (id17), `Вес`
+  (id29) и `Очки действия` (state id18) вместо `—`.
+- **Research/spec:** `docs/research/p5c2-armor-weight-extraction.md`
+  (§8–§13), `docs/specs/2026-11-25-p5c2-armor-weight-design.md`;
+  **D-113**.
+- **Модель:** атрибуты применяются после стат-модификаторов экипировки
+  (`round(FUN_1201b1c4(raw, id))`, getters `FUN_12020620/205b8/20550/
+  204e8/20400`, ids 6/7/9/8/12).
+  - armor = `lround((dexterity+skills[6])*0.334f +
+    shield.unknown_b[3]*(durability*0.005f+0.5f) + mods(0x1d))`,
+    clamp 0..50; щит = набор A (`flags & 0x400000`).
+  - weight `cur = Σ count*weight_x10` (equipped+hot+main, UI `/10`);
+    `max = lround(mods(0x1e)(str*20+con*20+level))`, `*1.5` при
+    `skills[6]>=5`, `*1.1` при `person_flags & 0x2000` (save `+0xB4`),
+    clamp 1..9999.
+  - AP (`FUN_1201ecd8`): `overload=(cur-max)/10` (0 если <1);
+    `base=skills[26]*(2/3)+(dex+per/2)+(5-overload)`, `+5` при
+    `skills[6]>14`; `mods(0x1b)`; clamp 5..60.
+  - crit (`FUN_1201e384`): `skills[24]==0 → 0`, иначе
+    `lround(mods(0x33)((luck*0.334f + skills[24]*0.667f)*0.5f))`,
+    clamp 0..10; `luck` — getter `FUN_12020400` (stat 0xc).
+  - урон: оружие набора A (`0x001000`); физический = повреждения
+    `damage[0,1]/[2,3]/[4,5]` × `(dur*0.005+0.5)*(1+str*0.01)` +
+    weapon-skill (stat 0x22/0x21/0x23); стихийный = сумма модов оружия
+    (idx 0/1/2) `+5` при skill>4 → `1/sum`; формат `min-max`/`0`.
+  - accuracy (`FUN_1201e660`): `(per*1.5+2*skills[24]+luck/2)*0.334+50`;
+    при оружии `(unknown_b[4]+base)*0.6` + skill-бонус `+15`; stat
+    0x32/0x38; clamp 0..90; строка `N%`. arg2 call-site листа = 0.
+  - магия-сопротивления: `wisdom + skills[k] + skills[17]`, mods(stat
+    0x0d..0x12), clamp 0..90; `wisdom` = stat 0xb + (`skills[21]>4`).
+  - иммунитеты: `perception + skills[k] + skills[17]`, mods(stat
+    0x2a..0x2f), clamp 0..90.
+  - стихийные сопротивления: `mods(skills[k], stat)` + `10` за каждый
+    из `skills[17]/skills[1]/skills[20]>4`, clamp 0..90 (Огонь
+    skills[22]/5, Холод skills[25]/4, Яд skills[20]/3).
+  - физические сопротивления: сумма по armor-слотам (`0x304000`) их
+    `damage[idx]*(dur*0.005+0.5)` × mult + skills[6] + attr*0.334,
+    mods(0x13), clamp 0..90 (Дробящее con/idx0/0.334, Колющее
+    dex/idx4/0.334, Рубящее per/idx2/0.333).
+  - Модификаторы — из `InventoryItem.mods`: `0x40` flat, `0x80`
+    percent-of-base, иначе override (max |value|); условные
+    (биты `2/4/8/0x200`) пропускаются.
+  - primary-атрибуты листа (Сила..Удача) заполняются
+    **модифицированными** значениями (str/con/dex/per/wis/int/luck через
+    `attribute_value`, ids 6/7/9/8/11/10/12), а не сырыми из сейва.
+  - кап атрибутов `ch_max_primary_value` default **30**
+    (`DAT_12106ac0+0x8c`), навыков `ch_max_skill_value` default **15**.
+    con 32→30 → вес 204.6, Дробящее 64 (совпало с оригиналом).
+- **Активный набор:** `local_player+0x6E4` (0=A/1=B) не сейвится;
+  порт берёт **A** (weapon `0x001000`, shield `0x400000`). slot0: щита A
+  нет → `Класс брони 15` (совпало с ориентиром пользователя).
+- **Реализация:** `src/game/{include/gl/game,src}/combat_stats` (SDL-free
+  `compute_armor_weight`/`format_*`), перегрузка
+  `build_character_sheet(..., const ArmorWeight*)`,
+  `ArmorWeight::{action_points,crit_chance,primary,physical/magic/
+  elemental_resistance,immunity}`; wiring в `glgame::open_character`
+  (`pending_hero_stats_` + `hero_inventory` + `item_catalog_`); log
+  `character: armor=15 weight=132/204.6 ap=43 crit=7 acc=90`.
+- **Проверка (2026-11-25):** `gl_game_tests --test-case="*combat stats*,
+  *character sheet*"` 40/40 (280 assertions, вкл. real slot0
+  armor=15/cur=1320/max=2046/ap=43/crit=7/acc=90; primary
+  `30,30,20,13,10,5,9`; урон 6/6, магия `40,40,40,40,10,10`,
+  иммунитеты `13,38,38,13,38,13`, стихии `11,10,24`, физические
+  `64,71,79`); `character_overlay_tests` 9/9; screenshot → строки
+  `76-96/0/125-141/1-30`, `90%`, `7%`, `15`, `132/204.6`, `43`,
+  атрибуты `30/30/20/13/10/5/9`, сопротивления/иммунитет заполнены;
+  **все значения = оригинальный скриншот**; полный `ctest` с
+  `GL_GAME_DIR` — 21/21 passed, 2343.04 s.
+- **Residual:** combat-лист **полностью смоделирован**. Не-боевые
+  остатки: условные (time-of-day) модификаторы; бонусные поля
+  `this+0x16c..`/бонусные навыки `this+0x198`; набор B (порт всегда A);
+  режимные флаги `1.35/1.1` (1.1 реализован). Кап атрибутов (30)
+  реализован — все значения листа **совпали с оригиналом**.
+- **Статус:** done (automated green, full ctest 21/21); не закоммичено.
+
 ## P5c — Character sheet combat/resistance values (scoping done 2026-11-25)
 
 - **Задача:** реальные значения combat(10)/resistance(12)/immunity(6) и
@@ -22,6 +99,51 @@
   real-тест. Ориентир из оригинала пользователя: `Класс брони 15`,
   `Вес 132/204.6` (сейв неизвестен — сверить на доступном сейве).
 - **Статус:** scoping done; реализация не начата; committed scoping doc.
+
+## P5c2 — Armor/weight extraction (research done 2026-11-25)
+
+- **Research:** `docs/research/p5c2-armor-weight-extraction.md`
+  (`Client.dll` SHA-256 `FBF213B4…AB5C16`, ImageBase `0x12000000`).
+- **Разобран блокер `FUN_1201b1c4`** (RVA `0x1b1c4`, `__thiscall
+  float10(value, statId)`): контейнер модификаторов `this+0x44/0x48/0x4c`;
+  `flags&0x40` — flat add, `flags&0x80` — `value*0.01*base`, иначе
+  override (max по модулю); при override дельты игнорируются.
+- **Снята математика:**
+  - `Класс брони` `FUN_1201f7a0`: `(dext+skill6)*0.334` + при item
+    `unsigned(proto+0x24)*(durability*0.005+0.5)`; затем
+    `FUN_1201b1c4(...,0x1d)`; `*1.35` при skill4>=15 и флаге; round,
+    clamp 0..50.
+  - `Вес` `FUN_1201e92c`: cur = `round(vtable[+0x3c])`; max =
+    `FUN_1201b1c4((str*20+con*20+level),0x1e)`, `*1.5` при skill6>=5,
+    `*1.1` при `this+0xf8&0x2000`; round, clamp 1..9999.
+  - Константы `.data1`: `0.334f/0.005f/0.5f/1.35f`, double `1.5`,
+    `1.1f`, `0.01f`; round = `lround`.
+- **Ключевое соответствие:** клиентская запись персоны (`FUN_1201b034`
+  копирует 0x47 int из `vtable[+4]`) == `BT_HERO` person-record, который
+  уже парсит `HeroStats` (strength/constitution/dexterity/perception/
+  exp/reputation/skills — все входы брони/веса есть).
+- **Дозакрыто (2026-11-25, продолжение):**
+  1. wrapper-vtable найдена: `PTR_FUN_12131340` (`DAT_12110efc`);
+     `+0x18` = shield/ammo активного набора, `+0x28` = `instance+4`,
+     `+0x2c` = durability `instance+0xB4` (default 100),
+     `+0x3c` = Σ`count*weight_x10`.
+  2. `instance+0x28` = ITM `unknown_b[3]` (броня); `instance+0x88` =
+     ITM `damage[2]` (боевое) — `Server.dll` `FUN_1404f4fc` (RVA
+     `0x4f4fc`), подтверждено на slot0 (shield 353 → 20, armor 318 → 0).
+  3. контейнер модификаторов (`FUN_120b0278`) строится из **ITM effects**
+     надетых предметов (`{id,value,flags,cond,extra}`, proof 741/741).
+  4. проверка модели на slot0: `Σcount*weight_x10 = 1320` → `/10 = 132`
+     (точно ориентир `Вес 132/…`); armor = 29; max raw = 1140.
+  5. вес в UI: значения делятся на 10 (cur 1320→132, max 1710→171.0);
+     точный формат `.` — подтвердить скриншотом.
+- **Остаток (не блокеры):** флаг-множители `12106ab8/bc0+0x8c`,
+  `this+0xf8&0x2000` (вероятно 0 в обычной игре); условные
+  модификаторы (time-of-day) — только безусловные в первой версии.
+- **Дальше:** spec `P5c2` (броня/вес) → approval → реализация →
+  real-тест на slot0 (curl-парность 132, armor/max).
+- **Статус:** research **done**; spec написан
+  (`docs/specs/2026-11-25-p5c2-armor-weight-design.md`, **proposed**),
+  ждёт одобрения; реализация не начата.
 
 ## P7b3 — Character sheet text layout parity (automated done 2026-11-24)
 

@@ -19,6 +19,7 @@ struct HeroStats {
     std::int32_t life = 0;
     std::int32_t energy = 0;
     std::int32_t extra = 0;
+    std::uint32_t flags = 0;
     std::array<std::int32_t, 27> skills{};
 };
 
