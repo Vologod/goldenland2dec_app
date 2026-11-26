@@ -2,6 +2,17 @@
 
 Обновлено: 2026-11-26
 
+## Session checkpoint (2026-11-26, end)
+
+- HEAD `07d8e07`; рабочее дерево чистое; push не выполнялся.
+- P5 effect runtime core done (D-115), см. секцию ниже; полный `ctest`
+  с `GL_GAME_DIR` на финальном дереве — 21/21, 1543.29 s.
+- Ручной гейт (пользователь): `build\bin\glgame.exe --load-save 16
+  --character` — в листе DEX raw 10 → 7 (эффект `slot16`).
+- Дальше (отдельные подпроекты): продюсеры эффектов — использование
+  зелий/еды (item-use action) и магия/`LE_CastMagic`; затем набор B
+  инвентаря, P8 audio, P9 Android.
+
 ## P5 effect runtime core (done 2026-11-26)
 
 - **Задача:** общий канал эффектов персоны (5×int32): aging по
