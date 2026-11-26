@@ -6,6 +6,20 @@
 #include <limits>
 
 namespace gl::game {
+namespace {
+std::uint32_t packed_minutes(std::uint32_t cond, unsigned first_byte) {
+    return ((cond >> (8 * first_byte)) & 0xffu) * 60u +
+           ((cond >> (8 * (first_byte + 1))) & 0xffu);
+}
+
+std::uint32_t pack_low(std::uint32_t minutes) {
+    return (minutes / 60u) | ((minutes % 60u) << 8);
+}
+
+std::uint32_t pack_high(std::uint32_t minutes) {
+    return ((minutes / 60u) << 16) | ((minutes % 60u) << 24);
+}
+} // namespace
 
 bool effect_delay_pending(const PersonEffect &effect) {
     const auto flags = static_cast<std::uint32_t>(effect.words[2]);
@@ -23,25 +37,25 @@ void age_effects(std::vector<PersonEffect> &effects, std::uint32_t elapsed_minut
         std::uint32_t cond = static_cast<std::uint32_t>(effect.words[3]);
         bool remove = false;
         if ((flags & kEffectDuration) != 0) {
-            const std::uint32_t duration = cond & 0xffffu;
+            const std::uint32_t duration = packed_minutes(cond, 0);
             if (elapsed_minutes >= duration)
                 remove = true;
             else
-                cond = duration - elapsed_minutes;
+                cond = pack_low(duration - elapsed_minutes);
         }
         if (!remove && (flags & kEffectDelayed) != 0) {
             if ((cond & kEffectDelayMask) != 0) {
-                const std::uint32_t delay = cond & kEffectDelayMask;
+                const std::uint32_t delay = packed_minutes(cond, 0);
                 if (elapsed_minutes >= delay)
                     cond &= 0xffff0000u;
                 else
-                    cond = (cond & 0xffff0000u) | (delay - elapsed_minutes);
+                    cond = (cond & 0xffff0000u) | pack_low(delay - elapsed_minutes);
             } else {
-                const std::uint32_t duration = cond >> 16;
+                const std::uint32_t duration = packed_minutes(cond, 2);
                 if (elapsed_minutes >= duration)
                     remove = true;
                 else
-                    cond = (duration - elapsed_minutes) << 16;
+                    cond = pack_high(duration - elapsed_minutes);
             }
         }
         if (remove) {

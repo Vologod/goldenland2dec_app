@@ -16,7 +16,7 @@ gl::game::PersonEffect make_effect(std::int32_t id, std::int32_t value, std::uin
 } // namespace
 
 TEST_CASE("effect_delay_pending follows the client skip rule") {
-    CHECK(gl::game::effect_delay_pending(make_effect(9, -3, 0x20, 0x0000000A)));
+    CHECK(gl::game::effect_delay_pending(make_effect(9, -3, 0x20, 0x00000A00)));
     CHECK_FALSE(gl::game::effect_delay_pending(make_effect(9, -3, 0x20, 0x23000000)));
     CHECK_FALSE(gl::game::effect_delay_pending(make_effect(9, -3, 0x60, 0x23000000)));
     CHECK_FALSE(gl::game::effect_delay_pending(make_effect(9, -3, 0x40, 0)));
@@ -24,33 +24,33 @@ TEST_CASE("effect_delay_pending follows the client skip rule") {
 
 TEST_CASE("age_effects decrements 0x10 duration and removes on expiry") {
     std::vector<gl::game::PersonEffect> effects{
-        make_effect(9, -3, 0x10, 0x00000064)};
+        make_effect(9, -3, 0x10, 0x00002801)};
     gl::game::age_effects(effects, 40);
     REQUIRE(effects.size() == 1);
-    CHECK(static_cast<std::uint32_t>(effects[0].words[3]) == 0x0000003C);
+    CHECK(static_cast<std::uint32_t>(effects[0].words[3]) == 0x00000001);
     gl::game::age_effects(effects, 60);
     CHECK(effects.empty());
 }
 
 TEST_CASE("age_effects handles 0x20 delay then active duration") {
     std::vector<gl::game::PersonEffect> effects{
-        make_effect(9, -3, 0x20, 0x0023000A)};
+        make_effect(9, -3, 0x20, 0x23000A00)};
     gl::game::age_effects(effects, 5);
     REQUIRE(effects.size() == 1);
-    CHECK(static_cast<std::uint32_t>(effects[0].words[3]) == 0x00230005);
+    CHECK(static_cast<std::uint32_t>(effects[0].words[3]) == 0x23000500);
     gl::game::age_effects(effects, 5);
     REQUIRE(effects.size() == 1);
-    CHECK(static_cast<std::uint32_t>(effects[0].words[3]) == 0x00230000);
+    CHECK(static_cast<std::uint32_t>(effects[0].words[3]) == 0x23000000);
     gl::game::age_effects(effects, 35);
     CHECK(effects.empty());
 }
 
 TEST_CASE("age_effects overwrites the whole cond in the 0x10 branch") {
     std::vector<gl::game::PersonEffect> effects{
-        make_effect(9, -3, 0x10, 0xAB000064)};
+        make_effect(9, -3, 0x10, 0xAB002801)};
     gl::game::age_effects(effects, 40);
     REQUIRE(effects.size() == 1);
-    CHECK(static_cast<std::uint32_t>(effects[0].words[3]) == 0x0000003C);
+    CHECK(static_cast<std::uint32_t>(effects[0].words[3]) == 0x00000001);
 }
 
 TEST_CASE("age_effects is a no-op for zero elapsed time") {
@@ -79,7 +79,7 @@ TEST_CASE("total_minutes and minutes_between use whole minutes") {
 TEST_CASE("active_effect_mods drops pending delay records") {
     const std::vector<gl::game::PersonEffect> effects{
         make_effect(9, -3, 0x60, 0x23000000),
-        make_effect(7, 2, 0x20, 0x00000005),
+        make_effect(7, 2, 0x20, 0x00000500),
     };
     const auto mods = gl::game::active_effect_mods(effects);
     REQUIRE(mods.size() == 1);
