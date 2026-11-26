@@ -1,6 +1,8 @@
 #include "gl/game/hero_save_write.hpp"
 
 #include "gl/assets/save_item_convert.hpp"
+#include "gl/game/effect.hpp"
+#include "gl/game/rginf.hpp"
 
 #include <array>
 #include <cstdint>
@@ -183,4 +185,58 @@ TEST_CASE("make_hero_save_body keeps absent containers absent even with runtime 
     REQUIRE(parsed.has_value());
     CHECK(parsed->containers[0].flag == 0);
     CHECK(parsed->containers[0].items.empty());
+}
+TEST_CASE("make_hero_save_body writes live effects and clock") {
+    auto body = gl::assets::HeroSaveBody{};
+    auto live = gl::game::HeroLiveState{};
+    gl::game::PersonEffect effect;
+    effect.words = {9, -3, 0x60, 0x23000000, -1};
+    live.effects.push_back(effect);
+    live.has_effects = true;
+    gl::game::GameDatetime clock;
+    clock.year = 1124;
+    clock.month = 11;
+    clock.day = 27;
+    clock.hour = 4;
+    clock.minute = 31;
+    live.effect_clock = clock;
+
+    const auto result = gl::game::make_hero_save_body(body, live);
+    REQUIRE(result.extra.size() == 1);
+    const auto decoded = gl::assets::parse_hero_save_body([&] {
+        const auto encoded = gl::assets::encode_hero_save_body(result);
+        REQUIRE(encoded.has_value());
+        return encoded.value();
+    }());
+    REQUIRE(decoded.has_value());
+    REQUIRE(decoded->extra.size() == 1);
+    std::int32_t words[5];
+    for (std::size_t i = 0; i < 5; ++i) {
+        words[i] = static_cast<std::int32_t>(
+            static_cast<std::uint32_t>(decoded->extra[0][4 * i]) |
+            (static_cast<std::uint32_t>(decoded->extra[0][4 * i + 1]) << 8) |
+            (static_cast<std::uint32_t>(decoded->extra[0][4 * i + 2]) << 16) |
+            (static_cast<std::uint32_t>(decoded->extra[0][4 * i + 3]) << 24));
+    }
+    CHECK(words[0] == 9);
+    CHECK(words[1] == -3);
+    const auto clock_back = gl::game::GameDatetime::from_time_bytes(
+        std::array<std::uint8_t, 0x20>{decoded->tail80[0x40], decoded->tail80[0x41],
+                                        decoded->tail80[0x42], decoded->tail80[0x43],
+                                        decoded->tail80[0x44], decoded->tail80[0x45],
+                                        decoded->tail80[0x46], decoded->tail80[0x47],
+                                        decoded->tail80[0x48], decoded->tail80[0x49],
+                                        decoded->tail80[0x4A], decoded->tail80[0x4B],
+                                        decoded->tail80[0x4C], decoded->tail80[0x4D],
+                                        decoded->tail80[0x4E], decoded->tail80[0x4F],
+                                        decoded->tail80[0x50], decoded->tail80[0x51],
+                                        decoded->tail80[0x52], decoded->tail80[0x53],
+                                        decoded->tail80[0x54], decoded->tail80[0x55],
+                                        decoded->tail80[0x56], decoded->tail80[0x57],
+                                        decoded->tail80[0x58], decoded->tail80[0x59],
+                                        decoded->tail80[0x5A], decoded->tail80[0x5B],
+                                        decoded->tail80[0x5C], decoded->tail80[0x5D],
+                                        decoded->tail80[0x5E], decoded->tail80[0x5F]});
+    CHECK(clock_back.year == 1124);
+    CHECK(clock_back.minute == 31);
 }
