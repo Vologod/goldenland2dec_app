@@ -21,6 +21,13 @@ struct CarriedItem {
     std::uint32_t weight_x10 = 0;
 };
 
+// Current world lighting for conditional (day/night) stat modifiers.
+// Unknown means conditional modifiers are skipped (legacy behaviour).
+struct StatCondition {
+    bool day_night_known = false;
+    double day_night = 0.0;
+};
+
 struct StatInputs {
     std::int32_t strength = 0;
     std::int32_t constitution = 0;
@@ -31,6 +38,7 @@ struct StatInputs {
     std::int32_t intelligence = 0;
     std::int32_t experience = 0;
     std::uint32_t person_flags = 0;
+    StatCondition condition;
     std::array<std::int32_t, 27> skills{};
     std::vector<EquippedStatItem> equipped;
     std::vector<CarriedItem> carried;

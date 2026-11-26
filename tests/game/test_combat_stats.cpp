@@ -144,6 +144,55 @@ TEST_CASE("combat stats: conditional armor modifiers are skipped") {
     CHECK(gl::game::compute_armor_weight(in).armor_class == 9);
 }
 
+TEST_CASE("combat stats: day modifier applies only at full day") {
+    StatInputs in = base_inputs();
+    EquippedStatItem ring;
+    ring.mods.push_back(mod(0x1d, 5, 0x42));
+    in.equipped.push_back(ring);
+    in.condition.day_night_known = true;
+    in.condition.day_night = 1.0;
+    CHECK(gl::game::compute_armor_weight(in).armor_class == 14);
+    in.condition.day_night = 0.0;
+    CHECK(gl::game::compute_armor_weight(in).armor_class == 9);
+    in.condition.day_night = 0.5;
+    CHECK(gl::game::compute_armor_weight(in).armor_class == 9);
+}
+
+TEST_CASE("combat stats: night modifier applies only at full night") {
+    StatInputs in = base_inputs();
+    EquippedStatItem ring;
+    ring.mods.push_back(mod(0x1d, 5, 0x44));
+    in.equipped.push_back(ring);
+    in.condition.day_night_known = true;
+    in.condition.day_night = 0.0;
+    CHECK(gl::game::compute_armor_weight(in).armor_class == 14);
+    in.condition.day_night = 1.0;
+    CHECK(gl::game::compute_armor_weight(in).armor_class == 9);
+}
+
+TEST_CASE("combat stats: day percent modifier applies only at full day") {
+    StatInputs in = base_inputs();
+    EquippedStatItem ring;
+    ring.mods.push_back(mod(0x1d, 50, 0x82));
+    in.equipped.push_back(ring);
+    in.condition.day_night_known = true;
+    in.condition.day_night = 1.0;
+    CHECK(gl::game::compute_armor_weight(in).armor_class == 14);
+    in.condition.day_night = 0.0;
+    CHECK(gl::game::compute_armor_weight(in).armor_class == 9);
+}
+
+TEST_CASE("combat stats: time-interval and reject conditions are always skipped") {
+    StatInputs in = base_inputs();
+    EquippedStatItem ring;
+    ring.mods.push_back(mod(0x1d, 5, 0x48));
+    ring.mods.push_back(mod(0x1d, 5, 0x240));
+    in.equipped.push_back(ring);
+    in.condition.day_night_known = true;
+    in.condition.day_night = 1.0;
+    CHECK(gl::game::compute_armor_weight(in).armor_class == 9);
+}
+
 TEST_CASE("combat stats: armor clamps to 0..50") {
     StatInputs high = base_inputs();
     high.equipped.push_back(shield_item(2000, 100));

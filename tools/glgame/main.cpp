@@ -1305,6 +1305,10 @@ class Game {
             inputs.intelligence = pending_hero_stats_->intelligence;
             inputs.experience = pending_hero_stats_->experience;
             inputs.person_flags = pending_hero_stats_->flags;
+            if (has_calendar_) {
+                inputs.condition.day_night_known = true;
+                inputs.condition.day_night = gl::game::day_night_factor(calendar_.now());
+            }
             for (std::size_t id = 0; id < inputs.skills.size(); ++id)
                 inputs.skills[id] = pending_hero_stats_->skills[id];
             const gl::assets::HeroInventory &inventory = inventory_runtime_.hero_inventory();

@@ -1,6 +1,44 @@
 # STATUS
 
-Обновлено: 2026-11-25
+Обновлено: 2026-11-26
+
+## P5c2b — Day/night stat modifiers in the sheet (done 2026-11-26)
+
+- **Задача:** применять условные модификаторы статов «день»/«ночь»
+  (ITM `effect.flags` биты `0x2`/`0x4`) по текущему фактору день/ночь,
+  как `FUN_12020e68` + `FUN_1201b1c4` в оригинале (сейчас всегда skip).
+- **Research:** `docs/research/p5c2b-residual-conditions.md` (закрывает
+  §12/§13/§16 P5c2: day/night реализуемо; режимные флаги = дефолты 0;
+  бонусные поля = 0 для загруженного сейва; набор B — инвентарный UI).
+- **Spec:** `docs/specs/2026-11-26-p5c2b-day-night-modifiers-design.md`;
+  **D-114**.
+- **Факты:** `FUN_12020e68` (RVA `0x20e68`): `0x2` → `this+0x3c==1.0f`
+  (день), `0x4` → `this+0x3c==0.0f` (ночь), `0x8` — интервал (0/2142),
+  `0x200` — reject (0/2142); `this+0x3c` = day/night фактор из clock
+  `+0xc` (RVA `0xafcac`); константы `.data1` `0x12123f24=0.0f`,
+  `0x12123f28=1.0f`. 31 предмет / 99 effect используют `0x2/0x4`;
+  slot0 — 0 условных эффектов (оракул не меняется).
+- **Реализация:** `StatInputs::condition` (`StatCondition{day_night_known,
+  day_night}`); `apply_modifiers` проверяет `0x2/0x4` (unknown → skip,
+  как раньше; `0x8`/`0x200` всегда skip). `glgame::open_character`
+  заполняет из `day_night_factor(calendar_.now())` при наличии календаря.
+  Режимные флаги/бонусные поля/набор B — не требуют кода (дефолты/
+  отдельная подсистема), см. research §2–§4.
+- **Проверка (2026-11-26):** `cmake --build build` — ok;
+  `gl_game_tests --test-case="*combat stats*,*character sheet*"` 44/44
+  (288 assertions; real slot0 armor=15/weight=1320/2046/AP=43/crit=7/
+  acc=90 без изменений); `character_overlay_tests` 9/9 (154);
+  `glgame_screenshot_tests --test-case="*character*"` 1/1 (30);
+  полный `ctest` с `GL_GAME_DIR` — **21/21 passed, 2209.95 s**.
+- **Остаток:** интервальные (`0x8`) модификаторы не реализованы (в
+  данных 0); активные эффекты персоны — общий канал магии/зелий/еды/
+  травм/квестов/проклятий (Server `person+0x110C/+0x14F4` → клиент
+  `FUN_120b0690` + `DAT_12110f28+0x6DC`, research §3.1) — подсистема
+  эффектов не реализована; `PersonState.effects` (5 слов) есть, но в
+  `combat_stats` не передаётся; `LE_CastEffect`/`LE_CastMagic`/магия
+  unsupported. Бонусные поля — levелап/распределение очков; набор B —
+  инвентарный UI. Ручной гейт — пользователь.
+- **Статус:** done (automated green, full ctest 21/21); не закоммичено.
 
 ## P5c2 — Character sheet combat values (done 2026-11-25)
 

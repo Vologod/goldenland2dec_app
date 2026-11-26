@@ -17,7 +17,10 @@ constexpr std::uint32_t kDexterityStatId = 9;
 constexpr std::uint32_t kLuckStatId = 0xc;
 constexpr std::uint32_t kWisdomStatId = 0x0b;
 constexpr std::uint32_t kIntelligenceStatId = 10;
-constexpr std::uint32_t kConditionMask = 0x2u | 0x4u | 0x8u | 0x200u;
+constexpr std::uint32_t kDayCondition = 0x2u;
+constexpr std::uint32_t kNightCondition = 0x4u;
+constexpr std::uint32_t kTimeIntervalCondition = 0x8u;
+constexpr std::uint32_t kAlwaysRejectCondition = 0x200u;
 constexpr std::uint32_t kShieldMaskA = 0x400000u;
 constexpr std::uint32_t kWeaponMaskA = 0x001000u;
 constexpr std::uint32_t kBluntStatId = 0x22;
@@ -30,8 +33,23 @@ constexpr double kCritSkillFactor = 0.667;
 constexpr double kCritScale = 0.5;
 constexpr std::int32_t kMaxPrimaryValue = 30; // ch_max_primary_value default (ini absent)
 
+bool modifier_applies(std::uint32_t flags, const StatCondition &condition) {
+    if ((flags & kAlwaysRejectCondition) != 0)
+        return false;
+    if ((flags & kTimeIntervalCondition) != 0)
+        return false;
+    if ((flags & kDayCondition) != 0 &&
+        (!condition.day_night_known || condition.day_night != 1.0))
+        return false;
+    if ((flags & kNightCondition) != 0 &&
+        (!condition.day_night_known || condition.day_night != 0.0))
+        return false;
+    return true;
+}
+
 double apply_modifiers(double base, std::uint32_t stat_id,
-                       const std::vector<EquippedStatItem> &equipped) {
+                       const std::vector<EquippedStatItem> &equipped,
+                       const StatCondition &condition) {
     double override_value = 0.0;
     bool have_override = false;
     double total = 0.0;
@@ -41,7 +59,7 @@ double apply_modifiers(double base, std::uint32_t stat_id,
         for (const gl::assets::SpecialMod &entry : item.mods) {
             if (entry.id != stat_id)
                 continue;
-            if ((entry.flags & kConditionMask) != 0)
+            if (!modifier_applies(entry.flags, condition))
                 continue;
             const double value = static_cast<double>(entry.value);
             const bool is_override = (entry.flags & 0x40u) == 0 && (entry.flags & 0x80u) == 0;
@@ -63,8 +81,9 @@ double apply_modifiers(double base, std::uint32_t stat_id,
 }
 
 std::int32_t attribute_value(std::int32_t raw, std::uint32_t stat_id,
-                             const std::vector<EquippedStatItem> &equipped) {
-    const long value = std::lround(apply_modifiers(raw, stat_id, equipped));
+                             const std::vector<EquippedStatItem> &equipped,
+                             const StatCondition &condition) {
+    const long value = std::lround(apply_modifiers(raw, stat_id, equipped, condition));
     if (value < 2)
         return 1;
     if (value >= kMaxPrimaryValue)
@@ -97,13 +116,16 @@ std::int32_t weapon_skill(const EquippedStatItem &weapon,
 
 DamageRange physical_damage(std::uint32_t damage_min, std::uint32_t damage_max, double factor,
                             std::int32_t weapon_skill_value, std::uint32_t stat_id,
-                            const std::vector<EquippedStatItem> &equipped) {
+                            const std::vector<EquippedStatItem> &equipped,
+                            const StatCondition &condition) {
     DamageRange out;
     const double skill = damage_min == 0 ? 0.0 : static_cast<double>(weapon_skill_value);
     const double low = static_cast<double>(damage_min) * factor + skill;
     const double high = static_cast<double>(damage_max) * factor + skill;
-    out.minimum = static_cast<std::int32_t>(std::lround(apply_modifiers(low, stat_id, equipped)));
-    out.maximum = static_cast<std::int32_t>(std::lround(apply_modifiers(high, stat_id, equipped)));
+    out.minimum =
+        static_cast<std::int32_t>(std::lround(apply_modifiers(low, stat_id, equipped, condition)));
+    out.maximum =
+        static_cast<std::int32_t>(std::lround(apply_modifiers(high, stat_id, equipped, condition)));
     return out;
 }
 
@@ -142,22 +164,24 @@ ArmorWeight compute_armor_weight(const StatInputs &inputs) {
         }
     }
     const std::int32_t dexterity =
-        attribute_value(inputs.dexterity, kDexterityStatId, inputs.equipped);
+        attribute_value(inputs.dexterity, kDexterityStatId, inputs.equipped, inputs.condition);
     const std::int32_t perception =
-        attribute_value(inputs.perception, kPerceptionStatId, inputs.equipped);
+        attribute_value(inputs.perception, kPerceptionStatId, inputs.equipped, inputs.condition);
     const std::int32_t strength =
-        attribute_value(inputs.strength, kStrengthStatId, inputs.equipped);
+        attribute_value(inputs.strength, kStrengthStatId, inputs.equipped, inputs.condition);
     const std::int32_t constitution =
-        attribute_value(inputs.constitution, kConstitutionStatId, inputs.equipped);
-    const std::int32_t luck = attribute_value(inputs.luck, kLuckStatId, inputs.equipped);
+        attribute_value(inputs.constitution, kConstitutionStatId, inputs.equipped, inputs.condition);
+    const std::int32_t luck =
+        attribute_value(inputs.luck, kLuckStatId, inputs.equipped, inputs.condition);
     const std::int32_t intelligence =
-        attribute_value(inputs.intelligence, kIntelligenceStatId, inputs.equipped);
+        attribute_value(inputs.intelligence, kIntelligenceStatId, inputs.equipped, inputs.condition);
     float armor = static_cast<float>(dexterity + inputs.skills[6]) * 0.334f;
     if (shield != nullptr) {
         const float durability = static_cast<float>(shield->durability);
         armor += static_cast<float>(shield->unknown_b[3]) * (durability * 0.005f + 0.5f);
     }
-    long armor_class = std::lround(apply_modifiers(armor, kArmorStatId, inputs.equipped));
+    long armor_class =
+        std::lround(apply_modifiers(armor, kArmorStatId, inputs.equipped, inputs.condition));
     if (armor_class < 0)
         armor_class = 0;
     else if (armor_class > 50)
@@ -171,7 +195,7 @@ ArmorWeight compute_armor_weight(const StatInputs &inputs) {
 
     const std::int32_t level = hero_level_from_experience(static_cast<double>(inputs.experience));
     const double base = static_cast<double>(strength * 20 + constitution * 20 + level);
-    double maximum = apply_modifiers(base, kWeightStatId, inputs.equipped);
+    double maximum = apply_modifiers(base, kWeightStatId, inputs.equipped, inputs.condition);
     if (inputs.skills[6] >= 5)
         maximum *= 1.5;
     if ((inputs.person_flags & 0x2000u) != 0)
@@ -193,7 +217,8 @@ ArmorWeight compute_armor_weight(const StatInputs &inputs) {
                     (kActionConstant - static_cast<double>(overload));
     if (inputs.skills[6] > 14)
         action += kActionConstant;
-    long action_points = std::lround(apply_modifiers(action, kActionStatId, inputs.equipped));
+    long action_points =
+        std::lround(apply_modifiers(action, kActionStatId, inputs.equipped, inputs.condition));
     if (action_points < 6)
         action_points = 5;
     else if (action_points > 59)
@@ -205,7 +230,7 @@ ArmorWeight compute_armor_weight(const StatInputs &inputs) {
         const double base = (static_cast<double>(luck) * kCritLuckFactor +
                              static_cast<double>(inputs.skills[24]) * kCritSkillFactor) *
                             kCritScale;
-        crit = std::lround(apply_modifiers(base, kCritStatId, inputs.equipped));
+        crit = std::lround(apply_modifiers(base, kCritStatId, inputs.equipped, inputs.condition));
         if (crit < 1)
             crit = 0;
         else if (crit > 9)
@@ -249,7 +274,8 @@ ArmorWeight compute_armor_weight(const StatInputs &inputs) {
         }
         if (skill_id >= 0 && inputs.skills[skill_id] > 9)
             accuracy += 15.0;
-        long value = std::lround(apply_modifiers(accuracy, stat_id, inputs.equipped));
+        long value =
+            std::lround(apply_modifiers(accuracy, stat_id, inputs.equipped, inputs.condition));
         if (value < 1)
             value = 0;
         else if (value > 89)
@@ -258,7 +284,7 @@ ArmorWeight compute_armor_weight(const StatInputs &inputs) {
     } else {
         if (inputs.skills[14] > 9)
             accuracy += 20.0;
-        long value = std::lround(apply_modifiers(accuracy, 0x32, inputs.equipped));
+        long value = std::lround(apply_modifiers(accuracy, 0x32, inputs.equipped, inputs.condition));
         if (value < 1)
             value = 0;
         else if (value > 89)
@@ -266,14 +292,16 @@ ArmorWeight compute_armor_weight(const StatInputs &inputs) {
         out.accuracy = static_cast<std::int32_t>(value);
     }
 
-    std::int32_t wisdom_attr = attribute_value(inputs.wisdom, kWisdomStatId, inputs.equipped);
+    std::int32_t wisdom_attr =
+        attribute_value(inputs.wisdom, kWisdomStatId, inputs.equipped, inputs.condition);
     if (inputs.skills[21] > 4)
         wisdom_attr += 1;
     out.primary = {strength, constitution, dexterity, perception, wisdom_attr, intelligence, luck};
     const std::int32_t skill17 = inputs.skills[17];
     auto resistance_value = [&](std::int32_t base, std::int32_t skill, std::uint32_t stat_id) {
         long value = std::lround(apply_modifiers(
-            static_cast<double>(base + inputs.skills[skill] + skill17), stat_id, inputs.equipped));
+            static_cast<double>(base + inputs.skills[skill] + skill17), stat_id, inputs.equipped,
+            inputs.condition));
         if (value < 1)
             value = 0;
         else if (value > 89)
@@ -294,8 +322,8 @@ ArmorWeight compute_armor_weight(const StatInputs &inputs) {
     out.immunity[5] = resistance_value(perception, 3, 0x2d);
 
     auto elemental_value = [&](std::int32_t skill, std::uint32_t stat_id) {
-        long value = std::lround(
-            apply_modifiers(static_cast<double>(inputs.skills[skill]), stat_id, inputs.equipped));
+        long value = std::lround(apply_modifiers(static_cast<double>(inputs.skills[skill]), stat_id,
+                                                 inputs.equipped, inputs.condition));
         if (inputs.skills[17] > 4)
             value += 10;
         if (inputs.skills[1] > 4)
@@ -325,7 +353,7 @@ ArmorWeight compute_armor_weight(const StatInputs &inputs) {
     auto physical_value = [&](double sum, double multiplier, std::int32_t attribute) {
         const double value = sum * multiplier + static_cast<double>(inputs.skills[6]) +
                              static_cast<double>(attribute) * 0.334;
-        long result = std::lround(apply_modifiers(value, 0x13, inputs.equipped));
+        long result = std::lround(apply_modifiers(value, 0x13, inputs.equipped, inputs.condition));
         if (result < 1)
             result = 0;
         else if (result > 89)
@@ -341,11 +369,11 @@ ArmorWeight compute_armor_weight(const StatInputs &inputs) {
         const double factor = (static_cast<double>(weapon->durability) * 0.005 + 0.5) * attack;
         const std::int32_t skill = weapon_skill(*weapon, inputs.skills);
         out.damage[0] = physical_damage(weapon->damage[0], weapon->damage[1], factor, skill,
-                                        kBluntStatId, inputs.equipped);
+                                        kBluntStatId, inputs.equipped, inputs.condition);
         out.damage[1] = physical_damage(weapon->damage[4], weapon->damage[5], factor, skill,
-                                        kPierceStatId, inputs.equipped);
+                                        kPierceStatId, inputs.equipped, inputs.condition);
         out.damage[2] = physical_damage(weapon->damage[2], weapon->damage[3], factor, skill,
-                                        kSlashStatId, inputs.equipped);
+                                        kSlashStatId, inputs.equipped, inputs.condition);
         out.damage[3] = elemental_damage(*weapon, 2, inputs.skills[0]);
         out.damage[4] = elemental_damage(*weapon, 1, inputs.skills[4]);
         out.damage[5] = elemental_damage(*weapon, 0, inputs.skills[5]);
