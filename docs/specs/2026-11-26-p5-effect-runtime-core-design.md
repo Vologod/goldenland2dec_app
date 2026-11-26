@@ -1,6 +1,6 @@
 # P5 — Effect runtime core (aging + stats + save) — дизайн
 
-Дата: 2026-11-26. Статус: proposed. Решение: **D-115**.
+Дата: 2026-11-26. Статус: accepted (done 2026-11-26). Решение: **D-115**.
 Research: `docs/research/p5-effect-runtime.md`.
 
 ## 1. Цель
@@ -61,7 +61,7 @@ max(0, now − prev)`; невалидное время (`year == 0`) → 0.
 - `bool effect_delay_pending(const PersonEffect&)`;
 - `void age_effects(std::vector<PersonEffect>&, std::uint32_t elapsed_minutes)`;
 - `std::int64_t total_minutes(const GameDatetime&)`;
-- `std::uint32_t elapsed_minutes(const GameDatetime& prev, const GameDatetime& now)`.
+- `std::uint32_t minutes_between(const GameDatetime& prev, const GameDatetime& now)`.
 - `SPECIAL`-конверсия: `std::vector<gl::assets::SpecialMod> effect_mods(...)`.
 
 `PersonEffect` переносится из `person_runtime.hpp` в этот заголовок;
@@ -82,7 +82,7 @@ std::optional<GameDatetime> effect_clock;
 - `set_effects(name, effects)`, `effects(name)`; `set_effect_clock`,
   `effect_clock`.
 - `age_effects(const GameDatetime& now)`: для каждой персоны
-  `delta = elapsed_minutes(clock.value_or(now), now)`, `gl::game::age_effects`,
+  `delta = minutes_between(clock.value_or(now), now)`, `gl::game::age_effects`,
   `clock = now`.
 - `active_effect_mods(name)`: слова → `SpecialMod{id=w0,value=w1,flags=w2,
   word3=w3,word4=w4}`, исключая `effect_delay_pending`.
@@ -104,9 +104,9 @@ std::optional<GameDatetime> effect_clock;
 - Основной цикл: после `calendar_.advance(now)` (строка ~914) при
   `has_calendar_` вызвать `person_runtime_.age_effects(calendar_.now())`.
 - `open_character`: `inputs.effect_mods = person_runtime_.active_effect_mods("Hero")`.
-- Headless-путь `advance_scene`: если есть календарь — также вызывать
-  `age_effects` после продвижения времени (если календарь там не
-  продвигается, вызов безвреден).
+- Headless-путь `advance_scene`: старение не вызывается — календарь там не
+  продвигается; `age_effects` вызывается только в `run_interactive` после
+  `calendar_.advance`.
 
 ## 5. Save restore/write
 

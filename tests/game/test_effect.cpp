@@ -53,6 +53,14 @@ TEST_CASE("age_effects overwrites the whole cond in the 0x10 branch") {
     CHECK(static_cast<std::uint32_t>(effects[0].words[3]) == 0x00000001);
 }
 
+TEST_CASE("age_effects applies 0x10 then 0x20 on the same record") {
+    std::vector<gl::game::PersonEffect> effects{
+        make_effect(9, -3, 0x30, 0xAB002801)};
+    gl::game::age_effects(effects, 40);
+    REQUIRE(effects.size() == 1);
+    CHECK(static_cast<std::uint32_t>(effects[0].words[3]) == 0x00001400);
+}
+
 TEST_CASE("age_effects is a no-op for zero elapsed time") {
     std::vector<gl::game::PersonEffect> effects{
         make_effect(9, -3, 0x60, 0x23000000)};
@@ -74,6 +82,14 @@ TEST_CASE("total_minutes and minutes_between use whole minutes") {
     CHECK(gl::game::minutes_between(a, b) == 35);
     CHECK(gl::game::minutes_between(b, a) == 0);
     CHECK(gl::game::minutes_between(gl::game::GameDatetime{}, b) == 0);
+}
+
+TEST_CASE("minutes_between returns zero for an invalid datetime") {
+    gl::game::GameDatetime valid;
+    valid.year = 1124; valid.month = 11; valid.day = 27; valid.hour = 4; valid.minute = 0;
+    gl::game::GameDatetime invalid;
+    CHECK(gl::game::minutes_between(valid, invalid) == 0);
+    CHECK(gl::game::minutes_between(invalid, valid) == 0);
 }
 
 TEST_CASE("active_effect_mods drops pending delay records") {

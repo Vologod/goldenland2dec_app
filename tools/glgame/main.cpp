@@ -3374,6 +3374,8 @@ class Game {
 
     void menu_activate(int index) {
         if (index == 0) {
+            pending_hero_effects_.clear();
+            pending_hero_effect_clock_.reset();
             if (!load_level(kNewGameLevel)) return;
             quest_runtime_.clear();
             time_events_.clear();

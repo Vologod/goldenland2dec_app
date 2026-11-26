@@ -75,6 +75,8 @@ std::int64_t total_minutes(const GameDatetime &value) {
 }
 
 std::uint32_t minutes_between(const GameDatetime &previous, const GameDatetime &now) {
+    if (previous.year == 0 || now.year == 0)
+        return 0;
     const std::int64_t before = total_minutes(previous);
     const std::int64_t after = total_minutes(now);
     if (before == 0 || after <= before)
