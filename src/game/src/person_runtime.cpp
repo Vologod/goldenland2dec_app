@@ -300,6 +300,8 @@ PersonRuntime PersonRuntime::create(const std::vector<PersonInstance> &persons,
             if (key.starts_with("skills."))
                 state.skills.emplace(key.substr(7), parse_number(text));
         }
+        state.effects = person.saved_effects;
+        state.effect_clock = person.effect_clock;
         add(std::move(state));
     }
 
@@ -469,6 +471,44 @@ std::int32_t PersonRuntime::dialog_percent(std::string_view person) const {
     if (clamped_skill("SKILL_TRADE") > 9) value += 20.0f;
     return static_cast<std::int32_t>(
         round_half_away_from_zero(static_cast<double>(value)));
+}
+
+std::vector<PersonEffect> PersonRuntime::effects(std::string_view person) const {
+    const PersonState *state = find(person);
+    return state == nullptr ? std::vector<PersonEffect>{} : state->effects;
+}
+
+void PersonRuntime::set_effects(std::string_view person, std::vector<PersonEffect> effects) {
+    PersonState *state = find(person);
+    if (state != nullptr)
+        state->effects = std::move(effects);
+}
+
+std::optional<GameDatetime> PersonRuntime::effect_clock(std::string_view person) const {
+    const PersonState *state = find(person);
+    return state == nullptr ? std::nullopt : state->effect_clock;
+}
+
+void PersonRuntime::set_effect_clock(std::string_view person,
+                                     std::optional<GameDatetime> clock) {
+    PersonState *state = find(person);
+    if (state != nullptr)
+        state->effect_clock = clock;
+}
+
+void PersonRuntime::age_effects(const GameDatetime &now) {
+    for (PersonState &state : persons_) {
+        const GameDatetime previous = state.effect_clock.value_or(now);
+        gl::game::age_effects(state.effects, minutes_between(previous, now));
+        state.effect_clock = now;
+    }
+}
+
+std::vector<gl::assets::SpecialMod>
+PersonRuntime::active_effect_mods(std::string_view person) const {
+    const PersonState *state = find(person);
+    return state == nullptr ? std::vector<gl::assets::SpecialMod>{}
+                            : gl::game::active_effect_mods(state->effects);
 }
 
 gl::script::PersonAccess PersonRuntime::access() {

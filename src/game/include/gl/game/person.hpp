@@ -4,6 +4,7 @@
 #include "gl/assets/person_script.hpp"
 #include "gl/assets/result.hpp"
 #include "gl/assets/vfs.hpp"
+#include "gl/game/effect.hpp"
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -19,6 +20,8 @@ struct PersonInstance {
     std::uint8_t direction = 0;
     std::optional<std::int32_t> saved_life;
     std::optional<std::int32_t> saved_energy;
+    std::vector<PersonEffect> saved_effects;
+    std::optional<GameDatetime> effect_clock;
     std::string route_type;
     std::string route;
     std::vector<std::pair<std::int32_t, std::int32_t>> route_cells;

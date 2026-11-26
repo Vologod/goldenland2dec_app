@@ -88,3 +88,66 @@ TEST_CASE("active_effect_mods drops pending delay records") {
     CHECK(mods[0].flags == 0x60);
     CHECK(mods[0].word3 == 0x23000000);
 }
+
+#include "gl/game/person.hpp"
+#include "gl/game/person_runtime.hpp"
+
+TEST_CASE("PersonRuntime restores saved effects and exposes active mods") {
+    gl::game::PersonInstance person;
+    person.name = "A";
+    person.route_type = "STAY";
+    gl::game::PersonEffect effect;
+    effect.words = {9, -3, 0x60, 0x23000000, -1};
+    person.saved_effects.push_back(effect);
+    auto runtime = gl::game::PersonRuntime::create({person}, std::nullopt);
+
+    REQUIRE(runtime.effects("A").size() == 1);
+    const auto mods = runtime.active_effect_mods("A");
+    REQUIRE(mods.size() == 1);
+    CHECK(mods[0].id == 9);
+    CHECK(mods[0].value == -3);
+    CHECK(runtime.effects("missing").empty());
+    CHECK(runtime.active_effect_mods("missing").empty());
+}
+
+TEST_CASE("PersonRuntime ages each person from its own clock") {
+    gl::game::PersonInstance person;
+    person.name = "A";
+    person.route_type = "STAY";
+    gl::game::PersonEffect effect;
+    effect.words = {9, -3, 0x20, 0x00000A00, -1};
+    person.saved_effects.push_back(effect);
+    gl::game::GameDatetime start;
+    start.year = 1124;
+    start.month = 11;
+    start.day = 27;
+    start.hour = 4;
+    start.minute = 0;
+    person.effect_clock = start;
+    auto runtime = gl::game::PersonRuntime::create({person}, std::nullopt);
+
+    gl::game::GameDatetime now = start;
+    now.minute = 5;
+    runtime.age_effects(now);
+    REQUIRE(runtime.effects("A").size() == 1);
+    CHECK(static_cast<std::uint32_t>(runtime.effects("A")[0].words[3]) == 0x00000500);
+
+    now.minute = 10;
+    runtime.age_effects(now);
+    now.minute = 20;
+    runtime.age_effects(now);
+    CHECK(runtime.active_effect_mods("A").empty());
+}
+
+TEST_CASE("PersonRuntime set_effects and set_effect_clock replace state") {
+    auto runtime = gl::game::PersonRuntime::create({}, std::nullopt);
+    gl::game::PersonEffect effect;
+    effect.words = {9, -3, 0x40, 0, -1};
+    runtime.set_effects("Hero", {effect});
+    REQUIRE(runtime.effects("Hero").size() == 1);
+    gl::game::GameDatetime clock;
+    clock.year = 1124;
+    runtime.set_effect_clock("Hero", clock);
+    REQUIRE(runtime.effect_clock("Hero").has_value());
+    CHECK(runtime.effect_clock("Hero")->year == 1124);
+}

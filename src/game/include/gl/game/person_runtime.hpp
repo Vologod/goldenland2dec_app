@@ -28,6 +28,7 @@ struct PersonState {
     bool undead = false;
     std::int32_t party_role = 0;
     std::vector<PersonEffect> effects;
+    std::optional<GameDatetime> effect_clock;
 };
 
 class PersonRuntime {
@@ -49,6 +50,12 @@ class PersonRuntime {
     bool injured(std::string_view person) const;
     std::int32_t dialog_percent(std::string_view person) const;
     gl::script::PersonAccess access();
+    std::vector<PersonEffect> effects(std::string_view person) const;
+    void set_effects(std::string_view person, std::vector<PersonEffect> effects);
+    std::optional<GameDatetime> effect_clock(std::string_view person) const;
+    void set_effect_clock(std::string_view person, std::optional<GameDatetime> clock);
+    void age_effects(const GameDatetime &now);
+    std::vector<gl::assets::SpecialMod> active_effect_mods(std::string_view person) const;
 
   private:
     const PersonState *find(std::string_view person) const;
