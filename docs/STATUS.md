@@ -2,6 +2,30 @@
 
 Обновлено: 2026-11-26
 
+## P5 effect runtime core (done 2026-11-26)
+
+- **Задача:** общий канал эффектов персоны (5×int32): aging по
+  `FUN_1405719c`, клиентский skip задержки, применение к статам листа,
+  restore/write в сейве (BT_HERO + type-2 tail).
+- **Spec/research/plan:** `docs/specs/2026-11-26-p5-effect-runtime-core-design.md`,
+  `docs/research/p5-effect-runtime.md`,
+  `docs/plans/2026-11-26-p5-effect-runtime-core.md`; **D-115**.
+- **Оракул:** `slot16` hero `{9,-3,0x60,0x23000000,-1}`, raw DEX 10 → 7,
+  через 35 игровых минут удаляется; остальные 27 сейвов — 0.
+- **Критерии приёмки:** unit aging/фильтр/статы/save; real slot16 (aging,
+  DEX); round-trip `extra`/`tail80`; полный `ctest` с `GL_GAME_DIR`.
+- **Команды проверки:** `cmake --build build`;
+  `build\bin\gl_game_tests.exe --test-case="*effect*,*combat stats*,*character sheet*,*real saves: hero effects*,*real slot16*"`;
+  `build\bin\glgame_screenshot_tests.exe --test-case="*character*"`;
+  `ctest --test-dir build --output-on-failure`.
+- **Проверка (2026-11-26):** `gl_game_tests` → **65 cases / 541 assertions
+  passed** (475 skipped, SUCCESS); `glgame_screenshot_tests --test-case="*character*"`
+  → **1 case / 30 assertions passed** (46 skipped), `character: armor=15
+  weight=132/204.6 ap=43 crit=7 acc=90`; полный `ctest` с `GL_GAME_DIR` →
+  **21/21 passed**, 0 failed, `Total Test time (real) = 1541.09 sec`.
+- **Статус:** done (2026-11-26): зелёный полный `ctest` 21/21; D-115.
+  Продюсеры (зелья/магия) — отдельные подпроекты.
+
 ## P5c2b — Day/night stat modifiers in the sheet (done 2026-11-26)
 
 - **Задача:** применять условные модификаторы статов «день»/«ночь»
