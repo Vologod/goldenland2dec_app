@@ -712,6 +712,40 @@ void InventoryOverlay::render(SDL_Renderer *renderer, int screen_w, int screen_h
     SDL_SetRenderDrawColor(renderer, old_r, old_g, old_b, old_a);
 }
 
+std::optional<InventoryUseRequest> InventoryOverlay::use_request_at(int x, int y) const {
+    if (!visible_ || scale_ <= 0.0f)
+        return std::nullopt;
+    const InventoryRegion region = hit_test(x, y);
+    const float logical_x = (static_cast<float>(x) - offset_x_) / scale_;
+    const float logical_y = (static_cast<float>(y) - offset_y_) / scale_;
+    if (region == InventoryRegion::bottom_slot) {
+        for (std::size_t slot = 0; slot < kBottomX.size(); ++slot) {
+            if (!contains(static_cast<float>(kBottomX[slot]), static_cast<float>(kBottomY), 55.0f,
+                          55.0f, logical_x, logical_y))
+                continue;
+            const std::size_t visible = view_.page + slot;
+            if (visible >= visible_indices_.size())
+                return std::nullopt;
+            return InventoryUseRequest{InventorySelection::item, visible_indices_[visible]};
+        }
+        return std::nullopt;
+    }
+    if (region == InventoryRegion::hot_slot) {
+        for (std::size_t slot = 1; slot < kHotX.size(); ++slot) {
+            if (!contains(static_cast<float>(kHotX[slot]), static_cast<float>(kHotY), 27.0f, 27.0f,
+                          logical_x, logical_y))
+                continue;
+            for (std::size_t index = 0; index < inventory_.hot.size(); ++index) {
+                if (((inventory_.hot[index].flags & 0x0000F000u) >> 12) == slot)
+                    return InventoryUseRequest{InventorySelection::hot, index};
+            }
+            return std::nullopt;
+        }
+        return std::nullopt;
+    }
+    return std::nullopt;
+}
+
 bool InventoryOverlay::handle_mouse(int x, int y, bool click) {
     if (!visible_)
         return false;

@@ -9,6 +9,7 @@
 
 #include <cstddef>
 #include <map>
+#include <optional>
 #include <set>
 #include <string>
 #include <string_view>
@@ -44,6 +45,11 @@ enum class InventorySelection {
     equipped,
 };
 
+struct InventoryUseRequest {
+    InventorySelection source = InventorySelection::none;
+    std::size_t index = 0;
+};
+
 class InventoryOverlay {
   public:
     bool open(const gl::assets::GameVfs &vfs, const gl::assets::ItemCatalog &catalog,
@@ -59,6 +65,8 @@ class InventoryOverlay {
     bool handle_key(SDL_Keycode key);
     bool handle_wheel(int delta);
     bool handle_wheel(int delta, int x, int y);
+
+    std::optional<InventoryUseRequest> use_request_at(int x, int y) const;
 
     const gl::game::InventoryViewState &view() const { return view_; }
     std::size_t visible_count() const { return visible_indices_.size(); }

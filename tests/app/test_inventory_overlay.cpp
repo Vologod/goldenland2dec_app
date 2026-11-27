@@ -432,6 +432,19 @@ TEST_CASE("inventory overlay selects hot and puppet records") {
     CHECK(overlay.selected_name() == "item 1000");
 }
 
+TEST_CASE("inventory overlay exposes a right-click use request for bottom slots") {
+    gl::assets::GameVfs vfs;
+    gl::assets::ItemCatalog catalog;
+    gl::app::InventoryOverlay overlay;
+    REQUIRE(overlay.open(vfs, catalog, make_inventory()));
+
+    auto request = overlay.use_request_at(167, 730);
+    REQUIRE(request.has_value());
+    CHECK(request->source == gl::app::InventorySelection::item);
+    CHECK(request->index == 0);
+    CHECK_FALSE(overlay.use_request_at(10, 10).has_value());
+}
+
 TEST_CASE("inventory overlay centers native icon sizes") {
     CHECK(gl::app::InventoryOverlay::native_icon_offset(55.0f, 22.0f) ==
           doctest::Approx(16.5f));
