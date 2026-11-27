@@ -43,6 +43,7 @@ struct StatInputs {
     std::vector<EquippedStatItem> equipped;
     std::vector<gl::assets::SpecialMod> effect_mods;
     std::vector<CarriedItem> carried;
+    bool use_b_set = false;
 };
 
 struct DamageRange {

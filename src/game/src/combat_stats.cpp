@@ -1,5 +1,6 @@
 #include "gl/game/combat_stats.hpp"
 #include "gl/game/person_runtime.hpp"
+#include "gl/game/weapon_set.hpp"
 
 #include <cmath>
 #include <cstdint>
@@ -21,8 +22,6 @@ constexpr std::uint32_t kDayCondition = 0x2u;
 constexpr std::uint32_t kNightCondition = 0x4u;
 constexpr std::uint32_t kTimeIntervalCondition = 0x8u;
 constexpr std::uint32_t kAlwaysRejectCondition = 0x200u;
-constexpr std::uint32_t kShieldMaskA = 0x400000u;
-constexpr std::uint32_t kWeaponMaskA = 0x001000u;
 constexpr std::uint32_t kBluntStatId = 0x22;
 constexpr std::uint32_t kSlashStatId = 0x21;
 constexpr std::uint32_t kPierceStatId = 0x23;
@@ -155,6 +154,8 @@ std::string format_x10(std::int32_t value) {
 
 ArmorWeight compute_armor_weight(const StatInputs &inputs) {
     ArmorWeight out;
+    const WeaponSetMasks masks =
+        weapon_set_masks(inputs.use_b_set ? WeaponSet::b : WeaponSet::a);
 
     std::vector<EquippedStatItem> equipped = inputs.equipped;
     if (!inputs.effect_mods.empty()) {
@@ -165,7 +166,7 @@ ArmorWeight compute_armor_weight(const StatInputs &inputs) {
 
     const EquippedStatItem *shield = nullptr;
     for (const EquippedStatItem &item : equipped) {
-        if ((item.flags & kShieldMaskA) != 0) {
+        if ((item.flags & masks.shield) != 0) {
             shield = &item;
             break;
         }
@@ -247,7 +248,7 @@ ArmorWeight compute_armor_weight(const StatInputs &inputs) {
 
     const EquippedStatItem *weapon = nullptr;
     for (const EquippedStatItem &item : equipped) {
-        if ((item.flags & kWeaponMaskA) != 0) {
+        if ((item.flags & masks.weapon) != 0) {
             weapon = &item;
             break;
         }

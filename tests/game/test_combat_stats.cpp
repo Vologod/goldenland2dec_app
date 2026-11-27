@@ -553,3 +553,66 @@ TEST_CASE("combat stats real: slot0 armor and weight" * doctest::skip(!game_dir_
     CHECK(out.elemental_resistance == elemental);
     CHECK(out.physical_resistance == physical);
 }
+
+TEST_CASE("combat stats real: slot0 set B armor, perception and weapon" *
+          doctest::skip(!game_dir_available())) {
+    const char *dir = std::getenv("GL_GAME_DIR");
+    REQUIRE(dir != nullptr);
+    auto vfs = gl::assets::GameVfs::mount(dir);
+    REQUIRE(vfs.has_value());
+    auto catalog = gl::assets::ItemCatalog::load(vfs.value());
+    REQUIRE(catalog.has_value());
+
+    const std::filesystem::path path = std::filesystem::path(dir) / "Saves" / "slot0.sav";
+    std::ifstream in(path, std::ios::binary);
+    REQUIRE(in);
+    const std::vector<std::uint8_t> bytes((std::istreambuf_iterator<char>(in)),
+                                          std::istreambuf_iterator<char>());
+    auto body = gl::assets::decode_save_body(bytes);
+    REQUIRE(body.has_value());
+    auto stats = gl::assets::parse_hero_stats(body.value());
+    REQUIRE(stats.has_value());
+    auto inventory = gl::assets::parse_hero_inventory(body.value());
+    REQUIRE(inventory.has_value());
+
+    StatInputs inputs;
+    inputs.strength = stats->strength;
+    inputs.constitution = stats->constitution;
+    inputs.dexterity = stats->dexterity;
+    inputs.perception = stats->perception;
+    inputs.luck = stats->luck;
+    inputs.wisdom = stats->wisdom;
+    inputs.intelligence = stats->intelligence;
+    inputs.experience = stats->experience;
+    inputs.person_flags = stats->flags;
+    for (std::size_t id = 0; id < inputs.skills.size(); ++id)
+        inputs.skills[id] = stats->skills[id];
+    for (const auto &item : inventory->equipped) {
+        EquippedStatItem equipped;
+        equipped.type = item.type;
+        equipped.flags = item.flags;
+        equipped.durability = item.durability;
+        equipped.mods = item.mods;
+        if (const auto *entry = catalog->find(item.item_id)) {
+            equipped.unknown_b = entry->item.unknown_b;
+            equipped.damage = entry->item.damage;
+        }
+        inputs.equipped.push_back(equipped);
+    }
+    for (const auto &list : {inventory->hot, inventory->items, inventory->equipped})
+        for (const auto &item : list)
+            inputs.carried.push_back(
+                CarriedItem{static_cast<std::int32_t>(item.count), item.weight_x10});
+
+    const auto a = gl::game::compute_armor_weight(inputs);
+    CHECK(a.armor_class == 15);
+    inputs.use_b_set = true;
+    const auto b = gl::game::compute_armor_weight(inputs);
+    CHECK(b.armor_class == 35);
+    CHECK(b.primary[3] == 13);
+    CHECK(b.damage[0].minimum == 0);
+    CHECK(b.damage[1].minimum > 0);
+    CHECK(b.damage[2].minimum > 0);
+    CHECK(b.weight_cur_x10 == 1320);
+    CHECK(b.weight_max_x10 == 2046);
+}

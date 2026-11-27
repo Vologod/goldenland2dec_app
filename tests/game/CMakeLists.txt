@@ -3,6 +3,7 @@ add_executable(gl_game_tests
     test_calendar.cpp
     test_character_sheet.cpp
     test_combat_stats.cpp
+    test_weapon_set.cpp
     test_diary.cpp
     test_diary_real.cpp
     test_diary_view.cpp
