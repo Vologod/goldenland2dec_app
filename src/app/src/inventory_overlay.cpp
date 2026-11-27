@@ -4,6 +4,7 @@
 #include <gl/assets/image.hpp>
 #include <gl/assets/item_catalog.hpp>
 #include <gl/assets/vfs.hpp>
+#include <gl/game/weapon_set.hpp>
 #include <gl/render/text.hpp>
 
 #include <algorithm>
@@ -56,10 +57,6 @@ constexpr float kFilterHeight = 23.0f;
 constexpr std::string_view kBackground = "engineres/newinv/inventory_secondary.bmp";
 constexpr std::string_view kFallbackIcon = "engineres/interface/bag.csx";
 constexpr std::string_view kEmptyText = "(пусто)";
-constexpr std::uint32_t kWeaponAMask = 0x001000u;
-constexpr std::uint32_t kWeaponBMask = 0x002000u;
-constexpr std::uint32_t kShieldAMask = 0x400000u;
-constexpr std::uint32_t kShieldBMask = 0x800000u;
 constexpr float kPanelNameLine = 18.0f;
 constexpr float kPanelStatLine = 18.0f;
 constexpr float kPanelDescLine = 16.0f;
@@ -77,12 +74,40 @@ const gl::assets::InventoryItem *find_equipped(const gl::assets::HeroInventory &
     return nullptr;
 }
 
-bool puppet_slot_visible(const gl::assets::HeroInventory &inventory, const PuppetSpec &slot) {
-    if (slot.mask == kWeaponBMask)
-        return find_equipped(inventory, kWeaponAMask) == nullptr;
-    if (slot.mask == kShieldBMask)
-        return find_equipped(inventory, kShieldAMask) == nullptr;
+bool puppet_slot_visible(const gl::assets::HeroInventory &, const PuppetSpec &) { return true; }
+
+bool is_weapon_set_slot(std::uint32_t mask) {
+    return mask == gl::game::kWeaponMaskA || mask == gl::game::kWeaponMaskB ||
+           mask == gl::game::kShieldMaskA || mask == gl::game::kShieldMaskB;
+}
+
+bool mask_is_active(std::uint32_t mask, bool use_b_set) {
+    if (mask == gl::game::kWeaponMaskA || mask == gl::game::kShieldMaskA)
+        return !use_b_set;
+    if (mask == gl::game::kWeaponMaskB || mask == gl::game::kShieldMaskB)
+        return use_b_set;
     return true;
+}
+
+const PuppetSpec *hit_weapon_set_slot(const gl::assets::HeroInventory &inventory, float x,
+                                      float y, bool use_b_set) {
+    for (const PuppetSpec &slot : kPuppetSlots) {
+        if (!is_weapon_set_slot(slot.mask) || !mask_is_active(slot.mask, use_b_set))
+            continue;
+        if (find_equipped(inventory, slot.mask) == nullptr)
+            continue;
+        if (contains(static_cast<float>(slot.x), static_cast<float>(slot.y), 55.0f, 55.0f, x, y))
+            return &slot;
+    }
+    for (const PuppetSpec &slot : kPuppetSlots) {
+        if (!is_weapon_set_slot(slot.mask) || mask_is_active(slot.mask, use_b_set))
+            continue;
+        if (find_equipped(inventory, slot.mask) == nullptr)
+            continue;
+        if (contains(static_cast<float>(slot.x), static_cast<float>(slot.y), 55.0f, 55.0f, x, y))
+            return &slot;
+    }
+    return nullptr;
 }
 
 const PuppetSpec *hit_puppet_slot(const gl::assets::HeroInventory &inventory, float x, float y,
@@ -239,10 +264,12 @@ std::vector<std::string> wrap_fallback(std::string_view text, float max_width, f
 
 bool InventoryOverlay::open(const gl::assets::GameVfs &vfs,
                             const gl::assets::ItemCatalog &catalog,
-                            const gl::assets::HeroInventory &inventory) {
+                            const gl::assets::HeroInventory &inventory, bool use_b_set) {
     vfs_ = &vfs;
     catalog_ = &catalog;
     inventory_ = inventory;
+    use_b_set_ = use_b_set;
+    weapon_set_toggle_requested_ = false;
     view_ = {};
     visible_indices_.clear();
     selection_ = InventorySelection::none;
@@ -282,6 +309,12 @@ bool InventoryOverlay::select_visible_slot(std::size_t slot) {
 }
 
 void InventoryOverlay::close() { visible_ = false; }
+
+bool InventoryOverlay::take_weapon_set_toggle() {
+    const bool value = weapon_set_toggle_requested_;
+    weapon_set_toggle_requested_ = false;
+    return value;
+}
 
 void InventoryOverlay::rebuild_visible() {
     visible_indices_ = gl::game::visible_inventory(inventory_, view_.filter_mask);
@@ -654,6 +687,8 @@ void InventoryOverlay::render(SDL_Renderer *renderer, int screen_w, int screen_h
     for (const PuppetSpec &slot : kPuppetSlots) {
         if (!puppet_slot_visible(inventory_, slot))
             continue;
+        if (!mask_is_active(slot.mask, use_b_set_))
+            continue;
         const gl::assets::InventoryItem *item = find_equipped(inventory_, slot.mask);
         if (item == nullptr)
             continue;
@@ -813,7 +848,14 @@ bool InventoryOverlay::handle_mouse(int x, int y, bool click) {
         }
         break;
     case InventoryRegion::puppet_slot: {
-        const PuppetSpec *puppet = hit_puppet_slot(inventory_, logical_x, logical_y, true);
+        const PuppetSpec *puppet =
+            hit_weapon_set_slot(inventory_, logical_x, logical_y, use_b_set_);
+        if (puppet != nullptr && !mask_is_active(puppet->mask, use_b_set_)) {
+            weapon_set_toggle_requested_ = true;
+            break;
+        }
+        if (puppet == nullptr)
+            puppet = hit_puppet_slot(inventory_, logical_x, logical_y, true);
         if (puppet == nullptr)
             puppet = hit_puppet_slot(inventory_, logical_x, logical_y, false);
         bool found = false;

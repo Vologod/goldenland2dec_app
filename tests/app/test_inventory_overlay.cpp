@@ -227,54 +227,67 @@ TEST_CASE("inventory overlay clears a selection when an empty slot is clicked") 
     CHECK_FALSE(overlay.view().selected.has_value());
 }
 
-TEST_CASE("inventory overlay draws only the active puppet weapon and shield set") {
+TEST_CASE("inventory overlay exposes both set slots and toggles from the inactive one") {
     gl::assets::GameVfs vfs;
     gl::assets::ItemCatalog catalog;
 
     gl::assets::HeroInventory active;
     active.equipped.push_back(make_item(1, 0, 1, 0x001000));
     active.equipped.push_back(make_item(2, 0, 1, 0x002000));
+    active.equipped.push_back(make_item(3, 13, 1, 0x400000));
+    active.equipped.push_back(make_item(4, 13, 1, 0x800000));
 
     gl::app::InventoryOverlay overlay;
     REQUIRE(overlay.open(vfs, catalog, active));
     CHECK(overlay.hit_test(30, 480) == gl::app::InventoryRegion::puppet_slot);
-    CHECK(overlay.hit_test(18, 468) == gl::app::InventoryRegion::none);
+    CHECK(overlay.hit_test(18, 468) == gl::app::InventoryRegion::puppet_slot);
     CHECK(overlay.handle_mouse(30, 480, true));
     CHECK(overlay.selection() == gl::app::InventorySelection::equipped);
-    REQUIRE(overlay.view().selected.has_value());
-    CHECK(*overlay.view().selected == 0);
+    CHECK_FALSE(overlay.take_weapon_set_toggle());
 
-    gl::assets::HeroInventory only_b;
-    only_b.equipped.push_back(make_item(2, 0, 1, 0x002000));
+    CHECK(overlay.handle_mouse(18, 468, true));
+    CHECK(overlay.take_weapon_set_toggle());
+    CHECK_FALSE(overlay.take_weapon_set_toggle());
+
     gl::app::InventoryOverlay b_overlay;
-    REQUIRE(b_overlay.open(vfs, catalog, only_b));
-    CHECK(b_overlay.hit_test(18, 468) == gl::app::InventoryRegion::puppet_slot);
+    REQUIRE(b_overlay.open(vfs, catalog, active, true));
     CHECK(b_overlay.handle_mouse(18, 468, true));
     CHECK(b_overlay.selection() == gl::app::InventorySelection::equipped);
-    REQUIRE(b_overlay.view().selected.has_value());
-    CHECK(*b_overlay.view().selected == 0);
+    CHECK_FALSE(b_overlay.take_weapon_set_toggle());
+    CHECK(b_overlay.handle_mouse(30, 480, true));
+    CHECK_FALSE(b_overlay.take_weapon_set_toggle());
+    CHECK(b_overlay.handle_mouse(75, 525, true));
+    CHECK(b_overlay.take_weapon_set_toggle());
+}
 
-    SoftwareRenderer active_canvas(1024, 768);
-    REQUIRE(active_canvas.renderer != nullptr);
-    gl::app::InventoryOverlay active_overlay;
-    REQUIRE(active_overlay.open(vfs, catalog, active));
-    gl::app::InventoryOverlay hidden_b_overlay;
-    gl::assets::HeroInventory hidden_b;
-    hidden_b.equipped.push_back(make_item(1, 0, 1, 0x001000));
-    REQUIRE(hidden_b_overlay.open(vfs, catalog, hidden_b));
-    SDL_SetRenderDrawColor(active_canvas.renderer, 0, 0, 0, 255);
-    SDL_RenderClear(active_canvas.renderer);
-    active_overlay.render(active_canvas.renderer, 1024, 768);
-    std::vector<std::uint8_t> with_b(1024 * 768 * 4);
-    REQUIRE(SDL_RenderReadPixels(active_canvas.renderer, nullptr, SDL_PIXELFORMAT_RGBA32,
-                                 with_b.data(), 1024 * 4) == 0);
-    SDL_SetRenderDrawColor(active_canvas.renderer, 0, 0, 0, 255);
-    SDL_RenderClear(active_canvas.renderer);
-    hidden_b_overlay.render(active_canvas.renderer, 1024, 768);
-    std::vector<std::uint8_t> without_b(1024 * 768 * 4);
-    REQUIRE(SDL_RenderReadPixels(active_canvas.renderer, nullptr, SDL_PIXELFORMAT_RGBA32,
-                                 without_b.data(), 1024 * 4) == 0);
-    CHECK(region_difference(with_b, without_b, 16, 466, 61, 62) == 0);
+TEST_CASE("inventory overlay hides the inactive set icon") {
+    gl::assets::GameVfs vfs;
+    gl::assets::ItemCatalog catalog;
+    gl::assets::HeroInventory only_a;
+    only_a.equipped.push_back(make_item(1, 0, 1, 0x001000));
+    gl::assets::HeroInventory both;
+    both.equipped.push_back(make_item(1, 0, 1, 0x001000));
+    both.equipped.push_back(make_item(2, 0, 1, 0x002000));
+
+    SoftwareRenderer canvas(1024, 768);
+    REQUIRE(canvas.renderer != nullptr);
+    gl::app::InventoryOverlay a_overlay;
+    gl::app::InventoryOverlay both_overlay;
+    REQUIRE(a_overlay.open(vfs, catalog, only_a));
+    REQUIRE(both_overlay.open(vfs, catalog, both));
+    SDL_SetRenderDrawColor(canvas.renderer, 0, 0, 0, 255);
+    SDL_RenderClear(canvas.renderer);
+    a_overlay.render(canvas.renderer, 1024, 768);
+    std::vector<std::uint8_t> a_pixels(1024 * 768 * 4);
+    REQUIRE(SDL_RenderReadPixels(canvas.renderer, nullptr, SDL_PIXELFORMAT_RGBA32,
+                                 a_pixels.data(), 1024 * 4) == 0);
+    SDL_SetRenderDrawColor(canvas.renderer, 0, 0, 0, 255);
+    SDL_RenderClear(canvas.renderer);
+    both_overlay.render(canvas.renderer, 1024, 768);
+    std::vector<std::uint8_t> both_pixels(1024 * 768 * 4);
+    REQUIRE(SDL_RenderReadPixels(canvas.renderer, nullptr, SDL_PIXELFORMAT_RGBA32,
+                                 both_pixels.data(), 1024 * 4) == 0);
+    CHECK(region_difference(a_pixels, both_pixels, 16, 466, 61, 62) <= 4);
 }
 
 TEST_CASE("real slot0 puppet overlap selects the active weapon A" *
@@ -290,9 +303,15 @@ TEST_CASE("real slot0 puppet overlap selects the active weapon A" *
 
     gl::app::InventoryOverlay overlay;
     REQUIRE(overlay.open(vfs.value(), catalog.value(), inventory.value()));
-    CHECK(overlay.hit_test(18, 468) == gl::app::InventoryRegion::none);
+    CHECK(overlay.hit_test(18, 468) == gl::app::InventoryRegion::puppet_slot);
     CHECK(overlay.hit_test(30, 480) == gl::app::InventoryRegion::puppet_slot);
     CHECK(overlay.handle_mouse(30, 480, true));
+    CHECK(overlay.selection() == gl::app::InventorySelection::equipped);
+    CHECK(overlay.selected_name() == "Топор Сумеречного Палача");
+
+    CHECK(overlay.handle_mouse(18, 468, true));
+    CHECK(overlay.take_weapon_set_toggle());
+    CHECK_FALSE(overlay.take_weapon_set_toggle());
     CHECK(overlay.selection() == gl::app::InventorySelection::equipped);
     CHECK(overlay.selected_name() == "Топор Сумеречного Палача");
 }
@@ -309,13 +328,20 @@ TEST_CASE("real slot0 shield B is selectable when shield A is absent" *
     REQUIRE(inventory.has_value());
 
     gl::app::InventoryOverlay overlay;
-    REQUIRE(overlay.open(vfs.value(), catalog.value(), inventory.value()));
+    REQUIRE(overlay.open(vfs.value(), catalog.value(), inventory.value(), true));
     CHECK(overlay.hit_test(238, 493) == gl::app::InventoryRegion::puppet_slot);
     CHECK(overlay.handle_mouse(238, 493, true));
     CHECK(overlay.selection() == gl::app::InventorySelection::equipped);
     REQUIRE(overlay.view().selected.has_value());
     CHECK(inventory->equipped[*overlay.view().selected].item_id == 353);
     CHECK(overlay.selected_name() == "Крепкий костяной щит");
+    CHECK_FALSE(overlay.take_weapon_set_toggle());
+
+    gl::app::InventoryOverlay a_overlay;
+    REQUIRE(a_overlay.open(vfs.value(), catalog.value(), inventory.value()));
+    CHECK(a_overlay.handle_mouse(238, 493, true));
+    CHECK(a_overlay.take_weapon_set_toggle());
+    CHECK(a_overlay.selection() == gl::app::InventorySelection::none);
 }
 
 TEST_CASE("inventory overlay highlights the active filter") {

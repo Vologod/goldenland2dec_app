@@ -53,7 +53,9 @@ struct InventoryUseRequest {
 class InventoryOverlay {
   public:
     bool open(const gl::assets::GameVfs &vfs, const gl::assets::ItemCatalog &catalog,
-              const gl::assets::HeroInventory &inventory);
+              const gl::assets::HeroInventory &inventory, bool use_b_set = false);
+    void set_use_b_set(bool use_b_set) { use_b_set_ = use_b_set; }
+    bool take_weapon_set_toggle();
     void close();
     bool visible() const { return visible_; }
 
@@ -116,6 +118,8 @@ class InventoryOverlay {
     std::size_t panel_scroll_ = 0;
     std::size_t panel_scroll_max_ = 0;
     bool visible_ = false;
+    bool use_b_set_ = false;
+    bool weapon_set_toggle_requested_ = false;
 
     float scale_ = 1.0f;
     float offset_x_ = 0.0f;
