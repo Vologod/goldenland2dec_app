@@ -52,6 +52,9 @@ class PersonRuntime {
     gl::script::PersonAccess access();
     std::vector<PersonEffect> effects(std::string_view person) const;
     void set_effects(std::string_view person, std::vector<PersonEffect> effects);
+    void add_effect(std::string_view person, const PersonEffect &effect);
+    void set_raw_parameter(std::string_view person, gl::script::PersonParameter parameter,
+                           double value);
     std::optional<GameDatetime> effect_clock(std::string_view person) const;
     void set_effect_clock(std::string_view person, std::optional<GameDatetime> clock);
     void age_effects(const GameDatetime &now);

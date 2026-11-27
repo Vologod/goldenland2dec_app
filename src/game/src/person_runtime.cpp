@@ -484,6 +484,26 @@ void PersonRuntime::set_effects(std::string_view person, std::vector<PersonEffec
         state->effects = std::move(effects);
 }
 
+void PersonRuntime::add_effect(std::string_view person, const PersonEffect &effect) {
+    PersonState *state = find(person);
+    if (state != nullptr)
+        state->effects.push_back(effect);
+}
+
+void PersonRuntime::set_raw_parameter(std::string_view person, PersonParameter parameter,
+                                      double value) {
+    PersonState *state = find(person);
+    if (state == nullptr)
+        return;
+    if (parameter == PersonParameter::unknown || parameter == PersonParameter::maximum_life)
+        return;
+    const std::size_t index = value_index(parameter);
+    if (index >= state->values.size())
+        return;
+    state->present[index] = true;
+    state->values[index] = value;
+}
+
 std::optional<GameDatetime> PersonRuntime::effect_clock(std::string_view person) const {
     const PersonState *state = find(person);
     return state == nullptr ? std::nullopt : state->effect_clock;
