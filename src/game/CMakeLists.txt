@@ -19,6 +19,7 @@ add_library(gl_game STATIC
     src/hero_wear.cpp
     src/inventory_runtime.cpp
     src/inventory_view.cpp
+    src/item_use.cpp
     src/level_loader.cpp
     src/level_simulation.cpp
     src/live_save.cpp
