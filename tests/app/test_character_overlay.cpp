@@ -521,6 +521,36 @@ TEST_CASE("character overlay clips accessory overlays to the left half" *
     CHECK(box->x1 <= 141);
 }
 
+TEST_CASE("character overlay toggles weapon set from the inactive slot" *
+          doctest::skip(!game_dir_available())) {
+    const char *dir = std::getenv("GL_GAME_DIR");
+    REQUIRE(dir != nullptr);
+    auto vfs = gl::assets::GameVfs::mount(dir);
+    REQUIRE(vfs.has_value());
+    auto catalog = gl::assets::ItemCatalog::load(vfs.value());
+    REQUIRE(catalog.has_value());
+
+    gl::assets::HeroInventory inventory;
+    inventory.equipped.push_back({1, 1, 0x001000u, 0, 0});
+    inventory.equipped.push_back({2, 1, 0x002000u, 0, 0});
+    inventory.equipped.push_back({3, 1, 0x400000u, 13, 0});
+    inventory.equipped.push_back({4, 1, 0x800000u, 13, 0});
+
+    gl::app::CharacterOverlay overlay;
+    REQUIRE(overlay.open(nullptr, vfs.value(), make_sheet(), &inventory, &catalog.value()));
+
+    CHECK(overlay.handle_mouse(18, 468, true));
+    CHECK(overlay.take_weapon_set_toggle());
+    CHECK_FALSE(overlay.take_weapon_set_toggle());
+
+    CHECK(overlay.handle_mouse(75, 525, true));
+    CHECK_FALSE(overlay.take_weapon_set_toggle());
+
+    overlay.set_use_b_set(true);
+    CHECK(overlay.handle_mouse(75, 525, true));
+    CHECK(overlay.take_weapon_set_toggle());
+}
+
 TEST_CASE("character overlay skips missing puppet assets" *
           doctest::skip(!game_dir_available())) {
     const char *dir = std::getenv("GL_GAME_DIR");

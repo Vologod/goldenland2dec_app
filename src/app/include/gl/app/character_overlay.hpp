@@ -31,6 +31,8 @@ class CharacterOverlay {
         const int value = static_cast<int>(tab);
         tab_ = static_cast<gl::game::CharacterTab>(value < 0 ? 0 : (value > 1 ? 1 : value));
     }
+    void set_use_b_set(bool use_b_set) { use_b_set_ = use_b_set; }
+    bool take_weapon_set_toggle();
     void set_font(const gl::render::Font *font) { font_ = font; }
     void set_title_font(const gl::render::Font *font) { title_font_ = font; }
     void set_fonts(const gl::render::Font *title, const gl::render::Font *rows) {
@@ -77,6 +79,7 @@ class CharacterOverlay {
     bool visible_ = false;
     bool hover_close_ = false;
     bool use_b_set_ = false;
+    bool weapon_set_toggle_requested_ = false;
     float scale_ = 1.0f;
     float offset_x_ = 0.0f;
     float offset_y_ = 0.0f;

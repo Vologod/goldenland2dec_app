@@ -5,6 +5,7 @@
 #include "gl/assets/image.hpp"
 #include "gl/assets/item_catalog.hpp"
 #include "gl/assets/vfs.hpp"
+#include "gl/game/weapon_set.hpp"
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -147,6 +148,28 @@ bool contains(float rx, float ry, float rw, float rh, float x, float y) {
     return x >= rx && y >= ry && x < rx + rw && y < ry + rh;
 }
 
+bool is_weapon_set_slot(std::uint32_t mask) {
+    return mask == gl::game::kWeaponMaskA || mask == gl::game::kWeaponMaskB ||
+           mask == gl::game::kShieldMaskA || mask == gl::game::kShieldMaskB;
+}
+
+bool mask_is_active(std::uint32_t mask, bool use_b_set) {
+    if (mask == gl::game::kWeaponMaskA || mask == gl::game::kShieldMaskA)
+        return !use_b_set;
+    if (mask == gl::game::kWeaponMaskB || mask == gl::game::kShieldMaskB)
+        return use_b_set;
+    return true;
+}
+
+const PuppetSpec *hit_puppet(const float x, const float y) {
+    for (const PuppetSpec &slot : kPuppetSlots) {
+        if (contains(static_cast<float>(slot.x), static_cast<float>(slot.y), 55.0f,
+                     55.0f, x, y))
+            return &slot;
+    }
+    return nullptr;
+}
+
 void apply_magenta_key(gl::assets::Image &image) {
     for (gl::assets::Rgba &pixel : image.rgba) {
         if (pixel.r == 255 && pixel.g == 0 && pixel.b == 255) pixel.a = 0;
@@ -161,16 +184,7 @@ const gl::assets::InventoryItem *find_equipped(
     return nullptr;
 }
 
-bool puppet_visible(const gl::assets::HeroInventory &inventory,
-                    const PuppetSpec &slot, bool use_b_set) {
-    const bool has_weapon_a = find_equipped(inventory, 0x001000u) != nullptr;
-    const bool has_weapon_b = find_equipped(inventory, 0x002000u) != nullptr;
-    const bool has_shield_a = find_equipped(inventory, 0x400000u) != nullptr;
-    const bool has_shield_b = find_equipped(inventory, 0x800000u) != nullptr;
-    if (slot.mask == 0x001000u) return use_b_set ? !has_weapon_b : true;
-    if (slot.mask == 0x002000u) return use_b_set ? has_weapon_b : !has_weapon_a;
-    if (slot.mask == 0x400000u) return use_b_set ? !has_shield_b : true;
-    if (slot.mask == 0x800000u) return use_b_set ? has_shield_b : !has_shield_a;
+bool puppet_visible(const gl::assets::HeroInventory &, const PuppetSpec &, bool) {
     return true;
 }
 
@@ -202,6 +216,12 @@ bool CharacterOverlay::open(SDL_Renderer *renderer, const gl::assets::GameVfs &v
 }
 
 void CharacterOverlay::close() { visible_ = false; }
+
+bool CharacterOverlay::take_weapon_set_toggle() {
+    const bool value = weapon_set_toggle_requested_;
+    weapon_set_toggle_requested_ = false;
+    return value;
+}
 
 void CharacterOverlay::update_transform(int screen_w, int screen_h) {
     scale_ = std::min(static_cast<float>(screen_w) / kCanvasWidth,
@@ -453,6 +473,7 @@ void CharacterOverlay::draw_inventory_items(SDL_Renderer *renderer) {
     }
     for (const PuppetSpec &slot : kPuppetSlots) {
         if (!puppet_visible(*inventory_, slot, use_b_set_)) continue;
+        if (!mask_is_active(slot.mask, use_b_set_)) continue;
         const gl::assets::InventoryItem *item =
             find_equipped(*inventory_, slot.mask);
         if (item == nullptr) continue;
@@ -563,6 +584,12 @@ bool CharacterOverlay::handle_mouse(int x, int y, bool click) {
     if (!visible_) return false;
     const float logical_x = (static_cast<float>(x) - offset_x_) / scale_;
     const float logical_y = (static_cast<float>(y) - offset_y_) / scale_;
+    if (const PuppetSpec *puppet = hit_puppet(logical_x, logical_y);
+        puppet != nullptr && is_weapon_set_slot(puppet->mask)) {
+        if (!mask_is_active(puppet->mask, use_b_set_) && click)
+            weapon_set_toggle_requested_ = true;
+        if (click) return true;
+    }
     const bool on_close =
         contains(920.0f, 694.0f, 75.0f, 68.0f, logical_x, logical_y);
     hover_close_ = on_close;
