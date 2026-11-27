@@ -1,6 +1,32 @@
 # STATUS
 
-Обновлено: 2026-11-26
+Обновлено: 2026-11-27
+
+## P5e — Potions/food use (done 2026-11-27)
+
+- **Задача:** right-click по зелью/еде применяет `FUN_14057cf0`: прямые
+  статы, timed-эффекты в P5-канал, лечение HP/EP, расход 1 шт.; stat block
+  сохраняется в BT_HERO.
+- **Spec/research/plan:** `docs/specs/2026-11-27-p5e-potions-food-design.md`,
+  `docs/research/p5e-potions-food.md`,
+  `docs/plans/2026-11-27-p5e-potions-food.md`; **D-116**.
+- **Оракулы:** `953.itm` HP+100 (slot0 51→50), `948.itm` `{6,+1},{10,-1}`,
+  `408.itm` timed id30 3ч (`word3=0x00000003`).
+- **Критерии приёмки:** right-click use; direct/timed/heal/consume;
+  stat block в сейве; real 953/948/408; полный `ctest` с `GL_GAME_DIR`.
+- **Команды проверки:** `cmake --build build`;
+  `gl_game_tests --test-case="*use_hero_item*,*writes stats*,*real 953*,*real 948*,*real 408*"`;
+  `inventory_overlay_tests --test-case="*right-click*"`;
+  `ctest --test-dir build --output-on-failure`.
+- **Проверка (2026-11-27):** `gl_game_tests` focused
+  (`*use_hero_item*,*writes stats*,*real 953*,*real 948*,*real 408*`) →
+  **9 cases / 72 assertions passed** (SUCCESS);
+  `inventory_overlay_tests --test-case="*right-click use request*"` →
+  **1 case / 5 assertions passed**;
+  `glgame_screenshot_tests --test-case="*inventory*"` →
+  **6 cases / 251 assertions passed**; полный `ctest` с `GL_GAME_DIR` →
+  **21/21 passed**, 0 failed, `Total Test time (real) = 2233.56 sec`.
+- **Статус:** done (2026-11-27) после зелёного полного `ctest` (D-116).
 
 ## Session checkpoint (2026-11-26, end)
 
