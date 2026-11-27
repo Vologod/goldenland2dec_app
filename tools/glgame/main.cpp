@@ -33,6 +33,7 @@
 #include <gl/game/hero_outfit_resolver.hpp>
 #include <gl/game/hero_save_write.hpp>
 #include <gl/game/inventory_runtime.hpp>
+#include <gl/game/item_use.hpp>
 #include <gl/game/live_save.hpp>
 #include <gl/game/npc_loot.hpp>
 #include <gl/game/party_runtime.hpp>
@@ -1261,6 +1262,37 @@ class Game {
         return gl::game::regenerate_npc_inventories(
             inventory_runtime_, level.persons, indices, vfs_, names, item_template,
             loot_level(), rng, specials_db(), force);
+    }
+
+    void use_inventory_item(const gl::app::InventoryUseRequest &request) {
+        if (!pending_hero_stats_) return;
+        const bool main = request.source == gl::app::InventorySelection::item;
+        if (!main && request.source != gl::app::InventorySelection::hot) return;
+        const auto &items = main ? inventory_runtime_.hero_inventory().items
+                                 : inventory_runtime_.hero_inventory().hot;
+        if (request.index >= items.size()) return;
+        const auto *entry = item_catalog_.find(items[request.index].item_id);
+        if (entry == nullptr) {
+            gl::log(gl::LogLevel::warning, "item use: no catalog entry for item " +
+                                               std::to_string(items[request.index].item_id));
+            return;
+        }
+        const gl::game::HeroItemContainer container =
+            main ? gl::game::HeroItemContainer::main : gl::game::HeroItemContainer::hot;
+        const auto result = gl::game::use_hero_item(
+            entry->item, container, request.index, *pending_hero_stats_, person_runtime_,
+            inventory_runtime_);
+        if (!result.used) return;
+        pending_inventory_ = inventory_runtime_.hero_inventory();
+        gl::log(gl::LogLevel::info,
+                "item use: id=" + std::to_string(entry->item.description_id) +
+                    " effects=" + std::to_string(result.effects_added) +
+                    " count=" + std::to_string(main ? inventory_runtime_.hero_inventory().items.size()
+                                                    : inventory_runtime_.hero_inventory().hot.size()));
+        if (inventory_overlay_.visible()) {
+            inventory_overlay_.close();
+            open_inventory();
+        }
     }
 
     void open_inventory() {
@@ -2801,6 +2833,8 @@ class Game {
                 hero.containers[2] = inventory_runtime_.hero_inventory().equipped;
                 for (std::size_t index = 0; index < 3; ++index)
                     hero.present[index] = body->containers[index].flag != 0;
+                if (pending_hero_stats_)
+                    hero.stats = *pending_hero_stats_;
                 hero.has_effects = true;
                 hero.effects = person_runtime_.effects("Hero");
                 hero.effect_clock = person_runtime_.effect_clock("Hero");
@@ -3085,6 +3119,12 @@ class Game {
                 }
                 if (inventory_overlay_.visible()) {
                     if (event.button.which != SDL_TOUCH_MOUSEID) {
+                        if (event.button.button == SDL_BUTTON_RIGHT) {
+                            const auto request = inventory_overlay_.use_request_at(
+                                event.button.x, event.button.y);
+                            if (request) use_inventory_item(*request);
+                            return;
+                        }
                         const gl::app::InventoryRegion region =
                             inventory_overlay_.hit_test(event.button.x, event.button.y);
                         inventory_overlay_.handle_mouse(event.button.x, event.button.y,
