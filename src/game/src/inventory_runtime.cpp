@@ -484,6 +484,24 @@ std::int32_t InventoryRuntime::money() const {
     return static_cast<std::int32_t>(total);
 }
 
+bool InventoryRuntime::has_hero_item(HeroItemContainer container, std::size_t index) const {
+    const auto &items =
+        container == HeroItemContainer::main ? hero_inventory_.items : hero_inventory_.hot;
+    return index < items.size();
+}
+
+bool InventoryRuntime::consume_hero_item(HeroItemContainer container, std::size_t index) {
+    auto &items = container == HeroItemContainer::main ? hero_inventory_.items : hero_inventory_.hot;
+    if (index >= items.size())
+        return false;
+    if (items[index].count > 1) {
+        --items[index].count;
+        return true;
+    }
+    items.erase(items.begin() + static_cast<std::ptrdiff_t>(index));
+    return true;
+}
+
 const gl::assets::HeroInventory &InventoryRuntime::hero_inventory() const {
     return hero_inventory_;
 }

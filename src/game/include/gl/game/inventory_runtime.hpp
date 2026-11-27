@@ -13,6 +13,8 @@
 #include <vector>
 
 namespace gl::game {
+enum class HeroItemContainer { main, hot };
+
 struct ItemTemplateEffect {
     std::uint32_t type = 0;
     std::int32_t value = 0;
@@ -84,6 +86,8 @@ class InventoryRuntime {
                                const std::vector<TradePrice> &sell_items);
     std::int32_t count(std::string_view person, std::string_view tech_name) const;
     std::int32_t money() const;
+    bool has_hero_item(HeroItemContainer container, std::size_t index) const;
+    bool consume_hero_item(HeroItemContainer container, std::size_t index);
     const gl::assets::HeroInventory &hero_inventory() const;
     const std::vector<gl::assets::InventoryItem> &person_items(std::string_view person) const;
     void set_person_items(std::string name, std::vector<gl::assets::InventoryItem> items);

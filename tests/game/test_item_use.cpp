@@ -23,3 +23,24 @@ TEST_CASE("PersonRuntime appends effects and writes raw parameters") {
     runtime.add_effect("missing", effect);
     runtime.set_raw_parameter("missing", gl::script::PersonParameter::strength, 5.0);
 }
+
+#include "gl/game/inventory_runtime.hpp"
+
+TEST_CASE("InventoryRuntime consumes one item from the selected hero slot") {
+    gl::assets::HeroInventory inventory;
+    inventory.items.push_back(gl::assets::InventoryItem(953, 3, 0, 19, 0));
+    inventory.hot.push_back(gl::assets::InventoryItem(948, 1, 0, 19, 0));
+    auto runtime = gl::game::InventoryRuntime::create(inventory, {}, {});
+
+    CHECK(runtime.has_hero_item(gl::game::HeroItemContainer::main, 0));
+    CHECK(runtime.has_hero_item(gl::game::HeroItemContainer::hot, 0));
+    CHECK_FALSE(runtime.has_hero_item(gl::game::HeroItemContainer::main, 5));
+
+    CHECK(runtime.consume_hero_item(gl::game::HeroItemContainer::main, 0));
+    REQUIRE(runtime.hero_inventory().items.size() == 1);
+    CHECK(runtime.hero_inventory().items[0].count == 2);
+
+    CHECK(runtime.consume_hero_item(gl::game::HeroItemContainer::hot, 0));
+    CHECK(runtime.hero_inventory().hot.empty());
+    CHECK_FALSE(runtime.consume_hero_item(gl::game::HeroItemContainer::hot, 0));
+}
