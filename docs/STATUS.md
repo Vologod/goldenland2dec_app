@@ -2,6 +2,35 @@
 
 Обновлено: 2026-11-27
 
+## P5f — Weapon/shield sets A/B (done 2026-11-27)
+
+- **Задача:** runtime-набор A/B (`local_player+0x6E4`): Z (`vk_weapon_toggle`)
+  и клик по неактивному weapon/shield слоту; активный набор в combat-статах,
+  outfit, листе и инвентаре; не сейвится, сброс A при load/new game.
+- **Spec/research/plan:** `docs/specs/2026-11-27-p5f-weapon-sets-design.md`,
+  `docs/research/p5f-weapon-sets.md`,
+  `docs/plans/2026-11-27-p5f-weapon-sets.md`; **D-117**.
+- **Оракулы:** slot0 A armor=15; B armor=35, primary[3]=11,
+  damage[0]=0, damage[1]/[2]>0, weight 1320/2046; A weapon 486, B weapon
+  554, shield B 353.
+- **Критерии:** Z+click; без fallback; A-oracle не меняется; скриншоты A/B;
+  полный `ctest` с `GL_GAME_DIR`.
+- **Команды проверки:** `cmake --build build`;
+  `gl_game_tests --test-case="*weapon_set*,*slot0 set B*,*resolve_hero_outfit*"`;
+  `inventory_overlay_tests --test-case="*both set slots*,*inactive set icon*"`;
+  `character_overlay_tests --test-case="*inactive slot*"`;
+  `ctest --test-dir build --output-on-failure`.
+- **Проверка (2026-11-27, HEAD `0b8f327`):**
+  `gl_game_tests` focused → **8 cases / 60 assertions passed**, 553 skipped;
+  `inventory_overlay_tests` focused → **2 cases / 23 assertions passed**,
+  19 skipped; `character_overlay_tests` focused → **1 case / 13 assertions
+  passed**, 9 skipped; полный `ctest` с `GL_GAME_DIR` → **21/21 passed**,
+  0 failed, `Total Test time (real) = 1775.44 sec`.
+- **Статус:** done (2026-11-27): Tasks 1–5 (`0b8f327`), spec §4.4/§4.5
+  sync, полный `ctest` 21/21; D-117. **Manual gate open (пользователь):**
+  Z и клик по неактивному weapon/shield слоту в инвентаре/листе — смена
+  набора, статы/кукла/иконки обновляются.
+
 ## P5e — Potions/food use (done 2026-11-27)
 
 - **Задача:** right-click по зелью/еде применяет `FUN_14057cf0`: прямые
