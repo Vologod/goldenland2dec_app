@@ -18,15 +18,19 @@
   `gl_game_tests --test-case="*use_hero_item*,*writes stats*,*real 953*,*real 948*,*real 408*"`;
   `inventory_overlay_tests --test-case="*right-click*"`;
   `ctest --test-dir build --output-on-failure`.
-- **Проверка (2026-11-27):** `gl_game_tests` focused
-  (`*use_hero_item*,*writes stats*,*real 953*,*real 948*,*real 408*`) →
-  **9 cases / 72 assertions passed** (SUCCESS);
+- **Проверка (2026-11-27, финальное дерево `5aeaaef`):** `gl_game_tests`
+  focused (`*use_hero_item*,*writes stats*,*real 953*,*real 948*,*real 408*`) →
+  **12 cases / 98 assertions passed** (SUCCESS);
   `inventory_overlay_tests --test-case="*right-click use request*"` →
-  **1 case / 5 assertions passed**;
-  `glgame_screenshot_tests --test-case="*inventory*"` →
-  **6 cases / 251 assertions passed**; полный `ctest` с `GL_GAME_DIR` →
-  **21/21 passed**, 0 failed, `Total Test time (real) = 2233.56 sec`.
-- **Статус:** done (2026-11-27) после зелёного полного `ctest` (D-116).
+  **1 case / 5 assertions passed**; полный `ctest` с `GL_GAME_DIR` →
+  **21/21 passed**, 0 failed, `Total Test time (real) = 2249.68 sec`.
+  Добавлены headless-персистентные real-тесты: 948 stat change,
+  408 timed effect (`extra`), 953 heal (`hp`) через `make_hero_save_body`
+  → `encode/parse`.
+- **Статус:** done (2026-11-27): финальное ревью + fix wave (D-116 колонки,
+  spec sync, persistence-тесты, `pending_hero_effects_` sync, `<cstddef>`);
+  полный `ctest` 21/21; D-116. **Manual gate open (пользователь):**
+  right-click по зелью/еде в открытом инвентаре — расход и эффект.
 
 ## Session checkpoint (2026-11-26, end)
 
