@@ -163,7 +163,7 @@ WeaponSetMasks weapon_set_masks(WeaponSet set); // A→A/A, B→B/B
 1. Z и клик по неактивному слоту переключают A/B; состояние не
    сейвится, load/new game → A.
 2. Combat-статы slot0: A armor=15, B armor=35, B damage-структура и
-   perception=11; A-oracle не меняется.
+   perception=13; A-oracle не меняется.
 3. Outfit/кукла/инвентарь/лист отражают активный набор; неактивная
    иконка скрыта, слот кликабелен.
 4. Скриншоты A/B; полный `ctest` 21/21; docs/D-117.

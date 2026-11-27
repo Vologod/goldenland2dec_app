@@ -10,7 +10,7 @@
 - **Spec/research/plan:** `docs/specs/2026-11-27-p5f-weapon-sets-design.md`,
   `docs/research/p5f-weapon-sets.md`,
   `docs/plans/2026-11-27-p5f-weapon-sets.md`; **D-117**.
-- **Оракулы:** slot0 A armor=15; B armor=35, primary[3]=11,
+- **Оракулы:** slot0 A armor=15; B armor=35, primary[3]=13,
   damage[0]=0, damage[1]/[2]>0, weight 1320/2046; A weapon 486, B weapon
   554, shield B 353.
 - **Критерии:** Z+click; без fallback; A-oracle не меняется; скриншоты A/B;
