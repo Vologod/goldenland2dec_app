@@ -20,16 +20,24 @@
   `inventory_overlay_tests --test-case="*both set slots*,*inactive set icon*"`;
   `character_overlay_tests --test-case="*inactive slot*"`;
   `ctest --test-dir build --output-on-failure`.
-- **Проверка (2026-11-27, HEAD `0b8f327`):**
-  `gl_game_tests` focused → **8 cases / 60 assertions passed**, 553 skipped;
-  `inventory_overlay_tests` focused → **2 cases / 23 assertions passed**,
-  19 skipped; `character_overlay_tests` focused → **1 case / 13 assertions
-  passed**, 9 skipped; полный `ctest` с `GL_GAME_DIR` → **21/21 passed**,
-  0 failed, `Total Test time (real) = 1775.44 sec`.
-- **Статус:** done (2026-11-27): Tasks 1–5 (`0b8f327`), spec §4.4/§4.5
-  sync, полный `ctest` 21/21; D-117. **Manual gate open (пользователь):**
-  Z и клик по неактивному weapon/shield слоту в инвентаре/листе — смена
-  набора, статы/кукла/иконки обновляются.
+- **Проверка (2026-11-27, HEAD `2d231ad`):**
+  `gl_game_tests` focused (`*weapon_set*,*slot0 set B*,*resolve_hero_outfit*`)
+  → **8 cases / 60 assertions passed**, 553 skipped;
+  `inventory_overlay_tests` focused (`*both set slots*,*inactive set icon*,*empty*`)
+  → **5 cases / 47 assertions passed**, 17 skipped;
+  `character_overlay_tests` focused (`*inactive slot*`) → **2 cases / 17
+  assertions passed**, 9 skipped; полный `ctest` с `GL_GAME_DIR` → **21/21
+  passed**, 0 failed, `Total Test time (real) = 2068.50 sec`.
+  Real slot0/slot2 resolver B (`sword_platina`/`onehand_wpn`, shield
+  `shit_bio`/`shit_cherny`) и B-статы: A `armor=15 acc=90`, B `armor=35
+  acc=86`. Скриншоты A/B (не коммитятся):
+  inv `E88144FE…` vs `6994B537…`, char `F6164624…` vs `89103CE4…`.
+- **Статус:** done (2026-11-27): Tasks 1–6 + final fix wave (`2d231ad`:
+  empty inactive slot toggle, active-pair frame, real B resolver,
+  character empty-active fallback); полный `ctest` 21/21; D-117.
+  **Manual gate open (пользователь):** Z и клик по неактивному
+  weapon/shield слоту в инвентаре/листе — смена набора, статы/кукла/иконки
+  обновляются.
 
 ## P5e — Potions/food use (done 2026-11-27)
 
