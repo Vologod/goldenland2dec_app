@@ -215,3 +215,44 @@ TEST_CASE("use_hero_item rejects non-consumables and bad slots") {
                                    inventory);
     CHECK_FALSE(potion.used);
 }
+
+#include "gl/game/hero_save_write.hpp"
+
+TEST_CASE("make_hero_save_body writes stats and preserves the rest of the block") {
+    gl::assets::HeroSaveBody body;
+    body.stat_block.fill(0xAA);
+    gl::game::HeroLiveState live;
+    gl::assets::HeroStats stats;
+    stats.strength = 11;
+    stats.constitution = 12;
+    stats.dexterity = 13;
+    stats.perception = 14;
+    stats.intelligence = 15;
+    stats.wisdom = 16;
+    stats.luck = 17;
+    stats.reputation = 18;
+    stats.experience = 12345;
+    stats.skills[0] = 5;
+    stats.skills[26] = 9;
+    live.stats = stats;
+
+    const auto result = gl::game::make_hero_save_body(body, live);
+    const auto read = [&](std::size_t offset) {
+        return static_cast<std::uint32_t>(result.stat_block[offset]) |
+               (static_cast<std::uint32_t>(result.stat_block[offset + 1]) << 8) |
+               (static_cast<std::uint32_t>(result.stat_block[offset + 2]) << 16) |
+               (static_cast<std::uint32_t>(result.stat_block[offset + 3]) << 24);
+    };
+    CHECK(read(0) == 11);
+    CHECK(read(4) == 12);
+    CHECK(read(8) == 13);
+    CHECK(read(0x0C) == 14);
+    CHECK(read(0x10) == 15);
+    CHECK(read(0x14) == 16);
+    CHECK(read(0x18) == 17);
+    CHECK(read(0x1C) == 18);
+    CHECK(read(0x20) == 12345);
+    CHECK(read(0x2C) == 5);
+    CHECK(read(0x2C + 4 * 26) == 9);
+    CHECK(result.stat_block[0x100] == 0xAA);
+}

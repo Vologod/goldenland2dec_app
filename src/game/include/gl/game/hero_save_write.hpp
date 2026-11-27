@@ -1,6 +1,7 @@
 #pragma once
 #include "gl/assets/hero_equipment.hpp"
 #include "gl/assets/hero_save_body.hpp"
+#include "gl/assets/hero_stats.hpp"
 #include "gl/game/effect.hpp"
 #include <array>
 #include <cstdint>
@@ -20,6 +21,7 @@ struct HeroLiveState {
     std::vector<PersonEffect> effects;
     bool has_effects = false;
     std::optional<GameDatetime> effect_clock;
+    std::optional<gl::assets::HeroStats> stats;
 };
 
 gl::assets::HeroSaveBody make_hero_save_body(const gl::assets::HeroSaveBody &loaded,
