@@ -7,5 +7,6 @@
 namespace gl::game {
 Result<HeroOutfit> resolve_hero_outfit(const gl::assets::HeroEquipment& equipment,
                                        const gl::assets::Sdb& tech_names,
-                                       const gl::assets::HeroWearCatalog& wear);
+                                       const gl::assets::HeroWearCatalog& wear,
+                                       bool use_b_set = false);
 } // namespace gl::game

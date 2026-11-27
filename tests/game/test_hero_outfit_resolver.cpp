@@ -177,6 +177,29 @@ TEST_CASE("resolve_hero_outfit ignores accessories and set B armor duplicates") 
     CHECK(outfit->armor == "dospeh_almaz");
 }
 
+TEST_CASE("resolve_hero_outfit selects set B weapon and shield") {
+    auto sdb = assets::Sdb::parse(make_sdb({{1, "AXE_1_13_2"},
+                                             {2, "SWR_1_08_1"},
+                                             {3, "SHL_1_10_1"}}));
+    REQUIRE(sdb.has_value());
+    const auto catalog = slot_catalog();
+    const auto gear = equipment({
+        {1, 1, 0x001000u, 0},
+        {2, 0, 0x002000u, 0},
+        {3, 13, 0x800000u, 0},
+    });
+
+    const auto a = resolve_hero_outfit(gear, sdb.value(), catalog, false);
+    REQUIRE(a.has_value());
+    CHECK(a->weapon == "axe_goluboy2");
+    CHECK(a->shield.empty());
+
+    const auto b = resolve_hero_outfit(gear, sdb.value(), catalog, true);
+    REQUIRE(b.has_value());
+    CHECK(b->weapon == "sword_platina");
+    CHECK(b->shield == "shit_bio");
+}
+
 TEST_CASE("real herowear and tech_names map equipped items" *
           doctest::skip(!game_dir_available())) {
     auto vfs = assets::GameVfs::mount(std::getenv("GL_GAME_DIR"));

@@ -1,6 +1,7 @@
 #include "gl/game/hero_outfit_resolver.hpp"
 
 #include "gl/assets/log.hpp"
+#include "gl/game/weapon_set.hpp"
 
 #include <cctype>
 #include <cstdint>
@@ -10,8 +11,6 @@
 namespace gl::game {
 namespace {
 constexpr std::uint32_t kMaskMask = 0xFFF000;
-constexpr std::uint32_t kWeaponA = 0x001000;
-constexpr std::uint32_t kShieldA = 0x400000;
 constexpr std::uint32_t kHelmet = 0x004000;
 constexpr std::uint32_t kArmor = 0x100000;
 constexpr std::uint32_t kElbarms = 0x200000;
@@ -52,7 +51,9 @@ const gl::assets::HeroWearEntry* lookup(const gl::assets::Sdb& tech_names,
 
 Result<HeroOutfit> resolve_hero_outfit(const gl::assets::HeroEquipment& equipment,
                                        const gl::assets::Sdb& tech_names,
-                                       const gl::assets::HeroWearCatalog& wear) {
+                                       const gl::assets::HeroWearCatalog& wear,
+                                       bool use_b_set) {
+    const WeaponSetMasks masks = weapon_set_masks(use_b_set ? WeaponSet::b : WeaponSet::a);
     HeroOutfit outfit;
     outfit.wear_set = "noweapon_thrw";
     outfit.weapon.clear();
@@ -63,7 +64,7 @@ Result<HeroOutfit> resolve_hero_outfit(const gl::assets::HeroEquipment& equipmen
 
     for (const gl::assets::EquippedItem& item : equipment.items) {
         const std::uint32_t mask = item.flags & kMaskMask;
-        if (mask == kWeaponA) {
+        if (mask == masks.weapon) {
             const gl::assets::HeroWearEntry* entry =
                 lookup(tech_names, wear, item.item_id, "weapon");
             if (entry == nullptr)
@@ -86,7 +87,7 @@ Result<HeroOutfit> resolve_hero_outfit(const gl::assets::HeroEquipment& equipmen
                 lookup(tech_names, wear, item.item_id, "elbarms");
             if (entry != nullptr)
                 outfit.elbarms = lower_ascii(entry->group);
-        } else if (mask == kShieldA && item.type == 13) {
+        } else if (mask == masks.shield && item.type == 13) {
             const gl::assets::HeroWearEntry* entry =
                 lookup(tech_names, wear, item.item_id, "shield");
             if (entry != nullptr)
