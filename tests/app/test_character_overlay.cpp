@@ -547,6 +547,8 @@ TEST_CASE("character overlay toggles weapon set from the inactive slot" *
     CHECK_FALSE(overlay.take_weapon_set_toggle());
 
     overlay.set_use_b_set(true);
+    CHECK(overlay.handle_mouse(30, 480, true));
+    CHECK_FALSE(overlay.take_weapon_set_toggle());
     CHECK(overlay.handle_mouse(75, 525, true));
     CHECK(overlay.take_weapon_set_toggle());
 }

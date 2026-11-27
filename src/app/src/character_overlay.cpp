@@ -161,13 +161,17 @@ bool mask_is_active(std::uint32_t mask, bool use_b_set) {
     return true;
 }
 
-const PuppetSpec *hit_puppet(const float x, const float y) {
+const PuppetSpec *hit_puppet(const float x, const float y, bool use_b_set) {
+    const PuppetSpec *fallback = nullptr;
     for (const PuppetSpec &slot : kPuppetSlots) {
-        if (contains(static_cast<float>(slot.x), static_cast<float>(slot.y), 55.0f,
-                     55.0f, x, y))
+        if (!contains(static_cast<float>(slot.x), static_cast<float>(slot.y), 55.0f,
+                      55.0f, x, y))
+            continue;
+        if (is_weapon_set_slot(slot.mask) && mask_is_active(slot.mask, use_b_set))
             return &slot;
+        if (fallback == nullptr) fallback = &slot;
     }
-    return nullptr;
+    return fallback;
 }
 
 void apply_magenta_key(gl::assets::Image &image) {
@@ -205,6 +209,7 @@ bool CharacterOverlay::open(SDL_Renderer *renderer, const gl::assets::GameVfs &v
     inventory_ = inventory;
     catalog_ = catalog;
     use_b_set_ = use_b_set;
+    weapon_set_toggle_requested_ = false;
     sheet_ = std::move(sheet);
     tab_ = gl::game::CharacterTab::characteristics;
     visible_ = true;
@@ -584,7 +589,7 @@ bool CharacterOverlay::handle_mouse(int x, int y, bool click) {
     if (!visible_) return false;
     const float logical_x = (static_cast<float>(x) - offset_x_) / scale_;
     const float logical_y = (static_cast<float>(y) - offset_y_) / scale_;
-    if (const PuppetSpec *puppet = hit_puppet(logical_x, logical_y);
+    if (const PuppetSpec *puppet = hit_puppet(logical_x, logical_y, use_b_set_);
         puppet != nullptr && is_weapon_set_slot(puppet->mask)) {
         if (!mask_is_active(puppet->mask, use_b_set_) && click)
             weapon_set_toggle_requested_ = true;
