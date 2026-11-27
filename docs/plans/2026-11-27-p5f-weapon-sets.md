@@ -243,7 +243,7 @@ $env:GL_GAME_DIR="I:\Games\Златогорье-2"
 cmake --build build
 build\bin\gl_game_tests.exe --test-case="*weapon_set_masks*,*active weapon and shield*,*slot0 set B*"
 ```
-Expected: PASS (A stays 15, B 35/11/damage structure).
+Expected: PASS (A stays 15, B 35/13/damage structure).
 
 - [ ] **Step 5: Commit**
 

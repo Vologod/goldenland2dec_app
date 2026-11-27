@@ -553,6 +553,18 @@ TEST_CASE("character overlay toggles weapon set from the inactive slot" *
     CHECK(overlay.take_weapon_set_toggle());
 }
 
+TEST_CASE("character overlay toggles from an empty inactive slot") {
+    gl::assets::GameVfs vfs;
+    gl::assets::HeroInventory inventory;
+    inventory.equipped.push_back({1, 1, 0x001000u, 0, 0});
+
+    gl::app::CharacterOverlay overlay;
+    REQUIRE(overlay.open(nullptr, vfs, make_sheet(), &inventory, nullptr, true));
+    CHECK(overlay.handle_mouse(30, 480, true));
+    CHECK(overlay.take_weapon_set_toggle());
+    CHECK_FALSE(overlay.take_weapon_set_toggle());
+}
+
 TEST_CASE("character overlay skips missing puppet assets" *
           doctest::skip(!game_dir_available())) {
     const char *dir = std::getenv("GL_GAME_DIR");

@@ -161,13 +161,18 @@ bool mask_is_active(std::uint32_t mask, bool use_b_set) {
     return true;
 }
 
-const PuppetSpec *hit_puppet(const float x, const float y, bool use_b_set) {
+const gl::assets::InventoryItem *find_equipped(
+    const gl::assets::HeroInventory &inventory, std::uint32_t mask);
+
+const PuppetSpec *hit_puppet(const gl::assets::HeroInventory &inventory, float x, float y,
+                             bool use_b_set) {
     const PuppetSpec *fallback = nullptr;
     for (const PuppetSpec &slot : kPuppetSlots) {
         if (!contains(static_cast<float>(slot.x), static_cast<float>(slot.y), 55.0f,
                       55.0f, x, y))
             continue;
-        if (is_weapon_set_slot(slot.mask) && mask_is_active(slot.mask, use_b_set))
+        if (is_weapon_set_slot(slot.mask) && mask_is_active(slot.mask, use_b_set) &&
+            find_equipped(inventory, slot.mask) != nullptr)
             return &slot;
         if (fallback == nullptr) fallback = &slot;
     }
@@ -485,6 +490,12 @@ void CharacterOverlay::draw_inventory_items(SDL_Renderer *renderer) {
         draw_item(renderer, catalog_->find(item->item_id),
                   static_cast<float>(slot.x), static_cast<float>(slot.y), 55.0f,
                   55.0f);
+        if (is_weapon_set_slot(slot.mask)) {
+            SDL_SetRenderDrawColor(renderer, 232, 201, 112, 255);
+            const SDL_FRect border{static_cast<float>(slot.x), static_cast<float>(slot.y),
+                                   55.0f, 55.0f};
+            SDL_RenderDrawRectF(renderer, &border);
+        }
     }
 }
 
@@ -589,11 +600,14 @@ bool CharacterOverlay::handle_mouse(int x, int y, bool click) {
     if (!visible_) return false;
     const float logical_x = (static_cast<float>(x) - offset_x_) / scale_;
     const float logical_y = (static_cast<float>(y) - offset_y_) / scale_;
-    if (const PuppetSpec *puppet = hit_puppet(logical_x, logical_y, use_b_set_);
-        puppet != nullptr && is_weapon_set_slot(puppet->mask)) {
-        if (!mask_is_active(puppet->mask, use_b_set_) && click)
-            weapon_set_toggle_requested_ = true;
-        if (click) return true;
+    if (inventory_ != nullptr) {
+        if (const PuppetSpec *puppet =
+                hit_puppet(*inventory_, logical_x, logical_y, use_b_set_);
+            puppet != nullptr && is_weapon_set_slot(puppet->mask)) {
+            if (!mask_is_active(puppet->mask, use_b_set_) && click)
+                weapon_set_toggle_requested_ = true;
+            if (click) return true;
+        }
     }
     const bool on_close =
         contains(920.0f, 694.0f, 75.0f, 68.0f, logical_x, logical_y);

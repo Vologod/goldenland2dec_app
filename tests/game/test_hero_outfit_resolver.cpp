@@ -247,6 +247,15 @@ TEST_CASE("real herowear and tech_names map equipped items" *
         CHECK(outfit->helmet == "shlem_goluboy");
         CHECK(outfit->elbarms == "ponogi_goluboy");
 
+        auto b_outfit = resolve_hero_outfit(eq.value(), sdb.value(), wear.value(), true);
+        REQUIRE(b_outfit.has_value());
+        CHECK(b_outfit->weapon == "sword_platina");
+        CHECK(b_outfit->wear_set == "onehand_wpn");
+        CHECK(b_outfit->shield == (slot == 0 ? "shit_bio" : "shit_cherny"));
+        CHECK(b_outfit->armor == expected_armor);
+        CHECK(b_outfit->helmet == "shlem_goluboy");
+        CHECK(b_outfit->elbarms == "ponogi_goluboy");
+
         const std::string prefix = "wear/" + outfit->wear_set + "/";
         CHECK(vfs->exists(prefix + "weapon/" + outfit->weapon + "/" + outfit->weapon + ".iad"));
         CHECK(vfs->exists(prefix + "armor/" + outfit->armor + "/" + outfit->armor + ".iad"));

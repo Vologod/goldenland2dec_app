@@ -260,6 +260,21 @@ TEST_CASE("inventory overlay exposes both set slots and toggles from the inactiv
     CHECK(b_overlay.take_weapon_set_toggle());
 }
 
+TEST_CASE("inventory overlay toggles from an empty inactive set slot") {
+    gl::assets::GameVfs vfs;
+    gl::assets::ItemCatalog catalog;
+    gl::assets::HeroInventory only_a;
+    only_a.equipped.push_back(make_item(1, 0, 1, 0x001000));
+
+    gl::app::InventoryOverlay overlay;
+    REQUIRE(overlay.open(vfs, catalog, only_a));
+    CHECK(overlay.selection() == gl::app::InventorySelection::none);
+    CHECK(overlay.handle_mouse(18, 468, true));
+    CHECK(overlay.take_weapon_set_toggle());
+    CHECK_FALSE(overlay.take_weapon_set_toggle());
+    CHECK(overlay.selection() == gl::app::InventorySelection::none);
+}
+
 TEST_CASE("inventory overlay hides the inactive set icon") {
     gl::assets::GameVfs vfs;
     gl::assets::ItemCatalog catalog;

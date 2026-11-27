@@ -704,6 +704,11 @@ void InventoryOverlay::render(SDL_Renderer *renderer, int screen_w, int screen_h
             const SDL_FRect fill{x, y, 55.0f, 55.0f};
             SDL_RenderFillRectF(renderer, &fill);
         }
+        if (is_weapon_set_slot(slot.mask)) {
+            SDL_SetRenderDrawColor(renderer, 232, 201, 112, 255);
+            const SDL_FRect border{x, y, 55.0f, 55.0f};
+            SDL_RenderDrawRectF(renderer, &border);
+        }
     }
 
     for (std::size_t i = 0; i < kFilters.size(); ++i) {
@@ -858,6 +863,11 @@ bool InventoryOverlay::handle_mouse(int x, int y, bool click) {
             puppet = hit_puppet_slot(inventory_, logical_x, logical_y, true);
         if (puppet == nullptr)
             puppet = hit_puppet_slot(inventory_, logical_x, logical_y, false);
+        if (puppet != nullptr && is_weapon_set_slot(puppet->mask) &&
+            !mask_is_active(puppet->mask, use_b_set_)) {
+            weapon_set_toggle_requested_ = true;
+            break;
+        }
         bool found = false;
         if (puppet != nullptr) {
             for (std::size_t index = 0; index < inventory_.equipped.size(); ++index) {
