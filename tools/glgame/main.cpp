@@ -42,6 +42,7 @@
 #include <gl/game/time_event_runtime.hpp>
 #include <gl/game/trigger_runtime.hpp>
 #include <gl/game/weather_runtime.hpp>
+#include <gl/game/weapon_set.hpp>
 #include <gl/game/rginf.hpp>
 #include <gl/game/save_restore.hpp>
 #include <gl/platform/sdl_context.hpp>
@@ -144,6 +145,7 @@ struct Options {
     bool character = false;
     std::string character_tab;
     std::optional<int> inventory_select;
+    std::optional<int> weapon_set;
     std::string trade_npc;
     bool has_trade_npc = false;
     std::vector<TradeHook> trade_hooks;
@@ -194,6 +196,7 @@ void print_usage() {
         "  --inventory-select <n> Select bottom-strip slot <n> when the inventory opens\n"
         "  --character          Open the character sheet for the loaded save\n"
         "  --character-tab <characteristics|skills> Initial character sheet tab\n"
+        "  --weapon-set <a|b>   Select the active weapon/shield set\n"
         "  --diary              Open the quest journal for the loaded save\n"
         "  --trade-npc <name>   Open the trade overlay for person <name> after loading\n"
         "  --trade-buy <tech>   Headless: stage the whole NPC stack for item <tech>\n"
@@ -409,6 +412,17 @@ ParseStatus parse_args(int argc, char** argv, Options& options) {
                 return ParseStatus::error;
             }
             options.character_tab = std::string(value);
+        } else if (arg == "--weapon-set") {
+            if (!next_value(arg, value)) return ParseStatus::error;
+            if (value == "a") {
+                options.weapon_set = 0;
+            } else if (value == "b") {
+                options.weapon_set = 1;
+            } else {
+                std::fprintf(stderr, "glgame: invalid --weapon-set: %.*s\n",
+                             static_cast<int>(value.size()), value.data());
+                return ParseStatus::error;
+            }
         } else if (arg == "--diary") {
             options.diary = true;
         } else if (arg == "--inventory-select") {
@@ -845,6 +859,10 @@ class Game {
             execute_line(command, false);
         }
 
+        if (options_.weapon_set)
+            apply_active_weapon_set(*options_.weapon_set != 0 ? gl::game::WeaponSet::b
+                                                              : gl::game::WeaponSet::a,
+                                    true);
         if (options_.inventory) open_inventory();
         if (options_.character) open_character();
         if (options_.diary) open_diary();
@@ -1299,7 +1317,7 @@ class Game {
 
     void open_inventory() {
         const gl::assets::HeroInventory& inventory = inventory_runtime_.hero_inventory();
-        inventory_overlay_.open(vfs_, item_catalog_, inventory);
+        inventory_overlay_.open(vfs_, item_catalog_, inventory, use_b_set());
         inventory_overlay_.set_font(inventory_font());
         if (options_.inventory_select) {
             if (!inventory_overlay_.select_visible_slot(
@@ -1368,6 +1386,7 @@ class Game {
                         gl::game::CarriedItem{static_cast<std::int32_t>(item.count),
                                               item.weight_x10});
             inputs.effect_mods = person_runtime_.active_effect_mods("Hero");
+            inputs.use_b_set = use_b_set();
             armor_weight_values = gl::game::compute_armor_weight(inputs);
             armor_weight = &armor_weight_values;
         }
@@ -1378,7 +1397,7 @@ class Game {
         character_overlay_.set_top_font(character_top_font());
         const bool opened = character_overlay_.open(
             window_.renderer(), vfs_, std::move(sheet),
-            &inventory_runtime_.hero_inventory(), &item_catalog_);
+            &inventory_runtime_.hero_inventory(), &item_catalog_, use_b_set());
         if (!opened) {
             gl::log(gl::LogLevel::warning, "character: cannot open the character sheet");
             return false;
@@ -2341,7 +2360,7 @@ class Game {
     }
 
     std::optional<gl::game::HeroOutfit> resolve_outfit_from_equipment(
-        const gl::assets::HeroEquipment& equipment, std::string& error) {
+        const gl::assets::HeroEquipment& equipment, bool use_b_set, std::string& error) {
         error.clear();
         auto sdb_data = vfs_.read("sdb/items/tech_names.sdb");
         if (!sdb_data) {
@@ -2366,12 +2385,39 @@ class Game {
         }
 
         auto outfit = gl::game::resolve_hero_outfit(equipment, tech_names.value(),
-                                                    wear.value());
+                                                    wear.value(), use_b_set);
         if (!outfit) {
             error = outfit.error().message;
             return std::nullopt;
         }
         return outfit.value();
+    }
+
+    bool use_b_set() const { return active_weapon_set_ == gl::game::WeaponSet::b; }
+
+    void apply_active_weapon_set(gl::game::WeaponSet set, bool refresh_overlays) {
+        active_weapon_set_ = set;
+        if (level_ && pending_equipment_) {
+            std::string error;
+            if (auto outfit = resolve_outfit_from_equipment(*pending_equipment_, use_b_set(), error)) {
+                level_->apply_hero_outfit(*outfit);
+                character_outfit_ = *outfit;
+            } else {
+                gl::log(gl::LogLevel::warning, "outfit: " + error);
+            }
+        }
+        if (refresh_overlays) {
+            inventory_overlay_.set_use_b_set(use_b_set());
+            character_overlay_.set_use_b_set(use_b_set());
+        }
+        gl::log(gl::LogLevel::info,
+                "weapon set: " + std::string(use_b_set() ? "B" : "A"));
+    }
+
+    void toggle_weapon_set() {
+        apply_active_weapon_set(use_b_set() ? gl::game::WeaponSet::a
+                                            : gl::game::WeaponSet::b,
+                                true);
     }
 
     void report_outfit_message(const std::string& message, bool info) {
@@ -2399,6 +2445,7 @@ class Game {
 
     bool apply_hero_from_body(std::span<const std::uint8_t> body, int slot,
                               bool rebuild_inventory) {
+        active_weapon_set_ = gl::game::WeaponSet::a;
         reset_pending_hero();
 
         auto hero_stats = gl::assets::parse_hero_stats(body);
@@ -2466,7 +2513,7 @@ class Game {
         }
 
         std::string resolve_error;
-        auto outfit = resolve_outfit_from_equipment(*pending_equipment_, resolve_error);
+        auto outfit = resolve_outfit_from_equipment(*pending_equipment_, use_b_set(), resolve_error);
         if (!outfit) {
             pending_outfit_ = make_naked_outfit();
             report_outfit_message(
@@ -2512,6 +2559,15 @@ class Game {
 
     void apply_loaded_equip_save() {
         if (!level_) return;
+        if (pending_equipment_ && !options_.hero_outfit_none) {
+            std::string error;
+            if (auto outfit =
+                    resolve_outfit_from_equipment(*pending_equipment_, use_b_set(), error)) {
+                character_outfit_ = *outfit;
+                level_->apply_hero_outfit(*outfit);
+                return;
+            }
+        }
         const gl::game::HeroOutfit outfit =
             pending_outfit_ ? *pending_outfit_ : make_naked_outfit();
         level_->apply_hero_outfit(outfit);
@@ -2571,7 +2627,7 @@ class Game {
             character_outfit_ = hero_outfit;
         } else if (pending_equipment_) {
             std::string error;
-            auto resolved = resolve_outfit_from_equipment(*pending_equipment_, error);
+            auto resolved = resolve_outfit_from_equipment(*pending_equipment_, use_b_set(), error);
             if (resolved) {
                 hero_outfit = *resolved;
                 character_outfit_ = hero_outfit;
@@ -3105,6 +3161,7 @@ class Game {
                     if (event.button.which != SDL_TOUCH_MOUSEID)
                         character_overlay_.handle_mouse(event.button.x, event.button.y,
                                                         event.button.button == SDL_BUTTON_LEFT);
+                    if (character_overlay_.take_weapon_set_toggle()) toggle_weapon_set();
                     return;
                 }
                 if (trade_overlay_.visible()) {
@@ -3125,12 +3182,16 @@ class Game {
                             const auto request = inventory_overlay_.use_request_at(
                                 event.button.x, event.button.y);
                             if (request) use_inventory_item(*request);
+                            if (inventory_overlay_.take_weapon_set_toggle())
+                                toggle_weapon_set();
                             return;
                         }
                         const gl::app::InventoryRegion region =
                             inventory_overlay_.hit_test(event.button.x, event.button.y);
                         inventory_overlay_.handle_mouse(event.button.x, event.button.y,
                                                         event.button.button == SDL_BUTTON_LEFT);
+                        if (inventory_overlay_.take_weapon_set_toggle())
+                            toggle_weapon_set();
                         if (region == gl::app::InventoryRegion::skills_tab &&
                             event.button.button == SDL_BUTTON_LEFT) {
                             open_character();
@@ -3235,6 +3296,12 @@ class Game {
             raw_symbol == SDLK_AC_BACK ? SDLK_ESCAPE : raw_symbol;
         if (console_visible_) {
             handle_console_key(key);
+            return;
+        }
+        if (state_.state() == gl::core::AppState::level && level_ && !dialog_ &&
+            !save_slots_ && !console_visible_ &&
+            (symbol == SDLK_z || symbol == static_cast<SDL_Keycode>('Z'))) {
+            toggle_weapon_set();
             return;
         }
         if (trade_overlay_.visible()) {
@@ -3416,6 +3483,7 @@ class Game {
 
     void menu_activate(int index) {
         if (index == 0) {
+            active_weapon_set_ = gl::game::WeaponSet::a;
             pending_hero_effects_.clear();
             pending_hero_effect_clock_.reset();
             if (!load_level(kNewGameLevel)) return;
@@ -3882,6 +3950,7 @@ class Game {
     std::optional<gl::assets::Sdb> user_interface_sdb_;
     gl::app::CharacterOverlay character_overlay_;
     std::optional<gl::game::HeroOutfit> character_outfit_;
+    gl::game::WeaponSet active_weapon_set_ = gl::game::WeaponSet::a;
     gl::app::TradeOverlay trade_overlay_;
     std::string current_trade_npc_;
     bool trade_hooks_run_ = false;
