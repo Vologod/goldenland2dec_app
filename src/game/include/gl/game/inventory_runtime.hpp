@@ -4,6 +4,7 @@
 #include "gl/game/trade_price.hpp"
 #include "gl/script/native_registry.hpp"
 
+#include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <map>

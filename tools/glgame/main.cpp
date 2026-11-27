@@ -1284,6 +1284,8 @@ class Game {
             inventory_runtime_);
         if (!result.used) return;
         pending_inventory_ = inventory_runtime_.hero_inventory();
+        pending_hero_effects_ = person_runtime_.effects("Hero");
+        pending_hero_effect_clock_ = person_runtime_.effect_clock("Hero");
         gl::log(gl::LogLevel::info,
                 "item use: id=" + std::to_string(entry->item.description_id) +
                     " effects=" + std::to_string(result.effects_added) +

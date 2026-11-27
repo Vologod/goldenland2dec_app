@@ -4,6 +4,7 @@
 #include "gl/assets/hero_stats.hpp"
 #include "gl/assets/itm.hpp"
 #include "gl/assets/vfs.hpp"
+#include "gl/game/hero_save_write.hpp"
 #include "gl/game/inventory_runtime.hpp"
 #include "gl/game/item_use.hpp"
 #include "gl/game/person_runtime.hpp"
@@ -124,4 +125,103 @@ TEST_CASE("real 408 food appends a timed effect" *
     CHECK(runtime.effects("Hero")[0].words[0] == 30);
     CHECK(runtime.effects("Hero")[0].words[1] == 100);
     CHECK(static_cast<std::uint32_t>(runtime.effects("Hero")[0].words[3]) == 0x00000003);
+}
+
+TEST_CASE("real 948 stat change survives hero save encode/parse" *
+          doctest::skip(!game_dir_available())) {
+    auto vfs = gl::assets::GameVfs::mount(std::getenv("GL_GAME_DIR"));
+    REQUIRE(vfs.has_value());
+    const auto item = read_item(vfs.value(), "items/data/948.itm");
+
+    gl::assets::HeroStats stats;
+    stats.strength = 10;
+    stats.intelligence = 10;
+    gl::assets::HeroInventory hero;
+    hero.items.push_back(gl::assets::InventoryItem(948, 1, 0, 19, 0));
+    auto inventory = gl::game::InventoryRuntime::create(hero, {}, {});
+    auto runtime = gl::game::PersonRuntime::create({}, stats);
+    const auto used = gl::game::use_hero_item(item, gl::game::HeroItemContainer::main, 0, stats,
+                                              runtime, inventory);
+    REQUIRE(used.used);
+
+    gl::assets::HeroSaveBody body;
+    gl::game::HeroLiveState live;
+    live.stats = stats;
+    const auto rebuilt = gl::game::make_hero_save_body(body, live);
+    const auto encoded = gl::assets::encode_hero_save_body(rebuilt);
+    REQUIRE(encoded.has_value());
+    const auto parsed = gl::assets::parse_hero_save_body(encoded.value());
+    REQUIRE(parsed.has_value());
+    const auto parsed_stats = gl::assets::parse_hero_stats(encoded.value());
+    REQUIRE(parsed_stats.has_value());
+    CHECK(parsed_stats->strength == 11);
+    CHECK(parsed_stats->intelligence == 9);
+}
+
+TEST_CASE("real 408 timed effect survives hero save encode/parse" *
+          doctest::skip(!game_dir_available())) {
+    auto vfs = gl::assets::GameVfs::mount(std::getenv("GL_GAME_DIR"));
+    REQUIRE(vfs.has_value());
+    const auto item = read_item(vfs.value(), "items/data/408.itm");
+
+    gl::assets::HeroStats stats;
+    gl::assets::HeroInventory hero;
+    hero.items.push_back(gl::assets::InventoryItem(408, 1, 0, 20, 0));
+    auto inventory = gl::game::InventoryRuntime::create(hero, {}, {});
+    auto runtime = gl::game::PersonRuntime::create({}, stats);
+    const auto used = gl::game::use_hero_item(item, gl::game::HeroItemContainer::main, 0, stats,
+                                              runtime, inventory);
+    REQUIRE(used.used);
+
+    gl::assets::HeroSaveBody body;
+    gl::game::HeroLiveState live;
+    live.has_effects = true;
+    live.effects = runtime.effects("Hero");
+    const auto rebuilt = gl::game::make_hero_save_body(body, live);
+    const auto encoded = gl::assets::encode_hero_save_body(rebuilt);
+    REQUIRE(encoded.has_value());
+    const auto parsed = gl::assets::parse_hero_save_body(encoded.value());
+    REQUIRE(parsed.has_value());
+    REQUIRE(parsed->extra.size() == 1);
+    std::int32_t words[5];
+    for (std::size_t i = 0; i < 5; ++i) {
+        words[i] = static_cast<std::int32_t>(
+            static_cast<std::uint32_t>(parsed->extra[0][4 * i]) |
+            (static_cast<std::uint32_t>(parsed->extra[0][4 * i + 1]) << 8) |
+            (static_cast<std::uint32_t>(parsed->extra[0][4 * i + 2]) << 16) |
+            (static_cast<std::uint32_t>(parsed->extra[0][4 * i + 3]) << 24));
+    }
+    CHECK(words[0] == 30);
+    CHECK(words[1] == 100);
+    CHECK(static_cast<std::uint32_t>(words[3]) == 0x00000003);
+}
+
+TEST_CASE("real 953 heal survives hero save encode/parse" *
+          doctest::skip(!game_dir_available())) {
+    auto vfs = gl::assets::GameVfs::mount(std::getenv("GL_GAME_DIR"));
+    REQUIRE(vfs.has_value());
+    const auto item = read_item(vfs.value(), "items/data/953.itm");
+
+    gl::assets::HeroStats stats;
+    stats.experience = 1000;
+    gl::assets::HeroInventory hero;
+    hero.items.push_back(gl::assets::InventoryItem(953, 1, 0, 19, 0));
+    auto inventory = gl::game::InventoryRuntime::create(hero, {}, {});
+    auto runtime = gl::game::PersonRuntime::create({}, stats);
+    runtime.set_raw_parameter("Hero", gl::script::PersonParameter::life, 10.0);
+    const auto used = gl::game::use_hero_item(item, gl::game::HeroItemContainer::main, 0, stats,
+                                              runtime, inventory);
+    REQUIRE(used.used);
+    const auto healed = static_cast<std::uint32_t>(
+        runtime.get_parameter("Hero", gl::script::PersonParameter::life));
+
+    gl::assets::HeroSaveBody body;
+    gl::game::HeroLiveState live;
+    live.hp = healed;
+    const auto rebuilt = gl::game::make_hero_save_body(body, live);
+    const auto encoded = gl::assets::encode_hero_save_body(rebuilt);
+    REQUIRE(encoded.has_value());
+    const auto parsed = gl::assets::parse_hero_save_body(encoded.value());
+    REQUIRE(parsed.has_value());
+    CHECK(parsed->hp == healed);
 }

@@ -1,6 +1,6 @@
 # P5e — Potions/food use (right-click) — дизайн
 
-Дата: 2026-11-27. Статус: proposed. Решение: **D-116**.
+Дата: 2026-11-27. Статус: accepted (done 2026-11-27). Решение: **D-116**.
 Research: `docs/research/p5e-potions-food.md`.
 
 ## 1. Цель
@@ -48,8 +48,6 @@ HP/EP, расход 1 шт.; изменения переживают save/load.
 ### 4.1 `gl/game/item_use.hpp` + `src/game/src/item_use.cpp` (SDL-free)
 
 ```cpp
-enum class HeroItemContainer { main, hot };
-
 struct HeroUseResult {
     bool used = false;
     bool consumed = false;
@@ -67,7 +65,9 @@ HeroUseResult use_hero_item(const gl::assets::Item &item, HeroItemContainer cont
   прямые статы пишет в `stats` и `runtime.set_raw_parameter("Hero", ...)`;
   лечение — в `runtime` и `stats.life/energy`; эффекты — `runtime.add_effect`;
   расход — `inventory.consume_hero_item`.
-- Хелпер `classify_effect` (direct id или нет) — отдельная функция для тестов.
+- `HeroItemContainer` объявлен в `gl/game/inventory_runtime.hpp` (не в
+  `item_use.hpp`). Прямые статы отбирают `direct_parameter`/`primary_field`
+  из `src/game/src/item_use.cpp`.
 
 ### 4.2 `PersonRuntime`
 
@@ -86,10 +86,13 @@ HeroUseResult use_hero_item(const gl::assets::Item &item, HeroItemContainer cont
 ### 4.4 UI-триггер (right-click)
 
 - `InventoryOverlay::use_request_at(int x, int y) const` →
-  `std::optional<InventoryUseRequest>` c `{HeroItemContainer, std::size_t index}`:
-  - `bottom_slot` → `main`, `visible_indices_[page+slot]`;
-  - `hot_slot` → `hot`, найденный по маске слота (как в `handle_mouse`);
+  `std::optional<InventoryUseRequest>` c
+  `InventoryUseRequest{InventorySelection source; std::size_t index}`
+  (app-enum `InventorySelection`):
+  - `bottom_slot` → `InventorySelection::item`, `visible_indices_[page+slot]`;
+  - `hot_slot` → `InventorySelection::hot`, найденный по маске слота (как в `handle_mouse`);
   - прочие регионы → `nullopt`.
+- glgame переводит `item` → `HeroItemContainer::main`, `hot` → `HeroItemContainer::hot`.
 - glgame: в `SDL_MOUSEBUTTONDOWN` при `button == SDL_BUTTON_RIGHT` и
   видимом инвентаре — `use_request_at(x,y)`; если есть — `use_hero_item`
   с `ItemCatalog::find(item_id)`. Левый клик не меняется.
@@ -146,7 +149,7 @@ HP/EP) + `InventoryRuntime` (расход) → glgame синхронизируе
 - `use_request_at` для bottom/hot возвращает контейнер+индекс; для
   puppet/filter/пустого — `nullopt`.
 
-**Unit save (`tests/game/test_hero_save_write.cpp`):**
+**Unit save (`tests/game/test_item_use.cpp`):**
 
 - `make_hero_save_body` c `HeroStats` пишет 9 статов и навыки; байты вне
   известных полей сохраняются.
