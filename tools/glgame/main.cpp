@@ -2397,7 +2397,7 @@ class Game {
 
     void apply_active_weapon_set(gl::game::WeaponSet set, bool refresh_overlays) {
         active_weapon_set_ = set;
-        if (level_ && pending_equipment_) {
+        if (level_ && pending_equipment_ && !options_.hero_outfit_none) {
             std::string error;
             if (auto outfit = resolve_outfit_from_equipment(*pending_equipment_, use_b_set(), error)) {
                 level_->apply_hero_outfit(*outfit);
@@ -2405,6 +2405,11 @@ class Game {
             } else {
                 gl::log(gl::LogLevel::warning, "outfit: " + error);
             }
+        }
+        if (character_overlay_.visible()) {
+            const gl::game::CharacterTab tab = character_overlay_.tab();
+            open_character();
+            character_overlay_.set_tab(tab);
         }
         if (refresh_overlays) {
             inventory_overlay_.set_use_b_set(use_b_set());
@@ -2767,6 +2772,7 @@ class Game {
         auto hero_effect_clock_before = pending_hero_effect_clock_;
         auto outfit_before = pending_outfit_;
         auto character_outfit_before = character_outfit_;
+        auto active_weapon_set_before = active_weapon_set_;
         const bool hero_stats_absent_before = hero_stats_absent_logged_;
         auto save_globals_before = save_globals_;
         auto runtime_globals_before = runtime_globals_;
@@ -2809,6 +2815,7 @@ class Game {
             pending_hero_effect_clock_ = std::move(hero_effect_clock_before);
             pending_outfit_ = std::move(outfit_before);
             character_outfit_ = std::move(character_outfit_before);
+            active_weapon_set_ = active_weapon_set_before;
             hero_stats_absent_logged_ = hero_stats_absent_before;
             inventory_runtime_ = std::move(inventory_before);
             save_globals_ = std::move(save_globals_before);
@@ -3298,8 +3305,8 @@ class Game {
             handle_console_key(key);
             return;
         }
-        if (state_.state() == gl::core::AppState::level && level_ && !dialog_ &&
-            !save_slots_ && !console_visible_ &&
+        if (key.repeat == 0 && state_.state() == gl::core::AppState::level && level_ &&
+            !dialog_ && !save_slots_ && !console_visible_ &&
             (symbol == SDLK_z || symbol == static_cast<SDL_Keycode>('Z'))) {
             toggle_weapon_set();
             return;
