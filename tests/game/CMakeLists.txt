@@ -19,6 +19,7 @@ add_executable(gl_game_tests
     test_inventory_runtime_real.cpp
     test_inventory_view.cpp
     test_item_use.cpp
+    test_item_use_real.cpp
     test_level_simulation.cpp
     test_live_save_real.cpp
     test_location_access.cpp
